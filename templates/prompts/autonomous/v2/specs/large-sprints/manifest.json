@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "drafts": [
+    {
+      "key": "aquarium-large-sprint",
+      "title": "Aquarium Deep Systems Sprint",
+      "suggestedIdPrefix": "prd-aquarium-large-sprint",
+      "targetAgent": "aquarium-agent",
+      "sprintId": "multi-agent-mvp",
+      "recommendedTaskCount": "10-14",
+      "specFile": "prompts/autonomous/v2/specs/large-sprints/aquarium-large-sprint.md",
+      "requirements": [
+        "Produce between 10 and 14 implementation tasks total.",
+        "Assign every implementation task to aquarium-agent only.",
+        "Do not create tasks for adventure-agent, action-agent, or reviewer.",
+        "Keep every task scoped to files under src/barebones-starter/games/apps/aquarium/ only.",
+        "Tasks must be atomic enough to land as one commit each on the shared aquarium lane branch.",
+        "The resulting implementation should feel like one large aquarium sprint rather than isolated note files.",
+        "Cover gameplay depth across progression, fish behavior, economy pressure, threats, and presentation.",
+        "The reviewer should merge one aquarium PR after the lane finishes all tasks."
+      ]
+    },
+    {
+      "key": "adventure-large-sprint",
+      "title": "Adventure World Expansion Sprint",
+      "suggestedIdPrefix": "prd-adventure-large-sprint",
+      "targetAgent": "adventure-agent",
+      "sprintId": "multi-agent-mvp",
+      "recommendedTaskCount": "10-14",
+      "specFile": "prompts/autonomous/v2/specs/large-sprints/adventure-large-sprint.md",
+      "requirements": [
+        "Produce between 10 and 14 implementation tasks total.",
+        "Assign every implementation task to adventure-agent only.",
+        "Do not create tasks for aquarium-agent, action-agent, or reviewer.",
+        "Keep every task scoped to files under src/barebones-starter/games/apps/adventure/ only.",
+        "Tasks must be atomic enough to land as one commit each on the shared adventure lane branch.",
+        "The resulting implementation should feel like one large adventure sprint rather than isolated note files.",
+        "Cover exploration, encounters, progression, capture depth, and interface readability.",
+        "The reviewer should merge one adventure PR after the lane finishes all tasks."
+      ]
+    },
+    {
+      "key": "fluxborne-large-sprint",
+      "title": "Fluxborne Act Expansion Sprint",
+      "suggestedIdPrefix": "prd-fluxborne-large-sprint",
+      "targetAgent": "action-agent",
+      "sprintId": "multi-agent-mvp",
+      "recommendedTaskCount": "12-18",
+      "specFile": "prompts/autonomous/v2/specs/large-sprints/fluxborne-large-sprint.md",
+      "requirements": [
+        "Produce between 12 and 18 implementation tasks total.",
+        "Assign every implementation task to action-agent only.",
+        "Do not create tasks for aquarium-agent, adventure-agent, or reviewer.",
+        "Keep every task scoped to files under src/barebones-starter/games/apps/fluxborne/ only.",
+        "Tasks must be atomic enough to land as one commit each on the shared action lane branch.",
+        "The resulting implementation should feel like one large Fluxborne sprint rather than isolated note files.",
+        "Cover combat depth, map progression, contracts, home base services, and long-form progression systems.",
+        "The reviewer should merge one action PR after the lane finishes all tasks."
+      ]
+    }
+  ]
+}
+

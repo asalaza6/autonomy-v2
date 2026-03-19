@@ -1,0 +1,8 @@
+#!/usr/bin/env node
+
+const cli = require('../src/autonomy-v2');
+
+Promise.resolve(cli.main(process.argv.slice(2))).catch((error) => {
+  console.error(`ERROR: ${error.message}`);
+  process.exit(1);
+});

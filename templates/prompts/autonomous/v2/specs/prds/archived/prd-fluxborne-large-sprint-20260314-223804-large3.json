@@ -1,0 +1,328 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-fluxborne-large-sprint-20260314-223804-large3",
+  "title": "Fluxborne Act Expansion Sprint",
+  "createdAt": "2026-03-15T05:38:07.539Z",
+  "specification": "# Fluxborne Act Expansion Sprint\n\nThis PRD is intentionally lane-pure. PM should decompose it into a large Fluxborne-only sprint for `action-agent`.\n\n## Product Goal\n\nPush Fluxborne forward as the largest action project in the repo with a more substantial act-scale loop: stronger combat progression, clearer contract / mission structure, richer home base payoff, and better continuity between combat runs and long-term advancement.\n\nThe player experience should move toward:\n\n- more meaningful combat build decisions\n- clearer mission or contract goals\n- stronger home base utility\n- better continuity across acts, waves, maps, and upgrades\n\n## Sprint Shape\n\nExpected shape:\n\n- 12 to 18 implementation tasks\n- all tasks assigned to `action-agent`\n- one shared action lane branch\n- one Fluxborne PR with many commits\n- no cross-lane work\n\nThis is intentionally the largest of the three PRDs.\n\n## Scope Boundaries\n\nStay inside:\n\n- `src/barebones-starter/games/apps/fluxborne/**`\n\nPrimary areas likely to matter:\n\n- `config.ts`\n- `components/**`\n- `game/combat/**`\n- `game/player/**`\n- `game/map/**`\n- `game/progression/**`\n- `game/homeBase/**`\n- `game/workshop/**`\n- `game/story/**`\n- `game/endless/**`\n- `game/npc/**`\n- `types.ts`\n\n## Deliverable Themes\n\nPM should spread the task plan across most of these areas.\n\n### 1. Combat and Build Depth\n\n- deepen player build choices, weapon identity, or combat role specialization\n- strengthen the connection between moment-to-moment combat and longer-term loadout strategy\n- improve combat readability where complexity increases\n\n### 2. Contract / Mission Structure\n\n- strengthen the player’s sense of run objectives\n- add or improve mission board, contract cadence, or reward loops\n- make run goals more deliberate than pure survival drift\n\n### 3. Map and Progression Continuity\n\n- improve transitions between zones, acts, or wave phases\n- make exploration, unlocks, and progression systems feel connected\n- reinforce the sense of advancing through a larger campaign loop\n\n### 4. Home Base and Service Value\n\n- make home base rooms and services more strategically meaningful\n- improve the payoff of returning from a run\n- connect services to combat progression, loadouts, or contracts\n\n### 5. NPC / Story / World Feedback\n\n- improve story-state visibility, NPC utility, or relationship affordances\n- make progression beats feel acknowledged in the world\n- strengthen player understanding of what changed after key milestones\n\n### 6. Presentation and Interface Readability\n\n- improve clarity in heavy-system screens such as contracts, maps, inventory, stats, or home base views\n- reduce confusion around progression and player choice\n\n## Planning Rules For PM\n\n- Do not emit tasks for other agents.\n- Do not emit reviewer tasks.\n- Prefer substantial system work over documentation-only or note-only tasks.\n- Use existing Fluxborne systems and directories as the basis for decomposition.\n- Make the task list large enough that the resulting PR legitimately contains many commits.\n- Include tests where the touched Fluxborne subsystem already has useful test coverage patterns.\n\n## Definition Of Done\n\n- Fluxborne gains a noticeably larger act-scale loop.\n- Combat, contracts, map progression, and home base all feel more connected.\n- The sprint spans multiple major Fluxborne subsystems rather than one isolated feature slice.\n- The final lane PR should plausibly contain many commits because the PM decomposition is intentionally large.\n\n## Explicit Non-Goals\n\n- no changes outside Fluxborne scope\n- no filler tasks created only to drive up commit count\n- no PM-generated reviewer work",
+  "requirements": [
+    "Produce between 12 and 18 implementation tasks total.",
+    "Assign every implementation task to action-agent only.",
+    "Do not create tasks for aquarium-agent",
+    "adventure-agent",
+    "or reviewer.",
+    "Keep every task scoped to files under src/barebones-starter/games/apps/fluxborne/ only.",
+    "Tasks must be atomic enough to land as one commit each on the shared action lane branch.",
+    "The resulting implementation should feel like one large Fluxborne sprint rather than isolated note files.",
+    "Cover combat depth",
+    "map progression",
+    "contracts",
+    "home base services",
+    "and long-form progression systems.",
+    "The reviewer should merge one action PR after the lane finishes all tasks."
+  ],
+  "tasks": [
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-1",
+      "title": "Create act-aware contract board model and persistence",
+      "agentId": "action-agent",
+      "description": "Add a persisted contract-board domain for Fluxborne that can generate deterministic board entries, track one active contract, accumulate progress, and resolve rewards across acts, zones, waves, and campaign milestones.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/GameApp.types.ts",
+        "src/barebones-starter/games/apps/fluxborne/state.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/storage.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/progression/**",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/hooks/useGameSave.ts",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/state/**",
+        "src/barebones-starter/games/apps/fluxborne/game/retention/sprint21.test.ts"
+      ],
+      "acceptance": [
+        "Save/load can round-trip a contract board plus one active contract without breaking older Fluxborne saves.",
+        "Pure helpers can generate, accept, progress, complete, and claim contracts for at least kill, XP, wave, zone, exploration, and act-frontier objective types.",
+        "Node tests cover normalization, board refresh cadence, progress delta calculation, and reward-claim resolution."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-2",
+      "title": "Surface the contract board in home base",
+      "agentId": "action-agent",
+      "description": "Expose the new contract board in home base so returning from a run gives the player a clear accept, continue, and claim loop instead of opaque progression drift.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/HomeBaseHub.tsx",
+        "src/barebones-starter/games/apps/fluxborne/components/homeBase/**",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/**",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/flows/homeBaseFlow.ts"
+      ],
+      "acceptance": [
+        "Home base renders available contracts, the current active contract, claimable rewards, and refresh timing or cadence messaging.",
+        "Accepting or claiming a contract updates the relevant refs and persists through the existing save path.",
+        "Locked, empty, active, and claim-ready states each render distinct copy and controls so the player can tell what to do next."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-3",
+      "title": "Add an in-run mission tracker HUD",
+      "agentId": "action-agent",
+      "description": "Show the player exactly what the current contract requires during combat and transitions by adding a live objective tracker and completion-ready messaging to the existing HUD surfaces.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/game/renderer/**",
+        "src/barebones-starter/games/apps/fluxborne/components/WaveBanner.tsx",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/menuControls.tsx"
+      ],
+      "acceptance": [
+        "The HUD shows active contract title, metric progress, and completion-ready state when a contract is active and stays hidden when none is active.",
+        "Wave or zone transition messaging can announce newly completed contract steps without obscuring existing combat readability.",
+        "The tracker supports at least kill, XP, zone, and wave style contracts using live runtime state rather than hardcoded UI values."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-4",
+      "title": "Extend act progression into campaign frontier metadata",
+      "agentId": "action-agent",
+      "description": "Upgrade story progression from raw milestone flags into reusable frontier metadata that can describe the current campaign phase, next milestone, and return-to-base guidance across the sprint.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/game/story/**",
+        "src/barebones-starter/games/apps/fluxborne/GameApp.types.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/storage.ts"
+      ],
+      "acceptance": [
+        "Story helpers can resolve a current frontier and next milestone from persisted act state without duplicating switch logic in UI or map code.",
+        "Existing story tests expand to cover frontier resolution across act1, act2, act3, and completed milestone chains.",
+        "If any new persisted frontier metadata is added, save/load keeps it stable for existing Fluxborne save files."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-5",
+      "title": "Show campaign continuity in map views",
+      "agentId": "action-agent",
+      "description": "Make map screens communicate where the campaign is going by surfacing zone completion, gated exits, frontier targets, and contract-relevant destinations in the minimap and full map viewer.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/FullMapViewer.tsx",
+        "src/barebones-starter/games/apps/fluxborne/components/Minimap.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/map/**",
+        "src/barebones-starter/games/apps/fluxborne/game/story/**"
+      ],
+      "acceptance": [
+        "The full map shows zone completion and highlights frontier or contract-relevant exits or zones when data is available.",
+        "The minimap uses distinct visuals for locked gates, required progression targets, and optional contract markers.",
+        "Map helper tests cover marker precedence for overlapping cases such as gated exits that are also contract targets."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-6",
+      "title": "Wire live gameplay events into contracts and frontier progress",
+      "agentId": "action-agent",
+      "description": "Connect kills, wave clears, zone transitions, and exploration milestones to the new contract and campaign-frontier systems so progression advances from actual play instead of manual bookkeeping.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/game/map/**",
+        "src/barebones-starter/games/apps/fluxborne/game/endless/**",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/utils/**",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/systems/**",
+        "src/barebones-starter/games/apps/fluxborne/game/player/system.ts"
+      ],
+      "acceptance": [
+        "Kill-, wave-, zone-, and exploration-based contracts all progress from live gameplay events and not from UI-only triggers.",
+        "Story-mode and endless-mode wave sources feed the same contract progression helpers when relevant.",
+        "Tests cover at least one kill-based, one wave-based, and one zone or exploration-based contract progression scenario with persistence-safe outputs."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-7",
+      "title": "Implement skill path selection and respec flow",
+      "agentId": "action-agent",
+      "description": "Turn the existing skill-path contract layer into a real player-facing choice and respec loop tied to Fluxborne UI and Voss-driven interactions.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/StatAllocation.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/skillPath/**",
+        "src/barebones-starter/games/apps/fluxborne/game/dialog/**",
+        "src/barebones-starter/games/apps/fluxborne/game/npc/serviceLoops.ts",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/flows/npcDialogFlow.tsx",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/hooks/useMenuHandlers.ts",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/utils/initialization.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/storage.ts"
+      ],
+      "acceptance": [
+        "The player can choose a skill path from a real UI flow once the path-choice gate is met, and the selected path persists through save/load.",
+        "A respec flow is exposed through the Voss interaction path, applies shard and day costs through the existing rules, and updates respec tracking without breaking current passive or ability behavior.",
+        "Skill-path tests cover first-choice gating, invalid selection normalization, and respec success and failure cases."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-8",
+      "title": "Improve build summary and preset compatibility UI",
+      "agentId": "action-agent",
+      "description": "Make build-heavy screens easier to reason about by showing path identity, archetype focus, and preset compatibility directly in the existing Inventory and Stats flows.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/Inventory.tsx",
+        "src/barebones-starter/games/apps/fluxborne/components/StatAllocation.tsx",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/hooks/useMenuHandlers.ts",
+        "src/barebones-starter/games/apps/fluxborne/GameApp.types.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/storage.ts"
+      ],
+      "acceptance": [
+        "Inventory or Stats shows selected path, key passive identity, archetype focus, and active preset status in one readable summary.",
+        "Saving or applying a preset surfaces compatibility warnings when the current path or loadout diverges from the preset's intended build.",
+        "Retention or save tests are updated if preset metadata or serialization changes."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-9",
+      "title": "Deepen ranged weapon specialization and mastery",
+      "agentId": "action-agent",
+      "description": "Strengthen combat build decisions by giving Fluxborne's gun archetypes clearer identity and mastery hooks that materially change how each loadout plays.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/config.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/player/**",
+        "src/barebones-starter/games/apps/fluxborne/game/progression/**"
+      ],
+      "acceptance": [
+        "At least three ranged archetypes gain distinct combat behavior or mastery payoff beyond raw stat tuning.",
+        "The new identity is implemented in player and weapon logic, not only in descriptive copy or UI labels.",
+        "game/player tests cover each new archetype rule or mastery trigger that changes live combat behavior."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-10",
+      "title": "Add combat readability for build-state timers and procs",
+      "agentId": "action-agent",
+      "description": "Expose the temporary states that now matter to Fluxborne builds by extending feedback and HUD systems for execution windows, mastery timers, proc states, and similar combat signals.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/game/combat/**",
+        "src/barebones-starter/games/apps/fluxborne/game/renderer/**",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/utils/combat.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/player/system.ts"
+      ],
+      "acceptance": [
+        "The HUD or combat feedback layers surface at least three build-state timers or proc cues such as execution, flux mastery, finisher window, or gun-class proc state.",
+        "The added cues remain readable alongside the existing HP, Flux, Surge, and weapon HUD elements.",
+        "Combat runtime or related pure tests cover any new feedback-resolution or timer-helper logic."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-11",
+      "title": "Implement armory favorites and quick-equip actions",
+      "agentId": "action-agent",
+      "description": "Complete the deferred armory depth by adding favorite management and quick-equip operations that connect melee gear, ranged loadouts, and saved build priorities.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/homeBase/ArmoryRoom.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/services/armoryServices.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/serviceContracts.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/services/armorySprint61.test.ts",
+        "src/barebones-starter/games/apps/fluxborne/GameApp.types.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/storage.ts"
+      ],
+      "acceptance": [
+        "Armory service can persist favorite gear state and return favorite metadata from equipment snapshots.",
+        "Armory UI lets the player mark favorites and quick-equip favored or preset-linked gear without desyncing ranged and melee equipment state.",
+        "Armory service tests cover favorite toggle persistence plus quick-equip success and failure cases."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-12",
+      "title": "Implement workshop reforge and progression-gated unlocks",
+      "agentId": "action-agent",
+      "description": "Turn workshop reforge from a stub into a strategic service and connect workshop unlocks to real progression beats such as act milestones or contract rewards.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/homeBase/WorkshopRoom.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/workshop/**",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/services/workshopServices.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/sprint43.test.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/story/**",
+        "src/barebones-starter/games/apps/fluxborne/game/progression/**"
+      ],
+      "acceptance": [
+        "Workshop service implements reforge with concrete shard costs, deterministic output handling, and persistence wiring.",
+        "Recipe or upgrade availability can unlock from long-form progression state such as act milestones or contract claims instead of staying static-only.",
+        "Workshop or home-base tests cover reforge outcomes, unlock gating, and completed-job collection after unlock changes."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-13",
+      "title": "Implement training dummy modes and local leaderboards",
+      "agentId": "action-agent",
+      "description": "Replace the current training-room placeholders with real dummy mode launching, richer result tracking, and local leaderboard presentation that feeds back into build planning.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/homeBase/TrainingRoom.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/services/trainingServices.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/serviceContracts.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/trainingChallenges.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/sprint43.test.ts"
+      ],
+      "acceptance": [
+        "Training room exposes dummy session modes and per-course leaderboard or best-result views instead of placeholder text.",
+        "Training service records best results deterministically across repeated runs and shapes leaderboard data for UI consumption.",
+        "Home-base tests cover dummy start hooks, leaderboard output, and best-result persistence."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-14",
+      "title": "Implement medical stat upgrades and post-run planning cues",
+      "agentId": "action-agent",
+      "description": "Make the medical bay more strategically valuable by supporting stat-point spending and clearer recovery or planning guidance after the player returns from a run.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/homeBase/MedicalBayRoom.tsx",
+        "src/barebones-starter/games/apps/fluxborne/components/HomeBaseHub.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/services/medicalServices.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/serviceContracts.ts",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/services/sprint22.test.ts"
+      ],
+      "acceptance": [
+        "Medical service implements stat-point spending with validation, updated save slices, and persistence behavior.",
+        "Medical bay or the hub presents actionable recovery or planning cues such as available stat upgrades, pending cure issues, or next-step build hints.",
+        "Medical service tests cover stat-upgrade success, insufficient-point failure, and persisted results."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-15",
+      "title": "Expand NPC and world feedback for contracts and milestones",
+      "agentId": "action-agent",
+      "description": "Make Fluxborne's world acknowledge the larger act loop by adding new service-NPC and Voss reactions to contract state, home-base growth, act frontiers, and reputation milestones.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/NPCDialog.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/dialog/**",
+        "src/barebones-starter/games/apps/fluxborne/game/npc/**",
+        "src/barebones-starter/games/apps/fluxborne/game/story/**",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/flows/npcDialogFlow.tsx",
+        "src/barebones-starter/games/apps/fluxborne/gameApp/utils/initialization.ts"
+      ],
+      "acceptance": [
+        "At least Voss and one service NPC gain dialog or affordance changes that react to contract state, act frontier progression, or home-base growth.",
+        "Relevant dialog effects can update dialog flags, affinity, or reputation through the existing effect plumbing without breaking current quest flows.",
+        "NPC or story tests cover trigger evaluation, priority, or stateful reaction cases added for the new milestone-aware feedback."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-fluxborne-large-sprint-20260314-223804-large3-action-agent-16",
+      "title": "Bridge endless milestones into home-base continuity",
+      "agentId": "action-agent",
+      "description": "Connect Fluxborne's endless progression back into the main campaign payoff loop by surfacing best-wave and milestone data in home base instead of leaving it isolated.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/components/homeBase/TrophyHallRoom.tsx",
+        "src/barebones-starter/games/apps/fluxborne/components/HomeBaseHub.tsx",
+        "src/barebones-starter/games/apps/fluxborne/game/endless/**",
+        "src/barebones-starter/games/apps/fluxborne/game/homeBase/**",
+        "src/barebones-starter/games/apps/fluxborne/game/endless/sprint41.test.ts"
+      ],
+      "acceptance": [
+        "Endless progression exposes next milestone goal or reward data and home base surfaces current best-wave continuity to the player.",
+        "Trophy hall or the home-base hub shows endless milestone progress alongside act or home-base progress so side-mode advancement feels connected.",
+        "Existing endless tests expand to cover milestone mapping or persistence behavior for the new home-base-facing summary data."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
+  ]
+}

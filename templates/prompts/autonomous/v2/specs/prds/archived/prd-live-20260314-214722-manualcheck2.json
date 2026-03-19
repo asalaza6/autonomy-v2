@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-live-20260314-214722-manualcheck2",
+  "title": "Live PM planned 3-agent 2-task verification",
+  "createdAt": "2026-03-15T04:47:22.531Z",
+  "specification": "Create a live autonomy verification run driven by PM planning.\n\nThe PM plan must produce exactly 6 implementation tasks total and no reviewer tasks.\n\nTask shape requirements:\n- Exactly 2 tasks for aquarium-agent.\n- Exactly 2 tasks for adventure-agent.\n- Exactly 2 tasks for action-agent.\n- Each task must be lane-scoped and atomic.\n- Each task should create or update exactly one markdown note file for that lane.\n- The two tasks in each lane must land on the same branch so the resulting PR has 2 commits, one commit per task.\n\nRequired file targets:\n- aquarium-agent task 1 should target src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-1.md\n- aquarium-agent task 2 should target src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-2.md\n- adventure-agent task 1 should target src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-1.md\n- adventure-agent task 2 should target src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-2.md\n- action-agent task 1 should target src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-1.md\n- action-agent task 2 should target src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-2.md\n\nEach task acceptance criteria must mention the exact file path it owns.\nUse stable task ids derived from prd-live-20260314-214722-manualcheck2.\nUse sprintId multi-agent-mvp.",
+  "requirements": [
+    "Produce exactly six implementation tasks total.",
+    "Produce exactly two tasks for aquarium-agent.",
+    "Produce exactly two tasks for adventure-agent.",
+    "Produce exactly two tasks for action-agent.",
+    "Do not create reviewer tasks.",
+    "Each task must own one exact markdown file path from the specification.",
+    "The reviewer should merge one PR per implementation lane after both lane tasks are complete."
+  ],
+  "tasks": [
+    {
+      "id": "prd-live-20260314-214722-manualcheck2-aquarium-1",
+      "title": "Create aquarium verification note 1",
+      "agentId": "aquarium-agent",
+      "description": "Create the first aquarium lane markdown note at src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-1.md. Commit this task independently on shared branch autonomy/prd-live-20260314-214722-manualcheck2-aquarium with the PR targeting dev.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-1.md"
+      ],
+      "acceptance": [
+        "src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-1.md is the only file created or updated by this task."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live-20260314-214722-manualcheck2-aquarium-2",
+      "title": "Create aquarium verification note 2",
+      "agentId": "aquarium-agent",
+      "description": "Create the second aquarium lane markdown note at src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-2.md. Commit this task independently on shared branch autonomy/prd-live-20260314-214722-manualcheck2-aquarium with the PR targeting dev.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-2.md"
+      ],
+      "acceptance": [
+        "src/barebones-starter/games/apps/aquarium/autonomy-live-prd-20260314-214722-manualcheck2-aq-2.md is the only file created or updated by this task."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live-20260314-214722-manualcheck2-adventure-1",
+      "title": "Create adventure verification note 1",
+      "agentId": "adventure-agent",
+      "description": "Create the first adventure lane markdown note at src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-1.md. Commit this task independently on shared branch autonomy/prd-live-20260314-214722-manualcheck2-adventure with the PR targeting dev.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-1.md"
+      ],
+      "acceptance": [
+        "src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-1.md is the only file created or updated by this task."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live-20260314-214722-manualcheck2-adventure-2",
+      "title": "Create adventure verification note 2",
+      "agentId": "adventure-agent",
+      "description": "Create the second adventure lane markdown note at src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-2.md. Commit this task independently on shared branch autonomy/prd-live-20260314-214722-manualcheck2-adventure with the PR targeting dev.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-2.md"
+      ],
+      "acceptance": [
+        "src/barebones-starter/games/apps/adventure/autonomy-live-prd-20260314-214722-manualcheck2-adv-2.md is the only file created or updated by this task."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live-20260314-214722-manualcheck2-action-1",
+      "title": "Create action verification note 1",
+      "agentId": "action-agent",
+      "description": "Create the first action lane markdown note at src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-1.md. Commit this task independently on shared branch autonomy/prd-live-20260314-214722-manualcheck2-action with the PR targeting dev.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-1.md"
+      ],
+      "acceptance": [
+        "src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-1.md is the only file created or updated by this task."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live-20260314-214722-manualcheck2-action-2",
+      "title": "Create action verification note 2",
+      "agentId": "action-agent",
+      "description": "Create the second action lane markdown note at src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-2.md. Commit this task independently on shared branch autonomy/prd-live-20260314-214722-manualcheck2-action with the PR targeting dev.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-2.md"
+      ],
+      "acceptance": [
+        "src/barebones-starter/games/apps/fluxborne/autonomy-live-prd-20260314-214722-manualcheck2-act-2.md is the only file created or updated by this task."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
+  ]
+}

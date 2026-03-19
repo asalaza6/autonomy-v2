@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-live-",
+  "title": "Live PM planned 3-agent 2-task verification",
+  "createdAt": "2026-03-15T01:21:25.896Z",
+  "specification": "Create a live autonomy verification run driven by PM planning.\n\nThe PM plan must produce exactly 6 implementation tasks total and no reviewer tasks.\n\nTask shape requirements:\n- Exactly 2 tasks for aquarium-agent.\n- Exactly 2 tasks for adventure-agent.\n- Exactly 2 tasks for action-agent.\n- Each task must be lane-scoped and atomic.\n- Each task should create or update exactly one markdown note file for that lane.\n- The two tasks in each lane must land on the same branch so the resulting PR has 2 commits, one commit per task.\n\nRequired file targets:\n- aquarium-agent task 1 should target src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-1.md\n- aquarium-agent task 2 should target src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-2.md\n- adventure-agent task 1 should target src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-1.md\n- adventure-agent task 2 should target src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-2.md\n- action-agent task 1 should target src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-1.md\n- action-agent task 2 should target src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-2.md\n\nEach task acceptance criteria must mention the exact file path it owns.\nUse stable task ids derived from prd-live-.\nUse sprintId multi-agent-mvp.",
+  "requirements": [
+    "Produce exactly six implementation tasks total.",
+    "Produce exactly two tasks for aquarium-agent.",
+    "Produce exactly two tasks for adventure-agent.",
+    "Produce exactly two tasks for action-agent.",
+    "Do not create reviewer tasks.",
+    "Each task must own one exact markdown file path from the specification.",
+    "The reviewer should merge one PR per implementation lane after both lane tasks are complete."
+  ],
+  "tasks": [
+    {
+      "id": "prd-live--aquarium-1",
+      "title": "Create aquarium live autonomy verification note 1",
+      "agentId": "aquarium-agent",
+      "description": "Create or update only `src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-1.md` with the first aquarium lane markdown note for the live autonomy verification run, intended as one commit on the shared lane branch targeting `dev`.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-1.md"
+      ],
+      "acceptance": [
+        "Exactly one file is created or updated: `src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-1.md`.",
+        "No files outside `src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-1.md` are modified.",
+        "`src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-1.md` exists as a markdown note with aquarium-lane live autonomy verification content for PRD `prd-live-`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live--aquarium-2",
+      "title": "Create aquarium live autonomy verification note 2",
+      "agentId": "aquarium-agent",
+      "description": "Create or update only `src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-2.md` with the second aquarium lane markdown note for the live autonomy verification run, intended as the second commit on the same shared lane branch as aquarium task 1 and targeting `dev`.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-2.md"
+      ],
+      "acceptance": [
+        "Exactly one file is created or updated: `src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-2.md`.",
+        "No files outside `src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-2.md` are modified.",
+        "`src/barebones-starter/games/apps/aquarium/autonomy-live-prd--aq-2.md` exists as a markdown note with aquarium-lane live autonomy verification content for PRD `prd-live-`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live--adventure-1",
+      "title": "Create adventure live autonomy verification note 1",
+      "agentId": "adventure-agent",
+      "description": "Create or update only `src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-1.md` with the first adventure lane markdown note for the live autonomy verification run, intended as one commit on the shared lane branch targeting `dev`.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-1.md"
+      ],
+      "acceptance": [
+        "Exactly one file is created or updated: `src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-1.md`.",
+        "No files outside `src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-1.md` are modified.",
+        "`src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-1.md` exists as a markdown note with adventure-lane live autonomy verification content for PRD `prd-live-`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live--adventure-2",
+      "title": "Create adventure live autonomy verification note 2",
+      "agentId": "adventure-agent",
+      "description": "Create or update only `src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-2.md` with the second adventure lane markdown note for the live autonomy verification run, intended as the second commit on the same shared lane branch as adventure task 1 and targeting `dev`.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-2.md"
+      ],
+      "acceptance": [
+        "Exactly one file is created or updated: `src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-2.md`.",
+        "No files outside `src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-2.md` are modified.",
+        "`src/barebones-starter/games/apps/adventure/autonomy-live-prd--adv-2.md` exists as a markdown note with adventure-lane live autonomy verification content for PRD `prd-live-`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live--action-1",
+      "title": "Create action live autonomy verification note 1",
+      "agentId": "action-agent",
+      "description": "Create or update only `src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-1.md` with the first action lane markdown note for the live autonomy verification run, intended as one commit on the shared lane branch targeting `dev`.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-1.md"
+      ],
+      "acceptance": [
+        "Exactly one file is created or updated: `src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-1.md`.",
+        "No files outside `src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-1.md` are modified.",
+        "`src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-1.md` exists as a markdown note with action-lane live autonomy verification content for PRD `prd-live-`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live--action-2",
+      "title": "Create action live autonomy verification note 2",
+      "agentId": "action-agent",
+      "description": "Create or update only `src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-2.md` with the second action lane markdown note for the live autonomy verification run, intended as the second commit on the same shared lane branch as action task 1 and targeting `dev`.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-2.md"
+      ],
+      "acceptance": [
+        "Exactly one file is created or updated: `src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-2.md`.",
+        "No files outside `src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-2.md` are modified.",
+        "`src/barebones-starter/games/apps/fluxborne/autonomy-live-prd--act-2.md` exists as a markdown note with action-lane live autonomy verification content for PRD `prd-live-`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
+  ]
+}

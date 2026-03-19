@@ -1,0 +1,45 @@
+{
+  "name": "@fluxborne/autonomy-v2",
+  "version": "0.1.0",
+  "description": "Autonomy v2 orchestration package extracted from the Fluxborne repo.",
+  "type": "commonjs",
+  "private": false,
+  "author": "Fluxborne",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asalaza6/autonomy-v2.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "autonomy",
+    "fluxborne",
+    "agent-system"
+  ],
+  "main": "src/autonomy-v2.js",
+  "bin": {
+    "autonomy-v2": "bin/autonomy-v2",
+    "autonomy-v2-server": "bin/autonomy-v2-server",
+    "autonomy-v2-worker": "bin/autonomy-v2-worker",
+    "autonomy-v2-smoke": "bin/autonomy-v2-smoke"
+  },
+  "exports": {
+    ".": "./src/autonomy-v2.js",
+    "./server": "./src/autonomy-v2-server.js",
+    "./worker": "./src/autonomy-v2-worker.js",
+    "./default-runner": "./src/autonomy-v2-default-runner.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "smoke": "node --test package-smoke.test.js"
+  },
+  "files": [
+    "README.md",
+    "bin",
+    "src",
+    "templates",
+    "package-smoke.test.js"
+  ]
+}

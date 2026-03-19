@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-aquarium-large-sprint-20260314-223804-large3",
+  "title": "Aquarium Deep Systems Sprint",
+  "createdAt": "2026-03-15T05:38:04.826Z",
+  "specification": "# Aquarium Deep Systems Sprint\n\nThis PRD is intentionally lane-pure. PM should decompose it into a large aquarium-only sprint for `aquarium-agent`.\n\n## Product Goal\n\nTurn aquarium from a compact prototype into a deeper management loop with visible mid-run progression, more expressive fish behavior, stronger threat escalation, and clearer player-facing goals.\n\nThe player experience should move from:\n\n- feed fish\n- collect coins\n- react to pests\n\nto a richer loop with:\n\n- short-term tank maintenance decisions\n- medium-term roster and upgrade planning\n- escalating danger waves\n- clearer win / loss pressure and session milestones\n\n## Sprint Shape\n\nPM should plan a large sprint, not a smoke test.\n\nExpected shape:\n\n- 10 to 14 implementation tasks\n- all tasks assigned to `aquarium-agent`\n- one shared aquarium lane branch\n- one aquarium PR with many commits\n- no cross-lane work\n\nEach task should be small enough for one commit, but together they should add up to a meaningful feature sprint.\n\n## Scope Boundaries\n\nStay inside:\n\n- `src/barebones-starter/games/apps/aquarium/**`\n\nPrimary files and folders likely to matter:\n\n- `config.ts`\n- `world.ts`\n- `step.ts`\n- `draw.ts`\n- `constants.ts`\n- `types.ts`\n- `actors/**`\n- `logic/**`\n- `sprites.ts`\n- aquarium-local docs or sprint notes if needed\n\n## Deliverable Themes\n\nPM should cover most of these themes in the task plan.\n\n### 1. Run Progression and Goals\n\n- add clearer stage goals or milestone targets\n- make success / failure pressure legible over a longer session\n- introduce mid-run pacing beats so the tank evolves over time\n\n### 2. Fish Roster Depth\n\n- create more distinct fish archetypes and upgrade paths\n- strengthen fish personality differences in movement, appetite, output, or upkeep\n- make the roster feel intentionally tiered rather than flat\n\n### 3. Economy and Upgrade Loop\n\n- deepen coin generation and spending choices\n- make upgrades feel synergistic rather than isolated\n- improve recovery options after weak play without removing risk\n\n### 4. Threat Director\n\n- improve pest escalation and wave logic\n- introduce at least one more dramatic threat beat such as miniboss pressure, special pest types, or timed danger windows\n- make defensive tools and their tradeoffs clearer\n\n### 5. Presentation and Readability\n\n- improve HUD clarity\n- make important state changes visible in moment-to-moment play\n- improve animation / visual feedback / sprite usage where practical\n\n### 6. Session Wrap-Up\n\n- improve end-of-run clarity, summaries, or milestone messaging\n- leave the player with a sense of what advanced during the session\n\n## Planning Rules For PM\n\n- Do not emit tasks for other agents.\n- Do not emit reviewer tasks.\n- Prefer tasks that change real gameplay or presentation systems over placeholder markdown notes.\n- Prefer modifying existing aquarium systems over adding throwaway scaffolding.\n- Spread the plan across multiple aquarium subsystems so the sprint naturally creates many commits.\n- Include tests only where the repo already supports them naturally for the touched area.\n\n## Definition Of Done\n\n- Aquarium has a visibly deeper progression loop.\n- The tank feels more alive, more pressured, and more readable than the current baseline.\n- The sprint touches multiple aquarium subsystems, not just tuning constants.\n- The resulting PR should plausibly contain many commits because the work decomposes into many real tasks.\n\n## Explicit Non-Goals\n\n- no changes outside aquarium scope\n- no generic placeholder files just to inflate task count\n- no PM-generated reviewer work",
+  "requirements": [
+    "Produce between 10 and 14 implementation tasks total.",
+    "Assign every implementation task to aquarium-agent only.",
+    "Do not create tasks for adventure-agent",
+    "action-agent",
+    "or reviewer.",
+    "Keep every task scoped to files under src/barebones-starter/games/apps/aquarium/ only.",
+    "Tasks must be atomic enough to land as one commit each on the shared aquarium lane branch.",
+    "The resulting implementation should feel like one large aquarium sprint rather than isolated note files.",
+    "Cover gameplay depth across progression",
+    "fish behavior",
+    "economy pressure",
+    "threats",
+    "and presentation.",
+    "The reviewer should merge one aquarium PR after the lane finishes all tasks."
+  ],
+  "tasks": [
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-1",
+      "title": "Add stage progression and run-state pressure",
+      "agentId": "aquarium-agent",
+      "description": "Introduce stage progression data, milestone targets, and run-status tracking so aquarium sessions advance through explicit beats instead of a flat endless loop.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/state.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/index.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/progression.ts"
+      ],
+      "acceptance": [
+        "State initialization seeds stage 1 with explicit goal and timeout data and stores run status in aquarium state.",
+        "During play, meeting a stage target advances stage data and emits a stage-transition message without resetting fish or economy state.",
+        "Failing a stage timer or losing all fish flips run status to a non-active state that aquarium rendering can read."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-2",
+      "title": "Render goals, countdowns, and warning banners",
+      "agentId": "aquarium-agent",
+      "description": "Expose active goals, stage countdowns, and urgent tank warnings in the aquarium HUD for both compact and standard layouts.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/draw.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts"
+      ],
+      "acceptance": [
+        "The HUD shows the current stage name, goal progress, and remaining time or pressure in both compact and full-width layouts.",
+        "Incoming-wave, low-fish, or deadline-pressure states render with stronger visual treatment than normal shop chrome.",
+        "Aquarium messages are rendered on-screen as a readable banner or panel instead of existing only in state."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-3",
+      "title": "Retune the fish roster into distinct tiers",
+      "agentId": "aquarium-agent",
+      "description": "Give each shop fish explicit role stats and unlock tiers so buying fish becomes a medium-term roster planning choice.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/fish.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/fishActor.ts"
+      ],
+      "acceptance": [
+        "Every shop fish type has distinct price, appetite, income cadence or value, and role data instead of sharing one default profile.",
+        "At least two roster tiers exist, with higher-tier fish locked until the player reaches the intended stage or milestone.",
+        "Shop purchasing and fish spawning use per-species data and preserve those stats on created fish entities."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-4",
+      "title": "Add mid-run fish growth paths",
+      "agentId": "aquarium-agent",
+      "description": "Implement fish growth or promotion breakpoints tied to feeding and survival so existing fish visibly improve over a session.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/fish.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/fishTuning.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/fishActor.ts",
+        "src/barebones-starter/games/apps/aquarium/sprites.ts"
+      ],
+      "acceptance": [
+        "Fish accumulate progression toward at least one higher-value growth breakpoint during normal play.",
+        "Crossing a breakpoint changes a fish's visible stage or badge and improves output or survivability without replacing it with a new purchase.",
+        "Growth progress persists across simulation steps and is available to later HUD or summary systems."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-5",
+      "title": "Differentiate fish behavior and state cues",
+      "agentId": "aquarium-agent",
+      "description": "Deepen fish AI with role-specific movement and readable cues so the tank feels more alive and players can see who needs attention.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/actors/fishActor.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/fishTuning.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/sprites.ts"
+      ],
+      "acceptance": [
+        "At least three behavior signatures are observable across the roster, such as grazing, darting, schooling, resting, or threat-avoidance.",
+        "Fish react differently to food and pests based on their role stats instead of all sharing the same chase loop.",
+        "Hungry, injured, or especially productive fish display an in-world cue through animation, tint, or iconography."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-6",
+      "title": "Add water-quality maintenance pressure",
+      "agentId": "aquarium-agent",
+      "description": "Introduce a tank maintenance system that turns overfeeding and neglect into a short-term management problem with real penalties.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/state.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/index.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/fishActor.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/pelletActor.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/maintenance.ts"
+      ],
+      "acceptance": [
+        "Aquarium state includes a maintenance meter with at least safe, warning, and critical bands and updates it every run.",
+        "Warning and critical maintenance bands measurably reduce fish performance or increase danger when ignored.",
+        "The current maintenance band and critical alerts are visible to the player during play."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-7",
+      "title": "Replace the utility placeholder with recovery actions",
+      "agentId": "aquarium-agent",
+      "description": "Turn the existing potion or utility slot into a real comeback tool, such as cleanup, emergency healing, or a temporary stability buff.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/index.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/upgrades.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/utilities.ts"
+      ],
+      "acceptance": [
+        "Pressing the utility slot performs a concrete recovery action instead of showing placeholder text.",
+        "The recovery action costs coins and includes a clear tradeoff such as cooldown, capped effect, or lower efficiency than proactive upkeep.",
+        "The action can rescue a weak run from warning state without fully erasing repeated mistakes."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-8",
+      "title": "Rebalance economy and upgrade synergies",
+      "agentId": "aquarium-agent",
+      "description": "Tune coin flow, pellet spend, passive pickup, and upgrade scaling so feeding, fish growth, maintenance, and recovery systems create real spending choices.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/pellet.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/upgrades.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/coinActor.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/index.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts"
+      ],
+      "acceptance": [
+        "Default balance still allows pellet purchases from the opening state and makes at least one upgrade or new fish reachable before stage 3 under normal coin collection.",
+        "Food-strength and drop-speed upgrades modify a growth-facing or maintenance-facing effect in addition to their direct stat bump.",
+        "Passive coin expiry payout and utility costs are tuned so a weak run can still recover with deliberate play while unattended play can still stall or collapse."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-9",
+      "title": "Enable a live pest director",
+      "agentId": "aquarium-agent",
+      "description": "Turn pests back on and drive wave cadence from stage progression and tank pressure rather than a disabled flat timer.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/state.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/index.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/pest.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts"
+      ],
+      "acceptance": [
+        "With default aquarium balance, pests spawn during a normal run without manual constant edits.",
+        "Next-wave size, timing, or composition respond to stage or pressure data instead of only the old fixed timer.",
+        "Wave telegraph state and spawn timers reset cleanly after each wave and when the run ends."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-10",
+      "title": "Add a special threat beat",
+      "agentId": "aquarium-agent",
+      "description": "Introduce a more dramatic enemy moment with at least one special pest or miniboss that creates a distinct mid-run danger spike.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/pest.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/pestActor.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/projectileActor.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/sprites.ts"
+      ],
+      "acceptance": [
+        "A special threat type appears from a defined stage or wave trigger rather than random baseline spawns.",
+        "The special threat is visually distinguishable and uses attack or movement behavior that baseline pests do not share.",
+        "Defeating the special threat grants a distinct reward or clears a specific pressure effect."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-11",
+      "title": "Add a purchasable defensive tool",
+      "agentId": "aquarium-agent",
+      "description": "Restore active defense depth with a bought-and-placed turret or equivalent tool that supplements tap combat and forces an economic tradeoff.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/index.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/projectileActor.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/pestActor.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/turretActor.ts",
+        "src/barebones-starter/games/apps/aquarium/logic/defense.ts",
+        "src/barebones-starter/games/apps/aquarium/sprites.ts"
+      ],
+      "acceptance": [
+        "The aquarium HUD or shop exposes a defense purchase flow and the player can place the defense inside the tank via aquarium-local input handling.",
+        "Placed defenses automatically engage pests and use the existing projectile or collision loop.",
+        "Defense spending competes with fish and upgrades by costing enough or consuming a slot or limit, so it is not a free add-on."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-aquarium-large-sprint-20260314-223804-large3-aquarium-agent-12",
+      "title": "Add end-of-run states and a session summary",
+      "agentId": "aquarium-agent",
+      "description": "Define clear win and loss outcomes and present a run-wrap overlay that explains what the player achieved before restarting.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/constants.ts",
+        "src/barebones-starter/games/apps/aquarium/state.ts",
+        "src/barebones-starter/games/apps/aquarium/types.ts",
+        "src/barebones-starter/games/apps/aquarium/actors/index.ts",
+        "src/barebones-starter/games/apps/aquarium/world.ts",
+        "src/barebones-starter/games/apps/aquarium/draw.ts"
+      ],
+      "acceptance": [
+        "Aquarium enters a visible failure state when all fish are lost or stage pressure collapses, and a visible success state when the capstone milestone is reached.",
+        "The wrap-up UI lists stage reached, coins earned, fish lost or grown, and the most important upgrades or utilities used.",
+        "Restarting from the wrap-up recreates the initial aquarium state cleanly without touching non-aquarium code."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
+  ]
+}

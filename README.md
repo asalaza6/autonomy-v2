@@ -1,0 +1,53 @@
+# Autonomy v2 Package
+
+This is the repository-local package form of `autonomy-v2` for Fluxborne.
+
+The package owns the command implementations and prompt templates, while the
+runtime/state and execution still occur in a consumer workspace.
+
+## Package layout
+
+- `bin/` CLI entrypoints
+- `src/` runtime modules
+- `templates/` bootstrap templates copied into the workspace by `init`
+
+## Current package command usage
+
+From this repo:
+
+```bash
+node packages/autonomy-v2/bin/autonomy-v2 init --root /Users/bytedance/Documents/GitHub/fluxborne
+node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /Users/bytedance/Documents/GitHub/fluxborne --id <id> --title <title> --specification <text>
+node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /Users/bytedance/Documents/GitHub/fluxborne --id <id> --title <title> ...
+node packages/autonomy-v2/bin/autonomy-v2-server serve --root /Users/bytedance/Documents/GitHub/fluxborne
+```
+
+From another folder using the installed package:
+
+```bash
+npx autonomy-v2 init --root /path/to/consumer-repo
+npx autonomy-v2 prd:add --root /path/to/consumer-repo --id <id> --title <title> ...
+npx autonomy-v2-server serve --root /path/to/consumer-repo
+```
+
+## Compatibility with current repo setup
+
+- Root scripts in `package.json` already forward into this package:
+  - `autonomy:v2:init`
+  - `autonomy:v2:status`
+  - `autonomy:v2:runtime`
+  - `autonomy:v2:server`
+  - `autonomy:v2:tick`
+
+## Package health checks
+
+- Local package smoke check:
+
+```bash
+node packages/autonomy-v2/package-smoke.test.js
+```
+
+## Design scope
+
+This sprint intentionally keeps logic and prompts Fluxborne-specific.
+Only the package boundary and packaging metadata were organized.

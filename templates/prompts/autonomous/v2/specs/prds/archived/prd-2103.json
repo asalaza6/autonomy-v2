@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "prd-2103",
+  "title": "Three-lane auto flow 2103",
+  "createdAt": "2026-03-14T12:05:35.930Z",
+  "tasks": [
+    {
+      "id": "aq-2103",
+      "title": "Aquarium lane work 2103",
+      "agentId": "aquarium-agent",
+      "description": "Create aquarium work for run 2103.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/aquarium/**"
+      ],
+      "acceptance": [
+        "Aquarium work complete"
+      ]
+    },
+    {
+      "id": "adv-2103",
+      "title": "Adventure lane work 2103",
+      "agentId": "adventure-agent",
+      "description": "Create adventure work for run 2103.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/adventure/**"
+      ],
+      "acceptance": [
+        "Adventure work complete"
+      ]
+    },
+    {
+      "id": "act-2103",
+      "title": "Action lane work 2103",
+      "agentId": "action-agent",
+      "description": "Create action work for run 2103.",
+      "allowedPaths": [
+        "src/barebones-starter/games/apps/fluxborne/**"
+      ],
+      "acceptance": [
+        "Action work complete"
+      ]
+    }
+  ]
+}
