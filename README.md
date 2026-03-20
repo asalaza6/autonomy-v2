@@ -16,6 +16,8 @@ runtime/state and execution still occur in a consumer workspace.
 ## Docs
 
 - [Autonomy V2 Config Support](./docs/autonomy-v2-config-support.md)
+- [Current Issues / Deferred Fixes](./issues.md)
+- [Feature Design Template](./features.md)
 
 ## Current package command usage
 
