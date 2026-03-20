@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawn } = require('child_process');
 const { acquireStateLock } = require('./autonomy-v2-lock');
+const { validateAutonomyConfig } = require('./autonomy-v2-config');
 const { planPrdTasksWithCodex } = require('./autonomy-v2-codex');
 const {
   commitPrdSpecToIntegrationBranch,
@@ -75,7 +76,7 @@ function writeJson(filePath, payload) {
 function loadConfig(rootDir) {
   const paths = getPaths(rootDir);
   return {
-    config: readJson(paths.agentsConfig, { agents: [] }),
+    config: validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig),
     sprint: readJson(paths.sprintConfig, {}),
   };
 }

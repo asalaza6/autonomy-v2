@@ -29,7 +29,38 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
   runNode(CLI_BIN, ['init', '--root', repoDir]);
 
   assert.ok(fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json')));
+  assert.ok(fs.existsSync(path.join(repoDir, 'scripts', 'autonomy-v2-default-runner.js')));
   assert.ok(fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'state', 'runtime.json')));
+
+  const agentsConfig = JSON.parse(fs.readFileSync(
+    path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json'),
+    'utf8'
+  ));
+  assert.equal(agentsConfig.schemaVersion, 1);
+  assert.deepEqual(
+    agentsConfig.agents.map((agent) => agent.id),
+    ['pm-agent', 'aquarium-agent', 'adventure-agent', 'action-agent', 'reviewer']
+  );
+  assert.deepEqual(agentsConfig.mergeActors, ['reviewer']);
+  assert.deepEqual(
+    agentsConfig.agents.find((agent) => agent.id === 'aquarium-agent').runnerCommand,
+    ['node', 'scripts/autonomy-v2-default-runner.js']
+  );
+  assert.deepEqual(
+    agentsConfig.agents.find((agent) => agent.id === 'reviewer').runnerCommand,
+    ['node', 'scripts/autonomy-v2-default-runner.js']
+  );
+
+  const sprintConfig = JSON.parse(fs.readFileSync(
+    path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'sprint.json'),
+    'utf8'
+  ));
+  assert.equal(sprintConfig.sprintId, 'multi-agent-mvp');
+  assert.equal(sprintConfig.name, 'Multi-Agent PR System MVP');
+  assert.equal(sprintConfig.maxParallelImplementationAgents, 3);
+  assert.equal(sprintConfig.requireReviewApproval, true);
+  assert.equal(sprintConfig.requireScopeValidation, true);
+  assert.equal(sprintConfig.defaultTaskBaseBranch, 'dev');
 
   runNode(CLI_BIN, [
     'prd:add',
@@ -68,6 +99,91 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
   assert.equal(runtimePrds.prds[0].id, 'prd-package-001');
   assert.equal(runtimePrds.prds[0].status, 'planned');
   assert.deepEqual(runtimePrds.prds[0].plannedTaskIds, ['prd-package-001-aquarium-agent-1']);
+});
+
+test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on force', () => {
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxborne-autonomy-v2-custom-agent-'));
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+
+  const agentsPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json');
+  const agentsConfig = JSON.parse(fs.readFileSync(agentsPath, 'utf8'));
+  agentsConfig.agents.push({
+    id: 'billing-agent',
+    personaName: 'billing-agent',
+    role: 'implementation',
+    runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
+    systemPrompt: 'prompts/autonomous/v2/agents/billing-agent/system.md',
+    gitIdentity: {
+      name: 'fluxborne-billing[bot]',
+      email: 'fluxborne-billing[bot]@users.noreply.github.com',
+    },
+    prLabels: ['agent:billing'],
+    include: ['src/barebones-starter/games/apps/billing/**'],
+    checks: ['npm run typecheck'],
+  });
+  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
+
+  runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
+
+  const billingSystemPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'system.md');
+  const billingHandoffPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'handoff.md');
+  const billingLogPath = path.join(repoDir, '.autonomy', 'runtime', 'agents', 'billing-agent', 'log.md');
+  const billingQueuePath = path.join(repoDir, '.autonomy', 'runtime', 'state', 'queues', 'billing-agent.json');
+
+  assert.ok(fs.existsSync(billingSystemPath));
+  assert.ok(fs.existsSync(billingHandoffPath));
+  assert.ok(fs.existsSync(billingLogPath));
+  assert.ok(fs.existsSync(billingQueuePath));
+
+  const billingSystem = fs.readFileSync(billingSystemPath, 'utf8');
+  assert.match(billingSystem, /billing agent implementation agent/i);
+  assert.match(billingSystem, /src\/barebones-starter\/games\/apps\/billing\/\*\*/);
+
+  agentsConfig.agents = agentsConfig.agents.filter((agent) => agent.id !== 'action-agent');
+  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
+
+  runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
+
+  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'action-agent', 'system.md')));
+  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'action-agent', 'handoff.md')));
+  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'agents', 'action-agent', 'log.md')));
+  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'state', 'queues', 'action-agent.json')));
+  assert.ok(fs.existsSync(billingSystemPath));
+  assert.ok(fs.existsSync(billingQueuePath));
+});
+
+test('packaged autonomy-v2 rejects invalid agent config values', () => {
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxborne-autonomy-v2-validation-'));
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+
+  const agentsPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json');
+  const agentsConfig = JSON.parse(fs.readFileSync(agentsPath, 'utf8'));
+
+  agentsConfig.agents[1].id = agentsConfig.agents[0].id;
+  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
+  assert.throws(
+    () => runNode(CLI_BIN, ['status', '--root', repoDir]),
+    /duplicate agent id/i
+  );
+
+  agentsConfig.agents[1].id = 'aquarium-agent';
+  agentsConfig.agents[0].id = 'pm-agent';
+  agentsConfig.agents[0].role = 'bogus';
+  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
+  assert.throws(
+    () => runNode(CLI_BIN, ['status', '--root', repoDir]),
+    /unsupported role/i
+  );
+
+  delete agentsConfig.agents[0].id;
+  agentsConfig.agents[0].role = 'pm';
+  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
+  assert.throws(
+    () => runNode(CLI_BIN, ['status', '--root', repoDir]),
+    /id is required/i
+  );
 });
 
 function runNode(scriptPath, args, options = {}) {

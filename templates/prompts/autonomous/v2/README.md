@@ -34,7 +34,9 @@ The default poll interval is 2000 ms.
 
 ## Current agent set
 
-The active v2 agents are defined in [/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json](/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json):
+The active v2 agents are defined in [/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json](/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json), and the scaffold generator reads that file directly.
+
+Fluxborne currently ships with:
 
 - `pm-agent`
 - `aquarium-agent`
@@ -42,7 +44,11 @@ The active v2 agents are defined in [/Users/bytedance/Documents/GitHub/fluxborne
 - `action-agent`
 - `reviewer`
 
-Lane ownership is path-scoped:
+Other repos can add or remove implementation agents by editing `agents.json` and rerunning `init --force`.
+
+`init` also writes a repo-local `scripts/autonomy-v2-default-runner.js` wrapper so the default agent config can keep using Fluxborne's current runner command shape.
+
+Lane ownership is path-scoped in the active Fluxborne config:
 
 - `aquarium-agent` -> `src/barebones-starter/games/apps/aquarium/**`
 - `adventure-agent` -> `src/barebones-starter/games/apps/adventure/**`

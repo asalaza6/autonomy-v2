@@ -5,6 +5,7 @@ const https = require('https');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { loadAutonomyEnv } = require('./autonomy-v2-env');
+const { validateAutonomyConfig } = require('./autonomy-v2-config');
 const {
   DEFAULT_SYNC_STATE,
   buildPrdSpecPayload,
@@ -28,17 +29,37 @@ const GENERATED_TEMPLATE_FILES = {
   'state/prds.json': () => `${JSON.stringify({ prds: [] }, null, 2)}\n`,
   'state/spec-sync.json': () => `${JSON.stringify(DEFAULT_SYNC_STATE, null, 2)}\n`,
   'state/runtime.json': () => `${JSON.stringify({ workers: {} }, null, 2)}\n`,
-  'state/queues/aquarium-agent.json': () => buildQueueTemplate('aquarium-agent', 'implementation'),
-  'state/queues/adventure-agent.json': () => buildQueueTemplate('adventure-agent', 'implementation'),
-  'state/queues/action-agent.json': () => buildQueueTemplate('action-agent', 'implementation'),
-  'state/queues/reviewer.json': () => buildQueueTemplate('reviewer', 'review'),
-  'agents/pm-agent/log.md': () => '# PM Agent Log\n',
-  'agents/aquarium-agent/log.md': () => '# Aquarium Agent Log\n',
-  'agents/adventure-agent/log.md': () => '# Adventure Agent Log\n',
-  'agents/action-agent/log.md': () => '# Action Agent Log\n',
-  'agents/reviewer/log.md': () => '# Reviewer Agent Log\n',
+  'scripts/autonomy-v2-default-runner.js': () => `${[
+    '#!/usr/bin/env node',
+    '',
+    "const path = require('path');",
+    "const { execFileSync } = require('child_process');",
+    '',
+    `const PACKAGE_RUNNER_PATH = ${JSON.stringify(path.join(PACKAGE_ROOT, 'src', 'autonomy-v2-default-runner.js'))};`,
+    '',
+    'let TARGET_PATH = null;',
+    '',
+    'try {',
+    "  TARGET_PATH = require.resolve('@asalaza6/autonomy-v2/default-runner');",
+    '} catch (error) {',
+    '  TARGET_PATH = PACKAGE_RUNNER_PATH;',
+    '}',
+    '',
+    'if (require.main === module) {',
+    '  try {',
+    '    execFileSync(process.execPath, [TARGET_PATH], {',
+    "      stdio: 'inherit',",
+    '      env: process.env,',
+    '    });',
+    '  } catch (error) {',
+    "    process.exit(typeof error.status === 'number' ? error.status : 1);",
+    '  }',
+    '} else {',
+    '  module.exports = require(TARGET_PATH);',
+    '}',
+  ].join('\n')}\n`,
 };
-const DEFAULT_TEMPLATE_FILES = [
+const BASE_TEMPLATE_FILES = [
   'README.md',
   'config/agents.json',
   'config/sprint.json',
@@ -49,25 +70,7 @@ const DEFAULT_TEMPLATE_FILES = [
   'state/prds.json',
   'state/spec-sync.json',
   'state/runtime.json',
-  'state/queues/aquarium-agent.json',
-  'state/queues/adventure-agent.json',
-  'state/queues/action-agent.json',
-  'state/queues/reviewer.json',
-  'agents/pm-agent/system.md',
-  'agents/pm-agent/handoff.md',
-  'agents/pm-agent/log.md',
-  'agents/aquarium-agent/system.md',
-  'agents/aquarium-agent/handoff.md',
-  'agents/aquarium-agent/log.md',
-  'agents/adventure-agent/system.md',
-  'agents/adventure-agent/handoff.md',
-  'agents/adventure-agent/log.md',
-  'agents/action-agent/system.md',
-  'agents/action-agent/handoff.md',
-  'agents/action-agent/log.md',
-  'agents/reviewer/system.md',
-  'agents/reviewer/handoff.md',
-  'agents/reviewer/log.md',
+  'scripts/autonomy-v2-default-runner.js',
   'specs/README.md',
   'specs/prds/archived/README.md',
 ];
@@ -221,7 +224,7 @@ Commands:
   scope:validate --task <task-id> [--files <path1,path2>] [--worktree <path>]
   pr:record --task <task-id> --head-branch <branch> [--publish]
   review:record --pr <pr-id> --reviewer <agent-id> --decision <approve|changes-requested> [--publish]
-  merge --pr <pr-id> --actor <merge-manager-id> [--execute]
+  merge --pr <pr-id> --actor <agent-id> [--execute]
   runtime:status
 
 Global options:
@@ -378,11 +381,18 @@ function archiveCompletedPrdSpecs(rootDir, state) {
 function handleInit(rootDir, options) {
   const created = [];
   const skipped = [];
+  const removed = [];
+  const paths = getAutonomyPaths(rootDir);
 
-  for (const relativeFile of DEFAULT_TEMPLATE_FILES) {
+  ensureDir(paths.configDir);
+  ensureDir(paths.repoAutonomyDir);
+  ensureDir(paths.runtimeAutonomyDir);
+
+  for (const relativeFile of BASE_TEMPLATE_FILES) {
     const targetPath = resolveTemplateTargetPath(rootDir, relativeFile);
     ensureDir(path.dirname(targetPath));
-    if (fs.existsSync(targetPath) && options.force !== true) {
+    const preserveIfExists = relativeFile === 'config/agents.json' || relativeFile === 'config/sprint.json';
+    if (fs.existsSync(targetPath) && (preserveIfExists || options.force !== true)) {
       skipped.push(relativeFile);
       continue;
     }
@@ -392,22 +402,295 @@ function handleInit(rootDir, options) {
     created.push(relativeFile);
   }
 
+  const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
+  const agentEntries = collectAgentScaffoldEntries(rootDir, config);
+
+  for (const entry of agentEntries) {
+    ensureDir(path.dirname(entry.targetPath));
+    if (fs.existsSync(entry.targetPath) && options.force !== true) {
+      skipped.push(entry.relativeFile);
+      continue;
+    }
+
+    fs.writeFileSync(entry.targetPath, entry.content, 'utf8');
+    created.push(entry.relativeFile);
+  }
+
+  if (options.force === true) {
+    removed.push(...pruneStaleAgentScaffold(rootDir, agentEntries));
+  }
+
   const payload = {
     rootDir,
     created,
     skipped,
+    removed,
   };
 
   printOutput(options, payload, () => {
-    const paths = getAutonomyPaths(rootDir);
     console.log(`Initialized autonomy v2 scaffold at ${paths.repoAutonomyDir}`);
     console.log(`Runtime state path: ${paths.runtimeAutonomyDir}`);
     console.log(`Created: ${created.length}`);
     console.log(`Skipped: ${skipped.length}`);
+    if (removed.length > 0) {
+      console.log(`Removed: ${removed.length}`);
+    }
   });
 }
 
+function collectAgentScaffoldEntries(rootDir, config) {
+  return (config.agents || []).flatMap((agent) => {
+    const systemPromptPath = resolveScaffoldPath(rootDir, agent.systemPrompt);
+    const handoffPath = path.join(path.dirname(systemPromptPath), 'handoff.md');
+    const logPath = getAgentLogPath(rootDir, agent.id);
+    const queuePath = resolveTaskQueuePath(rootDir, config, agent.id);
+
+    return [
+      {
+        relativeFile: relativeScaffoldPath(rootDir, systemPromptPath) || systemPromptPath,
+        targetPath: systemPromptPath,
+        content: getAgentScaffoldContent(rootDir, agent, systemPromptPath, 'system.md', config),
+      },
+      {
+        relativeFile: relativeScaffoldPath(rootDir, handoffPath) || handoffPath,
+        targetPath: handoffPath,
+        content: getAgentScaffoldContent(rootDir, agent, handoffPath, 'handoff.md', config),
+      },
+      {
+        relativeFile: relativeScaffoldPath(rootDir, logPath) || logPath,
+        targetPath: logPath,
+        content: getAgentScaffoldContent(rootDir, agent, logPath, 'log.md', config),
+      },
+      {
+        relativeFile: relativeScaffoldPath(rootDir, queuePath) || queuePath,
+        targetPath: queuePath,
+        content: buildQueueTemplate(agent.id, agent.role),
+      },
+    ];
+  });
+}
+
+function pruneStaleAgentScaffold(rootDir, agentEntries) {
+  const desiredPaths = new Set(agentEntries.map((entry) => path.resolve(entry.targetPath)));
+  const paths = getAutonomyPaths(rootDir);
+  const candidateDirs = [
+    path.join(paths.repoAutonomyDir, 'agents'),
+    path.join(paths.runtimeAutonomyDir, 'agents'),
+    path.join(paths.runtimeAutonomyDir, 'state', 'queues'),
+  ];
+  const removed = [];
+
+  candidateDirs.forEach((candidateDir) => {
+    pruneStaleScaffoldDirectory(candidateDir, desiredPaths, removed, rootDir);
+  });
+
+  return removed;
+}
+
+function pruneStaleScaffoldDirectory(dirPath, desiredPaths, removed, rootDir) {
+  if (!fs.existsSync(dirPath)) {
+    return;
+  }
+
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  entries.forEach((entry) => {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      pruneStaleScaffoldDirectory(entryPath, desiredPaths, removed, rootDir);
+      if (fs.existsSync(entryPath) && fs.readdirSync(entryPath).length === 0) {
+        fs.rmdirSync(entryPath);
+      }
+      return;
+    }
+
+    if (desiredPaths.has(path.resolve(entryPath))) {
+      return;
+    }
+
+    fs.unlinkSync(entryPath);
+    removed.push(path.relative(rootDir, entryPath));
+  });
+}
+
+function resolveScaffoldPath(rootDir, relativePath) {
+  if (path.isAbsolute(relativePath)) {
+    return path.normalize(relativePath);
+  }
+
+  return path.join(rootDir, relativePath);
+}
+
+function relativeScaffoldPath(rootDir, absolutePath) {
+  const relativePath = path.relative(rootDir, absolutePath);
+  if (relativePath.startsWith('..')) {
+    return null;
+  }
+  return relativePath;
+}
+
+function getAgentScaffoldContent(rootDir, agent, targetPath, fileName, config) {
+  const relativePath = relativeScaffoldPath(rootDir, targetPath);
+  if (relativePath) {
+    const diskPath = path.join(TEMPLATE_ROOT, relativePath);
+    if (fs.existsSync(diskPath)) {
+      return fs.readFileSync(diskPath, 'utf8');
+    }
+  }
+
+  switch (fileName) {
+    case 'system.md':
+      return buildAgentSystemPrompt(agent, config);
+    case 'handoff.md':
+      return buildAgentHandoffTemplate(agent);
+    case 'log.md':
+      return buildAgentLogTemplate(agent);
+    default:
+      return '';
+  }
+}
+
+function buildAgentSystemPrompt(agent, config) {
+  const agentLabel = getAgentDisplayName(agent);
+  const integrationBranch = config.integrationBranch || 'dev';
+  const productionBranch = config.productionBranch || 'main';
+  const projectName = config.projectName || 'this repository';
+  const scopeLines = Array.isArray(agent.include) && agent.include.length > 0
+    ? agent.include.map((pattern) => `- Stay inside \`${pattern}\` unless the task explicitly expands scope.`)
+    : ['- Stay inside your assigned scope.'];
+  const checkLines = Array.isArray(agent.checks) && agent.checks.length > 0
+    ? agent.checks.map((check) => `- ${check}`)
+    : ['- Run the checks configured for your lane before publishing.'];
+
+  if (agent.role === 'pm') {
+    return [
+      `# ${agentLabel} System`,
+      '',
+      `You are the PM agent for ${projectName}.`,
+      '',
+      '## Role',
+      '',
+      '- Watch the PRD inbox for newly inserted product requests.',
+      '- Decompose each PRD into scoped implementation tasks for the feature agents.',
+      '- Route tasks into the correct per-agent queues with acceptance criteria and path bounds.',
+      '',
+      '## Hard Rules',
+      '',
+      '- Do not write feature code.',
+      '- Do not review or merge pull requests.',
+      '- Do not create repo-wide tasks when a narrower scoped task is possible.',
+      `- Always target automation at \`${integrationBranch}\`, never \`${productionBranch}\` or \`master\`.`,
+      '',
+      '## Workflow',
+      '',
+      '1. Read the next queued PRD from the PRD inbox.',
+      '2. Break it into atomic tasks for the configured implementation lanes as needed.',
+      '3. Assign each task to one agent queue with explicit allowed paths.',
+      '4. Record the decomposition result and mark the PRD as planned.',
+      '',
+    ].join('\n');
+  }
+
+  if (agent.role === 'review') {
+    return [
+      `# ${agentLabel} System`,
+      '',
+      `You are the review and integration agent for ${projectName}.`,
+      '',
+      '## Role',
+      '',
+      '- Review PRs created by implementation agents.',
+      '- Focus on correctness, regressions, missing tests, scope violations, and unsafe merges.',
+      '- Approve or request changes.',
+      `- Merge approved PRs into \`${integrationBranch}\`.`,
+      '',
+      '## Hard Rules',
+      '',
+      '- Never review your own authored work.',
+      '- Do not implement feature changes while reviewing.',
+      '- Treat missing required checks as blocking.',
+      `- Never target \`${productionBranch}\` or \`master\`.`,
+      '',
+      '## Review Priorities',
+      '',
+      '1. Behavioral regressions',
+      '2. Scope violations',
+      '3. Missing or weak verification',
+      '4. Merge safety',
+      '5. Maintainability issues that materially affect delivery',
+      '',
+    ].join('\n');
+  }
+
+  return [
+    `# ${agentLabel} System`,
+    '',
+    `You are the ${agentLabel} implementation agent for ${projectName}.`,
+    '',
+    '## Role',
+    '',
+    '- Implement only tasks assigned to you.',
+    `- Work only from task branches based on \`${integrationBranch}\`.`,
+    `- Open or update pull requests targeting \`${integrationBranch}\`.`,
+    '',
+    '## Hard Rules',
+    '',
+    '- Edit only files allowed by your assigned task and configured scope.',
+    ...scopeLines,
+    `- Do not merge to \`${productionBranch}\` or \`master\`.`,
+    `- Do not merge directly to \`${integrationBranch}\`; publish changes for review.`,
+    '',
+    '## Required Checks',
+    '',
+    ...checkLines,
+    '',
+    '## Required Workflow',
+    '',
+    '1. Read your leased task and acceptance criteria.',
+    '2. Work inside the assigned worktree and branch.',
+    '3. Run required checks before publishing.',
+    '4. Keep the diff focused on your lane.',
+    '5. Update the PR when review asks for changes.',
+    '',
+  ].join('\n');
+}
+
+function buildAgentHandoffTemplate(agent) {
+  const agentLabel = getAgentDisplayName(agent);
+  return [
+    `# ${agentLabel} Handoff`,
+    '',
+    '## Current State',
+    '',
+    '_No active handoff yet._',
+    '',
+  ].join('\n');
+}
+
+function buildAgentLogTemplate(agent) {
+  const agentLabel = getAgentDisplayName(agent);
+  return `# ${agentLabel} Log\n`;
+}
+
+function getAgentDisplayName(agent) {
+  const source = String(agent && (agent.personaName || agent.id) || 'agent').trim();
+  if (!source) {
+    return 'Agent';
+  }
+  if (/^pm([-_\s]?agent)?$/i.test(source) || /^pm-agent$/i.test(source)) {
+    return 'PM Agent';
+  }
+  return source
+    .replace(/[-_]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function resolveTemplateTargetPath(rootDir, relativeFile) {
+  if (relativeFile.startsWith('scripts/')) {
+    return path.join(rootDir, relativeFile);
+  }
   const paths = getAutonomyPaths(rootDir);
   const baseDir = isRuntimeTemplate(relativeFile)
     ? paths.runtimeAutonomyDir
@@ -425,28 +708,9 @@ function getTemplateContent(relativeFile) {
   }
   const diskPath = path.join(TEMPLATE_ROOT, relativeFile);
   if (fs.existsSync(diskPath)) {
-    const content = fs.readFileSync(diskPath, 'utf8');
-    if (relativeFile === 'config/agents.json') {
-      return buildInstalledAgentsConfig(content);
-    }
-    return content;
+    return fs.readFileSync(diskPath, 'utf8');
   }
   return '';
-}
-
-function buildInstalledAgentsConfig(rawContent) {
-  const parsed = JSON.parse(rawContent);
-  const runnerCommand = [process.execPath, path.join(PACKAGE_ROOT, 'src', 'autonomy-v2-default-runner.js')];
-  parsed.agents = (parsed.agents || []).map((agent) => {
-    if (!Array.isArray(agent.runnerCommand) || agent.runnerCommand.length === 0) {
-      return agent;
-    }
-    return {
-      ...agent,
-      runnerCommand: runnerCommand.slice(),
-    };
-  });
-  return `${JSON.stringify(parsed, null, 2)}\n`;
 }
 
 function buildQueueTemplate(agentId, role) {
@@ -497,6 +761,9 @@ function handleStatus(rootDir, options) {
   const activeLeaseDetails = buildLeaseDetails(leases, taskQueues);
 
   const payload = {
+    configPath: path.relative(rootDir, paths.agentsConfig),
+    sprintPath: path.relative(rootDir, paths.sprintConfig),
+    configSchemaVersion: typeof config.schemaVersion === 'undefined' ? null : config.schemaVersion,
     integrationBranch: config.integrationBranch,
     productionBranch: config.productionBranch,
     blockedBranches: config.blockedBranches || [],
@@ -513,10 +780,15 @@ function handleStatus(rootDir, options) {
   };
 
   printOutput(options, payload, () => {
+    console.log(`Config file: ${path.relative(rootDir, paths.agentsConfig)}`);
+    console.log(`Sprint file: ${path.relative(rootDir, paths.sprintConfig)}`);
+    if (typeof config.schemaVersion !== 'undefined') {
+      console.log(`Config schema version: ${config.schemaVersion}`);
+    }
     console.log(`Integration branch: ${config.integrationBranch}`);
     console.log(`Production branch: ${config.productionBranch}`);
     console.log(`Blocked branches: ${(config.blockedBranches || []).join(', ')}`);
-    console.log(`Agents: ${(config.agents || []).map((agent) => `${agent.id}:${agent.role}`).join(', ')}`);
+    console.log(`Loaded agents: ${(config.agents || []).map((agent) => `${agent.id}:${agent.role}`).join(', ')}`);
     console.log('Agent status:');
     agentStatuses.forEach((agentStatus) => {
       console.log(formatAgentStatusLine(agentStatus, { includePid: true }));
@@ -1470,7 +1742,7 @@ function ensureInitialized(rootDir) {
 
 function loadAllState(rootDir) {
   const paths = getAutonomyPaths(rootDir);
-  const config = readJson(paths.agentsConfig);
+  const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
   return {
     config,
     sprint: readJson(paths.sprintConfig),
@@ -1486,7 +1758,7 @@ function syncIntegrationSpecs(rootDir, options = {}) {
     return null;
   }
   const paths = getAutonomyPaths(rootDir);
-  const config = readJson(paths.agentsConfig);
+  const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
   return syncPrdSpecsFromIntegrationBranch(rootDir, config.integrationBranch);
 }
 

@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "integrationBranch": "dev",
   "productionBranch": "main",
   "blockedBranches": ["main", "master"],
