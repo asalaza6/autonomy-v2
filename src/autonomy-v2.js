@@ -403,6 +403,7 @@ function handleInit(rootDir, options) {
   }
 
   const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
+  validateImplementationChecks(config, paths.agentsConfig);
   const agentEntries = collectAgentScaffoldEntries(rootDir, config);
 
   for (const entry of agentEntries) {
@@ -436,6 +437,24 @@ function handleInit(rootDir, options) {
       console.log(`Removed: ${removed.length}`);
     }
   });
+}
+
+function validateImplementationChecks(config, sourcePath) {
+  const invalidAgents = [];
+
+  for (const agent of config.agents || []) {
+    if (String(agent.role || '').trim() !== 'implementation') {
+      continue;
+    }
+
+    if (!Array.isArray(agent.checks) || agent.checks.length === 0 || agent.checks.some((check) => String(check || '').trim().length === 0)) {
+      invalidAgents.push(agent.id || '(unknown)');
+    }
+  }
+
+  if (invalidAgents.length > 0) {
+    throw new Error(`Invalid autonomy config at ${sourcePath}: implementation agents must define a non-empty checks array. Invalid agents: ${invalidAgents.join(', ')}.`);
+  }
 }
 
 function collectAgentScaffoldEntries(rootDir, config) {
