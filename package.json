@@ -1,6 +1,6 @@
 {
   "name": "@fluxborne/autonomy-v2",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Autonomy v2 orchestration package extracted from the Fluxborne repo.",
   "type": "commonjs",
   "private": false,
