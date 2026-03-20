@@ -33,7 +33,11 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "smoke": "node --test package-smoke.test.js"
+    "smoke": "node --test package-smoke.test.js",
+    "release:patch": "npm run smoke && npm version patch && npm publish --access public",
+    "release:minor": "npm run smoke && npm version minor && npm publish --access public",
+    "release:major": "npm run smoke && npm version major && npm publish --access public",
+    "release:tag": "npm run smoke && npm publish --access public --tag ${npm_config_tag:-latest}"
   },
   "files": [
     "README.md",
