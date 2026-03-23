@@ -17,6 +17,7 @@ runtime/state and execution still occur in a consumer workspace.
 
 - [Autonomy V2 Config Support](./docs/autonomy-v2-config-support.md)
 - [Orchestrator Flow](./docs/orchestrator-flow.md)
+- [Orchestrator Failure Cases](./docs/orchestrator-failure-cases.md)
 - [Current Issues / Deferred Fixes](./issues.md)
 - [Feature Design Template](./features.md)
 
