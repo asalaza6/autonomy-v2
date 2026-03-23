@@ -2997,12 +2997,22 @@ function matchesAnyGlob(filePath, globs) {
 }
 
 function globToRegExp(glob) {
-  const placeholder = '\u0000';
-  let pattern = glob.replace(/\*\*/g, placeholder);
-  pattern = pattern.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
-  pattern = pattern.replace(/\*/g, '[^/]*');
-  pattern = pattern.replace(new RegExp(placeholder, 'g'), '.*');
-  return new RegExp(`^${pattern}$`);
+  const normalizedGlob = normalizeRepoPath(glob);
+  const segments = normalizedGlob.split('/').filter((segment) => segment.length > 0);
+  if (segments.length === 0) {
+    return /^$/;
+  }
+  const segmentToRegex = (segment) => {
+    if (segment === '**') {
+      return '(?:[^/]+/)*';
+    }
+    const escaped = segment.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+    return escaped
+      .replace(/\*/g, '[^/]*')
+      .replace(/\?/g, '[^/]');
+  };
+  const regexBody = segments.map(segmentToRegex).join('/');
+  return new RegExp(`^${regexBody}$`);
 }
 
 function buildStablePullRequestId(laneKey) {
