@@ -140,36 +140,19 @@ async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branc
     `Current branch: ${branch}`,
     `Worktree path: ${worktreePath}`,
     '',
-    'After making the code changes, return JSON only.',
+    'Make the requested changes directly in the worktree. No structured response is required.',
   ].join('\n');
 
-  const output = await runCodexStructured({
+  await runCodexExec({
     cwd: worktreePath,
     prompt,
     readOnly: false,
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['status', 'summary', 'notes'],
-      properties: {
-        status: {
-          type: 'string',
-          enum: ['completed', 'blocked'],
-        },
-        summary: {
-          type: 'string',
-        },
-        notes: {
-          type: 'string',
-        },
-      },
-    },
   });
 
   return {
-    status: output.status,
-    summary: String(output.summary || '').trim(),
-    notes: typeof output.notes === 'string' ? output.notes.trim() : '',
+    status: 'completed',
+    summary: '',
+    notes: '',
   };
 }
 
@@ -294,6 +277,31 @@ async function runCodexStructured({ cwd, prompt, schema, readOnly }) {
   }
 }
 
+async function runCodexExec({ cwd, prompt, readOnly }) {
+  const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
+  const streamOutput = shouldStreamCodexOutput();
+  try {
+    const args = buildCodexExecArgs({ cwd, readOnly });
+    logCodexInvocation({
+      cwd,
+      prompt,
+      args,
+      readOnly,
+      streamOutput,
+    });
+    await runCodexCommand({
+      binary: codexBin,
+      args,
+      cwd,
+      input: prompt,
+      streamOutput,
+    });
+  } catch (error) {
+    logCodexFailure(error, streamOutput);
+    throw new Error(`Codex CLI failed: ${extractExecError(error)}`);
+  }
+}
+
 function runCodexStructuredSync({ cwd, prompt, schema, readOnly }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
@@ -352,6 +360,31 @@ function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly }) {
     schemaPath,
     '--output-last-message',
     outputPath,
+    '-'
+  );
+  return args;
+}
+
+function buildCodexExecArgs({ cwd, readOnly }) {
+  const args = ['--ask-for-approval', 'never', 'exec'];
+  args.push('--sandbox', readOnly ? 'read-only' : 'danger-full-access');
+
+  const model = String(process.env.AUTONOMY_CODEX_MODEL || '').trim();
+  if (model) {
+    args.push('-m', model);
+  }
+
+  const profile = String(process.env.AUTONOMY_CODEX_PROFILE || '').trim();
+  if (profile) {
+    args.push('-p', profile);
+  }
+
+  args.push(
+    '--cd',
+    cwd,
+    '--ephemeral',
+    '--color',
+    'never',
     '-'
   );
   return args;

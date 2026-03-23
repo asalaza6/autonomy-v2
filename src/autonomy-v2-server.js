@@ -10,6 +10,7 @@ const {
 const { loadAutonomyEnv } = require('./autonomy-v2-env');
 const { acquireServerLock } = require('./autonomy-v2-lock');
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
+const MAX_CONSECUTIVE_TICK_FAILURES = 3;
 
 function parseCli(argv) {
   const options = {};
@@ -73,6 +74,7 @@ async function main(argv = process.argv.slice(2)) {
   let released = false;
   let shuttingDown = false;
   let tickCount = 0;
+  let consecutiveTickFailures = 0;
   const attachedWorkers = new Map();
   const cleanup = () => {
     if (released) {
@@ -137,15 +139,26 @@ async function main(argv = process.argv.slice(2)) {
         },
       });
       tickCount = tickId;
+      consecutiveTickFailures = 0;
       logTickResult(result);
       if (shouldSync) {
         lastSyncAt = now;
       }
     } catch (error) {
+      consecutiveTickFailures += 1;
       console.error(formatServerEventLine('tick:error', {
         id: tickId,
+        consecutiveFailures: consecutiveTickFailures,
         message: error.message,
       }));
+      if (consecutiveTickFailures >= MAX_CONSECUTIVE_TICK_FAILURES) {
+        console.error(formatServerEventLine('server:stop', {
+          reason: 'consecutive_tick_failures',
+          failures: consecutiveTickFailures,
+          message: error.message,
+        }));
+        shutdown(1);
+      }
     }
   };
   runTick();

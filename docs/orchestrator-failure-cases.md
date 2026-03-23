@@ -117,7 +117,7 @@ Examples:
 
 - unknown task ID for a required transition
 - unknown PR ID during review or merge
-- leased task disappears between lease and dispatch
+- claimed task disappears between tracked queue claim and dispatch
 - task is not present in the expected queue
 - branch/worktree metadata points to a missing or invalid git worktree
 - aggregate runtime files disagree with per-agent queues in a way the code cannot reconcile
@@ -190,12 +190,13 @@ Implementation is where the repo currently mixes AI outcomes with orchestration 
 
 ### Real failures
 
-- cannot lease the task safely
+- cannot resolve or claim the tracked queue task safely
 - cannot prepare the worktree or branch
 - runner command cannot be launched
 - deterministic required checks fail when the policy says they are blocking
 - git add/commit/push fails when those steps are required for the chosen transition
-- task finish / PR record mutation fails after work has been produced
+- tracked queue completion or queue metadata persistence fails after work has been produced
+- PR record mutation fails after work has been produced
 - scope evaluator finds a hard scope breach and the policy treats it as blocking
 
 These are orchestration or policy failures because the deterministic wrapper cannot safely complete the task lifecycle.
@@ -216,6 +217,20 @@ These should usually map to a non-error outcome like:
 - `completed_without_diff`
 
 The orchestrator can still record the result and close or defer the task, but it should not crash merely because no commit was made.
+
+### Structured output note
+
+Implementation should not fail because the coding agent did not return a schema-valid payload.
+
+Structured model output is a planner/reviewer concern.
+
+For implementation, the orchestrator should care about:
+
+- did the runner execute
+- what changed in the repo
+- did scope/checks pass
+- was the queue advanced safely
+- was the branch commit/push lifecycle completed
 
 ### Why this matters
 

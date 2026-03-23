@@ -8,6 +8,7 @@ The current default configuration lives in the consumer repo under:
 
 - `prompts/autonomous/v2/config/agents.json`
 - `prompts/autonomous/v2/config/sprint.json`
+- `prompts/autonomous/v2/queues/<implementation-agent>.json`
 
 The runtime state stays separate under:
 
@@ -15,6 +16,7 @@ The runtime state stays separate under:
 - `.autonomy/worktrees/`
 
 The entire `.autonomy/` directory is scaffolded as local runtime state and is ignored by default.
+Tracked implementation queue files are not part of `.autonomy/`; they live in the repository tree and are committed to git.
 
 ## What `init` Creates
 
@@ -28,6 +30,7 @@ By default it writes:
 - `prompts/autonomous/v2/config/agents.json`
 - `prompts/autonomous/v2/config/sprint.json`
 - `prompts/autonomous/v2/agents/*`
+- `prompts/autonomous/v2/queues/*`
 - `prompts/autonomous/v2/state/*`
 - `scripts/autonomy-v2-default-runner.js`
 
@@ -105,10 +108,16 @@ The active config supports any number of agents. Common fields are:
 - `checks`
 - `taskQueue` when you want to override the default queue location; otherwise the runtime uses the standard queue path for that agent id
 
+Queue defaults:
+
+- implementation agents default to tracked queue files in `prompts/autonomous/v2/queues/<agent-id>.json`
+- review and other runtime-managed queues remain under `.autonomy/runtime/state/queues/`
+
 The scaffold generator derives system prompts, handoff files, log files, and queue files from the config entries, so adding a new implementation lane does not require package changes.
 
 ## Operational Notes
 
 - `status` reports the loaded config path and the loaded agent list.
 - Scheduler and CLI commands read the repo-local config, not package-global state.
-- Runtime queues, leases, logs, and worktrees remain local cache only.
+- Implementation queues are tracked in git; review queues, leases, logs, worker status, and worktrees remain local runtime cache.
+- Implementation task completion is observed from tracked queue state plus git branch state, not from runtime implementation queue files.

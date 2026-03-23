@@ -6,6 +6,7 @@ const { validateAutonomyConfig } = require('./autonomy-v2-config');
 const { planPrdTasksWithCodex } = require('./autonomy-v2-codex');
 const {
   commitPrdSpecToIntegrationBranch,
+  commitTrackedFilesToIntegrationBranch,
   syncPrdSpecsFromIntegrationBranch,
 } = require('./autonomy-v2-dev-sync');
 
@@ -13,7 +14,7 @@ const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const CLI_PATH = path.join(__dirname, 'autonomy-v2.js');
 const WORKER_PATH = path.join(__dirname, 'autonomy-v2-worker.js');
-const IMPLEMENTATION_DUE_STATUSES = new Set(['queued']);
+const IMPLEMENTATION_DUE_STATUSES = new Set(['queued', 'active']);
 const BACKLOG_GRACE_MS = 15000;
 
 function emitSchedulerProgress(options, event, payload = {}) {
@@ -54,6 +55,7 @@ function getPaths(rootDir) {
     prdsState: path.join(stateDir, 'prds.json'),
     runtimeState: path.join(stateDir, 'runtime.json'),
     prsState: path.join(stateDir, 'prs.json'),
+    branchLocksState: path.join(stateDir, 'branch-locks.json'),
   };
 }
 
@@ -90,12 +92,52 @@ function getAgent(config, agentId) {
 }
 
 function resolveQueuePath(rootDir, agent) {
-  if (!agent.taskQueue) {
-    return null;
+  const relativePath = agent.taskQueue || (
+    String(agent.role || '') === 'implementation'
+      ? buildImplementationQueueRelativePath(agent.id)
+      : path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agent.id}.json`)
+  );
+  if (String(agent.role || '') === 'implementation') {
+    return path.isAbsolute(relativePath)
+      ? relativePath
+      : path.join(rootDir, relativePath);
   }
-  return path.isAbsolute(agent.taskQueue)
-    ? agent.taskQueue
-    : resolveRuntimeManagedPath(rootDir, agent.taskQueue);
+  return path.isAbsolute(relativePath)
+    ? relativePath
+    : resolveRuntimeManagedPath(rootDir, relativePath);
+}
+
+function buildImplementationQueueRelativePath(agentId) {
+  return path.join('prompts', 'autonomous', 'v2', 'queues', `${agentId}.json`);
+}
+
+function resolveTrackedQueueRef(rootDir, integrationBranch) {
+  const remoteRef = `origin/${integrationBranch}`;
+  if (gitRefExists(rootDir, remoteRef)) {
+    return remoteRef;
+  }
+  if (gitRefExists(rootDir, integrationBranch)) {
+    return integrationBranch;
+  }
+  return null;
+}
+
+function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
+  if (!ref || path.isAbsolute(relativePath)) {
+    return fallbackValue;
+  }
+  try {
+    return JSON.parse(execFileSync('git', [
+      'show',
+      `${ref}:${relativePath.replace(/\\/g, '/')}`,
+    ], {
+      cwd: rootDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }));
+  } catch (_) {
+    return fallbackValue;
+  }
 }
 
 function resolveRuntimeManagedPath(rootDir, relativePath) {
@@ -120,16 +162,32 @@ function loadQueues(rootDir, config) {
   const queues = {};
   (config.agents || []).forEach((agent) => {
     const queuePath = resolveQueuePath(rootDir, agent);
-    if (!queuePath) {
-      return;
-    }
-    queues[agent.id] = readJson(queuePath, {
-      agentId: agent.id,
-      role: agent.role,
-      tasks: [],
-    });
+    const fallbackValue = buildTaskQueueState(agent, []);
+    queues[agent.id] = String(agent.role || '') === 'implementation'
+      ? readJsonFromGitRef(
+          rootDir,
+          resolveTrackedQueueRef(rootDir, config.integrationBranch),
+          agent.taskQueue || buildImplementationQueueRelativePath(agent.id),
+          fs.existsSync(queuePath) ? readJson(queuePath, fallbackValue) : fallbackValue
+        )
+      : readJson(queuePath, fallbackValue);
   });
   return queues;
+}
+
+function buildTaskQueueState(agent, tasks = []) {
+  return String(agent.role || '') === 'implementation'
+    ? {
+        schemaVersion: 1,
+        agentId: agent.id,
+        role: agent.role,
+        tasks,
+      }
+    : {
+        agentId: agent.id,
+        role: agent.role,
+        tasks,
+      };
 }
 
 function writeQueue(rootDir, agent, queue) {
@@ -147,7 +205,9 @@ function writeQueueAndAggregate(rootDir, config, agentId, queue) {
   const queues = loadQueues(rootDir, config);
   queues[agentId] = queue;
   writeJson(paths.tasksState, {
-    tasks: Object.values(queues).flatMap((entry) => listTasks(entry)),
+    tasks: Object.values(queues)
+      .filter((entry) => String((entry && entry.role) || '') !== 'implementation')
+      .flatMap((entry) => listTasks(entry)),
   });
 }
 
@@ -164,6 +224,10 @@ function writePrds(rootDir, prds) {
 function loadRuntime(rootDir) {
   const paths = getPaths(rootDir);
   return readJson(paths.runtimeState, { workers: {} });
+}
+
+function loadBranchLocks(rootDir) {
+  return readJson(getPaths(rootDir).branchLocksState, { locks: [] });
 }
 
 function loadLeases(rootDir) {
@@ -204,6 +268,105 @@ function appendAgentLog(rootDir, config, agentId, event, payload = {}) {
 
 function listTasks(queue) {
   return queue && Array.isArray(queue.tasks) ? queue.tasks : [];
+}
+
+function getImplementationTaskState(task) {
+  return String((task && (task.state || task.status)) || '').trim();
+}
+
+function isPendingImplementationTask(task) {
+  const state = getImplementationTaskState(task);
+  return state === 'active' || state === 'queued';
+}
+
+function buildTaskLaneKey(task) {
+  if (task && task.laneKey) {
+    return task.laneKey;
+  }
+  if (task && task.prdId) {
+    return `${task.prdId}:${task.agentId}`;
+  }
+  return task ? task.id : '';
+}
+
+function slugify(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'shared';
+}
+
+function buildTaskBranchName(config, task) {
+  const sprintSegment = slugify(task.sprintId || 'shared');
+  const agentSegment = slugify(task.agentId);
+  const laneSegment = slugify(buildTaskLaneKey(task));
+  return `${config.branchPrefixes.task}/${sprintSegment}/${agentSegment}/${laneSegment}`;
+}
+
+function readImplementationQueueFromWorktree(config, agentId, worktreePath) {
+  const agent = getAgent(config, agentId);
+  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agentId);
+  const queuePath = path.isAbsolute(relativePath)
+    ? relativePath
+    : path.join(worktreePath, relativePath);
+  if (!fs.existsSync(queuePath)) {
+    return null;
+  }
+  try {
+    const queueState = readJson(queuePath, buildTaskQueueState(agent, []));
+    return buildTaskQueueState(agent, Array.isArray(queueState.tasks) ? queueState.tasks : []);
+  } catch (_) {
+    return null;
+  }
+}
+
+function completedImplementationTaskIds(branchLocks, agentId) {
+  return new Set(
+    ((branchLocks && branchLocks.locks) || [])
+      .filter((lock) => lock && lock.agentId === agentId)
+      .flatMap((lock) => ((lock && lock.completedTasks) || []).map((task) => task.id))
+      .filter(Boolean)
+  );
+}
+
+function filterCompletedImplementationTasks(queue, branchLocks, agentId) {
+  const completedIds = completedImplementationTaskIds(branchLocks, agentId);
+  return {
+    ...(queue || {}),
+    tasks: listTasks(queue).filter((task) => !completedIds.has(task.id)),
+  };
+}
+
+function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, fallbackQueue) {
+  const locks = ((branchLocks && branchLocks.locks) || [])
+    .filter((lock) => lock && lock.agentId === agent.id && lock.worktreePath && fs.existsSync(lock.worktreePath))
+    .slice()
+    .sort((left, right) => {
+      return (Date.parse(right && right.updatedAt || '') || 0) - (Date.parse(left && left.updatedAt || '') || 0);
+    });
+
+  for (const lock of locks) {
+    const queue = readImplementationQueueFromWorktree(config, agent.id, lock.worktreePath);
+    if (!queue) {
+      continue;
+    }
+    if (listTasks(queue).some((task) => isPendingImplementationTask(task))) {
+      return {
+        source: 'branch',
+        queue,
+        branch: lock.branch || null,
+        worktreePath: lock.worktreePath,
+      };
+    }
+  }
+
+  return {
+    source: 'root',
+    queue: filterCompletedImplementationTasks(fallbackQueue, branchLocks, agent.id),
+    branch: null,
+    worktreePath: null,
+  };
 }
 
 function isProcessAlive(pid) {
@@ -250,7 +413,7 @@ function refreshRuntime(rootDir, config, queues, leases, runtime) {
           if (task.status !== 'assigned') {
             return;
           }
-          task.status = 'queued';
+          task.status = 'failed';
           task.updatedAt = now;
           task.lastError = 'review worker exited before completion';
           delete task.dispatchedAt;
@@ -264,27 +427,7 @@ function refreshRuntime(rootDir, config, queues, leases, runtime) {
       }
 
       if (agent.role === 'implementation') {
-        const strandedTaskIds = [];
-        let queueChanged = false;
-        listTasks(queue).forEach((task) => {
-          if (task.status !== 'leased' && !(task.execution && task.execution.status === 'waiting_for_external_agent')) {
-            return;
-          }
-          task.status = 'queued';
-          task.updatedAt = now;
-          task.lastError = 'implementation worker exited before completion';
-          delete task.execution;
-          strandedTaskIds.push(task.id);
-          queueChanged = true;
-        });
-        if (strandedTaskIds.length > 0) {
-          const before = (leases.leases || []).length;
-          leases.leases = (leases.leases || []).filter((lease) => !strandedTaskIds.includes(lease.taskId));
-          leasesChanged = leasesChanged || before !== leases.leases.length;
-        }
-        if (queueChanged) {
-          recoveredAgents.add(agent.id);
-        }
+        return;
       }
     }
   });
@@ -294,7 +437,9 @@ function refreshRuntime(rootDir, config, queues, leases, runtime) {
       writeQueue(rootDir, getAgent(config, agentId), queues[agentId]);
     });
     writeJson(getPaths(rootDir).tasksState, {
-      tasks: Object.values(queues).flatMap((queue) => listTasks(queue)),
+      tasks: Object.values(queues)
+        .filter((queue) => String((queue && queue.role) || '') !== 'implementation')
+        .flatMap((queue) => listTasks(queue)),
     });
   }
   if (leasesChanged) {
@@ -332,9 +477,8 @@ function comparePrdBacklogOrder(left, right) {
   return String(left && left.id || '').localeCompare(String(right && right.id || ''));
 }
 
-function findDueAgents(rootDir, config, queues, prds, runtime, leases, options = {}) {
+function findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, leases, options = {}) {
   const due = [];
-  const activeLeaseTaskIds = new Set((leases.leases || []).map((lease) => lease.taskId));
   const knownPrds = listPrds(prds);
   const hasQueuedPrd = knownPrds.some((prd) => prd.status === 'queued');
   const hasPlanningPrd = knownPrds.some((prd) => prd.status === 'planning');
@@ -368,7 +512,8 @@ function findDueAgents(rootDir, config, queues, prds, runtime, leases, options =
     }
 
     if (agent.role === 'implementation') {
-      if (listTasks(queue).some((task) => implementationTaskNeedsDispatch(task, activeLeaseTaskIds))) {
+      const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
+      if (listTasks(queueContext.queue).some((task) => implementationTaskNeedsDispatch(task))) {
         due.push({ agentId: agent.id, reason: 'queued_task' });
       }
     }
@@ -376,20 +521,8 @@ function findDueAgents(rootDir, config, queues, prds, runtime, leases, options =
   return due;
 }
 
-function implementationTaskNeedsDispatch(task, activeLeaseTaskIds) {
-  if (task.status === 'changes_requested' || task.status === 'conflicted') {
-    return true;
-  }
-  if (task.execution && task.execution.status === 'waiting_for_external_agent') {
-    return false;
-  }
-  if (IMPLEMENTATION_DUE_STATUSES.has(task.status)) {
-    return true;
-  }
-  if (task.status === 'leased') {
-    return true;
-  }
-  return activeLeaseTaskIds.has(task.id);
+function implementationTaskNeedsDispatch(task) {
+  return IMPLEMENTATION_DUE_STATUSES.has(getImplementationTaskState(task));
 }
 
 function setWorkerState(runtime, agentId, patch) {
@@ -456,6 +589,7 @@ function runSchedulerTick(rootDir, options = {}) {
     emitSchedulerProgress(options, 'state-lock:acquired', { lock: 'state-lock' });
     const { config } = loadConfig(rootDir);
     const queues = loadQueues(rootDir, config);
+    const branchLocks = loadBranchLocks(rootDir);
     const prds = loadPrds(rootDir);
     const leases = loadLeases(rootDir);
     runtime = loadRuntime(rootDir);
@@ -477,7 +611,7 @@ function runSchedulerTick(rootDir, options = {}) {
       if (pendingPrdWork) {
         runtime.backlogGraceConsumed = false;
         delete runtime.backlogGraceUntil;
-      } else if (runtime.backlogGraceConsumed !== true && hasPendingBacklogWork(config, queues, leases)) {
+      } else if (runtime.backlogGraceConsumed !== true && hasPendingBacklogWork(rootDir, config, queues, branchLocks, leases)) {
         const nowMs = Date.now();
         const graceUntilMs = Date.parse(runtime.backlogGraceUntil || '');
         if (!Number.isFinite(graceUntilMs)) {
@@ -492,7 +626,7 @@ function runSchedulerTick(rootDir, options = {}) {
       }
     }
 
-    dueAgents = findDueAgents(rootDir, config, queues, prds, runtime, leases, {
+    dueAgents = findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, leases, {
       suppressNonPmDispatch,
     });
     emitSchedulerProgress(options, 'due:computed', {
@@ -609,8 +743,7 @@ function runSchedulerTick(rootDir, options = {}) {
   };
 }
 
-function hasPendingBacklogWork(config, queues, leases) {
-  const activeLeaseTaskIds = new Set((leases.leases || []).map((lease) => lease.taskId));
+function hasPendingBacklogWork(rootDir, config, queues, branchLocks, leases) {
   return (config.agents || []).some((agent) => {
     const queue = queues[agent.id];
     if (!queue) {
@@ -620,7 +753,8 @@ function hasPendingBacklogWork(config, queues, leases) {
       return listTasks(queue).some((task) => task.status === 'queued');
     }
     if (agent.role === 'implementation') {
-      return listTasks(queue).some((task) => implementationTaskNeedsDispatch(task, activeLeaseTaskIds));
+      const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
+      return listTasks(queueContext.queue).some((task) => implementationTaskNeedsDispatch(task));
     }
     return false;
   });
@@ -665,7 +799,7 @@ function runPmWorker(rootDir, config, sprint, agent) {
   }
 
   const plannedSpecs = useCodexStub()
-    ? (Array.isArray(prd.tasks) ? prd.tasks.slice() : [])
+    ? buildPmStubTaskSpecs(config, sprint, prd)
     : planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }).tasks;
   const sanitizedPlannedSpecs = sanitizePlannedTaskSpecs(plannedSpecs);
   if (!Array.isArray(sanitizedPlannedSpecs) || sanitizedPlannedSpecs.length === 0) {
@@ -680,50 +814,20 @@ function runPmWorker(rootDir, config, sprint, agent) {
       createdAt: prd.createdAt,
       specification: prd.specification,
       requirements: prd.requirements,
-      tasks: sanitizedPlannedSpecs,
     }, {
       commitMessage: `autonomy(prd): persist plan ${prd.id}`,
       gitIdentity: agent.gitIdentity,
     });
 
-    for (const spec of sanitizedPlannedSpecs) {
-      const args = [
-        CLI_PATH,
-        'task:add',
-        '--root',
-        rootDir,
-        '--id',
-        spec.id,
-        '--title',
-        spec.title,
-        '--agent',
-        spec.agentId,
-      ];
-
-      if (spec.description) {
-        args.push('--description', spec.description);
-      }
-      if (prd.id) {
-        args.push('--prd-id', prd.id);
-      }
-      for (const allowedPath of spec.allowedPaths || []) {
-        args.push('--allowed-path', allowedPath);
-      }
-      for (const acceptance of spec.acceptance || []) {
-        args.push('--acceptance', acceptance);
-      }
-      if (spec.sprintId) {
-        args.push('--sprint-id', spec.sprintId);
-      } else if (prd.sprintId || sprint.sprintId) {
-        args.push('--sprint-id', prd.sprintId || sprint.sprintId);
-      }
-
-      execFileSync(process.execPath, args, {
-        cwd: rootDir,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      createdTaskIds.push(spec.id);
-    }
+    const queueUpdates = buildTrackedImplementationQueueUpdates(rootDir, config, sanitizedPlannedSpecs, {
+      prd,
+      sprint,
+    });
+    commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, queueUpdates, {
+      commitMessage: `autonomy(queue): enqueue plan ${prd.id}`,
+      gitIdentity: agent.gitIdentity,
+    });
+    createdTaskIds.push(...sanitizedPlannedSpecs.map((spec) => spec.id));
   } catch (error) {
     finalizePrd(rootDir, prd.id, {
       status: 'failed',
@@ -732,7 +836,7 @@ function runPmWorker(rootDir, config, sprint, agent) {
     appendAgentLog(rootDir, config, agent.id, 'prd:failed', {
       input: {
         prdId: prd.id,
-        taskCount: (prd.tasks || []).length,
+        taskCount: Array.isArray(prd.plannedTaskIds) ? prd.plannedTaskIds.length : 0,
       },
       output: {
         createdTaskIds,
@@ -744,7 +848,6 @@ function runPmWorker(rootDir, config, sprint, agent) {
 
   finalizePrd(rootDir, prd.id, {
     status: 'planned',
-    tasks: sanitizedPlannedSpecs,
     plannedTaskIds: createdTaskIds,
   });
   appendAgentLog(rootDir, config, agent.id, 'prd:planned', {
@@ -764,6 +867,30 @@ function runPmWorker(rootDir, config, sprint, agent) {
     prdId: prd.id,
     createdTaskIds,
   };
+}
+
+function buildPmStubTaskSpecs(config, sprint, prd) {
+  const implementationAgents = (config.agents || []).filter((candidate) => String(candidate.role || '') === 'implementation');
+  const primaryAgent = implementationAgents[0];
+  if (!primaryAgent) {
+    return [];
+  }
+  const taskId = `${prd.id}-${primaryAgent.id}-1`;
+  const allowedPaths = normalizeStringList(primaryAgent.include || []);
+  const acceptance = normalizeStringList(prd.requirements);
+  const description = typeof prd.specification === 'string' && prd.specification.trim()
+    ? prd.specification.trim()
+    : acceptance[0] || `Implement ${prd.title || prd.id}.`;
+  return [{
+    id: taskId,
+    title: `Implement ${prd.title || prd.id}`,
+    agentId: primaryAgent.id,
+    description,
+    laneKey: `${prd.id}:${primaryAgent.id}`,
+    sprintId: prd.sprintId || sprint.sprintId || 'shared',
+    allowedPaths,
+    acceptance: acceptance.length > 0 ? acceptance : buildFallbackAcceptance(taskId, allowedPaths),
+  }];
 }
 
 function sanitizePlannedTaskSpecs(taskSpecs) {
@@ -798,6 +925,61 @@ function normalizeStringList(value) {
   return value
     .map((entry) => String(entry || '').trim())
     .filter(Boolean);
+}
+
+function buildTrackedImplementationQueueUpdates(rootDir, config, taskSpecs, { prd, sprint }) {
+  const queues = loadQueues(rootDir, config);
+  const nextByAgent = new Map();
+  const now = new Date().toISOString();
+
+  (Array.isArray(taskSpecs) ? taskSpecs : []).forEach((spec) => {
+    const agent = getAgent(config, spec.agentId);
+    const baseQueue = nextByAgent.get(agent.id) || buildTaskQueueState(agent, listTasks(queues[agent.id]).slice());
+    const existingIndex = listTasks(baseQueue).findIndex((task) => task.id === spec.id);
+    const nextTask = {
+      id: spec.id,
+      title: spec.title,
+      description: spec.description || '',
+      agentId: spec.agentId,
+      prdId: prd.id || undefined,
+      laneKey: spec.laneKey || `${prd.id}:${spec.agentId}`,
+      type: spec.type || 'implementation',
+      source: spec.source || 'planned',
+      sprintId: spec.sprintId || prd.sprintId || sprint.sprintId || 'shared',
+      baseBranch: config.integrationBranch,
+      allowedPaths: normalizeStringList(spec.allowedPaths),
+      checks: normalizeStringList(agent.checks || []),
+      acceptance: normalizeStringList(spec.acceptance),
+      state: 'queued',
+      status: 'queued',
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!nextTask.prdId) {
+      delete nextTask.prdId;
+    }
+    if (existingIndex >= 0) {
+      baseQueue.tasks[existingIndex] = {
+        ...baseQueue.tasks[existingIndex],
+        ...nextTask,
+      };
+    } else {
+      baseQueue.tasks.push(nextTask);
+    }
+    nextByAgent.set(agent.id, baseQueue);
+  });
+
+  return Array.from(nextByAgent.entries()).map(([agentId, queueState]) => {
+    const agent = getAgent(config, agentId);
+    const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agentId);
+    if (path.isAbsolute(relativePath)) {
+      throw new Error(`Implementation queue for "${agentId}" must be repo-relative to commit it to ${config.integrationBranch}.`);
+    }
+    return {
+      relativePath,
+      content: buildTaskQueueState(agent, listTasks(queueState)),
+    };
+  });
 }
 
 function isProcessAcceptance(value) {
@@ -846,73 +1028,68 @@ function runReviewerWorker(rootDir, config, agent) {
   };
 }
 
+function claimTrackedImplementationTask(rootDir, config, agent, queue, task) {
+  const nextQueue = buildTaskQueueState(agent, listTasks(queue).map((candidate) => ({ ...candidate })));
+  const nextTask = listTasks(nextQueue).find((candidate) => candidate.id === task.id);
+  if (!nextTask) {
+    throw new Error(`Task "${task.id}" disappeared before tracked claim.`);
+  }
+  const branch = buildTaskBranchName(config, nextTask);
+  const claimedAt = new Date().toISOString();
+  nextTask.state = 'active';
+  nextTask.status = 'active';
+  nextTask.branch = branch;
+  nextTask.startedAt = nextTask.startedAt || claimedAt;
+  nextTask.updatedAt = claimedAt;
+  delete nextTask.completedAt;
+  delete nextTask.commitSha;
+  delete nextTask.completionMode;
+
+  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agent.id);
+  if (path.isAbsolute(relativePath)) {
+    throw new Error(`Implementation queue for "${agent.id}" must be repo-relative to commit it to ${config.integrationBranch}.`);
+  }
+  commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, [{
+    relativePath,
+    content: nextQueue,
+  }], {
+    commitMessage: `autonomy(queue): start ${task.id}`,
+    gitIdentity: agent.gitIdentity,
+  });
+
+  return {
+    task: nextTask,
+    branch,
+  };
+}
+
 function runImplementationWorker(rootDir, config, agent) {
   const queues = loadQueues(rootDir, config);
   const queue = queues[agent.id];
-  const leases = loadLeases(rootDir);
+  const branchLocks = loadBranchLocks(rootDir);
   const prds = loadPrds(rootDir);
-  const activeLeaseTaskIds = new Set((leases.leases || []).map((lease) => lease.taskId));
-  const task = selectImplementationTask(listTasks(queue), prds.prds || [], activeLeaseTaskIds);
+  const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
+  const task = selectImplementationTask(listTasks(queueContext.queue), prds.prds || [], new Set());
   if (!task) {
     return { ok: true, status: 'noop', reason: 'no_queued_task' };
   }
 
-  if (!activeLeaseTaskIds.has(task.id)) {
-    const leasePayload = JSON.parse(execFileSync(process.execPath, [
-      CLI_PATH,
-      'lease',
-      '--root',
-      rootDir,
-      '--agent',
-      agent.id,
-      '--task',
-      task.id,
-      '--json',
-    ], {
-      cwd: rootDir,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim());
-    if (!leasePayload.task || leasePayload.task.id !== task.id) {
-      throw new Error(`Expected lease for task "${task.id}" but received "${leasePayload.task && leasePayload.task.id}".`);
-    }
-  }
-  const worktreePayload = JSON.parse(
-    execFileSync(process.execPath, [CLI_PATH, 'worktree:prepare', '--root', rootDir, '--task', task.id, '--create', '--json'], {
-      cwd: rootDir,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim()
-  );
-
-  const refreshedQueues = loadQueues(rootDir, config);
-  const refreshedQueue = refreshedQueues[agent.id];
-  const leasedTask = listTasks(refreshedQueue).find((candidate) => candidate.id === task.id);
-  if (!leasedTask) {
-    throw new Error(`Leased task "${task.id}" disappeared before dispatch.`);
-  }
-  leasedTask.execution = {
-    status: 'waiting_for_external_agent',
-    dispatchedAt: new Date().toISOString(),
-    branch: worktreePayload.branch,
-    worktreePath: worktreePayload.worktreePath,
-  };
-  const queueRelease = acquireStateLock(rootDir);
-  try {
-    const lockedQueues = loadQueues(rootDir, config);
-    const lockedQueue = lockedQueues[agent.id];
-    const lockedTask = listTasks(lockedQueue).find((candidate) => candidate.id === task.id);
-    if (!lockedTask) {
-      throw new Error(`Leased task "${task.id}" disappeared before dispatch.`);
-    }
-    lockedTask.status = 'leased';
-    lockedTask.updatedAt = new Date().toISOString();
-    lockedTask.execution = {
-      ...leasedTask.execution,
-    };
-    writeQueueAndAggregate(rootDir, config, agent.id, lockedQueue);
-  } finally {
-    queueRelease();
+  let branch = queueContext.branch || task.branch || null;
+  let worktreePath = queueContext.worktreePath || null;
+  let dispatchTask = task;
+  if (queueContext.source !== 'branch') {
+    const claim = claimTrackedImplementationTask(rootDir, config, agent, queue, task);
+    branch = claim.branch;
+    dispatchTask = claim.task;
+    const worktreePayload = JSON.parse(
+      execFileSync(process.execPath, [CLI_PATH, 'worktree:prepare', '--root', rootDir, '--task', task.id, '--create', '--json'], {
+        cwd: rootDir,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim()
+    );
+    branch = worktreePayload.branch;
+    worktreePath = worktreePayload.worktreePath;
   }
 
   let runner = null;
@@ -921,33 +1098,34 @@ function runImplementationWorker(rootDir, config, agent) {
       runner = executeRunnerCommand(agent.runnerCommand, {
         AUTONOMY_ROOT: rootDir,
         AUTONOMY_AGENT_ID: agent.id,
-        AUTONOMY_TASK_ID: task.id,
-        AUTONOMY_BRANCH: worktreePayload.branch,
-        AUTONOMY_WORKTREE: worktreePayload.worktreePath,
+        AUTONOMY_TASK_ID: dispatchTask.id,
+        AUTONOMY_BRANCH: branch,
+        AUTONOMY_WORKTREE: worktreePath,
         AUTONOMY_ERROR_REPORT: getRunnerErrorReportPath(rootDir, agent.id),
       });
     } catch (error) {
-      markImplementationDispatchFailure(rootDir, config, agent.id, task.id, extractExecError(error));
+      markImplementationDispatchFailure(rootDir, config, agent.id, dispatchTask.id, extractExecError(error));
       throw error;
     }
   }
 
   appendAgentLog(rootDir, config, agent.id, 'worker:dispatch', {
     input: {
-      taskId: task.id,
+      taskId: dispatchTask.id,
     },
     output: {
-      ...leasedTask.execution,
+      branch,
+      worktreePath,
       runner,
     },
   });
 
   return {
     ok: true,
-    status: 'leased',
-    taskId: task.id,
-    branch: worktreePayload.branch,
-    worktreePath: worktreePayload.worktreePath,
+    status: 'active',
+    taskId: dispatchTask.id,
+    branch,
+    worktreePath,
     runner,
   };
 }
@@ -955,7 +1133,7 @@ function runImplementationWorker(rootDir, config, agent) {
 function selectImplementationTask(tasks, prds, activeLeaseTaskIds) {
   const prdById = new Map((prds || []).map((prd) => [prd.id, prd]));
   return (tasks || [])
-    .filter((candidate) => implementationTaskNeedsDispatch(candidate, activeLeaseTaskIds))
+    .filter((candidate) => implementationTaskNeedsDispatch(candidate))
     .sort((left, right) => {
       const priorityOrder = compareImplementationTaskPriority(left, right, activeLeaseTaskIds);
       if (priorityOrder !== 0) {
@@ -978,19 +1156,19 @@ function getImplementationTaskPriority(task, activeLeaseTaskIds) {
   if (!task) {
     return Number.MAX_SAFE_INTEGER;
   }
-  if (activeLeaseTaskIds.has(task.id) || task.status === 'leased') {
+  if (getImplementationTaskState(task) === 'active') {
     return 0;
   }
-  if (
-    task.status === 'changes_requested'
-    || task.status === 'conflicted'
-    || task.type === 'review_followup'
-    || task.type === 'conflict_resolution'
-    || task.prId
-  ) {
+  if (task.type === 'review_followup') {
     return 1;
   }
-  return 2;
+  if (task.type === 'conflict_resolution') {
+    return 2;
+  }
+  if (getImplementationTaskState(task) === 'queued') {
+    return 3;
+  }
+  return 10;
 }
 
 function claimQueuedPrd(rootDir) {
@@ -1104,25 +1282,11 @@ function readRunnerErrorReport(filePath) {
 }
 
 function markImplementationDispatchFailure(rootDir, config, agentId, taskId, message) {
-  const release = acquireStateLock(rootDir);
-  try {
-    const queues = loadQueues(rootDir, config);
-    const leases = loadLeases(rootDir);
-    const queue = queues[agentId];
-    const task = listTasks(queue).find((candidate) => candidate.id === taskId);
-    if (!task) {
-      return;
-    }
-    task.status = 'queued';
-    task.updatedAt = new Date().toISOString();
-    task.lastError = message;
-    delete task.execution;
-    leases.leases = (leases.leases || []).filter((lease) => lease.taskId !== taskId);
-    writeQueueAndAggregate(rootDir, config, agentId, queue);
-    writeJson(getPaths(rootDir).leasesState, leases);
-  } finally {
-    release();
-  }
+  void rootDir;
+  void config;
+  void agentId;
+  void taskId;
+  void message;
 }
 
 function normalizeNonEmptyString(value) {
@@ -1139,7 +1303,7 @@ function markReviewDispatchFailure(rootDir, config, agentId, taskId, message) {
     if (!task) {
       return;
     }
-    task.status = 'queued';
+    task.status = 'failed';
     task.updatedAt = new Date().toISOString();
     task.lastError = message;
     delete task.dispatchedAt;

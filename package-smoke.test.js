@@ -166,6 +166,63 @@ test('packaged autonomy-v2 queues PRD additions when one is already active', () 
   );
 });
 
+test('packaged autonomy-v2 queues PRD additions when spec already exists in integration specs', () => {
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-queue-existing-spec-'));
+
+  fs.mkdirSync(path.join(repoDir, 'src', 'apps', 'bay'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'bay', 'index.js'), 'export const value = 3;\n', 'utf8');
+
+  git(repoDir, ['init', '-b', 'main']);
+  git(repoDir, ['config', 'user.email', 'autonomy-queue-existing-spec@example.com']);
+  git(repoDir, ['config', 'user.name', 'Autonomy Queue Existing Spec']);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'fixture']);
+  git(repoDir, ['branch', 'dev']);
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-queue-existing-001',
+    '--title',
+    'Primary PRD in specs',
+    '--task-spec',
+    JSON.stringify({
+      id: 'prd-queue-existing-001-architecture-agent-1',
+      title: 'Primary architecture task',
+      agentId: 'architecture-agent',
+      description: 'Existing spec fixture',
+      allowedPaths: ['src/**/*'],
+      acceptance: ['Only repository source files are queued for this queue fixture task.'],
+      sprintId: 'multi-agent-mvp',
+    }),
+  ]);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-queue-existing-002',
+    '--title',
+    'Secondary PRD in queue',
+    '--specification',
+    'Should queue even without ticking first PRD',
+  ]);
+
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-existing-002.json'),
+    true
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-existing-002.json'),
+    false
+  );
+});
+
 test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is imported', () => {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-queue-promote-'));
 

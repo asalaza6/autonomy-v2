@@ -61,16 +61,17 @@ Tracked truth lives in git on `dev`:
 - agent config
 - sprint config
 - agent prompt files
+- implementation queues in `prompts/autonomous/v2/queues/<agent-id>.json`
 - committed active PRD specs in `prompts/autonomous/v2/specs/prds/<prd-id>.json`
 - queued PRDs in `prompts/autonomous/v2/specs/prds/queue/<prd-id>.json`
 - completed PRD specs may be moved into `prompts/autonomous/v2/specs/prds/archived/`, which sync ignores
-- PM-generated task specs once planning completes
+- PM-generated implementation task entries once planning completes
 
 ### Runtime cache
 
 Runtime state lives under `.autonomy/runtime`:
 
-- queues
+- non-implementation queues
 - leases
 - worker status
 - reconstructed PR records
@@ -95,12 +96,12 @@ What is true on `dev` today:
 - The scheduler syncs `origin/dev` every tick.
 - When safe, local `dev` is fast-forwarded to the fetched remote ref so the checkout stays aligned.
 - `pm-agent` uses Codex CLI to turn a freeform PRD into lane task specs.
-- PM persists those generated task specs back into the committed PRD spec on `dev`.
+- PM persists those generated implementation tasks into tracked per-agent queue files on `dev`.
 - Implementation agents use Codex CLI inside isolated git worktrees.
 - Each implementation lane reuses one deterministic lane branch and worktree.
 - One PR is created per `prd + implementation-agent` lane.
 - A lane PR is created only after that lane has completed its currently queued tasks.
-- If a lane has two tasks, the resulting PR should have two commits.
+- Implementation completion is inferred from tracked queue state, not from raw branch commit count.
 - Reviewer work is per-lane and can start as soon as the first lane PR exists; it does not wait for all implementation lanes to finish.
 - If reviewer requests changes, the system creates or updates a lane-local `review_followup` task on the same branch.
 - Review follow-up tasks use the latest reviewer summary as their default acceptance payload unless the task already has explicit custom acceptance.
@@ -145,19 +146,20 @@ The next scheduler tick:
 
 Those planned tasks are:
 
-- written back into the committed PRD spec on `dev`
-- added to the runtime lane queues
+- written into tracked implementation queue files on `dev`
+- made dispatchable without a runtime implementation queue as source of truth
 
 ### 5. Implementation lanes execute
 
 Each implementation agent:
 
-- leases one queued task
+- reads the current tracked queue task
 - prepares its deterministic worktree and branch
 - runs Codex in that worktree
+- determines success from repo side effects, not structured implementation JSON
 - validates changed files against the allowed path scope
 - runs configured checks
-- commits and pushes
+- commits the task result, records the work commit SHA in the tracked queue, and pushes
 
 Current lane branches are deterministic:
 
@@ -169,8 +171,8 @@ PR creation is lane-level, not per-task.
 
 That means:
 
-- task 1 creates commit 1 on the lane branch
-- task 2 creates commit 2 on the same lane branch
+- task 1 advances the branch-local queue and creates task result commits on the lane branch
+- task 2 continues on the same lane branch
 - only after the lane has no remaining queued tasks does the system record and publish the lane PR
 
 In a typical setup:

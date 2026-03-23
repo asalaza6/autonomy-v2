@@ -29,9 +29,9 @@ The short version is:
 - `src/autonomy-v2-default-runner.js`
   Default implementation/review runner. Wraps Codex with deterministic repo checks, git operations, PR updates, and error reporting.
 - `src/autonomy-v2-codex.js`
-  Codex integration. Builds prompts, enforces JSON schemas, and validates structured planning output.
+  Codex integration. Uses structured output for planning/review and freeform execution for implementation.
 - `src/autonomy-v2-dev-sync.js`
-  Reconciles tracked PRD truth on `dev` with local runtime state.
+  Reconciles tracked PRD truth and tracked implementation queues on `dev` with local runtime state.
 - `src/autonomy-v2-lock.js`
   Filesystem locks for server and state mutations.
 - `src/autonomy-v2-config.js`
@@ -49,6 +49,7 @@ Tracked truth:
 
 - `prompts/autonomous/v2/config/agents.json`
 - `prompts/autonomous/v2/config/sprint.json`
+- `prompts/autonomous/v2/queues/*.json`
 - `prompts/autonomous/v2/specs/prds/*.json`
 - `prompts/autonomous/v2/specs/prds/queue/*.json`
 - `prompts/autonomous/v2/specs/prds/archived/*.json`
@@ -66,6 +67,7 @@ Local runtime cache:
 - `.autonomy/control/dev-sync`
 
 The scheduler rebuilds runtime state from tracked truth and external systems. The runtime files are operational state, not the long-term source of truth.
+For implementation work specifically, tracked queue files are authoritative and runtime implementation queue files are not.
 
 ## Deterministic vs nondeterministic boundary
 
@@ -73,13 +75,14 @@ Deterministic parts:
 
 - config loading and validation
 - lock acquisition
-- queue and lease mutation
+- tracked implementation queue mutation
+- runtime queue and lease mutation for non-implementation agents
 - PRD sync from `dev`
 - worktree and branch preparation
 - git add/commit/push/merge calls
 - diff collection and scope evaluation
 - required check execution
-- PR/review/task state transitions
+- PR/review state transitions and tracked implementation task transitions
 - runtime log and error-report writing
 
 Nondeterministic parts:
@@ -92,7 +95,7 @@ The design intent is to keep the AI inside a deterministic wrapper:
 
 - Codex planning must return schema-valid JSON.
 - planned tasks are validated against implementation lanes and allowed paths.
-- implementation edits are checked against scope and required checks before commit/push.
+- implementation edits are judged by diff, scope, checks, and git side effects rather than required structured output.
 - review output is combined with deterministic diff, scope, and check results before merge decisions are applied.
 
 ## End-to-end flow
@@ -104,12 +107,12 @@ flowchart TD
   C --> D["Runtime PRD state imported/rebuilt"]
   D --> E["PM worker claims queued PRD"]
   E --> F["Codex decomposes PRD into lane tasks"]
-  F --> G["Planned task specs committed back to dev"]
-  G --> H["Runtime task queues updated"]
+  F --> G["Tracked implementation queue entries committed to dev"]
+  G --> H["Implementation queue becomes dispatchable"]
   H --> I["Implementation worker selected by scheduler"]
-  I --> J["Task leased and worktree prepared"]
+  I --> J["Tracked queue task claimed and worktree prepared"]
   J --> K["Default runner invokes Codex in worktree"]
-  K --> L["Scope checks + repo checks + commit + push"]
+  K --> L["Scope checks + repo checks + work commit + queue metadata commit + push"]
   L --> M{"Lane finished?"}
   M -- "No" --> H
   M -- "Yes" --> N["Lane PR recorded/published"]
@@ -144,7 +147,7 @@ Each server poll does this:
    - runtime worker state
 5. It refreshes runtime state:
    - clears dead workers
-   - reconciles stranded leased work
+   - reconciles stranded worker/runtime entries
    - updates aggregated runtime state files
 6. It decides which agents are due:
    - PM if there is a queued PRD and no active planning PRD
@@ -157,7 +160,7 @@ Important constraint:
 
 - the scheduler is polling, not event-driven
 - one worker is active per agent id
-- workers communicate completion by writing runtime/task/PR state, not by holding in-memory objects in the server
+- workers communicate completion by writing tracked queue state and runtime PR/review state, not by holding in-memory objects in the server
 
 ## Worker lifecycle
 
@@ -178,22 +181,22 @@ It does four things:
 
 ## PM flow
 
-PM is the planning bridge between tracked PRD input and runtime task queues.
+PM is the planning bridge between tracked PRD input and tracked implementation queues.
 
 Sequence:
 
 1. claim the next queued PRD from runtime state
 2. call `planPrdTasksWithCodex(...)`
 3. validate returned task specs against implementation agents and scopes
-4. commit the enriched PRD spec back to the integration branch
-5. create runtime tasks by invoking `task:add`
+4. commit PRD metadata back to the integration branch
+5. write planned implementation tasks into tracked per-agent queue files on `dev`
 6. mark the PRD `planned`
 
 What is important here:
 
 - PM output is AI-generated, but it is constrained to JSON
 - PM cannot create reviewer tasks directly
-- PM persists its decomposition back into tracked git state, not just runtime state
+- PM persists queueable implementation work into tracked git state, not just runtime state
 
 ## Implementation flow
 
@@ -201,32 +204,32 @@ Implementation is a deterministic wrapper around a Codex edit session.
 
 In `runImplementationWorker()`:
 
-1. load the agent queue and current leases
+1. resolve the current tracked implementation queue for the agent
 2. select one dispatchable task
-3. acquire a lease through the main CLI
+3. if needed, claim the next queued task on `dev`
 4. prepare the task worktree and deterministic lane branch
-5. mark the task as waiting for the external runner
-6. execute the configured runner command
+5. execute the configured runner command
 
 In the default runner:
 
 1. read task, lane, PR, and completion context
 2. call Codex in the prepared worktree
-3. require a structured `{ status, summary, notes }` result
+3. do not require structured implementation JSON
 4. list changed files
 5. evaluate path scope
 6. run deterministic repo checks
-7. commit one task-sized change
-8. push the lane branch
-9. record or update the lane PR if the lane is complete
-10. finish the task in runtime state
+7. commit the task result
+8. record that work commit SHA into the tracked queue
+9. push the lane branch
+10. record or update the lane PR if the lane is complete
 
 Important implementation invariants:
 
 - one deterministic lane branch per lane
 - one worktree per active lane
-- one commit per completed task
+- one tracked queue file per implementation agent
 - one PR per lane, not one PR per task
+- implementation progress comes from tracked queue state, not raw branch commit count
 
 ## Review flow
 
@@ -271,7 +274,7 @@ Its job is to:
 
 This is one of the most important architectural points in the repo:
 
-- runtime queues are local execution cache
+- review/runtime queues are local execution cache; implementation execution now advances through tracked queue files in git
 - committed PRD specs on `dev` are the durable planning contract
 - restart/recovery is based on reconstructing from git and GitHub, not trusting stale runtime files blindly
 
@@ -289,12 +292,12 @@ Common runtime objects:
 Implementation task shape, conceptually:
 
 - `queued`
-- `leased`
-- `waiting_for_external_agent` in `task.execution.status`
+- `active`
+- `done`
 - `changes_requested`
 - `conflicted`
 - `failed`
-- removed from queue by `task:finish`
+- marked `done` in the tracked queue file and committed on the lane branch
 - later represented through PR/branch-lock state after completion/merge
 
 Review task shape, conceptually:
@@ -369,7 +372,6 @@ Core commands in the package:
 - `autonomy-v2 prd:add`
 - `autonomy-v2 status`
 - `autonomy-v2 lease`
-- `autonomy-v2 task:finish`
 - `autonomy-v2 pr:record`
 - `autonomy-v2 review:record`
 - `autonomy-v2 prd:archive-completed`

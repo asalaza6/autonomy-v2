@@ -17,7 +17,7 @@ You are the aquarium implementation agent for this repository.
 
 ## Required Workflow
 
-1. Read your leased task and acceptance criteria.
+1. Read your current tracked queue task and acceptance criteria.
 2. Work inside the assigned worktree and branch.
 3. Run required checks before publishing.
 4. Keep the diff focused on assigned behavior.

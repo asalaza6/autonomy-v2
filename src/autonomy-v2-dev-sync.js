@@ -49,24 +49,55 @@ function getSyncPaths(rootDir) {
 function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requirements }) {
   const normalizedSpecification = typeof specification === 'string' ? specification.trim() : '';
   const normalizedRequirements = normalizeStringList(requirements);
-  const normalizedTasks = normalizeTaskSpecs(tasks || [], {
-    allowEmpty: Boolean(normalizedSpecification) || normalizedRequirements.length > 0,
-  });
-  return {
+  const normalizedTasks = Array.isArray(tasks) && tasks.length > 0
+    ? normalizeTaskSpecs(tasks || [], {
+        allowEmpty: Boolean(normalizedSpecification) || normalizedRequirements.length > 0,
+      })
+    : [];
+  const payload = {
     schemaVersion: normalizedSpecification || normalizedRequirements.length > 0 ? 2 : 1,
     id: String(id),
     title: String(title),
     createdAt: createdAt || new Date().toISOString(),
     specification: normalizedSpecification || undefined,
     requirements: normalizedRequirements.length > 0 ? normalizedRequirements : undefined,
-    tasks: normalizedTasks,
   };
+  if (normalizedTasks.length > 0) {
+    payload.tasks = normalizedTasks;
+  }
+  return payload;
 }
 
 function hasActiveRuntimePrd(prds) {
   return (prds || []).some((prd) => {
     return ['planning', 'planned', 'queued'].includes(String(prd && prd.status || ''));
   });
+}
+
+function hasPrdSpecInIntegrationBranch(rootDir, integrationBranch, prdId) {
+  const fetchResult = fetchIntegrationBranch(rootDir, integrationBranch);
+  const ref = fetchResult.ref || integrationBranch;
+  if (!ref) {
+    return false;
+  }
+  const specPath = buildPrdSpecRelativePath(String(prdId));
+  const queueSpecPath = buildPrdSpecRelativePath(String(prdId), { queue: true });
+
+  try {
+    readGit(rootDir, ['cat-file', '-e', `${ref}:${specPath}`]);
+    return true;
+  } catch (_) {
+    // File path does not exist in active location.
+  }
+
+  try {
+    readGit(rootDir, ['cat-file', '-e', `${ref}:${queueSpecPath}`]);
+    return true;
+  } catch (_) {
+    // File path does not exist in queue location.
+  }
+
+  return false;
 }
 
 function commitPrdSpecToIntegrationBranch(rootDir, integrationBranch, prdSpec, options = {}) {
@@ -116,6 +147,89 @@ function commitPrdSpecToIntegrationBranch(rootDir, integrationBranch, prdSpec, o
     integrationBranch,
     controlWorktree,
     specPath: relativeSpecPath,
+    committed: true,
+    pushed,
+    pushMessage,
+    commitSha,
+  };
+}
+
+function commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, fileUpdates, options = {}) {
+  const normalizedUpdates = (Array.isArray(fileUpdates) ? fileUpdates : [])
+    .map((entry) => {
+      if (!entry || !entry.relativePath) {
+        return null;
+      }
+      const relativePath = String(entry.relativePath).trim().replace(/\\/g, '/');
+      if (!relativePath) {
+        return null;
+      }
+      const content = typeof entry.content === 'string'
+        ? entry.content
+        : `${JSON.stringify(entry.content || {}, null, 2)}\n`;
+      return {
+        relativePath,
+        content,
+      };
+    })
+    .filter(Boolean);
+
+  if (normalizedUpdates.length === 0) {
+    return {
+      integrationBranch,
+      controlWorktree: null,
+      paths: [],
+      committed: false,
+      pushed: false,
+      commitSha: null,
+    };
+  }
+
+  const paths = getSyncPaths(rootDir);
+  const controlWorktree = ensureControlWorktree(rootDir, integrationBranch, paths.controlWorktree);
+  configureGitIdentity(controlWorktree, options.gitIdentity);
+
+  normalizedUpdates.forEach((entry) => {
+    const absolutePath = path.join(controlWorktree, entry.relativePath);
+    ensureDir(path.dirname(absolutePath));
+    fs.writeFileSync(absolutePath, entry.content, 'utf8');
+  });
+
+  runGit(controlWorktree, ['add', '--', ...normalizedUpdates.map((entry) => entry.relativePath)]);
+  if (!gitHasStagedChanges(controlWorktree)) {
+    return {
+      integrationBranch,
+      controlWorktree,
+      paths: normalizedUpdates.map((entry) => entry.relativePath),
+      committed: false,
+      pushed: false,
+      commitSha: readGit(controlWorktree, ['rev-parse', 'HEAD']),
+    };
+  }
+
+  const commitMessage = options.commitMessage || 'autonomy(sync): update tracked files';
+  runGit(controlWorktree, ['commit', '-m', commitMessage]);
+  const commitSha = readGit(controlWorktree, ['rev-parse', 'HEAD']);
+  const pushArgs = gitAuthArgs().concat(['push', 'origin', `HEAD:${integrationBranch}`]);
+  let pushed = false;
+  let pushMessage = '';
+  if (gitRemoteExists(controlWorktree, 'origin')) {
+    try {
+      runGit(controlWorktree, pushArgs);
+      pushed = true;
+      pushMessage = `pushed to origin/${integrationBranch}`;
+    } catch (error) {
+      pushMessage = extractExecError(error);
+      throw new Error(`Failed to push tracked files to origin/${integrationBranch}: ${pushMessage}`);
+    }
+  } else {
+    pushMessage = 'origin remote not configured; committed locally only';
+  }
+
+  return {
+    integrationBranch,
+    controlWorktree,
+    paths: normalizedUpdates.map((entry) => entry.relativePath),
     committed: true,
     pushed,
     pushMessage,
@@ -234,12 +348,23 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
       }
     }
     const queuedSpecsRemaining = remoteSpecs.length - importedSpecs.length;
+    const trackedImplementationTasksByPrd = buildTrackedImplementationTaskIndex(
+      readTrackedImplementationQueuesFromRef(rootDir, config, ref)
+    );
     const laneStatesStartedAt = Date.now();
     emitSyncProgress(options, 'sync:lane-states:start', {
       prds: importedSpecs.length,
       queued: queuedSpecsRemaining,
     });
-    const remoteLaneStates = resolveRemoteLaneStates(rootDir, integrationBranch, importedSpecs, config, sprint, options);
+    const remoteLaneStates = resolveRemoteLaneStates(
+      rootDir,
+      integrationBranch,
+      importedSpecs,
+      trackedImplementationTasksByPrd,
+      config,
+      sprint,
+      options
+    );
     emitSyncProgress(options, 'sync:lane-states:done', {
       prds: importedSpecs.length,
       queued: queuedSpecsRemaining,
@@ -252,6 +377,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
       config,
       sprint,
       remoteSpecs: importedSpecs,
+      trackedImplementationTasksByPrd,
       remoteLaneStates,
       currentPrds: prdsState.prds || [],
       currentTasks: currentQueueTasks,
@@ -340,7 +466,82 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
   return result;
 }
 
-function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, config, sprint, options = {}) {
+function buildImplementationQueueRelativePath(agentId) {
+  return path.posix.join(...AUTONOMY_SEGMENTS, 'queues', `${agentId}.json`);
+}
+
+function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
+  if (!ref || path.isAbsolute(relativePath)) {
+    return fallbackValue;
+  }
+  try {
+    return JSON.parse(readGit(rootDir, [
+      'show',
+      `${ref}:${relativePath.replace(/\\/g, '/')}`,
+    ]));
+  } catch (_) {
+    return fallbackValue;
+  }
+}
+
+function readTrackedImplementationQueuesFromRef(rootDir, config, ref) {
+  return (config.agents || []).reduce((queues, agent) => {
+    if (String(agent.role || '') !== 'implementation') {
+      return queues;
+    }
+    const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agent.id);
+    const absolutePath = path.isAbsolute(relativePath)
+      ? relativePath
+      : path.join(rootDir, relativePath);
+    const fallbackQueue = fs.existsSync(absolutePath)
+      ? readJson(absolutePath, { tasks: [] })
+      : {
+          schemaVersion: 1,
+          agentId: agent.id,
+          role: agent.role,
+          tasks: [],
+        };
+    const queueState = readJsonFromGitRef(rootDir, ref, relativePath, fallbackQueue);
+    queues[agent.id] = {
+      schemaVersion: 1,
+      agentId: agent.id,
+      role: agent.role,
+      tasks: Array.isArray(queueState.tasks) ? queueState.tasks : [],
+    };
+    return queues;
+  }, {});
+}
+
+function buildTrackedImplementationTaskIndex(trackedQueues) {
+  const tasksByPrd = new Map();
+  Object.values(trackedQueues || {}).forEach((queue) => {
+    (queue.tasks || []).forEach((task) => {
+      const prdId = String(task && task.prdId || '').trim();
+      if (!prdId) {
+        return;
+      }
+      const tasks = tasksByPrd.get(prdId) || [];
+      tasks.push(task);
+      tasksByPrd.set(prdId, tasks);
+    });
+  });
+  return tasksByPrd;
+}
+
+function getPlannedImplementationTasksForPrd(remoteSpec, trackedImplementationTasksByPrd) {
+  const prdId = String(remoteSpec && remoteSpec.spec && remoteSpec.spec.id || '').trim();
+  const trackedTasks = trackedImplementationTasksByPrd instanceof Map
+    ? trackedImplementationTasksByPrd.get(prdId)
+    : null;
+  if (Array.isArray(trackedTasks) && trackedTasks.length > 0) {
+    return trackedTasks.slice();
+  }
+  return Array.isArray(remoteSpec && remoteSpec.spec && remoteSpec.spec.tasks)
+    ? remoteSpec.spec.tasks.slice()
+    : [];
+}
+
+function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, trackedImplementationTasksByPrd, config, sprint, options = {}) {
   const token = resolveGithubAuthToken();
   let repo = null;
   if (token) {
@@ -355,7 +556,9 @@ function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, config
 
   remoteSpecs.forEach((remoteSpec) => {
     const laneStates = {};
-    const groupedTasks = groupLaneTasksByAgent(remoteSpec.spec.tasks || []);
+    const groupedTasks = groupLaneTasksByAgent(
+      getPlannedImplementationTasksForPrd(remoteSpec, trackedImplementationTasksByPrd)
+    );
     emitSyncProgress(options, 'sync:lane-state:prd:start', {
       prdId: remoteSpec.spec.id,
       lanes: Object.keys(groupedTasks).length,
@@ -367,7 +570,7 @@ function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, config
         agentId,
         branch,
       });
-      laneStates[agentId] = resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch);
+      laneStates[agentId] = resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch, config, agentId);
       emitSyncProgress(options, 'sync:lane-state:done', {
         prdId: remoteSpec.spec.id,
         agentId,
@@ -387,7 +590,8 @@ function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, config
   return result;
 }
 
-function resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch) {
+function resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch, config, agentId) {
+  const branchQueueState = readRemoteImplementationQueueState(rootDir, config, integrationBranch, branch, agentId);
   try {
     if (repo && token) {
       const pulls = listPullRequestsByHead(repo, token, integrationBranch, branch);
@@ -398,11 +602,12 @@ function resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch)
         const details = getPullRequest(repo, token, preferredPr.number);
         return {
           branch,
-          branchExists: remoteBranchExists(rootDir, branch),
-          commitCount: Number(details.commits || 0),
+          branchExists: branchQueueState ? true : remoteBranchExists(rootDir, branch),
+          commitCount: branchQueueState ? branchQueueState.commitCount : Number(details.commits || 0),
           merged: Boolean(details.merged_at),
           mergedPrNumber: details.merged_at ? details.number : null,
           openPrNumber: details.state === 'open' ? details.number : null,
+          queueState: branchQueueState ? branchQueueState.queueState : null,
           remote: {
             number: details.number,
             url: details.html_url,
@@ -419,23 +624,25 @@ function resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch)
         return {
           branch,
           branchExists: true,
-          commitCount: Number(comparison.ahead_by || 0),
+          commitCount: branchQueueState ? branchQueueState.commitCount : Number(comparison.ahead_by || 0),
           merged: false,
           mergedPrNumber: null,
           openPrNumber: null,
+          queueState: branchQueueState ? branchQueueState.queueState : null,
           remote: null,
         };
       }
     }
 
-    if (remoteBranchExists(rootDir, branch)) {
+    if (branchQueueState || remoteBranchExists(rootDir, branch)) {
       return {
         branch,
         branchExists: true,
-        commitCount: countRemoteBranchCommits(rootDir, integrationBranch, branch),
+        commitCount: branchQueueState ? branchQueueState.commitCount : countRemoteBranchCommits(rootDir, integrationBranch, branch),
         merged: false,
         mergedPrNumber: null,
         openPrNumber: null,
+        queueState: branchQueueState ? branchQueueState.queueState : null,
         remote: null,
       };
     }
@@ -450,6 +657,7 @@ function resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch)
     merged: false,
     mergedPrNumber: null,
     openPrNumber: null,
+    queueState: null,
     remote: null,
   };
 }
@@ -460,6 +668,7 @@ function buildDerivedImportedRuntimeState({
   config,
   sprint,
   remoteSpecs,
+  trackedImplementationTasksByPrd,
   remoteLaneStates,
   currentPrds,
   currentTasks,
@@ -516,11 +725,13 @@ function buildDerivedImportedRuntimeState({
     const prdId = remoteSpec.spec.id;
     importedPrdIds.add(prdId);
     const laneStates = remoteLaneStates[prdId] || {};
+    const plannedImplementationTasks = getPlannedImplementationTasksForPrd(remoteSpec, trackedImplementationTasksByPrd);
     const derivedPrd = buildDerivedPrdRecord({
       integrationBranch,
       config,
       sprint,
       remoteSpec,
+      implementationTasks: plannedImplementationTasks,
       laneStates,
       now,
       fetchedRef,
@@ -535,7 +746,7 @@ function buildDerivedImportedRuntimeState({
     }
     derivedPrds.push(derivedPrd);
 
-    const groupedTasks = groupLaneTasksByAgent(remoteSpec.spec.tasks || []);
+    const groupedTasks = groupLaneTasksByAgent(plannedImplementationTasks);
     Object.keys(groupedTasks).forEach((agentId) => {
       const laneTasks = groupedTasks[agentId];
       const laneState = laneStates[agentId] || {
@@ -551,7 +762,7 @@ function buildDerivedImportedRuntimeState({
       const prId = existingPr ? existingPr.id : buildStablePullRequestId(laneKey);
       const existingBranchLock = currentBranchLockByLane.get(laneKey) || null;
       const laneTaskIds = new Set(laneTasks.map((task) => task.id));
-      const remoteCompletedCount = Math.max(0, Math.min(Number(laneState.commitCount || 0), laneTasks.length));
+      const remoteCompletedCount = countCompletedRemoteLaneTasks(laneTasks, laneState);
       const localCompletedCount = Math.max(
         countCompletedLaneTasks(existingBranchLock, laneTaskIds, laneTasks.length),
         countCompletedTaskIds(existingPr && existingPr.completedTaskIds, laneTaskIds, laneTasks.length)
@@ -582,20 +793,6 @@ function buildDerivedImportedRuntimeState({
         });
       }
 
-      pendingTasks.forEach((task) => {
-        derivedTaskIds.add(task.id);
-        derivedTasks.push(
-          buildDerivedRuntimeTask(
-            task,
-            prdId,
-            integrationBranch,
-            agentConfig,
-            now,
-            currentTaskById.get(task.id) || null
-          )
-        );
-      });
-
       if (laneState.remote || existingPr) {
         const derivedPr = buildDerivedPullRequestRecord({
           existingPr,
@@ -611,15 +808,7 @@ function buildDerivedImportedRuntimeState({
           now,
         });
         derivedPullRequests.push(derivedPr);
-        const derivedPendingLinkedTasks = buildDerivedPendingLinkedTasks({
-          pr: derivedPr,
-          existingPr,
-          existingReviewerTask,
-          linkedRuntimeTasks,
-          laneTasks,
-          now,
-        });
-        const derivedPendingLinkedTaskIds = new Set(derivedPendingLinkedTasks.map((task) => task.id));
+        const derivedPendingLinkedTaskIds = new Set();
         linkedRuntimeTasks.forEach((task) => {
           if (!task || task.type === 'review') {
             return;
@@ -634,10 +823,6 @@ function buildDerivedImportedRuntimeState({
           if (!derivedPendingLinkedTaskIds.has(taskId)) {
             reconciledTaskIds.add(taskId);
           }
-        });
-        derivedPendingLinkedTasks.forEach((task) => {
-          derivedTaskIds.add(task.id);
-          derivedTasks.push(task);
         });
         if (pendingTasks.length === 0 || currentReviewerTaskByPrId.has(derivedPr.id)) {
           const reviewerTask = buildDerivedReviewerTask(
@@ -668,11 +853,10 @@ function buildDerivedImportedRuntimeState({
   };
 }
 
-function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, laneStates, now, fetchedRef }) {
-  const planningOnlySpec = requiresPmPlanning(remoteSpec.spec);
-  const groupedTasks = groupLaneTasksByAgent(remoteSpec.spec.tasks || []);
+function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, implementationTasks, laneStates, now, fetchedRef }) {
+  const planningOnlySpec = requiresPmPlanning(remoteSpec.spec, implementationTasks);
+  const groupedTasks = groupLaneTasksByAgent(implementationTasks || []);
   const completedTaskSpecIds = [];
-  const pendingTaskSpecs = [];
 
   Object.keys(groupedTasks).forEach((agentId) => {
     const laneTasks = groupedTasks[agentId];
@@ -680,13 +864,12 @@ function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, 
       commitCount: 0,
       merged: false,
     };
-    const completedCount = Math.max(0, Math.min(Number(laneState.commitCount || 0), laneTasks.length));
+    const completedCount = countCompletedRemoteLaneTasks(laneTasks, laneState);
     completedTaskSpecIds.push(...laneTasks.slice(0, completedCount).map((task) => task.id));
-    pendingTaskSpecs.push(...laneTasks.slice(completedCount));
   });
 
   let status = 'planned';
-  if (planningOnlySpec && (!Array.isArray(remoteSpec.spec.tasks) || remoteSpec.spec.tasks.length === 0)) {
+  if (planningOnlySpec && (!Array.isArray(implementationTasks) || implementationTasks.length === 0)) {
     status = 'queued';
   } else if (Object.keys(groupedTasks).length > 0 && Object.values(groupedTasks).every((laneTasks) => {
     const laneState = laneStates[laneTasks[0].agentId] || {};
@@ -697,7 +880,6 @@ function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, 
 
   const record = {
     ...remoteSpec.spec,
-    tasks: pendingTaskSpecs,
     completedTaskSpecIds,
     remoteLaneStates: laneStates,
     status,
@@ -705,8 +887,9 @@ function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, 
     updatedAt: now,
     source: buildSourceMetadata(remoteSpec, fetchedRef, integrationBranch),
   };
-  if (!planningOnlySpec) {
-    record.plannedTaskIds = (remoteSpec.spec.tasks || []).map((task) => task.id);
+  delete record.tasks;
+  if (Array.isArray(implementationTasks) && implementationTasks.length > 0) {
+    record.plannedTaskIds = implementationTasks.map((task) => task.id);
   } else {
     delete record.plannedTaskIds;
   }
@@ -1202,14 +1385,14 @@ function prdStateChanged(currentPrd, nextPrd) {
     currentPrd && currentPrd.title,
     currentPrd && currentPrd.status,
     currentPrd && currentPrd.completedTaskSpecIds || [],
-    currentPrd && currentPrd.tasks || [],
+    currentPrd && currentPrd.plannedTaskIds || [],
     currentPrd && currentPrd.remoteLaneStates || {},
     currentPrd && currentPrd.planningOnlySpec,
   ]) !== JSON.stringify([
     nextPrd.title,
     nextPrd.status,
     nextPrd.completedTaskSpecIds || [],
-    nextPrd.tasks || [],
+    nextPrd.plannedTaskIds || [],
     nextPrd.remoteLaneStates || {},
     nextPrd.planningOnlySpec,
   ]);
@@ -1258,6 +1441,9 @@ function buildLaneSourceSummary(prdId, laneTasks) {
 function writeDerivedQueues(rootDir, config, tasks) {
   const queueMap = {};
   (config.agents || []).forEach((agent) => {
+    if (String(agent.role || '') === 'implementation') {
+      return;
+    }
     queueMap[agent.id] = {
       agentId: agent.id,
       role: agent.role,
@@ -1271,6 +1457,9 @@ function writeDerivedQueues(rootDir, config, tasks) {
     queueMap[task.agentId].tasks.push(task);
   });
   (config.agents || []).forEach((agent) => {
+    if (String(agent.role || '') === 'implementation') {
+      return;
+    }
     writeJson(resolveTaskQueuePath(rootDir, config, agent.id), queueMap[agent.id]);
   });
 }
@@ -1279,6 +1468,9 @@ function readExistingQueueTasks(rootDir, config, fallbackTasks) {
   const aggregated = [];
   const seen = new Set();
   (config.agents || []).forEach((agent) => {
+    if (String(agent.role || '') === 'implementation') {
+      return;
+    }
     const queuePath = resolveTaskQueuePath(rootDir, config, agent.id);
     if (!fs.existsSync(queuePath)) {
       return;
@@ -1294,6 +1486,10 @@ function readExistingQueueTasks(rootDir, config, fallbackTasks) {
     });
   });
   (fallbackTasks || []).forEach((task) => {
+    const agent = getAgentConfig(config, task && task.agentId);
+    if (agent && String(agent.role || '') === 'implementation') {
+      return;
+    }
     const taskId = String(task && task.id || '');
     if (!taskId || seen.has(taskId)) {
       return;
@@ -1406,6 +1602,51 @@ function countRemoteBranchCommits(rootDir, baseBranch, branch) {
       // Best-effort cleanup of the temporary sync ref.
     }
   }
+}
+
+function readRemoteImplementationQueueState(rootDir, config, integrationBranch, branch, agentId) {
+  const agent = getAgentConfig(config, agentId) || null;
+  const relativePath = (agent && agent.taskQueue) || buildImplementationQueueRelativePath(agentId);
+  if (path.isAbsolute(relativePath)) {
+    return null;
+  }
+  const tempRef = `refs/autonomy-sync/${sanitizeFileSegment(agentId)}-${sanitizeFileSegment(branch)}`;
+  const baseRef = gitRefExists(rootDir, `origin/${integrationBranch}`)
+    ? `origin/${integrationBranch}`
+    : integrationBranch;
+  try {
+    runGit(rootDir, gitAuthArgs().concat(['fetch', '--no-tags', 'origin', `${branch}:${tempRef}`]), {
+      timeoutMs: GIT_NETWORK_TIMEOUT_MS,
+    });
+    return {
+      commitCount: Number(readGit(rootDir, ['rev-list', '--count', `${baseRef}..${tempRef}`]) || '0'),
+      queueState: readJsonFromGitRef(rootDir, tempRef, relativePath, null),
+    };
+  } catch (_) {
+    return null;
+  } finally {
+    try {
+      runGit(rootDir, ['update-ref', '-d', tempRef]);
+    } catch (_) {
+      // Best-effort cleanup of the temporary sync ref.
+    }
+  }
+}
+
+function countCompletedRemoteLaneTasks(laneTasks, laneState) {
+  if (laneState && laneState.merged) {
+    return laneTasks.length;
+  }
+  const queueTasksById = new Map(
+    (((laneState && laneState.queueState) || {}).tasks || []).map((task) => [task.id, task])
+  );
+  if (queueTasksById.size > 0) {
+    return laneTasks.filter((task) => {
+      const queueTask = queueTasksById.get(task.id);
+      return String((queueTask && (queueTask.state || queueTask.status)) || '') === 'done';
+    }).length;
+  }
+  return Math.max(0, Math.min(Number((laneState && laneState.commitCount) || 0), laneTasks.length));
 }
 
 function getPullRequest(repo, token, prNumber) {
@@ -1693,9 +1934,12 @@ function isProcessAcceptance(value) {
   return /(reflog|origin\/|merge-base|created from|branch|commit)/i.test(String(value || ''));
 }
 
-function requiresPmPlanning(spec) {
+function requiresPmPlanning(spec, implementationTasks = []) {
   const hasPlanningInput = Boolean(spec && typeof spec.specification === 'string' && spec.specification.trim())
     || (Array.isArray(spec && spec.requirements) && spec.requirements.some((entry) => String(entry || '').trim()));
+  if (Array.isArray(implementationTasks) && implementationTasks.length > 0) {
+    return false;
+  }
   return hasPlanningInput && (!Array.isArray(spec.tasks) || spec.tasks.length === 0);
 }
 
@@ -2037,6 +2281,8 @@ module.exports = {
   PRD_SPECS_DIR,
   buildPrdSpecPayload,
   commitPrdSpecToIntegrationBranch,
+  commitTrackedFilesToIntegrationBranch,
   getSyncPaths,
+  hasPrdSpecInIntegrationBranch,
   syncPrdSpecsFromIntegrationBranch,
 };

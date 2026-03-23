@@ -82,15 +82,17 @@ async function runImplementation({ rootDir, agentId, taskId, branch, worktreePat
   }
 
   logRunnerEvent('implementation:start', { agentId, taskId, branch, worktreePath });
-  const state = loadState(rootDir);
+  const state = loadState(rootDir, {
+    worktreePath,
+    implementationAgentId: agentId,
+  });
   const agent = getAgentConfig(state.config, agentId);
   const task = getTask(state.queues, taskId);
   const laneKey = buildTaskLaneKey(task);
   const laneTasks = getLaneTasks(state.queues, agentId, laneKey);
-  const remainingLaneTasks = laneTasks.filter((candidate) => candidate.id !== task.id);
+  const remainingLaneTasks = laneTasks.filter((candidate) => candidate.id !== task.id && isPendingImplementationTask(candidate));
   const existingPr = getPrForLane(rootDir, agentId, laneKey);
   const completedLaneTasks = getCompletedLaneTasks(rootDir, agentId, laneKey);
-  const taskAlreadyCompleted = completedLaneTasks.some((candidate) => candidate.id === task.id);
   logRunnerEvent('implementation:read-task', {
     taskId: task.id,
     taskType: task.type || 'implementation',
@@ -132,14 +134,7 @@ async function runImplementation({ rootDir, agentId, taskId, branch, worktreePat
     summary: summarizeText(codexResult.summary || codexResult.notes),
   });
 
-  if (codexResult.status !== 'completed') {
-    throw new Error(`Codex blocked implementation for ${task.id}: ${codexResult.summary || codexResult.notes || 'no summary'}`);
-  }
-
   const changedFiles = listChangedFiles(worktreePath);
-  if (changedFiles.length === 0 && !taskAlreadyCompleted) {
-    throw new Error(`Codex completed ${task.id} without changing any files.`);
-  }
 
   let scopeResult = {
     ok: true,
@@ -171,24 +166,30 @@ async function runImplementation({ rootDir, agentId, taskId, branch, worktreePat
     throw new Error(`Required checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
   }
 
-  let commitMessage = null;
-  let commitSha = null;
-  let completedTaskIds = completedLaneTasks.map((candidate) => candidate.id);
-  if (changedFiles.length > 0) {
-    runGit(worktreePath, ['add', '--all', '--', ...changedFiles]);
-    commitMessage = buildCommitMessage(agentId, task, completedLaneTasks.length > 0 || Boolean(existingPr));
-    runGit(worktreePath, ['commit', '-m', commitMessage]);
-    commitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
-    logRunnerEvent('implementation:commit', {
-      taskId: task.id,
-      branch,
-      commitMessage,
-      commitSha,
-      changedFiles,
-    });
-    completedTaskIds = recordLaneTaskCompletion(rootDir, task, branch, worktreePath, scopeResult)
-      .map((candidate) => candidate.id);
+  const completionMode = changedFiles.length > 0 ? 'code' : 'noop';
+  const queueUpdate = markImplementationTaskComplete(worktreePath, state.config, task, branch, completionMode);
+  const filesToCommit = uniqueStrings(changedFiles.concat([queueUpdate.relativePath]));
+  const commitMessage = buildCommitMessage(agentId, task, completedLaneTasks.length > 0 || Boolean(existingPr));
+  runGit(worktreePath, ['add', '--all', '--', ...filesToCommit]);
+  runGit(worktreePath, ['commit', '-m', commitMessage]);
+  const commitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
+  const queueCommitUpdate = recordImplementationTaskCommitSha(worktreePath, state.config, task, commitSha);
+  if (queueCommitUpdate.changed) {
+    runGit(worktreePath, ['add', '--', queueCommitUpdate.relativePath]);
+    runGit(worktreePath, ['commit', '-m', buildQueueMetadataCommitMessage(agentId, task)]);
   }
+  const queueMetadataCommitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
+  logRunnerEvent('implementation:commit', {
+    taskId: task.id,
+    branch,
+    commitMessage,
+    commitSha,
+    queueMetadataCommitSha,
+    changedFiles: filesToCommit,
+    completionMode,
+  });
+  const completedTaskIds = recordLaneTaskCompletion(rootDir, task, branch, worktreePath, scopeResult)
+    .map((candidate) => candidate.id);
   const pushResult = tryPushBranch(worktreePath, branch);
   logRunnerEvent('implementation:push', {
     taskId: task.id,
@@ -238,8 +239,9 @@ async function runImplementation({ rootDir, agentId, taskId, branch, worktreePat
       scopeResult,
       commitMessage,
       commitSha,
+      queueMetadataCommitSha,
+      completionMode,
       completedTaskIds,
-      replayedCompletedTask: taskAlreadyCompleted && changedFiles.length === 0,
       prRecorded: Boolean(existingPr) || remainingLaneTasks.length === 0,
       pushed: pushResult.ok,
       published: Boolean(pushResult.ok && hasGithubAuth()),
@@ -250,14 +252,16 @@ async function runImplementation({ rootDir, agentId, taskId, branch, worktreePat
 
 function runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath }) {
   logRunnerEvent('implementation:start', { agentId, taskId, branch, worktreePath, stub: true });
-  const state = loadState(rootDir);
+  const state = loadState(rootDir, {
+    worktreePath,
+    implementationAgentId: agentId,
+  });
   const task = getTask(state.queues, taskId);
   const laneKey = buildTaskLaneKey(task);
   const laneTasks = getLaneTasks(state.queues, agentId, laneKey);
-  const remainingLaneTasks = laneTasks.filter((candidate) => candidate.id !== task.id);
+  const remainingLaneTasks = laneTasks.filter((candidate) => candidate.id !== task.id && isPendingImplementationTask(candidate));
   const existingPr = getPrForLane(rootDir, agentId, laneKey);
   const completedLaneTasks = getCompletedLaneTasks(rootDir, agentId, laneKey);
-  const taskAlreadyCompleted = completedLaneTasks.some((candidate) => candidate.id === task.id);
   logRunnerEvent('implementation:read-task', {
     taskId: task.id,
     taskType: task.type || 'implementation',
@@ -282,44 +286,48 @@ function runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath 
   const targetFile = resolveTargetFile(worktreePath, task);
   ensureDir(path.dirname(targetFile));
   const alreadyExists = fs.existsSync(targetFile);
-  let commitMessage = null;
-  let commitSha = null;
-  let completedTaskIds = completedLaneTasks.map((candidate) => candidate.id);
-  if (!taskAlreadyCompleted) {
-    const generatedAt = new Date().toISOString();
-    const content = alreadyExists
-      ? `${fs.readFileSync(targetFile, 'utf8').trimEnd()}\n- Follow-up (${task.id}): ${generatedAt}\n`
-      : [
-        `# ${task.title}`,
-        '',
-        `- Agent: ${agentId}`,
-        `- Task: ${task.id}`,
-        `- Lane: ${laneKey}`,
-        `- Generated: ${generatedAt}`,
-        task.description ? `- Description: ${task.description}` : null,
-        '',
-        '## Acceptance',
-        ...(task.acceptance || []).map((entry) => `- ${entry}`),
-        '- Automated implementation runner created this draft change.',
-        '',
-      ].filter(Boolean).join('\n');
+  const generatedAt = new Date().toISOString();
+  const content = alreadyExists
+    ? `${fs.readFileSync(targetFile, 'utf8').trimEnd()}\n- Follow-up (${task.id}): ${generatedAt}\n`
+    : [
+      `# ${task.title}`,
+      '',
+      `- Agent: ${agentId}`,
+      `- Task: ${task.id}`,
+      `- Lane: ${laneKey}`,
+      `- Generated: ${generatedAt}`,
+      task.description ? `- Description: ${task.description}` : null,
+      '',
+      '## Acceptance',
+      ...(task.acceptance || []).map((entry) => `- ${entry}`),
+      '- Automated implementation runner created this draft change.',
+      '',
+    ].filter(Boolean).join('\n');
 
-    fs.writeFileSync(targetFile, content, 'utf8');
-    runGit(worktreePath, ['add', path.relative(worktreePath, targetFile)]);
-    commitMessage = buildCommitMessage(agentId, task, completedLaneTasks.length > 0 || Boolean(existingPr));
-    runGit(worktreePath, ['commit', '-m', commitMessage]);
-    commitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
-    logRunnerEvent('implementation:commit', {
-      taskId: task.id,
-      branch,
-      commitMessage,
-      commitSha,
-      changedFiles: [path.relative(worktreePath, targetFile)],
-      stub: true,
-    });
-    completedTaskIds = recordLaneTaskCompletion(rootDir, task, branch, worktreePath)
-      .map((candidate) => candidate.id);
+  fs.writeFileSync(targetFile, content, 'utf8');
+  const queueUpdate = markImplementationTaskComplete(worktreePath, state.config, task, branch, 'code');
+  const stagedFiles = [path.relative(worktreePath, targetFile), queueUpdate.relativePath];
+  runGit(worktreePath, ['add', '--', ...stagedFiles]);
+  const commitMessage = buildCommitMessage(agentId, task, completedLaneTasks.length > 0 || Boolean(existingPr));
+  runGit(worktreePath, ['commit', '-m', commitMessage]);
+  const commitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
+  const queueCommitUpdate = recordImplementationTaskCommitSha(worktreePath, state.config, task, commitSha);
+  if (queueCommitUpdate.changed) {
+    runGit(worktreePath, ['add', '--', queueCommitUpdate.relativePath]);
+    runGit(worktreePath, ['commit', '-m', buildQueueMetadataCommitMessage(agentId, task)]);
   }
+  const queueMetadataCommitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
+  logRunnerEvent('implementation:commit', {
+    taskId: task.id,
+    branch,
+    commitMessage,
+    commitSha,
+    queueMetadataCommitSha,
+    changedFiles: stagedFiles,
+    stub: true,
+  });
+  const completedTaskIds = recordLaneTaskCompletion(rootDir, task, branch, worktreePath)
+    .map((candidate) => candidate.id);
   const pushResult = tryPushBranch(worktreePath, branch);
   logRunnerEvent('implementation:push', {
     taskId: task.id,
@@ -348,7 +356,7 @@ function runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath 
   });
   logRunnerEvent('implementation:done', {
     taskId: task.id,
-    changedFiles: taskAlreadyCompleted ? 0 : 1,
+    changedFiles: 1,
     commitMessage,
     pushed: pushResult.ok,
     published: Boolean(pushResult.ok && hasGithubAuth()),
@@ -369,8 +377,9 @@ function runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath 
       targetFiles: [path.relative(worktreePath, targetFile)],
       commitMessages: commitMessage ? [commitMessage] : [],
       commitSha,
+      queueMetadataCommitSha,
+      completionMode: 'code',
       completedTaskIds,
-      replayedCompletedTask: taskAlreadyCompleted,
       prRecorded: Boolean(existingPr) || remainingLaneTasks.length === 0,
       pushed: pushResult.ok,
       published: Boolean(pushResult.ok && hasGithubAuth()),
@@ -669,23 +678,61 @@ function runReviewerStub({ rootDir, agentId, reviewTaskId, prId, sourceAgentId }
   });
 }
 
-function loadState(rootDir) {
+function loadState(rootDir, options = {}) {
   const repoAutonomyDir = path.join(rootDir, ...AUTONOMY_SEGMENTS);
   const config = readJson(path.join(repoAutonomyDir, 'config', 'agents.json'));
   const queues = {};
   (config.agents || []).forEach((agent) => {
-    if (!agent.taskQueue) {
-      return;
-    }
-    const queuePath = path.isAbsolute(agent.taskQueue)
-      ? agent.taskQueue
-      : resolveRuntimeManagedPath(rootDir, agent.taskQueue);
-    queues[agent.id] = readJson(queuePath);
+    const relativePath = agent.taskQueue || (
+      String(agent.role || '') === 'implementation'
+        ? buildImplementationQueueRelativePath(agent.id)
+        : path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agent.id}.json`)
+    );
+    const queuePath = String(agent.role || '') === 'implementation'
+      ? (
+        options.worktreePath && options.implementationAgentId === agent.id
+          ? path.join(options.worktreePath, relativePath)
+          : path.join(rootDir, relativePath)
+      )
+      : path.isAbsolute(relativePath)
+        ? relativePath
+        : resolveRuntimeManagedPath(rootDir, relativePath);
+    queues[agent.id] = fs.existsSync(queuePath)
+      ? readJson(queuePath)
+      : buildTaskQueueState(agent, []);
   });
   return {
     config,
     queues,
   };
+}
+
+function buildImplementationQueueRelativePath(agentId) {
+  return path.join('prompts', 'autonomous', 'v2', 'queues', `${agentId}.json`);
+}
+
+function buildTaskQueueState(agent, tasks = []) {
+  return String(agent.role || '') === 'implementation'
+    ? {
+        schemaVersion: 1,
+        agentId: agent.id,
+        role: agent.role,
+        tasks,
+      }
+    : {
+        agentId: agent.id,
+        role: agent.role,
+        tasks,
+      };
+}
+
+function getImplementationTaskState(task) {
+  return String((task && (task.state || task.status)) || '').trim();
+}
+
+function isPendingImplementationTask(task) {
+  const state = getImplementationTaskState(task);
+  return state === 'active' || state === 'queued';
 }
 
 function getTask(queues, taskId) {
@@ -748,6 +795,10 @@ function buildCommitMessage(agentId, task, hasPriorLaneWork) {
   return `auto(${agentId}): ${verb} ${task.id}`;
 }
 
+function buildQueueMetadataCommitMessage(agentId, task) {
+  return `auto(${agentId}): record ${task.id}`;
+}
+
 function finalizeTaskRun({ rootDir, task, branch, completedTaskIds, publish, shouldRecordPr }) {
   if (shouldRecordPr) {
     const recordArgs = [
@@ -771,24 +822,80 @@ function finalizeTaskRun({ rootDir, task, branch, completedTaskIds, publish, sho
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   }
+}
 
-  try {
-    execFileSync(process.execPath, [
-      CLI_PATH,
-      'task:finish',
-      '--root',
-      rootDir,
-      '--task',
-      task.id,
-    ], {
-      cwd: rootDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-  } catch (error) {
-    if (!shouldIgnoreMissingTaskFinishError(error, task.id)) {
-      throw error;
+function markImplementationTaskComplete(worktreePath, config, task, branch, completionMode) {
+  const agent = getAgentConfig(config, task.agentId);
+  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(task.agentId);
+  if (path.isAbsolute(relativePath)) {
+    throw new Error(`Implementation queue for "${task.agentId}" must be repo-relative inside the worktree.`);
+  }
+  const queuePath = path.join(worktreePath, relativePath);
+  const queueState = fs.existsSync(queuePath)
+    ? readJson(queuePath)
+    : buildTaskQueueState(agent, []);
+  const tasks = Array.isArray(queueState.tasks) ? queueState.tasks : [];
+  const currentTask = tasks.find((candidate) => candidate.id === task.id);
+  if (!currentTask) {
+    throw new Error(`Implementation queue in ${relativePath} does not contain task "${task.id}".`);
+  }
+  const now = new Date().toISOString();
+  currentTask.state = 'done';
+  currentTask.status = 'done';
+  currentTask.branch = branch;
+  currentTask.updatedAt = now;
+  currentTask.completedAt = now;
+  currentTask.completionMode = completionMode;
+  delete currentTask.lastError;
+
+  if (!tasks.some((candidate) => candidate.id !== task.id && getImplementationTaskState(candidate) === 'active')) {
+    const nextTask = tasks.find((candidate) => candidate.id !== task.id && getImplementationTaskState(candidate) === 'queued');
+    if (nextTask) {
+      nextTask.state = 'active';
+      nextTask.status = 'active';
+      nextTask.branch = branch;
+      nextTask.startedAt = nextTask.startedAt || now;
+      nextTask.updatedAt = now;
     }
   }
+
+  writeJson(queuePath, buildTaskQueueState(agent, tasks));
+  return {
+    queuePath,
+    relativePath,
+  };
+}
+
+function recordImplementationTaskCommitSha(worktreePath, config, task, commitSha) {
+  const agent = getAgentConfig(config, task.agentId);
+  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(task.agentId);
+  if (path.isAbsolute(relativePath)) {
+    throw new Error(`Implementation queue for "${task.agentId}" must be repo-relative inside the worktree.`);
+  }
+  const queuePath = path.join(worktreePath, relativePath);
+  const queueState = fs.existsSync(queuePath)
+    ? readJson(queuePath)
+    : buildTaskQueueState(agent, []);
+  const tasks = Array.isArray(queueState.tasks) ? queueState.tasks : [];
+  const currentTask = tasks.find((candidate) => candidate.id === task.id);
+  if (!currentTask) {
+    throw new Error(`Implementation queue in ${relativePath} does not contain task "${task.id}".`);
+  }
+  if (currentTask.commitSha === commitSha) {
+    return {
+      queuePath,
+      relativePath,
+      changed: false,
+    };
+  }
+  currentTask.commitSha = commitSha;
+  currentTask.updatedAt = new Date().toISOString();
+  writeJson(queuePath, buildTaskQueueState(agent, tasks));
+  return {
+    queuePath,
+    relativePath,
+    changed: true,
+  };
 }
 
 function listChangedFiles(worktreePath) {
@@ -1495,13 +1602,22 @@ function persistReviewerTaskState(rootDir, config, reviewTaskId, patch) {
 
 function writeQueuesState(rootDir, config, queues) {
   (config.agents || []).forEach((agent) => {
-    const queuePath = path.isAbsolute(agent.taskQueue)
-      ? agent.taskQueue
-      : resolveRuntimeManagedPath(rootDir, agent.taskQueue);
+    if (String(agent.role || '') === 'implementation') {
+      return;
+    }
+    const relativePath = agent.taskQueue || path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agent.id}.json`);
+    const queuePath = path.isAbsolute(relativePath)
+      ? relativePath
+      : resolveRuntimeManagedPath(rootDir, relativePath);
     writeJson(queuePath, queues[agent.id]);
   });
   writeJson(path.join(rootDir, ...RUNTIME_SEGMENTS, 'state', 'tasks.json'), {
-    tasks: Object.values(queues).flatMap((queue) => queue.tasks || []),
+    tasks: Object.values(queues)
+      .filter((queue) => {
+        const agent = getAgentConfig(config, queue.agentId);
+        return String((agent && agent.role) || queue.role || '') !== 'implementation';
+      })
+      .flatMap((queue) => queue.tasks || []),
   });
 }
 
