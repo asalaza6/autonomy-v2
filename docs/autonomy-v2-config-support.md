@@ -20,6 +20,8 @@ Running `autonomy-v2 init --root <repo>` scaffolds the repo-local config and sup
 
 By default it writes:
 
+- `.gitignore`
+- `.env.autonomy`
 - `prompts/autonomous/v2/config/agents.json`
 - `prompts/autonomous/v2/config/sprint.json`
 - `prompts/autonomous/v2/agents/*`

@@ -1,0 +1,7 @@
+# Default ignores for autonomy v2 repos.
+node_modules/
+dist/
+build/
+.DS_Store
+.autonomy/runtime/state/queues/*.lock
+.autonomy/runtime

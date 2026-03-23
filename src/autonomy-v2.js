@@ -60,6 +60,8 @@ const GENERATED_TEMPLATE_FILES = {
   ].join('\n')}\n`,
 };
 const BASE_TEMPLATE_FILES = [
+  '.env.autonomy',
+  '.gitignore',
   'README.md',
   'config/agents.json',
   'config/sprint.json',
@@ -707,6 +709,9 @@ function getAgentDisplayName(agent) {
 }
 
 function resolveTemplateTargetPath(rootDir, relativeFile) {
+  if (relativeFile.startsWith('.')) {
+    return path.join(rootDir, relativeFile);
+  }
   if (relativeFile.startsWith('scripts/')) {
     return path.join(rootDir, relativeFile);
   }
