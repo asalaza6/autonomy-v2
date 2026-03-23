@@ -14,6 +14,8 @@ The runtime state stays separate under:
 - `.autonomy/runtime/`
 - `.autonomy/worktrees/`
 
+The entire `.autonomy/` directory is scaffolded as local runtime state and is ignored by default.
+
 ## What `init` Creates
 
 Running `autonomy-v2 init --root <repo>` scaffolds the repo-local config and support files into the target repository.
@@ -22,6 +24,7 @@ By default it writes:
 
 - `.gitignore`
 - `.env.autonomy`
+- `.env.autonomy` is scaffolded with placeholders and ignored by default.
 - `prompts/autonomous/v2/config/agents.json`
 - `prompts/autonomous/v2/config/sprint.json`
 - `prompts/autonomous/v2/agents/*`

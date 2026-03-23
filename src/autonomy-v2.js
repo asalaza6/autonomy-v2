@@ -43,12 +43,11 @@ const DEFAULT_GITIGNORE = [
   '.env.development',
   '.env.production',
   '',
-  '# Keep autoproduced runtime marker',
-  '!.env.autonomy',
-  '',
   '# Autonomy runtime state',
-  '.autonomy/runtime/state/queues/*.lock',
-  '.autonomy/runtime',
+  '.autonomy/',
+  '',
+  '# Autonomy local environment placeholder',
+  '.env.autonomy',
   '',
 ].join('\n');
 const GENERATED_TEMPLATE_FILES = {
