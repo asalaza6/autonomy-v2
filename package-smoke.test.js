@@ -39,11 +39,11 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
   assert.equal(agentsConfig.schemaVersion, 1);
   assert.deepEqual(
     agentsConfig.agents.map((agent) => agent.id),
-    ['pm-agent', 'aquarium-agent', 'adventure-agent', 'action-agent', 'reviewer']
+    ['pm-agent', 'architecture-agent', 'reviewer']
   );
   assert.deepEqual(agentsConfig.mergeActors, ['reviewer']);
   assert.deepEqual(
-    agentsConfig.agents.find((agent) => agent.id === 'aquarium-agent').runnerCommand,
+    agentsConfig.agents.find((agent) => agent.id === 'architecture-agent').runnerCommand,
     ['node', 'scripts/autonomy-v2-default-runner.js']
   );
   assert.deepEqual(
@@ -57,7 +57,7 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
   ));
   assert.equal(sprintConfig.sprintId, 'multi-agent-mvp');
   assert.equal(sprintConfig.name, 'Multi-Agent PR System MVP');
-  assert.equal(sprintConfig.maxParallelImplementationAgents, 3);
+  assert.equal(sprintConfig.maxParallelImplementationAgents, 1);
   assert.equal(sprintConfig.requireReviewApproval, true);
   assert.equal(sprintConfig.requireScopeValidation, true);
   assert.equal(sprintConfig.defaultTaskBaseBranch, 'dev');
@@ -72,12 +72,12 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
     'Package smoke PRD',
     '--task-spec',
     JSON.stringify({
-      id: 'prd-package-001-aquarium-agent-1',
-      title: 'Aquarium package smoke task',
-      agentId: 'aquarium-agent',
-      description: 'Create one aquarium task through packaged PM planning.',
-      allowedPaths: ['src/barebones-starter/games/apps/aquarium/**'],
-      acceptance: ['Only aquarium files are queued for this package smoke task.'],
+      id: 'prd-package-001-architecture-agent-1',
+      title: 'Architecture package smoke task',
+      agentId: 'architecture-agent',
+      description: 'Create one architecture task through packaged PM planning.',
+      allowedPaths: ['src/barebones-starter/**'],
+      acceptance: ['Only barebones-starter files are queued for this package smoke task.'],
       sprintId: 'multi-agent-mvp',
     }),
   ]);
@@ -98,7 +98,7 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
   ));
   assert.equal(runtimePrds.prds[0].id, 'prd-package-001');
   assert.equal(runtimePrds.prds[0].status, 'planned');
-  assert.deepEqual(runtimePrds.prds[0].plannedTaskIds, ['prd-package-001-aquarium-agent-1']);
+  assert.deepEqual(runtimePrds.prds[0].plannedTaskIds, ['prd-package-001-architecture-agent-1']);
 });
 
 test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on force', () => {
@@ -140,15 +140,15 @@ test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on 
   assert.match(billingSystem, /billing agent implementation agent/i);
   assert.match(billingSystem, /src\/barebones-starter\/games\/apps\/billing\/\*\*/);
 
-  agentsConfig.agents = agentsConfig.agents.filter((agent) => agent.id !== 'action-agent');
+  agentsConfig.agents = agentsConfig.agents.filter((agent) => agent.id !== 'billing-agent');
   fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
 
   runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
 
-  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'action-agent', 'system.md')));
-  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'action-agent', 'handoff.md')));
-  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'agents', 'action-agent', 'log.md')));
-  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'state', 'queues', 'action-agent.json')));
+  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'system.md')));
+  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'handoff.md')));
+  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'agents', 'billing-agent', 'log.md')));
+  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'state', 'queues', 'billing-agent.json')));
   assert.ok(fs.existsSync(billingSystemPath));
   assert.ok(fs.existsSync(billingQueuePath));
 });
@@ -168,7 +168,7 @@ test('packaged autonomy-v2 rejects invalid agent config values', () => {
     /duplicate agent id/i
   );
 
-  agentsConfig.agents[1].id = 'aquarium-agent';
+  agentsConfig.agents[1].id = 'architecture-agent';
   agentsConfig.agents[0].id = 'pm-agent';
   agentsConfig.agents[0].role = 'bogus';
   fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
