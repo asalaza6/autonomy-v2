@@ -1,7 +1,22 @@
-# Default ignores for autonomy v2 repos.
+# System-generated default ignore file for autonomy-v2.
+# Keep this file aligned with repository bootstrap defaults.
+
+# Node / tooling artifacts
 node_modules/
 dist/
 build/
+coverage/
 .DS_Store
+
+# Env files
+.env
+.env.local
+.env.development
+.env.production
+
+# Keep autoproduced runtime marker
+!.env.autonomy
+
+# Autonomy runtime state
 .autonomy/runtime/state/queues/*.lock
 .autonomy/runtime
