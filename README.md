@@ -34,6 +34,41 @@ npm install -D @asalaza6/autonomy-v2
 npx autonomy-v2 init --root .
 ```
 
+### Update autonomy-v2 in an existing project
+
+From the target repository root:
+
+```bash
+# Update to the latest publish version in package.json + lockfile
+npm update @asalaza6/autonomy-v2
+
+# Force-resolve to latest and rebuild lockfile
+npm install -D @asalaza6/autonomy-v2@latest
+
+# Or with other package managers
+pnpm add -D @asalaza6/autonomy-v2@latest
+yarn add -D @asalaza6/autonomy-v2@latest
+```
+
+Then refresh local bootstrap artifacts so updated defaults (including `.gitignore` / `.env.autonomy`) are applied:
+
+```bash
+npx autonomy-v2 init --root . --force
+```
+
+If Codex shows `refresh_token_reused` or says your access token could not be refreshed, reset the local session and sign in again:
+
+```bash
+codex logout
+codex login
+```
+
+If browser-based login does not open or complete, use device auth instead:
+
+```bash
+codex login --device-auth
+```
+
 Use `--force` to refresh and prune scaffolded artifacts:
 
 ```bash

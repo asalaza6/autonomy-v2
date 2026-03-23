@@ -565,6 +565,9 @@ function isPathWithinAgentScope(candidatePath, agentInclude) {
   const candidatePrefix = trimGlob(candidatePath);
   return agentInclude.some((includePath) => {
     const includePrefix = trimGlob(includePath);
+    if (includePrefix.length === 0) {
+      return true;
+    }
     return candidatePrefix === includePrefix || candidatePrefix.startsWith(`${includePrefix}/`);
   });
 }
