@@ -10,7 +10,7 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
   const implementationAgents = (config.agents || []).filter((candidate) => candidate.role === 'implementation');
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
-    'You are planning implementation work for Fluxborne Autonomous v2.',
+    'You are planning implementation work for an autonomy-first repository.',
     '',
     'Available implementation lanes:',
     JSON.stringify(
@@ -105,7 +105,7 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
 async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branch, worktreePath }) {
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
-    'You are executing a Fluxborne implementation lane inside the assigned git worktree.',
+    'You are executing an implementation lane inside the assigned git worktree.',
     '',
     'Hard rules:',
     '- Edit only files allowed by the task and lane scope.',
@@ -176,7 +176,7 @@ async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branc
 async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, worktreePath, checkResults, diffFiles, scopeResult }) {
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
-    'You are reviewing a Fluxborne implementation branch for merge into dev.',
+    'You are reviewing an implementation branch for merge into dev.',
     '',
     'Hard rules:',
     '- Do not edit files.',
@@ -263,7 +263,7 @@ async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, workt
 
 async function runCodexStructured({ cwd, prompt, schema, readOnly }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxborne-autonomy-codex-'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
   const schemaPath = path.join(tempDir, 'schema.json');
   const outputPath = path.join(tempDir, 'output.json');
   const streamOutput = shouldStreamCodexOutput();
@@ -296,7 +296,7 @@ async function runCodexStructured({ cwd, prompt, schema, readOnly }) {
 
 function runCodexStructuredSync({ cwd, prompt, schema, readOnly }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxborne-autonomy-codex-'));
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
   const schemaPath = path.join(tempDir, 'schema.json');
   const outputPath = path.join(tempDir, 'output.json');
   const streamOutput = shouldStreamCodexOutput();

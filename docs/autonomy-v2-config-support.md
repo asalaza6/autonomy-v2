@@ -28,22 +28,20 @@ By default it writes:
 
 Existing config files are preserved. Generated agent scaffolding is recreated from the active config, and `--force` prunes stale generated agent files when the roster changes.
 
-## Default Fluxborne Agent Set
+## Default Agent Set
 
-The Fluxborne default config is intentionally repo-specific.
+The default config supports a small set of starter agents.
 
-Active agents:
+Active starter agents:
 
 - `pm-agent`
-- `aquarium-agent`
-- `adventure-agent`
-- `action-agent`
+- `architecture-agent`
 - `reviewer`
 
 Roles:
 
 - `pm-agent` plans PRDs into tasks
-- `aquarium-agent`, `adventure-agent`, and `action-agent` implement lane-scoped work
+- `architecture-agent` plans and guides repository initialization and structure-oriented implementation tasks
 - `reviewer` reviews and merges approved PRs into `dev`
 
 The default integration and production branches are:
@@ -53,7 +51,7 @@ The default integration and production branches are:
 
 ## How Runner Commands Work
 
-The repo-local config keeps the current Fluxborne runner command shape:
+The repo-local config keeps the current runner command shape:
 
 - `node scripts/autonomy-v2-default-runner.js`
 

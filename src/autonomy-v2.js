@@ -3247,7 +3247,7 @@ function githubRequest(repo, token, method, endpoint, payload) {
       'Accept': 'application/vnd.github+json',
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'fluxborne-autonomy-v2',
+      'User-Agent': 'autonomy-v2',
       'X-GitHub-Api-Version': '2022-11-28',
     },
   };

@@ -17,6 +17,7 @@ const CLI_PATH = path.join(__dirname, 'autonomy-v2.js');
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const DEFAULT_ERROR_PREVIEW_LIMIT = 4000;
+const REVIEW_AUTO_APPROVAL_THRESHOLD = 3;
 
 function logRunnerEvent(event, payload = {}) {
   if (process.env.AUTONOMY_STREAM_WORKER_OUTPUT !== '1') {
@@ -486,8 +487,11 @@ async function runReviewer({ rootDir, agentId, reviewTaskId, prId, sourceAgentId
     summary: summarizeText(codexReview.summary),
   });
   const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
+  const shouldForceApproveAfterThreeRounds = shouldForceApproveAfterRepeatedReviews(pr, checkResults, scopeResult);
   const scopeConcernOnly = scopeResult.ok && isScopeOnlyReviewFeedback(codexReview);
-  const decision = failedChecks.length > 0
+  const decision = shouldForceApproveAfterThreeRounds
+    ? 'approve'
+    : failedChecks.length > 0
     ? 'changes-requested'
     : !scopeResult.ok
       ? 'changes-requested'
@@ -499,6 +503,9 @@ async function runReviewer({ rootDir, agentId, reviewTaskId, prId, sourceAgentId
   const summaryParts = scopeConcernOnly
     ? [buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
     : [codexReview.summary].concat(codexReview.concerns || []);
+  if (shouldForceApproveAfterThreeRounds) {
+    summaryParts.push('Auto-approval threshold reached: 3+ reviewer rounds with passing checks/scope.');
+  }
   if (failedChecks.length > 0) {
     summaryParts.push(`Blocking checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
   }
@@ -1414,6 +1421,22 @@ function shouldRetryApprovedPrMerge(pr, reviewerTask) {
   return true;
 }
 
+function shouldForceApproveAfterRepeatedReviews(pr, checkResults, scopeResult) {
+  const normalizedPr = pr || {};
+  const normalizedScope = scopeResult || {};
+  const reviewCount = Number.isFinite(Number(normalizedPr.reviews && normalizedPr.reviews.length))
+    ? Number(normalizedPr.reviews.length)
+    : 0;
+  const failedChecks = Array.isArray(checkResults)
+    ? checkResults.filter((entry) => entry && entry.status === 'failed')
+    : [];
+  return (
+    reviewCount >= REVIEW_AUTO_APPROVAL_THRESHOLD
+    && failedChecks.length === 0
+    && normalizedScope.ok === true
+  );
+}
+
 function latestReviewDecision(pr) {
   if (!pr || !Array.isArray(pr.reviews) || pr.reviews.length === 0) {
     return '';
@@ -1604,7 +1627,7 @@ function githubRequest(repo, token, method, endpoint, payload) {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'fluxborne-autonomy-v2-runner',
+      'User-Agent': 'autonomy-v2-runner',
       'X-GitHub-Api-Version': '2022-11-28',
     },
   };
@@ -1688,6 +1711,7 @@ module.exports = {
   isScopeOnlyReviewFeedback,
   main,
   normalizeNonEmptyString,
+  shouldForceApproveAfterRepeatedReviews,
   shouldIgnoreMissingTaskFinishError,
   shouldRetryApprovedPrMerge,
 };

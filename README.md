@@ -1,6 +1,6 @@
 # Autonomy v2 Package
 
-This is the repository-local package form of `autonomy-v2` for Fluxborne.
+This is the repository-local package form of `autonomy-v2`.
 
 The package owns the command implementations and prompt templates, while the
 runtime/state and execution still occur in a consumer workspace.
@@ -21,13 +21,32 @@ runtime/state and execution still occur in a consumer workspace.
 
 ## Current package command usage
 
-From this repo:
+## Install + initialize in a new workspace
 
 ```bash
-node packages/autonomy-v2/bin/autonomy-v2 init --root /Users/bytedance/Documents/GitHub/fluxborne
-node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /Users/bytedance/Documents/GitHub/fluxborne --id <id> --title <title> --specification <text>
-node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /Users/bytedance/Documents/GitHub/fluxborne --id <id> --title <title> ...
-node packages/autonomy-v2/bin/autonomy-v2-server serve --root /Users/bytedance/Documents/GitHub/fluxborne
+nvm install 20
+nvm use 20
+```
+
+```bash
+# from the target workspace
+npm install -D @asalaza6/autonomy-v2
+npx autonomy-v2 init --root .
+```
+
+Use `--force` to refresh and prune scaffolded artifacts:
+
+```bash
+npx autonomy-v2 init --root . --force
+```
+
+From a local monorepo path:
+
+```bash
+node packages/autonomy-v2/bin/autonomy-v2 init --root /path/to/repo
+node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> --specification <text>
+node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> ...
+node packages/autonomy-v2/bin/autonomy-v2-server serve --root /path/to/repo
 ```
 
 From another folder using the installed package:
@@ -37,6 +56,28 @@ npx autonomy-v2 init --root /path/to/consumer-repo
 npx autonomy-v2 prd:add --root /path/to/consumer-repo --id <id> --title <title> ...
 npx autonomy-v2-server serve --root /path/to/consumer-repo
 ```
+
+## GitHub auth setup
+
+Create a GitHub token with repository access and store it in your environment:
+
+```bash
+GITHUB_TOKEN=ghp_...
+```
+
+Required token capabilities:
+
+- `Contents` (repository contents, commits, branches, downloads, releases, and merges)
+- `Issues` (issues and related comments, assignees, labels, milestones)
+- `Metadata` (required)
+- `Pull requests` (pull requests and related comments, assignees, labels, milestones, and merges)
+
+Place in one of:
+
+- `.env.autonomy.local`
+- `.env.autonomy`
+- `.env.local`
+- `.env`
 
 ## Compatibility with current repo setup
 
@@ -57,5 +98,5 @@ node packages/autonomy-v2/package-smoke.test.js
 
 ## Design scope
 
-This sprint intentionally keeps logic and prompts Fluxborne-specific.
+This package focuses on generic workflow orchestration.
 Only the package boundary and packaging metadata were organized.

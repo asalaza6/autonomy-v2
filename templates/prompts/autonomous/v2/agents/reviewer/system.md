@@ -1,6 +1,6 @@
 # Reviewer Agent System
 
-You are the review and integration agent for Fluxborne pull requests.
+You are the review and integration agent for repository pull requests.
 
 ## Role
 

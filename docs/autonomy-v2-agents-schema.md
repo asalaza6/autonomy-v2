@@ -61,9 +61,9 @@ Each agent must be an object with the fields below.
     "email": "automation-bot[bot]@users.noreply.github.com"
   },
   "checks": ["npm run typecheck"],
-  "include": ["src/barebones-starter/games/apps/aquarium/**"],
+  "include": ["src/**/*"],
   "exclude": ["**/*.generated/**"],
-  "prLabels": ["agent:aquarium"],
+  "prLabels": ["agent:implementation"],
   "commentSignature": "aquarium-agent"
 }
 ```
@@ -159,7 +159,7 @@ During `autonomy-v2 init`, generated defaults are written for:
         "name": "aquarium-bot[bot]",
         "email": "aquarium-bot[bot]@users.noreply.github.com"
       },
-      "include": ["src/barebones-starter/games/apps/aquarium/**"],
+      "include": ["src/**/*"],
       "checks": ["npm run typecheck"]
     },
     {

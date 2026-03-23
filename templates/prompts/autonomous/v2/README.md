@@ -1,6 +1,6 @@
 # Autonomous v2
 
-Autonomous v2 is Fluxborne's current GitHub-backed multi-agent delivery loop.
+Autonomous v2 is a GitHub-backed multi-agent delivery loop.
 
 It is built around one steady-state operator workflow:
 
@@ -21,7 +21,7 @@ From there, the system is expected to:
 
 ## What v2 is
 
-V2 is not a web server or dashboard. The "server" is a polling scheduler in [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-server.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-server.js).
+V2 is not a web server or dashboard. The "server" is a polling scheduler.
 
 On each poll it:
 
@@ -34,9 +34,9 @@ The default poll interval is 2000 ms.
 
 ## Current agent set
 
-The active v2 agents are defined in [/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json](/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json), and the scaffold generator reads that file directly.
+The active v2 agents are defined in `prompts/autonomous/v2/config/agents.json`, and the scaffold generator reads that file directly.
 
-Fluxborne currently ships with:
+The default setup ships with:
 
 - `pm-agent`
 - `architecture-agent`
@@ -44,11 +44,11 @@ Fluxborne currently ships with:
 
 Other repos can add or remove implementation agents by editing `agents.json` and rerunning `init --force`.
 
-`init` also writes a repo-local `scripts/autonomy-v2-default-runner.js` wrapper so the default agent config can keep using Fluxborne's current runner command shape.
+`init` also writes a repo-local `scripts/autonomy-v2-default-runner.js` wrapper so the default agent config can keep using the repository runner command shape.
 
-Lane ownership is path-scoped in the active Fluxborne config:
+Lane ownership is path-scoped in the active config:
 
-- `architecture-agent` -> `src/barebones-starter/**`
+- `architecture-agent` -> `**/*`
 
 ## Source of truth
 
@@ -82,7 +82,7 @@ For imported PRDs, runtime files are not treated as the long-term authority anym
 - remote lane branches
 - GitHub PR state and commit counts
 
-That rebuild happens in [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-dev-sync.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-dev-sync.js).
+That rebuild happens in `src/autonomy-v2-dev-sync.js`.
 
 ## Current behavior
 
@@ -213,7 +213,41 @@ The same checkout can be reused. Execution isolation comes from `.autonomy/workt
 
 ## One-time setup
 
+### Install package (if running from npm)
+
+```bash
+nvm install 20
+nvm use 20
+```
+
+```bash
+npm install -D @asalaza6/autonomy-v2
+```
+
+Then initialize in your workspace root:
+
+```bash
+npx autonomy-v2 init --root .
+npx autonomy-v2 init --root . --force
+```
+
 ### Environment
+
+### GitHub auth (required)
+
+Create a GitHub token and place it in your environment file (for example
+`.env.autonomy.local` or `.env.autonomy`) as:
+
+```bash
+GITHUB_TOKEN=ghp_...
+```
+
+The token must allow repository access for the workflow:
+
+- `Contents` (Repository contents, commits, branches, downloads, releases, and merges)
+- `Issues` (Issues and related comments, assignees, labels, milestones)
+- `Metadata` (Required)
+- `Pull requests` (Pull requests and related comments, assignees, labels, milestones, and merges)
 
 Autonomy commands auto-load env files in this order:
 
@@ -276,7 +310,12 @@ The v2 test suite runs the orchestration path with stubbed Codex behavior:
 npm run autonomy:v2:test
 ```
 
-The live GitHub flow requires real `codex` auth and a valid GitHub token. The tests do not exercise the real networked Codex path.
+## Reference links
+
+- [`prompts/autonomous/v2/config/agents.json`](config/agents.json)
+- [`prompts/autonomous/v2/config/sprint.json`](config/sprint.json)
+
+The live GitHub flow requires real `codex` auth and a valid GitHub token.
 
 ## Known limitations
 
@@ -289,11 +328,10 @@ Current limitations worth knowing:
 
 ## Key files
 
-- [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2.js)
-- [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-server.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-server.js)
-- [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-worker.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-worker.js)
-- [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-orchestrator.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-orchestrator.js)
-- [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-default-runner.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-default-runner.js)
-- [/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-dev-sync.js](/Users/bytedance/Documents/GitHub/fluxborne/scripts/autonomy-v2-dev-sync.js)
-- [/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json](/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/agents.json)
-- [/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/sprint.json](/Users/bytedance/Documents/GitHub/fluxborne/prompts/autonomous/v2/config/sprint.json)
+- [`[package] scripts/autonomy-v2.js`](scripts/autonomy-v2.js)
+- [`[package] scripts/autonomy-v2-server.js`](scripts/autonomy-v2-server.js)
+- [`[package] scripts/autonomy-v2-worker.js`](scripts/autonomy-v2-worker.js)
+- [`[package] scripts/autonomy-v2-orchestrator.js`](scripts/autonomy-v2-orchestrator.js)
+- [`[package] scripts/autonomy-v2-default-runner.js`](scripts/autonomy-v2-default-runner.js)
+- [`[package] prompts/autonomous/v2/config/agents.json`](prompts/autonomous/v2/config/agents.json)
+- [`[package] prompts/autonomous/v2/config/sprint.json`](prompts/autonomous/v2/config/sprint.json)

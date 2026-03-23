@@ -10,7 +10,7 @@
       "agentId": "aquarium-agent",
       "description": "Create aquarium work for this PRD.",
       "allowedPaths": [
-        "src/barebones-starter/games/apps/aquarium/**"
+        "src/**/*"
       ],
       "acceptance": [
         "Aquarium work complete"
@@ -22,7 +22,7 @@
       "agentId": "adventure-agent",
       "description": "Create adventure work for this PRD.",
       "allowedPaths": [
-        "src/barebones-starter/games/apps/adventure/**"
+        "src/**/*"
       ],
       "acceptance": [
         "Adventure work complete"
@@ -34,7 +34,7 @@
       "agentId": "action-agent",
       "description": "Create action work for this PRD.",
       "allowedPaths": [
-        "src/barebones-starter/games/apps/fluxborne/**"
+        "src/**/*"
       ],
       "acceptance": [
         "Action work complete"

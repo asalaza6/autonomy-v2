@@ -4,17 +4,18 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { shouldForceApproveAfterRepeatedReviews } = require('./src/autonomy-v2-default-runner');
 
 const PROJECT_ROOT = path.join(__dirname);
 const CLI_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2');
 const SERVER_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2-server');
 
 test('packaged autonomy-v2 runs init, prd:add, and PM planning against an external workspace root', () => {
-  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxborne-autonomy-v2-package-'));
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-package-'));
 
-  fs.mkdirSync(path.join(repoDir, 'src', 'barebones-starter', 'games', 'apps', 'aquarium'), { recursive: true });
+  fs.mkdirSync(path.join(repoDir, 'src', 'apps', 'aquarium'), { recursive: true });
   fs.writeFileSync(
-    path.join(repoDir, 'src', 'barebones-starter', 'games', 'apps', 'aquarium', 'README.md'),
+    path.join(repoDir, 'src', 'apps', 'aquarium', 'README.md'),
     'aquarium fixture\n',
     'utf8'
   );
@@ -76,8 +77,8 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
       title: 'Architecture package smoke task',
       agentId: 'architecture-agent',
       description: 'Create one architecture task through packaged PM planning.',
-      allowedPaths: ['src/barebones-starter/**'],
-      acceptance: ['Only barebones-starter files are queued for this package smoke task.'],
+      allowedPaths: ['src/**/*'],
+      acceptance: ['Only repository source files are queued for this package smoke task.'],
       sprintId: 'multi-agent-mvp',
     }),
   ]);
@@ -102,7 +103,7 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
 });
 
 test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on force', () => {
-  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxborne-autonomy-v2-custom-agent-'));
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-custom-agent-'));
 
   runNode(CLI_BIN, ['init', '--root', repoDir]);
 
@@ -115,11 +116,11 @@ test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on 
     runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
     systemPrompt: 'prompts/autonomous/v2/agents/billing-agent/system.md',
     gitIdentity: {
-      name: 'fluxborne-billing[bot]',
-      email: 'fluxborne-billing[bot]@users.noreply.github.com',
+      name: 'autonomy-billing[bot]',
+      email: 'autonomy-billing[bot]@users.noreply.github.com',
     },
     prLabels: ['agent:billing'],
-    include: ['src/barebones-starter/games/apps/billing/**'],
+      include: ['src/**/*'],
     checks: ['npm run typecheck'],
   });
   fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
@@ -138,7 +139,7 @@ test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on 
 
   const billingSystem = fs.readFileSync(billingSystemPath, 'utf8');
   assert.match(billingSystem, /billing agent implementation agent/i);
-  assert.match(billingSystem, /src\/barebones-starter\/games\/apps\/billing\/\*\*/);
+  assert.match(billingSystem, /src\/\*\*/);
 
   agentsConfig.agents = agentsConfig.agents.filter((agent) => agent.id !== 'billing-agent');
   fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
@@ -152,7 +153,7 @@ test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on 
 });
 
 test('packaged autonomy-v2 rejects invalid agent config values', () => {
-  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fluxborne-autonomy-v2-validation-'));
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-validation-'));
 
   runNode(CLI_BIN, ['init', '--root', repoDir]);
 
@@ -181,6 +182,45 @@ test('packaged autonomy-v2 rejects invalid agent config values', () => {
   assert.throws(
     () => runNode(CLI_BIN, ['status', '--root', repoDir]),
     /id is required/i
+  );
+});
+
+test('reviewer auto-approves on 3rd+ clean review cycle', () => {
+  const cleanCheckResults = [
+    { command: 'npm run typecheck', status: 'passed' },
+    { command: 'npm run test', status: 'passed' },
+  ];
+  const failedCheckResults = [
+    { command: 'npm run test', status: 'failed' },
+  ];
+  const prWithThreeReviews = {
+    reviews: [
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+    ],
+  };
+  const prWithTwoReviews = {
+    reviews: [{ decision: 'changes-requested' }, { decision: 'changes-requested' }],
+  };
+  const inScopeResult = { ok: true, violations: [] };
+  const outOfScopeResult = { ok: false, violations: [{ file: 'src/forbidden.ts', reason: 'outside scope' }] };
+
+  assert.equal(
+    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, cleanCheckResults, inScopeResult),
+    true
+  );
+  assert.equal(
+    shouldForceApproveAfterRepeatedReviews(prWithTwoReviews, cleanCheckResults, inScopeResult),
+    false
+  );
+  assert.equal(
+    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, failedCheckResults, inScopeResult),
+    false
+  );
+  assert.equal(
+    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, cleanCheckResults, outOfScopeResult),
+    false
   );
 });
 

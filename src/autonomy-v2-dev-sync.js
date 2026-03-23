@@ -1914,7 +1914,7 @@ function githubRequest(repo, token, method, endpoint) {
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
-      'User-Agent': 'fluxborne-autonomy-v2-sync',
+      'User-Agent': 'autonomy-v2-sync',
       'X-GitHub-Api-Version': '2022-11-28',
     },
   };

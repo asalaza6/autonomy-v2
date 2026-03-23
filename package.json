@@ -1,10 +1,10 @@
 {
   "name": "@asalaza6/autonomy-v2",
   "version": "1.4.2",
-  "description": "Autonomy v2 orchestration package extracted from the Fluxborne repo.",
+  "description": "Autonomy v2 orchestration package.",
   "type": "commonjs",
   "private": false,
-  "author": "Fluxborne",
+  "author": "Autonomy V2",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
@@ -15,7 +15,6 @@
   },
   "keywords": [
     "autonomy",
-    "fluxborne",
     "agent-system"
   ],
   "main": "src/autonomy-v2.js",
