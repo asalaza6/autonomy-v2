@@ -330,7 +330,7 @@ test('packaged autonomy-v2 rejects invalid agent config values', () => {
   );
 });
 
-test('reviewer auto-approves on 3rd+ clean review cycle', () => {
+test('reviewer auto-approves on 4th+ clean review cycle', () => {
   const cleanCheckResults = [
     { command: 'npm run typecheck', status: 'passed' },
     { command: 'npm run test', status: 'passed' },
@@ -338,6 +338,14 @@ test('reviewer auto-approves on 3rd+ clean review cycle', () => {
   const failedCheckResults = [
     { command: 'npm run test', status: 'failed' },
   ];
+  const prWithFourReviews = {
+    reviews: [
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+    ],
+  };
   const prWithThreeReviews = {
     reviews: [
       { decision: 'changes-requested' },
@@ -352,11 +360,19 @@ test('reviewer auto-approves on 3rd+ clean review cycle', () => {
   const outOfScopeResult = { ok: false, violations: [{ file: 'src/forbidden.ts', reason: 'outside scope' }] };
 
   assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, cleanCheckResults, inScopeResult),
+    shouldForceApproveAfterRepeatedReviews(prWithFourReviews, cleanCheckResults, inScopeResult),
     true
   );
   assert.equal(
+    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, cleanCheckResults, inScopeResult),
+    false
+  );
+  assert.equal(
     shouldForceApproveAfterRepeatedReviews(prWithTwoReviews, cleanCheckResults, inScopeResult),
+    false
+  );
+  assert.equal(
+    shouldForceApproveAfterRepeatedReviews(prWithFiveReviews, cleanCheckResults, inScopeResult),
     false
   );
   assert.equal(
@@ -406,3 +422,12 @@ function git(cwd, args) {
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
 }
+  const prWithFiveReviews = {
+    reviews: [
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+    ],
+  };

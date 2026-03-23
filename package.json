@@ -33,6 +33,7 @@
   },
   "scripts": {
     "smoke": "node --test package-smoke.test.js",
+    "typecheck": "node --check src/autonomy-v2-config.js src/autonomy-v2-codex.js src/autonomy-v2-dev-sync.js src/autonomy-v2-env.js src/autonomy-v2-github.js src/autonomy-v2-lock.js src/autonomy-v2-server.js src/autonomy-v2-default-runner.js src/autonomy-v2-worker.js bin/autonomy-v2 bin/autonomy-v2-server bin/autonomy-v2-smoke bin/autonomy-v2-worker",
     "release:patch": "npm run smoke && npm version patch && npm publish --access public",
     "release:minor": "npm run smoke && npm version minor && npm publish --access public",
     "release:major": "npm run smoke && npm version major && npm publish --access public",

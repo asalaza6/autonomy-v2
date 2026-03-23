@@ -3002,17 +3002,30 @@ function globToRegExp(glob) {
   if (segments.length === 0) {
     return /^$/;
   }
-  const segmentToRegex = (segment) => {
+  let pattern = '^';
+  for (let i = 0; i < segments.length; i += 1) {
+    const segment = segments[i];
+    const isPrevWildcardStar = i > 0 && segments[i - 1] === '**';
     if (segment === '**') {
-      return '(?:[^/]+/)*';
+      if (i > 0) {
+        pattern += '/';
+      }
+      if (i === segments.length - 1) {
+        pattern += '.*';
+      } else {
+        pattern += '(?:[^/]+/)*';
+      }
+      continue;
     }
-    const escaped = segment.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
-    return escaped
+    if (i > 0 && !isPrevWildcardStar) {
+      pattern += '/';
+    }
+    const escaped = segment.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
       .replace(/\*/g, '[^/]*')
       .replace(/\?/g, '[^/]');
-  };
-  const regexBody = segments.map(segmentToRegex).join('/');
-  return new RegExp(`^${regexBody}$`);
+    pattern += escaped;
+  }
+  return new RegExp(`${pattern}$`);
 }
 
 function buildStablePullRequestId(laneKey) {

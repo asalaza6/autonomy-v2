@@ -17,7 +17,7 @@ const CLI_PATH = path.join(__dirname, 'autonomy-v2.js');
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const DEFAULT_ERROR_PREVIEW_LIMIT = 4000;
-const REVIEW_AUTO_APPROVAL_THRESHOLD = 3;
+const REVIEW_AUTO_APPROVAL_THRESHOLD = 4;
 
 function logRunnerEvent(event, payload = {}) {
   if (process.env.AUTONOMY_STREAM_WORKER_OUTPUT !== '1') {
@@ -504,7 +504,7 @@ async function runReviewer({ rootDir, agentId, reviewTaskId, prId, sourceAgentId
     ? [buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
     : [codexReview.summary].concat(codexReview.concerns || []);
   if (shouldForceApproveAfterThreeRounds) {
-    summaryParts.push('Auto-approval threshold reached: 3+ reviewer rounds with passing checks/scope.');
+    summaryParts.push('Auto-approval threshold reached: 4+ reviewer rounds with passing checks/scope.');
   }
   if (failedChecks.length > 0) {
     summaryParts.push(`Blocking checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
