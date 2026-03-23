@@ -61,7 +61,8 @@ Tracked truth lives in git on `dev`:
 - agent config
 - sprint config
 - agent prompt files
-- committed active PRD specs in `prompts/autonomous/v2/specs/prds/*.json`
+- committed active PRD specs in `prompts/autonomous/v2/specs/prds/<prd-id>.json`
+- queued PRDs in `prompts/autonomous/v2/specs/prds/queue/<prd-id>.json`
 - completed PRD specs may be moved into `prompts/autonomous/v2/specs/prds/archived/`, which sync ignores
 - PM-generated task specs once planning completes
 
@@ -89,8 +90,8 @@ That rebuild happens in `src/autonomy-v2-dev-sync.js`.
 What is true on `dev` today:
 
 - `prd:add` commits a PRD spec to `dev` and pushes it automatically.
-- Sync imports only active JSON specs directly under `prompts/autonomous/v2/specs/prds/`.
-- Files in `prompts/autonomous/v2/specs/prds/archived/` are ignored during sync.
+- Sync imports active PRD specs from `prompts/autonomous/v2/specs/prds/<prd-id>.json`.
+- Files in `prompts/autonomous/v2/specs/prds/queue/` and `prompts/autonomous/v2/specs/prds/archived/` are ignored during sync.
 - The scheduler syncs `origin/dev` every tick.
 - When safe, local `dev` is fast-forwarded to the fetched remote ref so the checkout stays aligned.
 - `pm-agent` uses Codex CLI to turn a freeform PRD into lane task specs.
@@ -126,7 +127,7 @@ node scripts/autonomy-v2.js prd:add --id prd-123 --title "Example" --specificati
 
 That command:
 
-- writes `prompts/autonomous/v2/specs/prds/<prd-id>.json`
+- writes to `prompts/autonomous/v2/specs/prds/<prd-id>.json` when no active PRD exists, otherwise to `prompts/autonomous/v2/specs/prds/queue/<prd-id>.json`
 - commits it to `dev`
 - pushes `dev`
 

@@ -992,6 +992,10 @@ function handlePrdAdd(rootDir, options) {
   ensureInitialized(rootDir);
   const paths = getAutonomyPaths(rootDir);
   const config = readJson(paths.agentsConfig);
+  const prdsState = fs.existsSync(paths.prdsState) ? readJson(paths.prdsState) : { prds: [] };
+  const hasActivePrd = (prdsState.prds || []).some((prd) => ['planning', 'planned', 'queued'].includes(
+    String((prd && prd.status) || '')
+  ));
   const id = requireOption(options, 'id');
   const title = requireOption(options, 'title');
 
@@ -1028,6 +1032,7 @@ function handlePrdAdd(rootDir, options) {
   const commitResult = commitPrdSpecToIntegrationBranch(rootDir, config.integrationBranch, prdSpec, {
     commitMessage: `autonomy(prd): upsert ${id}`,
     gitIdentity: pmAgent.gitIdentity,
+    queueSpec: hasActivePrd,
   });
   appendAgentLog(rootDir, config, pmAgent.id, 'prd:committed', {
     input: {

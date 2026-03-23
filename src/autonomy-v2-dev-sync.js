@@ -8,6 +8,7 @@ const { acquireStateLock } = require('./autonomy-v2-lock');
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const PRD_SPECS_DIR = path.posix.join(...AUTONOMY_SEGMENTS, 'specs', 'prds');
+const PRD_QUEUE_DIR = path.posix.join(PRD_SPECS_DIR, 'queue');
 const PRD_ARCHIVE_DIR = path.posix.join(PRD_SPECS_DIR, 'archived');
 const GIT_NETWORK_TIMEOUT_MS = 15000;
 const HTTP_REQUEST_TIMEOUT_MS = 15000;
@@ -62,12 +63,20 @@ function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requi
   };
 }
 
+function hasActiveRuntimePrd(prds) {
+  return (prds || []).some((prd) => {
+    return ['planning', 'planned', 'queued'].includes(String(prd && prd.status || ''));
+  });
+}
+
 function commitPrdSpecToIntegrationBranch(rootDir, integrationBranch, prdSpec, options = {}) {
   const normalizedSpec = buildPrdSpecPayload(prdSpec);
   const paths = getSyncPaths(rootDir);
   const controlWorktree = ensureControlWorktree(rootDir, integrationBranch, paths.controlWorktree);
   configureGitIdentity(controlWorktree, options.gitIdentity);
-  const relativeSpecPath = buildPrdSpecRelativePath(normalizedSpec.id);
+  const relativeSpecPath = buildPrdSpecRelativePath(normalizedSpec.id, {
+    queue: Boolean(options.queueSpec),
+  });
   const absoluteSpecPath = path.join(controlWorktree, relativeSpecPath);
   ensureDir(path.dirname(absoluteSpecPath));
   fs.writeFileSync(absoluteSpecPath, `${JSON.stringify(normalizedSpec, null, 2)}\n`, 'utf8');
@@ -152,20 +161,39 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
   });
   const specFiles = listTreeFiles(rootDir, ref, PRD_SPECS_DIR)
     .filter((filePath) => filePath.endsWith('.json'))
+    .filter((filePath) => !filePath.startsWith(`${PRD_ARCHIVE_DIR}/`))
+    .filter((filePath) => !filePath.startsWith(`${PRD_QUEUE_DIR}/`));
+  const queueSpecFiles = listTreeFiles(rootDir, ref, PRD_QUEUE_DIR)
+    .filter((filePath) => filePath.endsWith('.json'))
     .filter((filePath) => !filePath.startsWith(`${PRD_ARCHIVE_DIR}/`));
+  const allSpecCandidates = [
+    ...specFiles.map((filePath) => ({ filePath, isQueued: false })),
+    ...queueSpecFiles.map((filePath) => ({ filePath, isQueued: true })),
+  ];
   emitSyncProgress(options, 'sync:specs:list:done', {
     ref,
-    specFiles: specFiles.length,
+    specFiles: allSpecCandidates.length,
   });
   const remoteSpecs = [];
-  for (const relativePath of specFiles) {
+  const seenPrdIds = new Set();
+  for (const candidate of allSpecCandidates) {
+    const relativePath = candidate.filePath;
     const blobSha = readGit(rootDir, ['rev-parse', `${ref}:${relativePath}`]);
     try {
       const raw = readTreeFile(rootDir, ref, relativePath);
       const spec = parsePrdSpec(raw, relativePath);
+      if (seenPrdIds.has(spec.id)) {
+        result.invalid.push({
+          path: relativePath,
+          message: `Duplicate PRD id "${spec.id}"; skipping duplicate spec.`,
+        });
+        continue;
+      }
+      seenPrdIds.add(spec.id);
       remoteSpecs.push({
         relativePath,
         blobSha,
+        isQueued: candidate.isQueued,
         spec,
       });
     } catch (error) {
@@ -180,16 +208,6 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
     invalid: result.invalid.length,
   });
 
-  const laneStatesStartedAt = Date.now();
-  emitSyncProgress(options, 'sync:lane-states:start', {
-    prds: remoteSpecs.length,
-  });
-  const remoteLaneStates = resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, config, sprint, options);
-  emitSyncProgress(options, 'sync:lane-states:done', {
-    prds: remoteSpecs.length,
-    durationMs: Date.now() - laneStatesStartedAt,
-  });
-
   emitSyncProgress(options, 'sync:state-lock:wait', { lock: 'state-lock' });
   const release = acquireStateLock(rootDir);
   try {
@@ -201,13 +219,39 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
     const leasesState = readJson(paths.leasesState, { leases: [] });
     const syncState = readJson(paths.specSyncState, DEFAULT_SYNC_STATE);
     const currentQueueTasks = readExistingQueueTasks(rootDir, config, tasksState.tasks || []);
+    const hasActivePrd = hasActiveRuntimePrd(prdsState.prds || []);
+    const importedSpecs = remoteSpecs.filter((remoteSpec) => !remoteSpec.isQueued);
+    if (!hasActivePrd) {
+      const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued);
+      if (queuedSpecToPromote) {
+        queuedSpecToPromote.isQueued = false;
+        importedSpecs.push(queuedSpecToPromote);
+        emitSyncProgress(options, 'sync:specs:queue:promoted', {
+          id: queuedSpecToPromote.spec.id,
+          source: queuedSpecToPromote.relativePath,
+          destination: buildPrdSpecRelativePath(queuedSpecToPromote.spec.id),
+        });
+      }
+    }
+    const queuedSpecsRemaining = remoteSpecs.length - importedSpecs.length;
+    const laneStatesStartedAt = Date.now();
+    emitSyncProgress(options, 'sync:lane-states:start', {
+      prds: importedSpecs.length,
+      queued: queuedSpecsRemaining,
+    });
+    const remoteLaneStates = resolveRemoteLaneStates(rootDir, integrationBranch, importedSpecs, config, sprint, options);
+    emitSyncProgress(options, 'sync:lane-states:done', {
+      prds: importedSpecs.length,
+      queued: queuedSpecsRemaining,
+      durationMs: Date.now() - laneStatesStartedAt,
+    });
     const now = new Date().toISOString();
     const derived = buildDerivedImportedRuntimeState({
       rootDir,
       integrationBranch,
       config,
       sprint,
-      remoteSpecs,
+      remoteSpecs: importedSpecs,
       remoteLaneStates,
       currentPrds: prdsState.prds || [],
       currentTasks: currentQueueTasks,
@@ -278,7 +322,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
       leases: nextLeases.length,
     });
 
-    remoteSpecs.forEach((remoteSpec) => {
+    importedSpecs.forEach((remoteSpec) => {
       syncState.importedSpecs[remoteSpec.relativePath] = buildImportedSpecState(remoteSpec, fetchResult.commitSha);
     });
     syncState.integrationBranch = integrationBranch;
@@ -1655,8 +1699,13 @@ function requiresPmPlanning(spec) {
   return hasPlanningInput && (!Array.isArray(spec.tasks) || spec.tasks.length === 0);
 }
 
-function buildPrdSpecRelativePath(prdId) {
-  return path.join(...AUTONOMY_SEGMENTS, 'specs', 'prds', `${sanitizeFileSegment(prdId)}.json`);
+function buildPrdSpecRelativePath(prdId, options = {}) {
+  const segments = [...AUTONOMY_SEGMENTS, 'specs', 'prds'];
+  if (options.queue) {
+    segments.push('queue');
+  }
+  segments.push(`${sanitizeFileSegment(prdId)}.json`);
+  return path.join(...segments);
 }
 
 function slugify(value) {

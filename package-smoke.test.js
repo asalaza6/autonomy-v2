@@ -102,6 +102,151 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
   assert.deepEqual(runtimePrds.prds[0].plannedTaskIds, ['prd-package-001-architecture-agent-1']);
 });
 
+test('packaged autonomy-v2 queues PRD additions when one is already active', () => {
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-queue-add-'));
+
+  fs.mkdirSync(path.join(repoDir, 'src', 'apps', 'ocean'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'ocean', 'index.js'), 'export const value = 1;\n', 'utf8');
+
+  git(repoDir, ['init', '-b', 'main']);
+  git(repoDir, ['config', 'user.email', 'autonomy-queue-add@example.com']);
+  git(repoDir, ['config', 'user.name', 'Autonomy Queue Add']);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'fixture']);
+  git(repoDir, ['branch', 'dev']);
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-queue-001',
+    '--title',
+    'First PRD',
+    '--task-spec',
+    JSON.stringify({
+      id: 'prd-queue-001-architecture-agent-1',
+      title: 'First architecture task',
+      agentId: 'architecture-agent',
+      description: 'Queue add fixture',
+      allowedPaths: ['src/**/*'],
+      acceptance: ['Only repository source files are queued for this queue fixture task.'],
+      sprintId: 'multi-agent-mvp',
+    }),
+  ]);
+
+  const tickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+  assert.equal(tickResult.sync.imported.length, 1);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-queue-002',
+    '--title',
+    'Second PRD',
+    '--specification',
+    'Queued while first PRD remains active',
+  ]);
+
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-002.json'),
+    true
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-002.json'),
+    false
+  );
+});
+
+test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is imported', () => {
+  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-queue-promote-'));
+
+  fs.mkdirSync(path.join(repoDir, 'src', 'apps', 'reef'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'reef', 'index.js'), 'export const value = 2;\n', 'utf8');
+
+  git(repoDir, ['init', '-b', 'main']);
+  git(repoDir, ['config', 'user.email', 'autonomy-queue-promote@example.com']);
+  git(repoDir, ['config', 'user.name', 'Autonomy Queue Promote']);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'fixture']);
+  git(repoDir, ['branch', 'dev']);
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-queue-promo-001',
+    '--title',
+    'Primary PRD',
+    '--task-spec',
+    JSON.stringify({
+      id: 'prd-queue-promo-001-architecture-agent-1',
+      title: 'Primary architecture task',
+      agentId: 'architecture-agent',
+      description: 'Primary fixture task',
+      allowedPaths: ['src/**/*'],
+      acceptance: ['Only repository source files are queued for this queue fixture task.'],
+      sprintId: 'multi-agent-mvp',
+    }),
+  ]);
+
+  const activeTickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+  assert.equal(activeTickResult.sync.imported.length, 1);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-queue-promo-002',
+    '--title',
+    'Queued PRD',
+    '--specification',
+    'Should wait in queue until promoted',
+  ]);
+
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-002.json'),
+    true
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-002.json'),
+    false
+  );
+
+  const paths = getAutonomyPathsForTest(repoDir);
+  fs.writeFileSync(paths.prdsState, `${JSON.stringify({ prds: [] }, null, 2)}\n`, 'utf8');
+
+  const secondTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+  assert.equal(secondTick.sync.imported.includes('prd-queue-promo-002'), true);
+
+  const runtimePrds = JSON.parse(fs.readFileSync(paths.prdsState, 'utf8'));
+  assert.equal(runtimePrds.prds.length, 2);
+  assert.equal(
+    runtimePrds.prds.some((prd) => prd.id === 'prd-queue-promo-002'),
+    true
+  );
+});
+
 test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on force', () => {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-custom-agent-'));
 
@@ -234,6 +379,24 @@ function runNode(scriptPath, args, options = {}) {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
+}
+
+function fileExistsInGitRevision(cwd, revisionPath) {
+  try {
+    git(cwd, ['show', revisionPath]);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function getAutonomyPathsForTest(rootDir) {
+  const repoAutonomyDir = path.join(rootDir, 'prompts', 'autonomous', 'v2');
+  const runtimeAutonomyDir = path.join(rootDir, '.autonomy', 'runtime');
+  const stateDir = path.join(runtimeAutonomyDir, 'state');
+  return {
+    prdsState: path.join(stateDir, 'prds.json'),
+  };
 }
 
 function git(cwd, args) {
