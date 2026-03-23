@@ -23,53 +23,19 @@
       "prLabels": ["agent:pm"]
     },
     {
-      "id": "aquarium-agent",
-      "personaName": "aquarium-agent",
+      "id": "architecture-agent",
+      "personaName": "architecture-agent",
       "role": "implementation",
       "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-      "taskQueue": "prompts/autonomous/v2/state/queues/aquarium-agent.json",
-      "systemPrompt": "prompts/autonomous/v2/agents/aquarium-agent/system.md",
+      "taskQueue": "prompts/autonomous/v2/state/queues/architecture-agent.json",
+      "systemPrompt": "prompts/autonomous/v2/agents/architecture-agent/system.md",
       "gitIdentity": {
-        "name": "fluxborne-aquarium[bot]",
-        "email": "fluxborne-aquarium[bot]@users.noreply.github.com"
+        "name": "fluxborne-architecture[bot]",
+        "email": "fluxborne-architecture[bot]@users.noreply.github.com"
       },
-      "prLabels": ["agent:aquarium"],
+      "prLabels": ["agent:architecture"],
       "include": [
-        "src/barebones-starter/games/apps/aquarium/**"
-      ],
-      "checks": ["npm run typecheck"]
-    },
-    {
-      "id": "adventure-agent",
-      "personaName": "adventure-agent",
-      "role": "implementation",
-      "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-      "taskQueue": "prompts/autonomous/v2/state/queues/adventure-agent.json",
-      "systemPrompt": "prompts/autonomous/v2/agents/adventure-agent/system.md",
-      "gitIdentity": {
-        "name": "fluxborne-adventure[bot]",
-        "email": "fluxborne-adventure[bot]@users.noreply.github.com"
-      },
-      "prLabels": ["agent:adventure"],
-      "include": [
-        "src/barebones-starter/games/apps/adventure/**"
-      ],
-      "checks": ["npm run typecheck"]
-    },
-    {
-      "id": "action-agent",
-      "personaName": "action-agent",
-      "role": "implementation",
-      "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-      "taskQueue": "prompts/autonomous/v2/state/queues/action-agent.json",
-      "systemPrompt": "prompts/autonomous/v2/agents/action-agent/system.md",
-      "gitIdentity": {
-        "name": "fluxborne-action[bot]",
-        "email": "fluxborne-action[bot]@users.noreply.github.com"
-      },
-      "prLabels": ["agent:action"],
-      "include": [
-        "src/barebones-starter/games/apps/fluxborne/**"
+        "src/barebones-starter/**"
       ],
       "checks": ["npm run typecheck"]
     },

@@ -12,7 +12,7 @@ From there, the system is expected to:
 - sync `origin/dev`
 - import the PRD into runtime state
 - have `pm-agent` generate lane tasks
-- run the three implementation lanes
+- run the default implementation lane(s)
 - open one PR per implementation lane only after that lane finishes its queued tasks
 - queue reviewer work
 - review and merge to `dev`
@@ -39,9 +39,7 @@ The active v2 agents are defined in [/Users/bytedance/Documents/GitHub/fluxborne
 Fluxborne currently ships with:
 
 - `pm-agent`
-- `aquarium-agent`
-- `adventure-agent`
-- `action-agent`
+- `architecture-agent`
 - `reviewer`
 
 Other repos can add or remove implementation agents by editing `agents.json` and rerunning `init --force`.
@@ -50,9 +48,7 @@ Other repos can add or remove implementation agents by editing `agents.json` and
 
 Lane ownership is path-scoped in the active Fluxborne config:
 
-- `aquarium-agent` -> `src/barebones-starter/games/apps/aquarium/**`
-- `adventure-agent` -> `src/barebones-starter/games/apps/adventure/**`
-- `action-agent` -> `src/barebones-starter/games/apps/fluxborne/**`
+- `architecture-agent` -> `src/barebones-starter/**`
 
 ## Source of truth
 
@@ -176,12 +172,12 @@ That means:
 - task 2 creates commit 2 on the same lane branch
 - only after the lane has no remaining queued tasks does the system record and publish the lane PR
 
-In the common demo shape:
+In a typical setup:
 
-- 3 implementation agents
-- 2 tasks per agent
-- 3 PRs total
-- 2 commits per PR
+- 1 implementation lane
+- 1-3 tasks per lane
+- 1 PR per lane
+- one commit per task
 
 ### 7. Reviewer processes lane PRs
 
