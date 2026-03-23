@@ -100,6 +100,35 @@ function hasPrdSpecInIntegrationBranch(rootDir, integrationBranch, prdId) {
   return false;
 }
 
+function hasActivePrdSpecInIntegrationBranch(rootDir, integrationBranch) {
+  const fetchResult = fetchIntegrationBranch(rootDir, integrationBranch);
+  const ref = fetchResult.ref || integrationBranch;
+  if (!ref) {
+    return false;
+  }
+  try {
+    const output = readGit(rootDir, [
+      'ls-tree',
+      '-r',
+      '--name-only',
+      ref,
+      path.posix.join(...AUTONOMY_SEGMENTS, 'specs', 'prds'),
+    ]);
+    return output
+      .split('\n')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .some((entry) => {
+        return entry.startsWith(`${PRD_SPECS_DIR}/`)
+          && !entry.startsWith(`${PRD_QUEUE_DIR}/`)
+          && !entry.startsWith(`${PRD_ARCHIVE_DIR}/`)
+          && !entry.endsWith('README.md');
+      });
+  } catch (_) {
+    return false;
+  }
+}
+
 function commitPrdSpecToIntegrationBranch(rootDir, integrationBranch, prdSpec, options = {}) {
   const normalizedSpec = buildPrdSpecPayload(prdSpec);
   const paths = getSyncPaths(rootDir);
@@ -2283,6 +2312,7 @@ module.exports = {
   commitPrdSpecToIntegrationBranch,
   commitTrackedFilesToIntegrationBranch,
   getSyncPaths,
+  hasActivePrdSpecInIntegrationBranch,
   hasPrdSpecInIntegrationBranch,
   syncPrdSpecsFromIntegrationBranch,
 };

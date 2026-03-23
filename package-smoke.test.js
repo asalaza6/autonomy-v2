@@ -332,7 +332,7 @@ test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on 
   const billingSystemPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'system.md');
   const billingHandoffPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'handoff.md');
   const billingLogPath = path.join(repoDir, '.autonomy', 'runtime', 'agents', 'billing-agent', 'log.md');
-  const billingQueuePath = path.join(repoDir, '.autonomy', 'runtime', 'state', 'queues', 'billing-agent.json');
+  const billingQueuePath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'queues', 'billing-agent.json');
 
   assert.ok(fs.existsSync(billingSystemPath));
   assert.ok(fs.existsSync(billingHandoffPath));
@@ -351,7 +351,7 @@ test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on 
   assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'system.md')));
   assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'handoff.md')));
   assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'agents', 'billing-agent', 'log.md')));
-  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'state', 'queues', 'billing-agent.json')));
+  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'queues', 'billing-agent.json')));
 });
 
 test('packaged autonomy-v2 rejects invalid agent config values', () => {

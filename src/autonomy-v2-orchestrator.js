@@ -158,6 +158,18 @@ function trimLeadingSeparator(value) {
   return normalized;
 }
 
+function gitRefExists(rootDir, ref) {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', ref], {
+      cwd: rootDir,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function loadQueues(rootDir, config) {
   const queues = {};
   (config.agents || []).forEach((agent) => {

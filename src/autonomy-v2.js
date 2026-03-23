@@ -11,6 +11,7 @@ const {
   buildPrdSpecPayload,
   commitPrdSpecToIntegrationBranch,
   commitTrackedFilesToIntegrationBranch,
+  hasActivePrdSpecInIntegrationBranch,
   hasPrdSpecInIntegrationBranch,
   syncPrdSpecsFromIntegrationBranch,
 } = require('./autonomy-v2-dev-sync');
@@ -533,6 +534,7 @@ function pruneStaleAgentScaffold(rootDir, agentEntries) {
   const paths = getAutonomyPaths(rootDir);
   const candidateDirs = [
     path.join(paths.repoAutonomyDir, 'agents'),
+    path.join(paths.repoAutonomyDir, 'queues'),
     path.join(paths.runtimeAutonomyDir, 'agents'),
     path.join(paths.runtimeAutonomyDir, 'state', 'queues'),
   ];
@@ -1046,6 +1048,7 @@ function handlePrdAdd(rootDir, options) {
   const hasActivePrd = (prdsState.prds || []).some((prd) => ['planning', 'planned', 'queued'].includes(
     String((prd && prd.status) || '')
   ));
+  const hasActiveIntegrationPrdSpec = hasActivePrdSpecInIntegrationBranch(rootDir, config.integrationBranch);
   const hasExistingPrdSpec = hasPrdSpecInIntegrationBranch(rootDir, config.integrationBranch, id);
 
   const now = new Date().toISOString();
@@ -1083,7 +1086,7 @@ function handlePrdAdd(rootDir, options) {
   const commitResult = commitPrdSpecToIntegrationBranch(rootDir, config.integrationBranch, prdSpec, {
     commitMessage: `autonomy(prd): upsert ${id}`,
     gitIdentity: pmAgent.gitIdentity,
-    queueSpec: hasActivePrd || hasExistingPrdSpec,
+    queueSpec: hasActivePrd || hasActiveIntegrationPrdSpec || hasExistingPrdSpec,
   });
   let queueCommitResult = null;
   if (taskSpecs.length > 0) {
