@@ -381,6 +381,7 @@ function archiveCompletedPrdSpecs(rootDir, state) {
 }
 
 function handleInit(rootDir, options) {
+  const bootstrapRootFiles = new Set(['.env.autonomy', '.gitignore']);
   const created = [];
   const skipped = [];
   const removed = [];
@@ -394,7 +395,10 @@ function handleInit(rootDir, options) {
     const targetPath = resolveTemplateTargetPath(rootDir, relativeFile);
     ensureDir(path.dirname(targetPath));
     const preserveIfExists = relativeFile === 'config/agents.json' || relativeFile === 'config/sprint.json';
-    if (fs.existsSync(targetPath) && (preserveIfExists || options.force !== true)) {
+    const isBootstrapRootFile = bootstrapRootFiles.has(relativeFile);
+    const shouldSkipExisting = fs.existsSync(targetPath)
+      && (preserveIfExists || (!isBootstrapRootFile && options.force !== true));
+    if (shouldSkipExisting) {
       skipped.push(relativeFile);
       continue;
     }
