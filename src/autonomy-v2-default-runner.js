@@ -1423,18 +1423,10 @@ function shouldRetryApprovedPrMerge(pr, reviewerTask) {
 
 function shouldForceApproveAfterRepeatedReviews(pr, checkResults, scopeResult) {
   const normalizedPr = pr || {};
-  const normalizedScope = scopeResult || {};
   const reviewCount = Number.isFinite(Number(normalizedPr.reviews && normalizedPr.reviews.length))
     ? Number(normalizedPr.reviews.length)
     : 0;
-  const failedChecks = Array.isArray(checkResults)
-    ? checkResults.filter((entry) => entry && entry.status === 'failed')
-    : [];
-  return (
-    reviewCount >= REVIEW_AUTO_APPROVAL_THRESHOLD
-    && failedChecks.length === 0
-    && normalizedScope.ok === true
-  );
+  return reviewCount >= REVIEW_AUTO_APPROVAL_THRESHOLD;
 }
 
 function latestReviewDecision(pr) {

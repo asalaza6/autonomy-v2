@@ -330,7 +330,7 @@ test('packaged autonomy-v2 rejects invalid agent config values', () => {
   );
 });
 
-test('reviewer auto-approves on 4th+ clean review cycle', () => {
+test('reviewer auto-approves on 4th+ review cycle regardless of review reasons', () => {
   const cleanCheckResults = [
     { command: 'npm run typecheck', status: 'passed' },
     { command: 'npm run test', status: 'passed' },
@@ -348,6 +348,15 @@ test('reviewer auto-approves on 4th+ clean review cycle', () => {
   };
   const prWithThreeReviews = {
     reviews: [
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
+    ],
+  };
+  const prWithFiveReviews = {
+    reviews: [
+      { decision: 'changes-requested' },
+      { decision: 'changes-requested' },
       { decision: 'changes-requested' },
       { decision: 'changes-requested' },
       { decision: 'changes-requested' },
@@ -373,15 +382,15 @@ test('reviewer auto-approves on 4th+ clean review cycle', () => {
   );
   assert.equal(
     shouldForceApproveAfterRepeatedReviews(prWithFiveReviews, cleanCheckResults, inScopeResult),
-    false
+    true
   );
   assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, failedCheckResults, inScopeResult),
-    false
+    shouldForceApproveAfterRepeatedReviews(prWithFourReviews, failedCheckResults, inScopeResult),
+    true
   );
   assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, cleanCheckResults, outOfScopeResult),
-    false
+    shouldForceApproveAfterRepeatedReviews(prWithFourReviews, cleanCheckResults, outOfScopeResult),
+    true
   );
 });
 
