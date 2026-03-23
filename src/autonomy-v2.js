@@ -21,6 +21,36 @@ const DEFAULT_AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const DEFAULT_RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const PRD_SPECS_SEGMENTS = [...DEFAULT_AUTONOMY_SEGMENTS, 'specs', 'prds'];
 const PRD_ARCHIVE_SEGMENTS = [...PRD_SPECS_SEGMENTS, 'archived'];
+const DEFAULT_AUTONOMY_ENV = [
+  'AUTONOMY_INITIALIZED=1',
+  'GITHUB_TOKEN=',
+  '',
+].join('\n');
+const DEFAULT_GITIGNORE = [
+  '# System-generated default ignore file for autonomy-v2.',
+  '# Keep this file aligned with repository bootstrap defaults.',
+  '',
+  '# Node / tooling artifacts',
+  'node_modules/',
+  'dist/',
+  'build/',
+  'coverage/',
+  '.DS_Store',
+  '',
+  '# Env files',
+  '.env',
+  '.env.local',
+  '.env.development',
+  '.env.production',
+  '',
+  '# Keep autoproduced runtime marker',
+  '!.env.autonomy',
+  '',
+  '# Autonomy runtime state',
+  '.autonomy/runtime/state/queues/*.lock',
+  '.autonomy/runtime',
+  '',
+].join('\n');
 const GENERATED_TEMPLATE_FILES = {
   'state/tasks.json': () => `${JSON.stringify({ tasks: [] }, null, 2)}\n`,
   'state/prs.json': () => `${JSON.stringify({ pullRequests: [] }, null, 2)}\n`,
@@ -29,6 +59,8 @@ const GENERATED_TEMPLATE_FILES = {
   'state/prds.json': () => `${JSON.stringify({ prds: [] }, null, 2)}\n`,
   'state/spec-sync.json': () => `${JSON.stringify(DEFAULT_SYNC_STATE, null, 2)}\n`,
   'state/runtime.json': () => `${JSON.stringify({ workers: {} }, null, 2)}\n`,
+  '.env.autonomy': () => DEFAULT_AUTONOMY_ENV,
+  '.gitignore': () => DEFAULT_GITIGNORE,
   'scripts/autonomy-v2-default-runner.js': () => `${[
     '#!/usr/bin/env node',
     '',
