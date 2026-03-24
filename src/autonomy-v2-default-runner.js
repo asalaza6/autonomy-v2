@@ -256,6 +256,7 @@ function runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath 
     worktreePath,
     implementationAgentId: agentId,
   });
+  const agent = getAgentConfig(state.config, agentId);
   const task = getTask(state.queues, taskId);
   const laneKey = buildTaskLaneKey(task);
   const laneTasks = getLaneTasks(state.queues, agentId, laneKey);

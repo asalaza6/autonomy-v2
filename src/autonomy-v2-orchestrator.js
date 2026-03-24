@@ -309,6 +309,56 @@ function buildTaskBranchName(config, task) {
   return `${config.branchPrefixes.task}/${sprintSegment}/${agentSegment}/${laneSegment}`;
 }
 
+function buildWorktreePath(rootDir, config, task) {
+  const sprintSegment = slugify(task.sprintId || 'shared');
+  const laneSegment = slugify(buildTaskLaneKey(task));
+  return path.join(rootDir, config.worktreesRoot, task.agentId, `${sprintSegment}-${laneSegment}`);
+}
+
+function runGit(cwd, args) {
+  execFileSync('git', args, {
+    cwd,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function hasStagedGitChanges(cwd) {
+  try {
+    execFileSync('git', ['diff', '--cached', '--quiet'], {
+      cwd,
+      stdio: 'ignore',
+    });
+    return false;
+  } catch (_) {
+    return true;
+  }
+}
+
+function readImplementationQueueFromGitRef(rootDir, config, agentId, ref, fallbackValue = null) {
+  if (!ref) {
+    return fallbackValue;
+  }
+  const agent = getAgent(config, agentId);
+  const queueState = readJsonFromGitRef(rootDir, ref, agent.taskQueue, fallbackValue);
+  if (!queueState) {
+    return fallbackValue;
+  }
+  return buildTaskQueueState(agent, Array.isArray(queueState.tasks) ? queueState.tasks : []);
+}
+
+function readImplementationQueueSnapshot(rootDir, config, agentId, options = {}) {
+  const queueFromBranch = options.branch && gitRefExists(rootDir, options.branch)
+    ? readImplementationQueueFromGitRef(rootDir, config, agentId, options.branch, null)
+    : null;
+  if (queueFromBranch) {
+    return queueFromBranch;
+  }
+  if (options.worktreePath && fs.existsSync(options.worktreePath)) {
+    return readImplementationQueueFromWorktree(config, agentId, options.worktreePath);
+  }
+  return null;
+}
+
 function readImplementationQueueFromWorktree(config, agentId, worktreePath) {
   const agent = getAgent(config, agentId);
   const relativePath = agent.taskQueue;
@@ -343,16 +393,25 @@ function filterCompletedImplementationTasks(queue, branchLocks, agentId) {
   };
 }
 
+function findBranchLockByLane(branchLocks, agentId, laneKey) {
+  return ((branchLocks && branchLocks.locks) || []).find((lock) => {
+    return lock && lock.agentId === agentId && (lock.laneKey || lock.taskId) === laneKey;
+  }) || null;
+}
+
 function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, fallbackQueue) {
   const locks = ((branchLocks && branchLocks.locks) || [])
-    .filter((lock) => lock && lock.agentId === agent.id && lock.worktreePath && fs.existsSync(lock.worktreePath))
+    .filter((lock) => lock && lock.agentId === agent.id)
     .slice()
     .sort((left, right) => {
       return (Date.parse(right && right.updatedAt || '') || 0) - (Date.parse(left && left.updatedAt || '') || 0);
     });
 
   for (const lock of locks) {
-    const queue = readImplementationQueueFromWorktree(config, agent.id, lock.worktreePath);
+    const queue = readImplementationQueueSnapshot(rootDir, config, agent.id, {
+      branch: lock.branch || null,
+      worktreePath: lock.worktreePath || null,
+    });
     if (!queue) {
       continue;
     }
@@ -362,6 +421,45 @@ function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, 
         queue,
         branch: lock.branch || null,
         worktreePath: lock.worktreePath,
+      };
+    }
+  }
+
+  const branchTasks = listTasks(fallbackQueue)
+    .filter((task) => isPendingImplementationTask(task))
+    .slice()
+    .sort((left, right) => {
+      const rankDiff = compareImplementationTaskPriority(left, right);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return String(left.createdAt || '').localeCompare(String(right.createdAt || ''));
+    });
+
+  for (const task of branchTasks) {
+    const laneKey = buildTaskLaneKey(task);
+    const branchLock = findBranchLockByLane(branchLocks, agent.id, laneKey);
+    const branch = normalizeNonEmptyString(
+      (branchLock && branchLock.branch)
+      || task.branch
+      || buildTaskBranchName(config, task)
+    );
+    if (!branch || !gitRefExists(rootDir, branch)) {
+      continue;
+    }
+    const derivedWorktreePath = branchLock && branchLock.worktreePath
+      ? branchLock.worktreePath
+      : buildWorktreePath(rootDir, config, task);
+    const queue = readImplementationQueueSnapshot(rootDir, config, agent.id, {
+      branch,
+      worktreePath: derivedWorktreePath,
+    });
+    if (queue && listTasks(queue).some((candidate) => isPendingImplementationTask(candidate))) {
+      return {
+        source: 'branch',
+        queue,
+        branch,
+        worktreePath: fs.existsSync(derivedWorktreePath) ? derivedWorktreePath : null,
       };
     }
   }
@@ -1016,13 +1114,20 @@ function runReviewerWorker(rootDir, config, agent) {
   };
 }
 
-function claimTrackedImplementationTask(rootDir, config, agent, queue, task) {
-  const nextQueue = buildTaskQueueState(agent, listTasks(queue).map((candidate) => ({ ...candidate })));
-  const nextTask = listTasks(nextQueue).find((candidate) => candidate.id === task.id);
-  if (!nextTask) {
-    throw new Error(`Task "${task.id}" disappeared before tracked claim.`);
+function claimImplementationTaskInWorktree(config, agent, task, branch, worktreePath) {
+  const relativePath = agent.taskQueue;
+  if (path.isAbsolute(relativePath)) {
+    throw new Error(`Implementation queue for "${agent.id}" must be repo-relative inside the worktree.`);
   }
-  const branch = buildTaskBranchName(config, nextTask);
+  const queuePath = path.join(worktreePath, relativePath);
+  const queueState = fs.existsSync(queuePath)
+    ? readJson(queuePath, buildTaskQueueState(agent, []))
+    : buildTaskQueueState(agent, []);
+  const tasks = listTasks(queueState).map((candidate) => ({ ...candidate }));
+  const nextTask = tasks.find((candidate) => candidate.id === task.id);
+  if (!nextTask) {
+    throw new Error(`Task "${task.id}" disappeared before branch-local claim.`);
+  }
   const claimedAt = new Date().toISOString();
   nextTask.state = 'active';
   nextTask.status = 'active';
@@ -1032,18 +1137,13 @@ function claimTrackedImplementationTask(rootDir, config, agent, queue, task) {
   delete nextTask.completedAt;
   delete nextTask.commitSha;
   delete nextTask.completionMode;
+  delete nextTask.lastError;
 
-  const relativePath = agent.taskQueue;
-  if (path.isAbsolute(relativePath)) {
-    throw new Error(`Implementation queue for "${agent.id}" must be repo-relative to commit it to ${config.integrationBranch}.`);
+  writeJson(queuePath, buildTaskQueueState(agent, tasks));
+  runGit(worktreePath, ['add', '--', relativePath]);
+  if (hasStagedGitChanges(worktreePath)) {
+    runGit(worktreePath, ['commit', '-m', `auto(${agent.id}): start ${task.id}`]);
   }
-  commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, [{
-    relativePath,
-    content: nextQueue,
-  }], {
-    commitMessage: `autonomy(queue): start ${task.id}`,
-    gitIdentity: agent.gitIdentity,
-  });
 
   return {
     task: nextTask,
@@ -1065,10 +1165,7 @@ function runImplementationWorker(rootDir, config, agent) {
   let branch = queueContext.branch || task.branch || null;
   let worktreePath = queueContext.worktreePath || null;
   let dispatchTask = task;
-  if (queueContext.source !== 'branch') {
-    const claim = claimTrackedImplementationTask(rootDir, config, agent, queue, task);
-    branch = claim.branch;
-    dispatchTask = claim.task;
+  if (queueContext.source !== 'branch' || !worktreePath || !fs.existsSync(worktreePath)) {
     const worktreePayload = JSON.parse(
       execFileSync(process.execPath, [CLI_PATH, 'worktree:prepare', '--root', rootDir, '--task', task.id, '--create', '--json'], {
         cwd: rootDir,
@@ -1078,6 +1175,11 @@ function runImplementationWorker(rootDir, config, agent) {
     );
     branch = worktreePayload.branch;
     worktreePath = worktreePayload.worktreePath;
+  }
+  if (queueContext.source !== 'branch') {
+    const claim = claimImplementationTaskInWorktree(config, agent, task, branch, worktreePath);
+    branch = claim.branch;
+    dispatchTask = claim.task;
   }
 
   let runner = null;

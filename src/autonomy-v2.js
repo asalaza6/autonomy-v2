@@ -937,7 +937,7 @@ function handleTaskAdd(rootDir, options) {
 
 function handleTaskFinish(rootDir, options) {
   ensureInitialized(rootDir);
-  const { config, taskQueues } = loadAllState(rootDir);
+  const { config, taskQueues, branchLocks } = loadAllState(rootDir);
   const task = getTask(taskQueues, requireOption(options, 'task'));
   const agent = getAgent(config, task.agentId);
   const queue = getTaskQueue(taskQueues, config, task.agentId);
@@ -946,6 +946,13 @@ function handleTaskFinish(rootDir, options) {
     throw new Error(`Task "${task.id}" is not present in queue "${task.agentId}".`);
   }
   if (String(agent.role || '') === 'implementation') {
+    const laneKey = task.laneKey || buildTaskLaneKey(task);
+    const claimedBranch = resolveImplementationBranchRef(rootDir, config, branchLocks, task.agentId, laneKey, { task });
+    if (claimedBranch) {
+      throw new Error(
+        `Implementation lane "${laneKey}" is active on branch "${claimedBranch}". Finish it from the lane worktree instead of mutating ${config.integrationBranch}.`
+      );
+    }
     const now = new Date().toISOString();
     task.state = 'done';
     task.status = 'done';
@@ -1174,20 +1181,61 @@ function handleArchiveCompletedPrds(rootDir, options) {
 
 function handlePrepareWorktree(rootDir, options) {
   ensureInitialized(rootDir);
-  const { config, taskQueues, branchLocks } = loadAllState(rootDir);
+  const state = loadAllState(rootDir);
   const taskId = requireOption(options, 'task');
-  const task = getTask(taskQueues, taskId);
+  const task = resolveTaskForWorktreePreparation(rootDir, state, taskId);
+  const agent = getAgent(state.config, task.agentId);
+  if (agent.role !== 'implementation' && agent.role !== 'conflict-resolution') {
+    throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
+  }
+  const create = options.create === true;
+  const payload = prepareTaskWorktree(rootDir, state.config, state.branchLocks, task, { create });
+  writeJson(getAutonomyPaths(rootDir).branchLocksState, state.branchLocks);
+
+  appendAgentLog(rootDir, state.config, task.agentId, 'worktree:prepare', {
+    input: {
+      taskId: task.id,
+      create,
+    },
+    output: payload,
+  });
+
+  printOutput(options, payload, () => {
+    console.log(`${create ? 'Created' : 'Planned'} worktree for ${task.id}`);
+    console.log(`Branch: ${payload.branch}`);
+    console.log(`Worktree: ${payload.worktreePath}`);
+  });
+}
+
+function resolveTaskForWorktreePreparation(rootDir, state, taskId) {
+  const liveTask = findTask(state.taskQueues, taskId);
+  if (liveTask) {
+    return liveTask;
+  }
+  const completedTask = findCompletedTask(state.branchLocks, taskId);
+  if (completedTask) {
+    return completedTask;
+  }
+  const branchTask = findImplementationTaskInBranchQueues(rootDir, state.config, state.branchLocks, taskId);
+  if (branchTask) {
+    return branchTask;
+  }
+  throw new Error(`Unknown task "${taskId}".`);
+}
+
+function prepareTaskWorktree(rootDir, config, branchLocksState, task, options = {}) {
   const agent = getAgent(config, task.agentId);
   if (agent.role !== 'implementation' && agent.role !== 'conflict-resolution') {
     throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
   }
-  const branchName = buildTaskBranchName(config, task);
-  const worktreePath = buildWorktreePath(rootDir, config, task);
   const create = options.create === true;
+  const branchName = options.branchName || buildTaskBranchName(config, task);
+  const worktreePath = options.worktreePath || buildWorktreePath(rootDir, config, task);
   let mode = create ? 'created' : 'planned';
 
   if (create) {
-    const baseRef = resolveBaseRef(rootDir, task.baseBranch || config.integrationBranch);
+    const baseBranch = task.baseBranch || config.integrationBranch;
+    const baseRef = resolveBaseRef(rootDir, baseBranch);
     ensureDir(path.dirname(worktreePath));
     const worktreeExists = fs.existsSync(worktreePath);
     const branchExists = gitRefExists(rootDir, branchName);
@@ -1206,7 +1254,7 @@ function handlePrepareWorktree(rootDir, options) {
     configureWorktreeGitIdentity(worktreePath, agent);
   }
 
-  upsertBranchLock(branchLocks, {
+  upsertBranchLock(branchLocksState, {
     taskId: task.id,
     laneKey: buildTaskLaneKey(task),
     agentId: task.agentId,
@@ -1216,27 +1264,13 @@ function handlePrepareWorktree(rootDir, options) {
     mode,
     updatedAt: new Date().toISOString(),
   });
-  writeJson(getAutonomyPaths(rootDir).branchLocksState, branchLocks);
 
-  const payload = {
+  return {
     taskId: task.id,
     branch: branchName,
     worktreePath,
     mode,
   };
-  appendAgentLog(rootDir, config, task.agentId, 'worktree:prepare', {
-    input: {
-      taskId: task.id,
-      create,
-    },
-    output: payload,
-  });
-
-  printOutput(options, payload, () => {
-    console.log(`${create ? 'Created' : 'Planned'} worktree for ${task.id}`);
-    console.log(`Branch: ${branchName}`);
-    console.log(`Worktree: ${worktreePath}`);
-  });
 }
 
 function handleScopeValidate(rootDir, options) {
@@ -1272,7 +1306,7 @@ function handleScopeValidate(rootDir, options) {
 async function handlePrRecord(rootDir, options) {
   ensureInitialized(rootDir);
   const state = loadAllState(rootDir);
-  const task = resolvePrRecordTask(state, requireOption(options, 'task'));
+  const task = resolvePrRecordTask(rootDir, state, requireOption(options, 'task'));
   const agent = getAgent(state.config, task.agentId);
   if (agent.role !== 'implementation' && agent.role !== 'conflict-resolution') {
     throw new Error(`Agent "${agent.id}" cannot publish pull requests.`);
@@ -1293,7 +1327,10 @@ async function handlePrRecord(rootDir, options) {
   const laneScopeViolations = uniqueScopeViolations(completedLaneTasks.flatMap((candidate) => {
     return collectTaskScopeViolations(candidate);
   }));
-  const pendingLaneTasks = listLaneTasks(state.taskQueues, task.agentId, laneKey)
+  const laneTasks = String(agent.role || '') === 'implementation'
+    ? listImplementationLaneTasks(rootDir, state, task.agentId, laneKey, { task }).tasks
+    : listLaneTasks(state.taskQueues, task.agentId, laneKey);
+  const pendingLaneTasks = laneTasks
     .filter((candidate) => !completedTaskIds.includes(candidate.id));
   let record = findPullRequestByLane(state.prs, task);
   const now = new Date().toISOString();
@@ -1480,6 +1517,8 @@ async function handleReviewRecord(rootDir, options) {
   pr.status = decision === 'approved' ? 'approved' : 'changes_requested';
 
   const task = findTask(state.taskQueues, pr.taskId);
+  const implementationAgent = getAgent(state.config, pr.agentId);
+  const usesTrackedImplementationQueue = String(implementationAgent.role || '') === 'implementation';
   let followupTask = null;
   const followupPatch = decision === 'changes_requested'
     ? {
@@ -1487,14 +1526,15 @@ async function handleReviewRecord(rootDir, options) {
         title: `Address review for ${pr.title}`,
         description: rawSummary || `Address reviewer feedback for ${pr.title}`,
         type: 'review_followup',
+        source: 'review_followup',
         createdAt: review.reviewedAt,
         updatedAt: review.reviewedAt,
       }
     : null;
-  if (decision === 'changes_requested') {
+  if (decision === 'changes_requested' && usesTrackedImplementationQueue) {
     followupTask = appendTrackedBranchFollowupTask(rootDir, state, pr, followupPatch);
   }
-  if (task && !followupTask) {
+  if (task && !followupTask && (!usesTrackedImplementationQueue || decision === 'approved')) {
     task.status = decision === 'approved' ? 'approved' : 'changes_requested';
     task.updatedAt = review.reviewedAt;
     if (decision === 'changes_requested') {
@@ -1569,7 +1609,13 @@ async function handleReviewRecord(rootDir, options) {
     },
     output: {
       decision,
-      taskStatus: task ? task.status : decision === 'approved' ? 'approved' : 'queued_followup',
+      taskStatus: followupTask
+        ? followupTask.status
+        : task
+          ? task.status
+          : decision === 'approved'
+            ? 'approved'
+            : 'queued_followup',
     },
   });
 
@@ -1584,7 +1630,11 @@ async function handleMerge(rootDir, options) {
   const pr = getPr(state.prs, requireOption(options, 'pr'));
   const actorId = requireOption(options, 'actor');
   const actor = getAgent(state.config, actorId);
-  const pendingLaneTasks = listLaneTasks(state.taskQueues, pr.agentId, pr.laneKey || pr.taskId);
+  const implementationAgent = getAgent(state.config, pr.agentId);
+  const laneTasks = String(implementationAgent.role || '') === 'implementation'
+    ? listImplementationLaneTasks(rootDir, state, pr.agentId, pr.laneKey || pr.taskId, { pr }).tasks
+    : listLaneTasks(state.taskQueues, pr.agentId, pr.laneKey || pr.taskId);
+  const pendingLaneTasks = laneTasks.filter((candidate) => !isTerminalTaskStatus(getImplementationTaskState(candidate)));
 
   const evaluation = evaluateMerge({
     config: state.config,
@@ -1628,11 +1678,23 @@ async function handleMerge(rootDir, options) {
           message: mergeResponse.message,
         });
         const task = findTask(state.taskQueues, pr.taskId);
-        if (task) {
+        const usesTrackedImplementationQueue = String(getAgent(state.config, pr.agentId).role || '') === 'implementation';
+        let conflictTask = null;
+        if (usesTrackedImplementationQueue) {
+          conflictTask = appendTrackedBranchFollowupTask(rootDir, state, pr, {
+            id: buildLaneConflictTaskId(pr),
+            title: `Resolve merge conflict for ${pr.title}`,
+            description: mergeResponse.message,
+            type: 'conflict_resolution',
+            source: 'conflict_resolution',
+            createdAt: conflictedAt,
+            updatedAt: conflictedAt,
+          });
+        } else if (task) {
           task.status = 'conflicted';
           task.updatedAt = conflictedAt;
         } else {
-          enqueueLaneFollowupTask(state.taskQueues, state.config, pr, {
+          conflictTask = enqueueLaneFollowupTask(state.taskQueues, state.config, pr, {
             id: buildLaneConflictTaskId(pr),
             title: `Resolve merge conflict for ${pr.title}`,
             description: mergeResponse.message,
@@ -1666,7 +1728,11 @@ async function handleMerge(rootDir, options) {
             reviewerId: actor.id,
           },
           output: {
-            status: task ? task.status : 'queued_conflict_resolution',
+            status: conflictTask
+              ? conflictTask.status
+              : task
+                ? task.status
+                : 'queued_conflict_resolution',
             message: mergeResponse.message,
           },
         });
@@ -2086,7 +2152,7 @@ function buildPmAgentStatus(agent, worker, prds) {
 
 function buildImplementationAgentStatus(rootDir, config, branchLocksState, agent, queue, worker, prById, branchLockByLane) {
   const resolvedQueueState = resolveImplementationStatusQueue(rootDir, config, branchLocksState, agent, queue);
-  const tasks = resolvedQueueState.tasks || [];
+  const tasks = (resolvedQueueState.queue && resolvedQueueState.queue.tasks) || [];
   const activeTask = selectImplementationTaskForStatus(tasks);
   const extraCount = countAdditionalPendingTasks(tasks, activeTask && activeTask.id);
   const branch = resolvedQueueState.branch || (activeTask ? resolveTaskBranch(activeTask, prById, branchLockByLane) : null);
@@ -2125,7 +2191,7 @@ function buildImplementationAgentStatus(rootDir, config, branchLocksState, agent
 }
 
 function resolveImplementationStatusQueue(rootDir, config, branchLocksState, agent, fallbackQueue) {
-  const branchQueueState = readLatestImplementationBranchQueue(rootDir, config, branchLocksState, agent.id);
+  const branchQueueState = readLatestImplementationBranchQueue(rootDir, config, branchLocksState, agent, fallbackQueue);
   if (branchQueueState) {
     return branchQueueState;
   }
@@ -2136,16 +2202,20 @@ function resolveImplementationStatusQueue(rootDir, config, branchLocksState, age
   };
 }
 
-function readLatestImplementationBranchQueue(rootDir, config, branchLocksState, agentId) {
+function readLatestImplementationBranchQueue(rootDir, config, branchLocksState, agent, fallbackQueue) {
+  const agentId = agent.id;
   const locks = ((branchLocksState && branchLocksState.locks) || [])
-    .filter((lock) => lock && lock.agentId === agentId && lock.worktreePath && fs.existsSync(lock.worktreePath))
+    .filter((lock) => lock && lock.agentId === agentId)
     .slice()
     .sort((left, right) => {
       return (Date.parse(right && right.updatedAt || '') || 0) - (Date.parse(left && left.updatedAt || '') || 0);
     });
 
   for (const lock of locks) {
-    const queueState = readImplementationQueueFromWorktree(rootDir, config, agentId, lock.worktreePath);
+    const queueState = readImplementationQueueSnapshot(rootDir, config, agentId, {
+      branch: lock.branch || null,
+      worktreePath: lock.worktreePath || null,
+    });
     if (!queueState) {
       continue;
     }
@@ -2159,6 +2229,68 @@ function readLatestImplementationBranchQueue(rootDir, config, branchLocksState, 
     }
   }
 
+  const branchTasks = (fallbackQueue && Array.isArray(fallbackQueue.tasks) ? fallbackQueue.tasks : [])
+    .filter((task) => !isTerminalTaskStatus(getImplementationTaskState(task)))
+    .slice()
+    .sort((left, right) => {
+      const rankDiff = rankImplementationTaskForStatus(left) - rankImplementationTaskForStatus(right);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return String(left.createdAt || '').localeCompare(String(right.createdAt || ''));
+    });
+
+  for (const task of branchTasks) {
+    const branch = resolveImplementationBranchRef(rootDir, config, branchLocksState, task.agentId, buildTaskLaneKey(task), {
+      task,
+    });
+    if (!branch) {
+      continue;
+    }
+    const queueState = readImplementationQueueSnapshot(rootDir, config, agentId, {
+      branch,
+      worktreePath: buildWorktreePath(rootDir, config, task),
+    });
+    if (!queueState) {
+      continue;
+    }
+    const pendingTasks = (queueState.tasks || []).filter((candidate) => !isTerminalTaskStatus(getImplementationTaskState(candidate)));
+    if (pendingTasks.length > 0) {
+      return {
+        queue: queueState,
+        branch,
+        worktreePath: fs.existsSync(buildWorktreePath(rootDir, config, task))
+          ? buildWorktreePath(rootDir, config, task)
+          : null,
+      };
+    }
+  }
+
+  return null;
+}
+
+function readImplementationQueueFromGitRef(rootDir, config, agentId, ref, fallbackValue = null) {
+  if (!ref) {
+    return fallbackValue;
+  }
+  const agent = getAgent(config, agentId);
+  const queueState = readJsonFromGitRef(rootDir, ref, agent.taskQueue, fallbackValue);
+  if (!queueState) {
+    return fallbackValue;
+  }
+  return buildTaskQueueState(agent, Array.isArray(queueState.tasks) ? queueState.tasks : []);
+}
+
+function readImplementationQueueSnapshot(rootDir, config, agentId, options = {}) {
+  const queueFromBranch = options.branch && gitRefExists(rootDir, options.branch)
+    ? readImplementationQueueFromGitRef(rootDir, config, agentId, options.branch, null)
+    : null;
+  if (queueFromBranch) {
+    return queueFromBranch;
+  }
+  if (options.worktreePath && fs.existsSync(options.worktreePath)) {
+    return readImplementationQueueFromWorktree(rootDir, config, agentId, options.worktreePath);
+  }
   return null;
 }
 
@@ -2750,10 +2882,14 @@ function findTask(taskQueues, taskId) {
   return null;
 }
 
-function resolvePrRecordTask(state, taskId) {
+function resolvePrRecordTask(rootDir, state, taskId) {
   const liveTask = findTask(state.taskQueues, taskId);
   if (liveTask) {
     return liveTask;
+  }
+  const branchTask = findImplementationTaskInBranchQueues(rootDir, state.config, state.branchLocks, taskId);
+  if (branchTask) {
+    return branchTask;
   }
   const completedTask = findCompletedTask(state.branchLocks, taskId);
   if (completedTask) {
@@ -2765,6 +2901,32 @@ function resolvePrRecordTask(state, taskId) {
 function findCompletedTask(branchLocksState, taskId) {
   for (const branchLock of (branchLocksState && branchLocksState.locks) || []) {
     const task = ((branchLock && branchLock.completedTasks) || []).find((candidate) => candidate.id === taskId);
+    if (task) {
+      return task;
+    }
+  }
+  return null;
+}
+
+function findImplementationTaskInBranchQueues(rootDir, config, branchLocksState, taskId) {
+  const locks = ((branchLocksState && branchLocksState.locks) || [])
+    .slice()
+    .sort((left, right) => {
+      return (Date.parse(right && right.updatedAt || '') || 0) - (Date.parse(left && left.updatedAt || '') || 0);
+    });
+
+  for (const lock of locks) {
+    if (!lock || !lock.agentId) {
+      continue;
+    }
+    const queueState = readImplementationQueueSnapshot(rootDir, config, lock.agentId, {
+      branch: lock.branch || null,
+      worktreePath: lock.worktreePath || null,
+    });
+    if (!queueState) {
+      continue;
+    }
+    const task = (queueState.tasks || []).find((candidate) => candidate.id === taskId);
     if (task) {
       return task;
     }
@@ -2787,6 +2949,91 @@ function listLaneTasks(taskQueues, agentId, laneKey) {
     .filter((queue) => queue.agentId === agentId)
     .flatMap((queue) => queue.tasks)
     .filter((task) => buildTaskLaneKey(task) === laneKey);
+}
+
+function findLatestCompletedLaneTask(branchLocksState, agentId, laneKey) {
+  const completedLaneTasks = listCompletedLaneTasks(branchLocksState, agentId, laneKey);
+  return completedLaneTasks.length > 0
+    ? completedLaneTasks[completedLaneTasks.length - 1]
+    : null;
+}
+
+function buildImplementationLaneSeedTask(config, branchLocksState, taskQueues, agentId, laneKey, options = {}) {
+  if (options.task) {
+    return options.task;
+  }
+  const liveLaneTasks = listLaneTasks(taskQueues, agentId, laneKey);
+  if (liveLaneTasks.length > 0) {
+    return liveLaneTasks[0];
+  }
+  const completedTask = findLatestCompletedLaneTask(branchLocksState, agentId, laneKey);
+  if (completedTask) {
+    return completedTask;
+  }
+  if (options.pr) {
+    const seedTask = {
+      id: options.pr.taskId || `${agentId}-${laneKey}`,
+      agentId,
+      laneKey,
+      sprintId: options.pr.sprintId || 'shared',
+      baseBranch: options.pr.baseBranch || config.integrationBranch,
+    };
+    if (options.pr.prdId) {
+      seedTask.prdId = options.pr.prdId;
+    }
+    return seedTask;
+  }
+  return null;
+}
+
+function resolveImplementationBranchRef(rootDir, config, branchLocksState, agentId, laneKey, options = {}) {
+  const branchLock = findBranchLockByLane(branchLocksState, agentId, laneKey);
+  const seedTask = buildImplementationLaneSeedTask(config, branchLocksState, {}, agentId, laneKey, options);
+  const branchCandidates = uniqueStrings([
+    options.branchHint,
+    branchLock ? branchLock.branch : null,
+    options.pr ? options.pr.headBranch : null,
+    options.task ? options.task.branch : null,
+    seedTask ? buildTaskBranchName(config, seedTask) : null,
+  ]);
+
+  return branchCandidates.find((candidate) => gitRefExists(rootDir, candidate)) || null;
+}
+
+function listImplementationLaneTasks(rootDir, state, agentId, laneKey, options = {}) {
+  const seedTask = buildImplementationLaneSeedTask(state.config, state.branchLocks, state.taskQueues, agentId, laneKey, options);
+  const branch = resolveImplementationBranchRef(rootDir, state.config, state.branchLocks, agentId, laneKey, {
+    ...options,
+    task: options.task || seedTask || null,
+  });
+  const branchLock = findBranchLockByLane(state.branchLocks, agentId, laneKey);
+  const fallbackWorktreePath = seedTask
+    ? buildWorktreePath(rootDir, state.config, seedTask)
+    : null;
+  const queueState = readImplementationQueueSnapshot(rootDir, state.config, agentId, {
+    branch,
+    worktreePath: branchLock && branchLock.worktreePath
+      ? branchLock.worktreePath
+      : fallbackWorktreePath,
+  });
+  if (!queueState) {
+    return {
+      tasks: listLaneTasks(state.taskQueues, agentId, laneKey),
+      branch: null,
+      worktreePath: branchLock ? branchLock.worktreePath || null : null,
+      source: 'root',
+      task: seedTask,
+    };
+  }
+  return {
+    tasks: (queueState.tasks || []).filter((task) => buildTaskLaneKey(task) === laneKey),
+    branch,
+    worktreePath: branchLock && branchLock.worktreePath
+      ? branchLock.worktreePath
+      : (fallbackWorktreePath && fs.existsSync(fallbackWorktreePath) ? fallbackWorktreePath : null),
+    source: 'branch',
+    task: seedTask,
+  };
 }
 
 function listCompletedLaneTasks(branchLocksState, agentId, laneKey) {
@@ -2914,22 +3161,75 @@ function buildLaneConflictTaskId(pr) {
   return `${pr.agentId}-conflict-${pr.id}-${conflictCount}`;
 }
 
+function ensureImplementationLaneWorktree(rootDir, state, pr, options = {}) {
+  const agent = getAgent(state.config, pr.agentId);
+  if (String(agent.role || '') !== 'implementation') {
+    throw new Error(`Agent "${agent.id}" does not use tracked implementation queues.`);
+  }
+  const laneKey = pr.laneKey || pr.taskId;
+  const laneContext = listImplementationLaneTasks(rootDir, state, pr.agentId, laneKey, {
+    pr,
+    task: options.task || null,
+  });
+  const seedTask = laneContext.task || buildImplementationLaneSeedTask(
+    state.config,
+    state.branchLocks,
+    state.taskQueues,
+    pr.agentId,
+    laneKey,
+    { pr, task: options.task || null }
+  );
+  if (!seedTask) {
+    throw new Error(`Unable to resolve lane task state for ${pr.id}.`);
+  }
+  const branch = laneContext.branch || resolveImplementationBranchRef(
+    rootDir,
+    state.config,
+    state.branchLocks,
+    pr.agentId,
+    laneKey,
+    { pr, task: seedTask }
+  );
+  if (!branch) {
+    throw new Error(`Unable to resolve implementation branch for lane "${laneKey}".`);
+  }
+
+  const preparedTask = {
+    ...seedTask,
+    id: seedTask.id || pr.taskId,
+    agentId: pr.agentId,
+    laneKey,
+    sprintId: seedTask.sprintId || pr.sprintId || 'shared',
+    baseBranch: seedTask.baseBranch || pr.baseBranch || state.config.integrationBranch,
+  };
+  if (pr.prdId && !preparedTask.prdId) {
+    preparedTask.prdId = pr.prdId;
+  }
+
+  const payload = prepareTaskWorktree(rootDir, state.config, state.branchLocks, preparedTask, {
+    create: true,
+    branchName: branch,
+    worktreePath: laneContext.worktreePath || buildWorktreePath(rootDir, state.config, preparedTask),
+  });
+  writeJson(getAutonomyPaths(rootDir).branchLocksState, state.branchLocks);
+  return payload;
+}
+
 function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
   const agent = getAgent(state.config, pr.agentId);
   if (String(agent.role || '') !== 'implementation') {
     return null;
   }
-
-  const branchLock = findBranchLockByLane(state.branchLocks, pr.agentId, pr.laneKey || pr.taskId);
-  if (!branchLock || !branchLock.worktreePath || !fs.existsSync(branchLock.worktreePath)) {
-    return null;
-  }
+  const baseTask = findTask(state.taskQueues, pr.taskId)
+    || findCompletedTask(state.branchLocks, pr.taskId)
+    || null;
+  const worktree = ensureImplementationLaneWorktree(rootDir, state, pr, { task: baseTask });
 
   const relativePath = agent.taskQueue;
   if (path.isAbsolute(relativePath)) {
-    return null;
+    throw new Error(`Implementation queue for "${agent.id}" must be repo-relative inside the worktree.`);
   }
-  const queuePath = path.join(branchLock.worktreePath, relativePath);
+  const queuePath = path.join(worktree.worktreePath, relativePath);
   const queueState = fs.existsSync(queuePath)
     ? readJson(queuePath)
     : buildTaskQueueState(agent, []);
@@ -2950,14 +3250,14 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
       prdId: pr.prdId || undefined,
       laneKey: pr.laneKey || pr.taskId,
       type: patch.type || 'review_followup',
-      source: 'review_followup',
+      source: patch.source || patch.type || 'review_followup',
       sprintId: pr.sprintId || 'shared',
       baseBranch: pr.baseBranch,
       checks: [],
       acceptance: buildReviewFollowupAcceptance(pr, nextDescription),
       state: hasActiveTask ? 'queued' : 'active',
       status: hasActiveTask ? 'queued' : 'active',
-      branch: branchLock.branch || null,
+      branch: worktree.branch || null,
       createdAt: patch.createdAt || new Date().toISOString(),
       updatedAt: patch.updatedAt || new Date().toISOString(),
       startedAt: hasActiveTask ? null : (patch.updatedAt || new Date().toISOString()),
@@ -2971,7 +3271,7 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
     task.title = patch.title || task.title;
     task.description = nextDescription;
     task.type = patch.type || task.type;
-    task.source = 'review_followup';
+    task.source = patch.source || patch.type || task.source || 'review_followup';
     task.acceptance = buildReviewFollowupAcceptance(pr, nextDescription, task.acceptance);
     task.updatedAt = patch.updatedAt || new Date().toISOString();
     task.prId = pr.id;
@@ -2979,14 +3279,14 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
       task.state = 'active';
       task.status = 'active';
       task.startedAt = task.startedAt || task.updatedAt;
-      task.branch = branchLock.branch || task.branch || null;
+      task.branch = worktree.branch || task.branch || null;
     }
   }
 
   writeJson(queuePath, buildTaskQueueState(agent, tasks));
-  runGit(branchLock.worktreePath, ['add', '--', relativePath]);
-  if (hasStagedGitChanges(branchLock.worktreePath)) {
-    runGit(branchLock.worktreePath, ['commit', '-m', `auto(${pr.agentId}): queue ${task.id}`]);
+  runGit(worktree.worktreePath, ['add', '--', relativePath]);
+  if (hasStagedGitChanges(worktree.worktreePath)) {
+    runGit(worktree.worktreePath, ['commit', '-m', `auto(${pr.agentId}): queue ${task.id}`]);
   }
   return task;
 }
