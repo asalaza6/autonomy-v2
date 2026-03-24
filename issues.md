@@ -64,7 +64,7 @@ Add deterministic no-op completion handling and guard review follow-ups when no 
 ## 5) Scope Leakage in Verification Expectations
 
 ### Symptom
-Reviewer requests or blocks lanes for checks/tools outside an agent’s configured `allowedPaths`.
+Reviewer requests or blocks lanes for checks/tools outside an agent’s configured scope.
 
 ### Root Cause
 Merge policy and review heuristics do not enforce a strict scope gate before check/fix expectations are required.
@@ -73,7 +73,7 @@ Merge policy and review heuristics do not enforce a strict scope gate before che
 Implementation agents are asked to mutate scope-violating files (for example root `package.json`) and then blocked again for out-of-scope actions.
 
 ### Fix Plan
-Enforce hard scope limits for required check fixes and reporting, and keep check gates aligned with allowed paths per lane.
+Enforce hard scope limits for required check fixes and reporting, and keep check gates aligned with agent scope per lane.
 
 ## 6) Test Gate Hard-Failure on Placeholder Repository Scripts
 

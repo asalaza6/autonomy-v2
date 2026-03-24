@@ -157,7 +157,7 @@ Each implementation agent:
 - prepares its deterministic worktree and branch
 - runs Codex in that worktree
 - determines success from repo side effects, not structured implementation JSON
-- validates changed files against the allowed path scope
+- validates changed files against the agent scope
 - runs configured checks
 - commits the task result, records the work commit SHA in the tracked queue, and pushes
 

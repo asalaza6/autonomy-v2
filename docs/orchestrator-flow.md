@@ -94,7 +94,7 @@ Nondeterministic parts:
 The design intent is to keep the AI inside a deterministic wrapper:
 
 - Codex planning must return schema-valid JSON.
-- planned tasks are validated against implementation lanes and allowed paths.
+- planned tasks are validated against implementation lanes and agent scope.
 - implementation edits are judged by diff, scope, checks, and git side effects rather than required structured output.
 - review output is combined with deterministic diff, scope, and check results before merge decisions are applied.
 

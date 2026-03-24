@@ -283,7 +283,7 @@ function runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath 
       stub: true,
     });
   }
-  const targetFile = resolveTargetFile(worktreePath, task);
+  const targetFile = resolveTargetFile(worktreePath, task, agent);
   ensureDir(path.dirname(targetFile));
   const alreadyExists = fs.existsSync(targetFile);
   const generatedAt = new Date().toISOString();
@@ -471,10 +471,9 @@ async function runReviewer({ rootDir, agentId, reviewTaskId, prId, sourceAgentId
   });
   const scopeResult = evaluateScope({
     files: reviewDiffFiles,
-    agent,
+    agent: getAgentConfig(state.config, sourceAgentId || pr.agentId),
     task: {
       id: pr.taskId,
-      allowedPaths: pr.allowedPaths || [],
     },
   });
   ensureCheckEnvironment(reviewContext.worktreePath, pr.checks || []);
@@ -765,13 +764,13 @@ function buildTaskLaneKey(task) {
   return task.id;
 }
 
-function resolveTargetFile(worktreePath, task) {
-  const allowedPath = (task.allowedPaths || [])[0];
-  if (!allowedPath) {
+function resolveTargetFile(worktreePath, task, agent) {
+  const includePath = ((agent && agent.include) || [])[0];
+  if (!includePath) {
     return path.join(worktreePath, `AUTONOMY_${slugify(task.id)}.md`);
   }
 
-  const rootSegment = trimGlob(allowedPath);
+  const rootSegment = trimGlob(includePath);
   const absoluteRoot = path.join(worktreePath, rootSegment);
   const looksLikeFile = path.extname(rootSegment) !== '';
   if (looksLikeFile) {
@@ -1008,10 +1007,8 @@ function isScopeOnlyReviewFeedback(codexReview) {
   }
   const scopeSignals = [
     /out-of-scope/,
-    /outside (?:the )?(?:allowed|lane) path/,
-    /outside (?:the )?allowed scope/,
-    /allowed paths?/,
-    /allowedpaths/,
+    /outside (?:the )?(?:agent|lane) scope/,
+    /agent scope/,
     /scope violation/,
     /extra file/,
     /unexpected file/,
@@ -1049,7 +1046,7 @@ function buildScopeSafeApprovalSummary(pr, diffFiles, checkResults) {
     .map((entry) => entry.command)
     .join(', ');
   const checksText = passedChecks ? ` The provided required checks passed: ${passedChecks}.` : '';
-  return `Approved. Compared against origin/${pr.baseBranch}, the diff stays within the lane PR allowed paths (${changed}).${checksText}`;
+  return `Approved. Compared against origin/${pr.baseBranch}, the diff stays within the lane agent scope (${changed}).${checksText}`;
 }
 
 function resolveCheckCommands({ task, existingPr, remainingLaneTasks, completedLaneTasks }) {
@@ -1192,7 +1189,6 @@ function buildTaskSnapshot(task, scopeResult) {
     type: task.type || 'implementation',
     sprintId: task.sprintId || null,
     baseBranch: task.baseBranch || null,
-    allowedPaths: uniqueStrings(task.allowedPaths || []),
     checks: uniqueStrings(task.checks || []),
     acceptance: uniqueStrings(task.acceptance || []),
     scopeViolations: uniqueScopeViolations(scopeResult && scopeResult.violations),

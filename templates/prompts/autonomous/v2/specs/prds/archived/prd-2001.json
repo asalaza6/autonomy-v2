@@ -9,9 +9,6 @@
       "title": "Aquarium lane work",
       "agentId": "aquarium-agent",
       "description": "Create aquarium work for this PRD.",
-      "allowedPaths": [
-        "src/**/*"
-      ],
       "acceptance": [
         "Aquarium work complete"
       ]
@@ -21,9 +18,6 @@
       "title": "Adventure lane work",
       "agentId": "adventure-agent",
       "description": "Create adventure work for this PRD.",
-      "allowedPaths": [
-        "src/**/*"
-      ],
       "acceptance": [
         "Adventure work complete"
       ]
@@ -33,9 +27,6 @@
       "title": "Action lane work",
       "agentId": "action-agent",
       "description": "Create action work for this PRD.",
-      "allowedPaths": [
-        "src/**/*"
-      ],
       "acceptance": [
         "Action work complete"
       ]

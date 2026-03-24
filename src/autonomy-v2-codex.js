@@ -42,7 +42,7 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
     '- Create implementation tasks only. Do not create reviewer tasks.',
     '- Keep tasks atomic and lane-scoped.',
     '- Each task must target exactly one implementation agent.',
-    '- allowedPaths must be within the chosen agent include scope.',
+    '- Scope is defined by the chosen agent include/exclude rules. Do not emit task-level scope fields.',
     '- Prefer stable ids of the form "<prd-id>-<lane>-<n>".',
     '- Acceptance criteria must be concrete and testable.',
     '',
@@ -67,17 +67,12 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['id', 'title', 'agentId', 'description', 'allowedPaths', 'acceptance', 'sprintId'],
+            required: ['id', 'title', 'agentId', 'description', 'acceptance', 'sprintId'],
             properties: {
               id: { type: 'string' },
               title: { type: 'string' },
               agentId: { type: 'string' },
               description: { type: 'string' },
-              allowedPaths: {
-                type: 'array',
-                minItems: 1,
-                items: { type: 'string' },
-              },
               acceptance: {
                 type: 'array',
                 minItems: 1,
@@ -108,7 +103,7 @@ async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branc
     'You are executing an implementation lane inside the assigned git worktree.',
     '',
     'Hard rules:',
-    '- Edit only files allowed by the task and lane scope.',
+    '- Edit only files within the assigned agent scope and current lane work.',
     '- Implement only the primary task in this run. Do not edit files that belong exclusively to later queued lane tasks.',
     '- Do not modify .autonomy/**, prompts/autonomous/**, or git metadata.',
     '- Do not commit, push, merge, or open/update pull requests. The wrapper will handle git and PR state.',
@@ -166,8 +161,8 @@ async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, workt
     '- Review the current branch checked out in this worktree against the base branch.',
     '- Missing or failing required checks are blocking.',
     '- Focus on regressions, correctness, scope violations, weak verification, and merge safety.',
-    '- Treat the PR as lane-scoped: any file listed in allowedPaths is in-scope even if sourceTitle/sourceBody mention only the most recent task.',
-    '- Do not request changes solely because the diff includes earlier completed lane-task files that are still within allowedPaths.',
+    '- Treat the PR as lane-scoped: files within the implementation agent scope are in-scope even if sourceTitle/sourceBody mention only the most recent task.',
+    '- Do not request changes solely because the diff includes earlier completed lane-task files that are still within the implementation agent scope.',
     '',
     'Review task:',
     JSON.stringify(reviewTask, null, 2),
@@ -183,7 +178,6 @@ async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, workt
         taskIds: pr.taskIds || [],
         completedTaskIds: pr.completedTaskIds || [],
         acceptance: pr.acceptance || [],
-        allowedPaths: pr.allowedPaths || [],
         implementationScopeViolations: pr.scopeViolations || [],
         priorReviews: pr.reviews || [],
       },
@@ -551,17 +545,6 @@ function validatePlannedTasks({ prd, tasks, implementationAgents, fallbackSprint
     }
     seenIds.add(id);
 
-    const allowedPaths = normalizeStringList(task.allowedPaths);
-    const effectiveAllowedPaths = allowedPaths.length > 0 ? allowedPaths : normalizeStringList(agent.include);
-    if (effectiveAllowedPaths.length === 0) {
-      throw new Error(`Task "${id}" does not have any allowedPaths.`);
-    }
-    effectiveAllowedPaths.forEach((allowedPath) => {
-      if (!isPathWithinAgentScope(allowedPath, agent.include || [])) {
-        throw new Error(`Task "${id}" uses allowedPath "${allowedPath}" outside ${agent.id} scope.`);
-      }
-    });
-
     const acceptance = normalizeStringList(task.acceptance);
     if (acceptance.length === 0) {
       throw new Error(`Task "${id}" must include at least one acceptance criterion.`);
@@ -572,7 +555,6 @@ function validatePlannedTasks({ prd, tasks, implementationAgents, fallbackSprint
       title: String(task.title || '').trim() || `Implement ${agentId} work for ${prd.id}`,
       agentId,
       description: String(task.description || '').trim(),
-      allowedPaths: effectiveAllowedPaths,
       acceptance,
       sprintId: String(task.sprintId || '').trim() || fallbackSprintId,
     };
@@ -589,29 +571,6 @@ function sanitizeTaskId(value) {
 function buildGeneratedTaskId(prdId, agentId, index) {
   const lane = String(agentId || '').replace(/-agent$/, '');
   return `${prdId}-${lane}-${index}`;
-}
-
-function isPathWithinAgentScope(candidatePath, agentInclude) {
-  if (!Array.isArray(agentInclude) || agentInclude.length === 0) {
-    return true;
-  }
-  const candidatePrefix = trimGlob(candidatePath);
-  return agentInclude.some((includePath) => {
-    const includePrefix = trimGlob(includePath);
-    if (includePrefix.length === 0) {
-      return true;
-    }
-    return candidatePrefix === includePrefix || candidatePrefix.startsWith(`${includePrefix}/`);
-  });
-}
-
-function trimGlob(value) {
-  const normalized = String(value || '').replace(/\\/g, '/');
-  const wildcardIndex = normalized.search(/[*?[]/);
-  if (wildcardIndex === -1) {
-    return normalized.replace(/\/+$/, '');
-  }
-  return normalized.slice(0, wildcardIndex).replace(/\/+$/, '');
 }
 
 function normalizeStringList(value) {

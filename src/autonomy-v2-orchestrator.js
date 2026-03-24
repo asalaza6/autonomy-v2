@@ -876,7 +876,6 @@ function buildPmStubTaskSpecs(config, sprint, prd) {
     return [];
   }
   const taskId = `${prd.id}-${primaryAgent.id}-1`;
-  const allowedPaths = normalizeStringList(primaryAgent.include || []);
   const acceptance = normalizeStringList(prd.requirements);
   const description = typeof prd.specification === 'string' && prd.specification.trim()
     ? prd.specification.trim()
@@ -888,34 +887,25 @@ function buildPmStubTaskSpecs(config, sprint, prd) {
     description,
     laneKey: `${prd.id}:${primaryAgent.id}`,
     sprintId: prd.sprintId || sprint.sprintId || 'shared',
-    allowedPaths,
-    acceptance: acceptance.length > 0 ? acceptance : buildFallbackAcceptance(taskId, allowedPaths),
+    acceptance: acceptance.length > 0 ? acceptance : buildFallbackAcceptance(taskId),
   }];
 }
 
 function sanitizePlannedTaskSpecs(taskSpecs) {
   return (Array.isArray(taskSpecs) ? taskSpecs : []).map((task) => {
-    const allowedPaths = normalizeStringList(task && task.allowedPaths);
     const acceptance = normalizeStringList(task && task.acceptance)
       .filter((entry) => !isProcessAcceptance(entry));
     return {
       ...task,
-      allowedPaths,
       acceptance: acceptance.length > 0
         ? acceptance
-        : buildFallbackAcceptance(task && task.id, allowedPaths),
+        : buildFallbackAcceptance(task && task.id),
     };
   });
 }
 
-function buildFallbackAcceptance(taskId, allowedPaths) {
-  if (allowedPaths.length === 1) {
-    return [`Only \`${allowedPaths[0]}\` is modified by task \`${taskId}\`.`];
-  }
-  if (allowedPaths.length > 1) {
-    return [`Changes for task \`${taskId}\` stay within the allowed paths: ${allowedPaths.join(', ')}.`];
-  }
-  return [`Task \`${taskId}\` is complete within its declared scope.`];
+function buildFallbackAcceptance(taskId) {
+  return [`Task \`${taskId}\` is complete within the assigned agent scope.`];
 }
 
 function normalizeStringList(value) {
@@ -947,7 +937,6 @@ function buildTrackedImplementationQueueUpdates(rootDir, config, taskSpecs, { pr
       source: spec.source || 'planned',
       sprintId: spec.sprintId || prd.sprintId || sprint.sprintId || 'shared',
       baseBranch: config.integrationBranch,
-      allowedPaths: normalizeStringList(spec.allowedPaths),
       checks: normalizeStringList(agent.checks || []),
       acceptance: normalizeStringList(spec.acceptance),
       state: 'queued',

@@ -243,7 +243,7 @@ Usage:
 Commands:
   init
   status [--sync]
-  task:add --id <id> --title <title> --agent <agent-id> [--allowed-path <glob>] [--acceptance <text>]
+  task:add --id <id> --title <title> --agent <agent-id> [--acceptance <text>]
   task:finish --task <task-id>
   task:list [--status <status>]
   prd:add --id <id> --title <title> [--specification <text>] [--requirement <text>] [--task-spec <json>]
@@ -623,7 +623,7 @@ function buildAgentSystemPrompt(agent, config) {
       '',
       '- Watch the PRD inbox for newly inserted product requests.',
       '- Decompose each PRD into scoped implementation tasks for the feature agents.',
-      '- Route tasks into the correct per-agent queues with acceptance criteria and path bounds.',
+      '- Route tasks into the correct per-agent queues with concrete acceptance criteria.',
       '',
       '## Hard Rules',
       '',
@@ -636,7 +636,7 @@ function buildAgentSystemPrompt(agent, config) {
       '',
       '1. Read the next queued PRD from the PRD inbox.',
       '2. Break it into atomic tasks for the configured implementation lanes as needed.',
-      '3. Assign each task to one agent queue with explicit allowed paths.',
+      '3. Assign each task to one agent queue that already owns the needed scope.',
       '4. Record the decomposition result and mark the PRD as planned.',
       '',
     ].join('\n');
@@ -686,7 +686,7 @@ function buildAgentSystemPrompt(agent, config) {
     '',
     '## Hard Rules',
     '',
-    '- Edit only files allowed by your assigned task and configured scope.',
+    '- Edit only files within your configured agent scope.',
     ...scopeLines,
     `- Do not merge to \`${productionBranch}\` or \`master\`.`,
     `- Do not merge directly to \`${integrationBranch}\`; publish changes for review.`,
@@ -885,7 +885,6 @@ function handleTaskAdd(rootDir, options) {
     throw new Error(`Task "${taskId}" already exists.`);
   }
 
-  const allowedPaths = getListOption(options, 'allowed-path');
   const checks = getListOption(options, 'check');
   const acceptance = getListOption(options, 'acceptance');
   const now = new Date().toISOString();
@@ -899,7 +898,6 @@ function handleTaskAdd(rootDir, options) {
     type: getStringOption(options, 'type', 'implementation'),
     sprintId: getStringOption(options, 'sprint-id', sprint.sprintId || 'shared'),
     baseBranch: getStringOption(options, 'base-branch', sprint.defaultTaskBaseBranch || config.integrationBranch),
-    allowedPaths,
     checks: checks.length > 0 ? checks : agent.checks || [],
     acceptance,
     source: getStringOption(options, 'source', 'manual'),
@@ -924,7 +922,6 @@ function handleTaskAdd(rootDir, options) {
     input: {
       id: taskId,
       title,
-      allowedPaths,
       acceptance,
     },
     output: {
@@ -1319,11 +1316,6 @@ async function handlePrRecord(rootDir, options) {
       ]),
       completedTaskIds: completedTaskIds.slice(),
       pendingTaskIds: pendingLaneTasks.map((candidate) => candidate.id),
-      allowedPaths: uniqueStrings([
-        ...completedLaneTasks.flatMap((candidate) => candidate.allowedPaths || []),
-        ...(task.allowedPaths || []),
-        ...pendingLaneTasks.flatMap((candidate) => candidate.allowedPaths || []),
-      ]),
       checks: uniqueStrings([
         ...completedLaneTasks.flatMap((candidate) => candidate.checks || []),
         ...(task.checks || []),
@@ -1363,12 +1355,6 @@ async function handlePrRecord(rootDir, options) {
       ...completedTaskIds,
     ]);
     record.pendingTaskIds = pendingLaneTasks.map((candidate) => candidate.id);
-    record.allowedPaths = uniqueStrings([
-      ...completedLaneTasks.flatMap((candidate) => candidate.allowedPaths || []),
-      ...(record.allowedPaths || []),
-      ...(task.allowedPaths || []),
-      ...pendingLaneTasks.flatMap((candidate) => candidate.allowedPaths || []),
-    ]);
     record.checks = uniqueStrings([
       ...completedLaneTasks.flatMap((candidate) => candidate.checks || []),
       ...(record.checks || []),
@@ -1911,7 +1897,7 @@ function buildPersonaPrBody(agent, task, sprint, body) {
     '<!-- autonomy-persona -->',
     `Agent: ${getAgentPersona(agent)}`,
     `Task: ${task.id}`,
-    `Scope: ${(task.allowedPaths || []).join(', ') || 'repo-scoped'}`,
+    `Scope: ${(agent.include || []).join(', ') || 'repo-scoped'}`,
     `Run: ${task.sprintId || sprint.sprintId || 'shared'}`,
   ].join('\n');
 
@@ -2605,27 +2591,19 @@ function isProcessAcceptance(value) {
   return /(reflog|origin\/|merge-base|created from|branch|commit)/i.test(String(value || ''));
 }
 
-function buildFallbackAcceptance(taskId, allowedPaths) {
-  if (allowedPaths.length === 1) {
-    return [`Only \`${allowedPaths[0]}\` is modified by task \`${taskId}\`.`];
-  }
-  if (allowedPaths.length > 1) {
-    return [`Changes for task \`${taskId}\` stay within the allowed paths: ${allowedPaths.join(', ')}.`];
-  }
-  return [`Task \`${taskId}\` is complete within its declared scope.`];
+function buildFallbackAcceptance(taskId) {
+  return [`Task \`${taskId}\` is complete within the assigned agent scope.`];
 }
 
 function sanitizePlannedTaskSpecs(taskSpecs) {
   return (Array.isArray(taskSpecs) ? taskSpecs : []).map((task) => {
-    const allowedPaths = normalizeTaskStringList(task && task.allowedPaths);
     const acceptance = normalizeTaskStringList(task && task.acceptance)
       .filter((entry) => !isProcessAcceptance(entry));
     return {
       ...task,
-      allowedPaths,
       acceptance: acceptance.length > 0
         ? acceptance
-        : buildFallbackAcceptance(task && task.id, allowedPaths),
+        : buildFallbackAcceptance(task && task.id),
     };
   });
 }
@@ -2650,7 +2628,6 @@ function buildTrackedImplementationQueueUpdates(rootDir, config, taskSpecs, { pr
       source: spec.source || source,
       sprintId: spec.sprintId || prd.sprintId || sprint.sprintId || 'shared',
       baseBranch: config.integrationBranch,
-      allowedPaths: normalizeTaskStringList(spec.allowedPaths),
       checks: normalizeTaskStringList(agent.checks || []),
       acceptance: normalizeTaskStringList(spec.acceptance),
       state: 'queued',
@@ -2905,7 +2882,6 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
       type: patch.type || 'implementation',
       sprintId: pr.sprintId || 'shared',
       baseBranch: pr.baseBranch,
-      allowedPaths: (pr.allowedPaths || []).slice(),
       checks: [],
       acceptance: buildReviewFollowupAcceptance(pr, nextDescription),
       status: 'queued',
@@ -2978,7 +2954,6 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
       source: 'review_followup',
       sprintId: pr.sprintId || 'shared',
       baseBranch: pr.baseBranch,
-      allowedPaths: (pr.allowedPaths || []).slice(),
       checks: [],
       acceptance: buildReviewFollowupAcceptance(pr, nextDescription),
       state: hasActiveTask ? 'queued' : 'active',
@@ -3118,10 +3093,7 @@ function buildLaneSourceSummary(task, completedLaneTasks, pendingLaneTasks) {
 
   return {
     title: `${task.agentId.replace(/-agent$/, '')} lane work for ${task.prdId || task.id}`,
-    body: [
-      `Lane task ids: ${laneTasks.map((candidate) => candidate.id).join(', ')}`,
-      `Allowed paths: ${uniqueStrings(laneTasks.flatMap((candidate) => candidate.allowedPaths || [])).join(', ')}`,
-    ].join('\n'),
+    body: `Lane task ids: ${laneTasks.map((candidate) => candidate.id).join(', ')}`,
   };
 }
 
@@ -3266,18 +3238,13 @@ function collectFilesForValidation(rootDir, options) {
 
 function evaluateScope({ files, agent, task }) {
   const violations = [];
-  const includeGlobs = task.allowedPaths && task.allowedPaths.length > 0 ? task.allowedPaths : agent.include || [];
+  const includeGlobs = agent.include || [];
   const excludeGlobs = agent.exclude || [];
 
   for (const file of files) {
-    const inTaskScope = includeGlobs.length === 0 || matchesAnyGlob(file, includeGlobs);
-    const inAgentScope = !agent.include || agent.include.length === 0 || matchesAnyGlob(file, agent.include);
+    const inAgentScope = includeGlobs.length === 0 || matchesAnyGlob(file, includeGlobs);
     const excluded = excludeGlobs.length > 0 && matchesAnyGlob(file, excludeGlobs);
 
-    if (!inTaskScope) {
-      violations.push({ file, reason: 'outside task allowedPaths' });
-      continue;
-    }
     if (!inAgentScope) {
       violations.push({ file, reason: 'outside agent include scope' });
       continue;

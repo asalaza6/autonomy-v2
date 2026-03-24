@@ -166,7 +166,7 @@ PM planning sits at the boundary between AI and deterministic validation.
 - Codex output violates required schema
 - returned task specs reference unknown implementation agents
 - task IDs are invalid or duplicated
-- allowed paths are outside the target lane scope
+- inferred work falls outside the target agent scope
 - acceptance criteria are missing when the planner contract requires them
 - failure persisting the planned PRD spec back to the integration branch
 - failure creating runtime tasks after planning

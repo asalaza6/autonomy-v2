@@ -37,7 +37,6 @@ Implementation queue files use this shape:
       "prdId": "prd-123",
       "laneKey": "prd-123:architecture-agent",
       "description": "…",
-      "allowedPaths": ["src/**"],
       "acceptance": ["…"],
       "source": "planned",
       "state": "queued",
@@ -50,6 +49,8 @@ Implementation queue files use this shape:
   ]
 }
 ```
+
+Task scope is not stored on the task object. Scope comes only from the implementation agent definition in `prompts/autonomous/v2/config/agents.json`.
 
 States are:
 

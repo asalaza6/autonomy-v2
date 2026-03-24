@@ -927,7 +927,6 @@ function buildDerivedCompletedTaskSnapshot(task, prdId, integrationBranch, agent
     type: 'implementation',
     sprintId: task.sprintId || 'shared',
     baseBranch: integrationBranch,
-    allowedPaths: normalizeStringList(task.allowedPaths),
     checks: uniqueStrings([...(task.checks || []), ...((agentConfig && agentConfig.checks) || [])]),
     acceptance: normalizeStringList(task.acceptance),
     completedAt: now,
@@ -955,7 +954,6 @@ function buildDerivedPullRequestRecord({
     ...(task.checks || []),
     ...((agentConfig && agentConfig.checks) || []),
   ]));
-  const allowedPaths = uniqueStrings(laneTasks.flatMap((task) => task.allowedPaths || []));
   const acceptance = uniqueStrings(laneTasks.flatMap((task) => task.acceptance || []));
   const source = buildLaneSourceSummary(remoteSpec.spec.id, laneTasks);
   const prForReviewState = {
@@ -1003,7 +1001,6 @@ function buildDerivedPullRequestRecord({
     taskIds: uniqueStrings([...baseTaskIds, ...extraTaskIds]),
     completedTaskIds: uniqueStrings([...completedTasks.map((task) => task.id), ...extraCompletedTaskIds]),
     pendingTaskIds: uniqueStrings([...pendingTasks.map((task) => task.id), ...extraPendingTaskIds]),
-    allowedPaths,
     acceptance,
     checks,
     commitCount: Number(laneState.commitCount || 0),
@@ -1112,7 +1109,6 @@ function buildDerivedPendingLinkedTask(task, pr, now) {
     type,
     sprintId: pr.sprintId || 'shared',
     baseBranch: pr.baseBranch,
-    allowedPaths: normalizeStringList(pr.allowedPaths),
     checks: normalizeStringList(pr.checks),
     acceptance: type === 'review_followup'
       ? buildDerivedReviewFollowupAcceptance(pr, description, task && task.acceptance)
@@ -1409,10 +1405,7 @@ function buildLaneSourceSummary(prdId, laneTasks) {
   }
   return {
     title: `${laneTasks[0].agentId.replace(/-agent$/, '')} lane work for ${prdId}`,
-    body: [
-      `Lane task ids: ${laneTasks.map((task) => task.id).join(', ')}`,
-      `Allowed paths: ${uniqueStrings(laneTasks.flatMap((task) => task.allowedPaths || [])).join(', ')}`,
-    ].join('\n'),
+    body: `Lane task ids: ${laneTasks.map((task) => task.id).join(', ')}`,
   };
 }
 
@@ -1870,8 +1863,7 @@ function normalizeTaskSpecs(taskSpecs, options = {}) {
       title: String(task.title),
       agentId: String(task.agentId),
       description: typeof task.description === 'string' ? task.description : '',
-      allowedPaths: normalizeStringList(task.allowedPaths),
-      acceptance: sanitizeTaskAcceptance(task.acceptance, task.allowedPaths, task.id),
+      acceptance: sanitizeTaskAcceptance(task.acceptance, task.id),
       sprintId: task.sprintId ? String(task.sprintId) : undefined,
     };
   }).map((task) => {
@@ -1891,21 +1883,13 @@ function normalizeStringList(value) {
     .filter(Boolean);
 }
 
-function sanitizeTaskAcceptance(value, allowedPaths, taskId) {
+function sanitizeTaskAcceptance(value, taskId) {
   const acceptance = normalizeStringList(value)
     .filter((entry) => !isProcessAcceptance(entry));
   if (acceptance.length > 0) {
     return acceptance;
   }
-
-  const normalizedAllowedPaths = normalizeStringList(allowedPaths);
-  if (normalizedAllowedPaths.length === 1) {
-    return [`Only \`${normalizedAllowedPaths[0]}\` is modified by task \`${taskId}\`.`];
-  }
-  if (normalizedAllowedPaths.length > 1) {
-    return [`Changes for task \`${taskId}\` stay within the allowed paths: ${normalizedAllowedPaths.join(', ')}.`];
-  }
-  return [`Task \`${taskId}\` is complete within its declared scope.`];
+  return [`Task \`${taskId}\` is complete within the assigned agent scope.`];
 }
 
 function isProcessAcceptance(value) {
