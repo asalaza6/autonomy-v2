@@ -19,7 +19,7 @@ The short version is:
 - `bin/autonomy-v2-worker`
   Worker entrypoint. Delegates to `src/autonomy-v2-worker.js`.
 - `src/autonomy-v2.js`
-  Command handlers for init, task/lease/PR/review mutations, scope evaluation, status, and operator-facing state changes.
+  Command handlers for init, task/PR/review mutations, non-implementation lease handling, scope evaluation, status, and operator-facing state changes.
 - `src/autonomy-v2-server.js`
   Long-running poll loop. Acquires the server lock and repeatedly calls one scheduler tick.
 - `src/autonomy-v2-worker.js`

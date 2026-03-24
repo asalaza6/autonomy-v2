@@ -56,7 +56,6 @@ const DEFAULT_GITIGNORE = [
 const GENERATED_TEMPLATE_FILES = {
   'state/tasks.json': () => `${JSON.stringify({ tasks: [] }, null, 2)}\n`,
   'state/prs.json': () => `${JSON.stringify({ pullRequests: [] }, null, 2)}\n`,
-  'state/leases.json': () => `${JSON.stringify({ leases: [] }, null, 2)}\n`,
   'state/branch-locks.json': () => `${JSON.stringify({ locks: [] }, null, 2)}\n`,
   'state/prds.json': () => `${JSON.stringify({ prds: [] }, null, 2)}\n`,
   'state/spec-sync.json': () => `${JSON.stringify(DEFAULT_SYNC_STATE, null, 2)}\n`,
@@ -101,7 +100,6 @@ const BASE_TEMPLATE_FILES = [
   'config/sprint.json',
   'state/tasks.json',
   'state/prs.json',
-  'state/leases.json',
   'state/branch-locks.json',
   'state/prds.json',
   'state/spec-sync.json',
@@ -148,9 +146,6 @@ async function main(argv = process.argv.slice(2)) {
         break;
       case 'prd:archive-completed':
         await runCommand(() => handleArchiveCompletedPrds(rootDir, options));
-        break;
-      case 'lease':
-        await runCommand(() => handleLease(rootDir, options));
         break;
       case 'worktree:prepare':
         await runCommand(() => handlePrepareWorktree(rootDir, options));
@@ -219,7 +214,6 @@ function isMutatingCommand(command) {
     'task:finish',
     'prd:add',
     'prd:archive-completed',
-    'lease',
     'worktree:prepare',
     'pr:record',
     'review:record',
@@ -255,7 +249,6 @@ Commands:
   prd:add --id <id> --title <title> [--specification <text>] [--requirement <text>] [--task-spec <json>]
   prd:list [--status <status>] [--sync]
   prd:archive-completed
-  lease --agent <agent-id> [--task <task-id>] [--minutes 60]
   worktree:prepare --task <task-id> [--create]
   scope:validate --task <task-id> [--files <path1,path2>] [--worktree <path>]
   pr:record --task <task-id> --head-branch <branch> [--publish]
@@ -294,7 +287,6 @@ function getAutonomyPaths(rootDir) {
     sprintConfig: path.join(configDir, 'sprint.json'),
     tasksState: path.join(stateDir, 'tasks.json'),
     prsState: path.join(stateDir, 'prs.json'),
-    leasesState: path.join(stateDir, 'leases.json'),
     branchLocksState: path.join(stateDir, 'branch-locks.json'),
     prdsState: path.join(stateDir, 'prds.json'),
     specSyncState: path.join(stateDir, 'spec-sync.json'),
@@ -805,7 +797,7 @@ function handleStatus(rootDir, options) {
   const prds = fs.existsSync(paths.prdsState)
     ? readJson(paths.prdsState)
     : { prds: [] };
-  const { config, sprint, taskQueues, prs, leases, branchLocks } = loadAllState(rootDir);
+  const { config, sprint, taskQueues, prs, branchLocks } = loadAllState(rootDir);
   const taskCounts = countBy(listTasks(taskQueues), 'status');
   const prCounts = countBy(prs.pullRequests, 'status');
   const queues = (config.agents || []).map((agent) => {
@@ -822,7 +814,6 @@ function handleStatus(rootDir, options) {
     config,
     taskQueues,
     prs,
-    leases,
     branchLocks,
     runtime,
     prds,
@@ -833,8 +824,6 @@ function handleStatus(rootDir, options) {
     runtime,
     branchLocks,
   });
-  const activeLeaseDetails = buildLeaseDetails(leases, taskQueues);
-
   const payload = {
     configPath: path.relative(rootDir, paths.agentsConfig),
     sprintPath: path.relative(rootDir, paths.sprintConfig),
@@ -849,8 +838,6 @@ function handleStatus(rootDir, options) {
     taskCounts,
     prCounts,
     pullRequestStatuses,
-    leaseCount: leases.leases.length,
-    activeLeaseDetails,
     branchLockCount: branchLocks.locks.length,
   };
 
@@ -879,7 +866,6 @@ function handleStatus(rootDir, options) {
         console.log(formatPullRequestStatusLine(prStatus));
       });
     }
-    console.log(`Active leases: ${leases.leases.length}${activeLeaseDetails.length > 0 ? ` | ${activeLeaseDetails.join(', ')}` : ''}`);
     console.log(`Branch locks: ${branchLocks.locks.length}`);
   });
 }
@@ -954,7 +940,7 @@ function handleTaskAdd(rootDir, options) {
 
 function handleTaskFinish(rootDir, options) {
   ensureInitialized(rootDir);
-  const { config, taskQueues, leases } = loadAllState(rootDir);
+  const { config, taskQueues } = loadAllState(rootDir);
   const task = getTask(taskQueues, requireOption(options, 'task'));
   const agent = getAgent(config, task.agentId);
   const queue = getTaskQueue(taskQueues, config, task.agentId);
@@ -962,11 +948,6 @@ function handleTaskFinish(rootDir, options) {
   if (taskIndex === -1) {
     throw new Error(`Task "${task.id}" is not present in queue "${task.agentId}".`);
   }
-
-  leases.leases = (leases.leases || []).filter((lease) => lease.taskId !== task.id);
-
-  const paths = getAutonomyPaths(rootDir);
-  writeJson(paths.leasesState, leases);
   if (String(agent.role || '') === 'implementation') {
     const now = new Date().toISOString();
     task.state = 'done';
@@ -1071,7 +1052,7 @@ function handlePrdAdd(rootDir, options) {
   if (taskSpecs.length === 0 && !specification && requirements.length === 0) {
     throw new Error('Provide at least one --task-spec or a --specification/--requirement input for PM planning.');
   }
-  if (taskSpecs.length > 0 && (hasActivePrd || hasExistingPrdSpec)) {
+  if (taskSpecs.length > 0 && (hasActivePrd || hasActiveIntegrationPrdSpec || hasExistingPrdSpec)) {
     throw new Error('Cannot enqueue implementation task specs while the PRD spec would be queued instead of active on the integration branch.');
   }
 
@@ -1191,73 +1172,6 @@ function handleArchiveCompletedPrds(rootDir, options) {
     archived.forEach((entry) => {
       console.log(`- ${entry.id} | ${entry.from} -> ${entry.to}`);
     });
-  });
-}
-
-function handleLease(rootDir, options) {
-  ensureInitialized(rootDir);
-  const { config, taskQueues, leases } = loadAllState(rootDir);
-  const agentId = requireOption(options, 'agent');
-  getAgent(config, agentId);
-
-  const now = Date.now();
-  pruneExpiredLeases(leases, taskQueues, now);
-  const queue = getTaskQueue(taskQueues, config, agentId);
-  const requestedTaskId = getStringOption(options, 'task', '');
-  const queuedTask = requestedTaskId
-    ? queue.tasks.find((task) => task.id === requestedTaskId)
-    : queue.tasks.find((task) => task.status === 'queued');
-  if (!queuedTask) {
-    if (requestedTaskId) {
-      throw new Error(`Task "${requestedTaskId}" is not available in queue "${agentId}".`);
-    }
-    throw new Error(`No queued task available for agent "${agentId}".`);
-  }
-
-  if (requestedTaskId) {
-    const leasableStatuses = new Set(['queued', 'changes_requested', 'conflicted', 'failed', 'leased']);
-    if (!leasableStatuses.has(queuedTask.status)) {
-      throw new Error(`Task "${queuedTask.id}" is not available for lease from status "${queuedTask.status}".`);
-    }
-  }
-
-  if (leases.leases.some((lease) => lease.taskId === queuedTask.id)) {
-    throw new Error(`Task "${queuedTask.id}" is already leased.`);
-  }
-
-  const minutes = Number(getStringOption(options, 'minutes', '60'));
-  if (!Number.isFinite(minutes) || minutes <= 0) {
-    throw new Error('--minutes must be a positive number.');
-  }
-
-  const leasedAt = new Date(now).toISOString();
-  const expiresAt = new Date(now + minutes * 60 * 1000).toISOString();
-  const lease = {
-    taskId: queuedTask.id,
-    agentId,
-    leasedAt,
-    expiresAt,
-  };
-  leases.leases.push(lease);
-  queuedTask.status = 'leased';
-  queuedTask.updatedAt = leasedAt;
-
-  const paths = getAutonomyPaths(rootDir);
-  writeJson(paths.leasesState, leases);
-  writeTaskQueues(rootDir, config, taskQueues);
-  appendAgentLog(rootDir, config, agentId, 'lease', {
-    input: {
-      minutes,
-      taskId: requestedTaskId || undefined,
-    },
-    output: {
-      taskId: queuedTask.id,
-      expiresAt,
-    },
-  });
-
-  printOutput(options, { task: queuedTask, lease }, () => {
-    console.log(`Leased task ${queuedTask.id} to ${agentId} until ${expiresAt}`);
   });
 }
 
@@ -1847,13 +1761,12 @@ function handleRuntimeStatus(rootDir, options) {
   const prds = fs.existsSync(paths.prdsState)
     ? readJson(paths.prdsState)
     : { prds: [] };
-  const { config, taskQueues, prs, leases, branchLocks } = loadAllState(rootDir);
+  const { config, taskQueues, prs, branchLocks } = loadAllState(rootDir);
   const agentStatuses = buildAgentStatusSummaries({
     rootDir,
     config,
     taskQueues,
     prs,
-    leases,
     branchLocks,
     runtime,
     prds,
@@ -1902,7 +1815,6 @@ function loadAllState(rootDir) {
     sprint: readJson(paths.sprintConfig),
     taskQueues: readTaskQueues(rootDir, config),
     prs: readJson(paths.prsState),
-    leases: readJson(paths.leasesState),
     branchLocks: readJson(paths.branchLocksState),
   };
 }
@@ -2140,7 +2052,7 @@ function normalizeLaneKey(record) {
   return '';
 }
 
-function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, leases, branchLocks, runtime, prds }) {
+function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, branchLocks, runtime, prds }) {
   const prById = new Map((prs.pullRequests || []).map((pr) => [pr.id, pr]));
   const branchLockByLane = new Map(
     (branchLocks.locks || [])
@@ -2595,39 +2507,6 @@ function formatAgentStatusLine(agentStatus, options = {}) {
     parts.push(agentStatus.detail);
   }
   return parts.join(' | ');
-}
-
-function buildLeaseDetails(leases, taskQueues) {
-  const tasksById = new Map(listTasks(taskQueues).map((task) => [task.id, task]));
-  return (leases.leases || []).map((lease) => {
-    const task = tasksById.get(lease.taskId);
-    if (!task) {
-      return lease.taskId;
-    }
-    return `${task.agentId}:${task.id}`;
-  });
-}
-
-function pruneExpiredLeases(leasesState, tasksState, now) {
-  const expiredTaskIds = [];
-  leasesState.leases = leasesState.leases.filter((lease) => {
-    const active = Date.parse(lease.expiresAt) > now;
-    if (!active) {
-      expiredTaskIds.push(lease.taskId);
-    }
-    return active;
-  });
-
-  if (!tasksState || expiredTaskIds.length === 0) {
-    return;
-  }
-
-  listTasks(tasksState).forEach((task) => {
-    if (expiredTaskIds.includes(task.id) && task.status === 'leased') {
-      task.status = 'queued';
-      task.updatedAt = new Date(now).toISOString();
-    }
-  });
 }
 
 function resolveTaskQueuePath(rootDir, config, agentId) {

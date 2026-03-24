@@ -51,7 +51,6 @@ function getPaths(rootDir) {
     agentsConfig: path.join(configDir, 'agents.json'),
     sprintConfig: path.join(configDir, 'sprint.json'),
     tasksState: path.join(stateDir, 'tasks.json'),
-    leasesState: path.join(stateDir, 'leases.json'),
     prdsState: path.join(stateDir, 'prds.json'),
     runtimeState: path.join(stateDir, 'runtime.json'),
     prsState: path.join(stateDir, 'prs.json'),
@@ -242,11 +241,6 @@ function loadBranchLocks(rootDir) {
   return readJson(getPaths(rootDir).branchLocksState, { locks: [] });
 }
 
-function loadLeases(rootDir) {
-  const paths = getPaths(rootDir);
-  return readJson(paths.leasesState, { leases: [] });
-}
-
 function writeRuntime(rootDir, runtime) {
   const paths = getPaths(rootDir);
   writeJson(paths.runtimeState, runtime);
@@ -400,10 +394,9 @@ function isProcessAlive(pid) {
   }
 }
 
-function refreshRuntime(rootDir, config, queues, leases, runtime) {
+function refreshRuntime(rootDir, config, queues, runtime) {
   const now = new Date().toISOString();
   const recoveredAgents = new Set();
-  let leasesChanged = false;
   Object.values(runtime.workers || {}).forEach((worker) => {
     if (worker.status === 'running' && worker.pid && !isProcessAlive(worker.pid)) {
       const agent = getAgent(config, worker.agentId);
@@ -454,9 +447,6 @@ function refreshRuntime(rootDir, config, queues, leases, runtime) {
         .flatMap((queue) => listTasks(queue)),
     });
   }
-  if (leasesChanged) {
-    writeJson(getPaths(rootDir).leasesState, leases);
-  }
 }
 
 function workerIsRunning(runtime, agentId) {
@@ -489,7 +479,7 @@ function comparePrdBacklogOrder(left, right) {
   return String(left && left.id || '').localeCompare(String(right && right.id || ''));
 }
 
-function findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, leases, options = {}) {
+function findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, options = {}) {
   const due = [];
   const knownPrds = listPrds(prds);
   const hasQueuedPrd = knownPrds.some((prd) => prd.status === 'queued');
@@ -603,16 +593,14 @@ function runSchedulerTick(rootDir, options = {}) {
     const queues = loadQueues(rootDir, config);
     const branchLocks = loadBranchLocks(rootDir);
     const prds = loadPrds(rootDir);
-    const leases = loadLeases(rootDir);
     runtime = loadRuntime(rootDir);
     emitSchedulerProgress(options, 'state:loaded', {
       agents: (config.agents || []).length,
       queues: Object.keys(queues).length,
       prds: Array.isArray(prds.prds) ? prds.prds.length : 0,
-      leases: Array.isArray(leases.leases) ? leases.leases.length : 0,
       workers: Object.keys((runtime && runtime.workers) || {}).length,
     });
-    refreshRuntime(rootDir, config, queues, leases, runtime);
+    refreshRuntime(rootDir, config, queues, runtime);
     emitSchedulerProgress(options, 'runtime:refreshed', {
       workers: Object.keys((runtime && runtime.workers) || {}).length,
     });
@@ -623,7 +611,7 @@ function runSchedulerTick(rootDir, options = {}) {
       if (pendingPrdWork) {
         runtime.backlogGraceConsumed = false;
         delete runtime.backlogGraceUntil;
-      } else if (runtime.backlogGraceConsumed !== true && hasPendingBacklogWork(rootDir, config, queues, branchLocks, leases)) {
+      } else if (runtime.backlogGraceConsumed !== true && hasPendingBacklogWork(rootDir, config, queues, branchLocks)) {
         const nowMs = Date.now();
         const graceUntilMs = Date.parse(runtime.backlogGraceUntil || '');
         if (!Number.isFinite(graceUntilMs)) {
@@ -638,7 +626,7 @@ function runSchedulerTick(rootDir, options = {}) {
       }
     }
 
-    dueAgents = findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, leases, {
+    dueAgents = findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, {
       suppressNonPmDispatch,
     });
     emitSchedulerProgress(options, 'due:computed', {
@@ -755,7 +743,7 @@ function runSchedulerTick(rootDir, options = {}) {
   };
 }
 
-function hasPendingBacklogWork(rootDir, config, queues, branchLocks, leases) {
+function hasPendingBacklogWork(rootDir, config, queues, branchLocks) {
   return (config.agents || []).some((agent) => {
     const queue = queues[agent.id];
     if (!queue) {
@@ -1081,7 +1069,7 @@ function runImplementationWorker(rootDir, config, agent) {
   const branchLocks = loadBranchLocks(rootDir);
   const prds = loadPrds(rootDir);
   const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
-  const task = selectImplementationTask(listTasks(queueContext.queue), prds.prds || [], new Set());
+  const task = selectImplementationTask(listTasks(queueContext.queue), prds.prds || []);
   if (!task) {
     return { ok: true, status: 'noop', reason: 'no_queued_task' };
   }
@@ -1142,12 +1130,12 @@ function runImplementationWorker(rootDir, config, agent) {
   };
 }
 
-function selectImplementationTask(tasks, prds, activeLeaseTaskIds) {
+function selectImplementationTask(tasks, prds) {
   const prdById = new Map((prds || []).map((prd) => [prd.id, prd]));
   return (tasks || [])
     .filter((candidate) => implementationTaskNeedsDispatch(candidate))
     .sort((left, right) => {
-      const priorityOrder = compareImplementationTaskPriority(left, right, activeLeaseTaskIds);
+      const priorityOrder = compareImplementationTaskPriority(left, right);
       if (priorityOrder !== 0) {
         return priorityOrder;
       }
@@ -1159,12 +1147,12 @@ function selectImplementationTask(tasks, prds, activeLeaseTaskIds) {
     })[0] || null;
 }
 
-function compareImplementationTaskPriority(left, right, activeLeaseTaskIds) {
-  return getImplementationTaskPriority(left, activeLeaseTaskIds)
-    - getImplementationTaskPriority(right, activeLeaseTaskIds);
+function compareImplementationTaskPriority(left, right) {
+  return getImplementationTaskPriority(left)
+    - getImplementationTaskPriority(right);
 }
 
-function getImplementationTaskPriority(task, activeLeaseTaskIds) {
+function getImplementationTaskPriority(task) {
   if (!task) {
     return Number.MAX_SAFE_INTEGER;
   }

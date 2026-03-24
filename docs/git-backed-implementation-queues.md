@@ -17,6 +17,7 @@ That means:
 - PM planning writes implementation task entries into tracked queue files
 - manual implementation task insertion also writes tracked queue files
 - runtime `.autonomy` queue files are not authoritative for implementation work
+- implementation agents do not use runtime leases
 
 For an active implementation branch, the branch-local copy of the same queue file becomes the in-progress execution view for that lane.
 

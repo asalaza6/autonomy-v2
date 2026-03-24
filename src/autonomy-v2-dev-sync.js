@@ -38,7 +38,6 @@ function getSyncPaths(rootDir) {
     prdsState: path.join(stateDir, 'prds.json'),
     tasksState: path.join(stateDir, 'tasks.json'),
     prsState: path.join(stateDir, 'prs.json'),
-    leasesState: path.join(stateDir, 'leases.json'),
     branchLocksState: path.join(stateDir, 'branch-locks.json'),
     queuesDir: path.join(stateDir, 'queues'),
     specSyncState: path.join(stateDir, 'spec-sync.json'),
@@ -359,7 +358,6 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
     const tasksState = readJson(paths.tasksState, { tasks: [] });
     const prsState = readJson(paths.prsState, { pullRequests: [] });
     const branchLocksState = readJson(paths.branchLocksState, { locks: [] });
-    const leasesState = readJson(paths.leasesState, { leases: [] });
     const syncState = readJson(paths.specSyncState, DEFAULT_SYNC_STATE);
     const currentQueueTasks = readExistingQueueTasks(rootDir, config, tasksState.tasks || []);
     const hasActivePrd = hasActiveRuntimePrd(prdsState.prds || []);
@@ -459,22 +457,16 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
         return !derivedBranchLockKeys.has(key);
       })
       .concat(derived.branchLocks);
-    const nextTaskIds = new Set(nextTasks.map((task) => task.id));
-    const nextLeases = (leasesState.leases || [])
-      .filter((lease) => nextTaskIds.has(lease.taskId));
-
     writeJson(paths.prdsState, { prds: nextPrds });
     writeJson(paths.tasksState, { tasks: nextTasks });
     writeJson(paths.prsState, { pullRequests: nextPrs });
     writeJson(paths.branchLocksState, { locks: nextBranchLocks });
-    writeJson(paths.leasesState, { leases: nextLeases });
     writeDerivedQueues(rootDir, config, nextTasks);
     emitSyncProgress(options, 'sync:state:written', {
       prds: nextPrds.length,
       tasks: nextTasks.length,
       prs: nextPrs.length,
       branchLocks: nextBranchLocks.length,
-      leases: nextLeases.length,
     });
 
     importedSpecs.forEach((remoteSpec) => {
@@ -565,9 +557,7 @@ function getPlannedImplementationTasksForPrd(remoteSpec, trackedImplementationTa
   if (Array.isArray(trackedTasks) && trackedTasks.length > 0) {
     return trackedTasks.slice();
   }
-  return Array.isArray(remoteSpec && remoteSpec.spec && remoteSpec.spec.tasks)
-    ? remoteSpec.spec.tasks.slice()
-    : [];
+  return [];
 }
 
 function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, trackedImplementationTasksByPrd, config, sprint, options = {}) {
@@ -926,41 +916,6 @@ function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, 
   return record;
 }
 
-function buildDerivedRuntimeTask(task, prdId, integrationBranch, agentConfig, now, existingTask = null) {
-  const record = {
-    id: task.id,
-    title: task.title,
-    description: task.description || '',
-    agentId: task.agentId,
-    prdId,
-    laneKey: `${prdId}:${task.agentId}`,
-    type: 'implementation',
-    sprintId: task.sprintId || 'shared',
-    baseBranch: integrationBranch,
-    allowedPaths: normalizeStringList(task.allowedPaths),
-    checks: uniqueStrings([...(task.checks || []), ...((agentConfig && agentConfig.checks) || [])]),
-    acceptance: normalizeStringList(task.acceptance),
-    status: 'queued',
-    createdAt: existingTask && existingTask.createdAt ? existingTask.createdAt : now,
-    updatedAt: now,
-  };
-  if (existingTask) {
-    if (existingTask.status) {
-      record.status = existingTask.status;
-    }
-    if (existingTask.prId) {
-      record.prId = existingTask.prId;
-    }
-    if (existingTask.execution) {
-      record.execution = { ...existingTask.execution };
-    }
-    if (existingTask.lastError) {
-      record.lastError = existingTask.lastError;
-    }
-  }
-  return record;
-}
-
 function buildDerivedCompletedTaskSnapshot(task, prdId, integrationBranch, agentConfig, now) {
   return {
     id: task.id,
@@ -1168,9 +1123,6 @@ function buildDerivedPendingLinkedTask(task, pr, now) {
     prId: pr.id,
   };
 
-  if (status === 'leased' && task.execution) {
-    record.execution = { ...task.execution };
-  }
   if (task.lastError) {
     record.lastError = task.lastError;
   }
@@ -1195,9 +1147,6 @@ function inferLinkedTaskType(taskId) {
 }
 
 function normalizePendingLinkedTaskStatus(status) {
-  if (status === 'leased') {
-    return 'leased';
-  }
   if (status === 'changes_requested' || status === 'conflicted') {
     return status;
   }
