@@ -682,11 +682,7 @@ function loadState(rootDir, options = {}) {
   const config = readJson(path.join(repoAutonomyDir, 'config', 'agents.json'));
   const queues = {};
   (config.agents || []).forEach((agent) => {
-    const relativePath = agent.taskQueue || (
-      String(agent.role || '') === 'implementation'
-        ? buildImplementationQueueRelativePath(agent.id)
-        : path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agent.id}.json`)
-    );
+    const relativePath = agent.taskQueue;
     const queuePath = String(agent.role || '') === 'implementation'
       ? (
         options.worktreePath && options.implementationAgentId === agent.id
@@ -825,7 +821,7 @@ function finalizeTaskRun({ rootDir, task, branch, completedTaskIds, publish, sho
 
 function markImplementationTaskComplete(worktreePath, config, task, branch, completionMode) {
   const agent = getAgentConfig(config, task.agentId);
-  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(task.agentId);
+  const relativePath = agent.taskQueue;
   if (path.isAbsolute(relativePath)) {
     throw new Error(`Implementation queue for "${task.agentId}" must be repo-relative inside the worktree.`);
   }
@@ -867,7 +863,7 @@ function markImplementationTaskComplete(worktreePath, config, task, branch, comp
 
 function recordImplementationTaskCommitSha(worktreePath, config, task, commitSha) {
   const agent = getAgentConfig(config, task.agentId);
-  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(task.agentId);
+  const relativePath = agent.taskQueue;
   if (path.isAbsolute(relativePath)) {
     throw new Error(`Implementation queue for "${task.agentId}" must be repo-relative inside the worktree.`);
   }
@@ -1601,7 +1597,7 @@ function writeQueuesState(rootDir, config, queues) {
     if (String(agent.role || '') === 'implementation') {
       return;
     }
-    const relativePath = agent.taskQueue || path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agent.id}.json`);
+    const relativePath = agent.taskQueue;
     const queuePath = path.isAbsolute(relativePath)
       ? relativePath
       : resolveRuntimeManagedPath(rootDir, relativePath);

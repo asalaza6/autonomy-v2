@@ -15,6 +15,7 @@
       "id": "pm-agent",
       "personaName": "pm-agent",
       "role": "pm",
+      "taskQueue": "prompts/autonomous/v2/queues/pm-agent.json",
       "systemPrompt": "prompts/autonomous/v2/agents/pm-agent/system.md",
       "gitIdentity": {
         "name": "autonomy-pm[bot]",
@@ -27,7 +28,7 @@
       "personaName": "architecture-agent",
       "role": "implementation",
       "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-      "taskQueue": "prompts/autonomous/v2/state/queues/architecture-agent.json",
+      "taskQueue": "prompts/autonomous/v2/queues/architecture-agent.json",
       "systemPrompt": "prompts/autonomous/v2/agents/architecture-agent/system.md",
       "gitIdentity": {
         "name": "autonomy-architecture[bot]",
@@ -44,7 +45,7 @@
       "personaName": "reviewer-agent",
       "role": "review",
       "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-      "taskQueue": "prompts/autonomous/v2/state/queues/reviewer.json",
+      "taskQueue": "prompts/autonomous/v2/queues/reviewer.json",
       "systemPrompt": "prompts/autonomous/v2/agents/reviewer/system.md",
       "gitIdentity": {
         "name": "autonomy-reviewer[bot]",

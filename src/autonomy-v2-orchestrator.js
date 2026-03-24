@@ -91,11 +91,10 @@ function getAgent(config, agentId) {
 }
 
 function resolveQueuePath(rootDir, agent) {
-  const relativePath = agent.taskQueue || (
-    String(agent.role || '') === 'implementation'
-      ? buildImplementationQueueRelativePath(agent.id)
-      : path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agent.id}.json`)
-  );
+  if (!agent.taskQueue) {
+    throw new Error(`Agent "${agent.id}" is missing required taskQueue in config.`);
+  }
+  const relativePath = agent.taskQueue;
   if (String(agent.role || '') === 'implementation') {
     return path.isAbsolute(relativePath)
       ? relativePath
@@ -178,7 +177,7 @@ function loadQueues(rootDir, config) {
       ? readJsonFromGitRef(
           rootDir,
           resolveTrackedQueueRef(rootDir, config.integrationBranch),
-          agent.taskQueue || buildImplementationQueueRelativePath(agent.id),
+          agent.taskQueue,
           fs.existsSync(queuePath) ? readJson(queuePath, fallbackValue) : fallbackValue
         )
       : readJson(queuePath, fallbackValue);
@@ -312,7 +311,7 @@ function buildTaskBranchName(config, task) {
 
 function readImplementationQueueFromWorktree(config, agentId, worktreePath) {
   const agent = getAgent(config, agentId);
-  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agentId);
+  const relativePath = agent.taskQueue;
   const queuePath = path.isAbsolute(relativePath)
     ? relativePath
     : path.join(worktreePath, relativePath);
@@ -960,7 +959,7 @@ function buildTrackedImplementationQueueUpdates(rootDir, config, taskSpecs, { pr
 
   return Array.from(nextByAgent.entries()).map(([agentId, queueState]) => {
     const agent = getAgent(config, agentId);
-    const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agentId);
+    const relativePath = agent.taskQueue;
     if (path.isAbsolute(relativePath)) {
       throw new Error(`Implementation queue for "${agentId}" must be repo-relative to commit it to ${config.integrationBranch}.`);
     }
@@ -1034,7 +1033,7 @@ function claimTrackedImplementationTask(rootDir, config, agent, queue, task) {
   delete nextTask.commitSha;
   delete nextTask.completionMode;
 
-  const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agent.id);
+  const relativePath = agent.taskQueue;
   if (path.isAbsolute(relativePath)) {
     throw new Error(`Implementation queue for "${agent.id}" must be repo-relative to commit it to ${config.integrationBranch}.`);
   }

@@ -62,10 +62,7 @@ function validateAgentConfig(agent, index, sourcePath, seenAgentIds) {
   if (role !== 'pm') {
     requireRunnerCommand(agent.runnerCommand, sourcePath, agentId);
   }
-
-  if (typeof agent.taskQueue !== 'undefined') {
-    requireNonEmptyString(agent.taskQueue, sourcePath, agentId, 'taskQueue');
-  }
+  requireNonEmptyString(agent.taskQueue, sourcePath, agentId, 'taskQueue');
 }
 
 function requireNonEmptyString(value, sourcePath, agentId, fieldName) {

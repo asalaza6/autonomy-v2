@@ -510,7 +510,7 @@ function readTrackedImplementationQueuesFromRef(rootDir, config, ref) {
     if (String(agent.role || '') !== 'implementation') {
       return queues;
     }
-    const relativePath = agent.taskQueue || buildImplementationQueueRelativePath(agent.id);
+    const relativePath = agent.taskQueue;
     const absolutePath = path.isAbsolute(relativePath)
       ? relativePath
       : path.join(rootDir, relativePath);
@@ -1472,8 +1472,11 @@ function readExistingQueueTasks(rootDir, config, fallbackTasks) {
 }
 
 function resolveTaskQueuePath(rootDir, config, agentId) {
-  const agent = getAgentConfig(config, agentId) || { taskQueue: path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agentId}.json`) };
-  const relativePath = agent.taskQueue || path.join('prompts', 'autonomous', 'v2', 'state', 'queues', `${agentId}.json`);
+  const agent = getAgentConfig(config, agentId);
+  if (!agent || !agent.taskQueue) {
+    throw new Error(`Agent "${agentId}" is missing taskQueue in config/agents.json`);
+  }
+  const relativePath = agent.taskQueue;
   return path.isAbsolute(relativePath)
     ? relativePath
     : resolveRuntimeManagedPath(rootDir, relativePath);
@@ -1577,7 +1580,10 @@ function countRemoteBranchCommits(rootDir, baseBranch, branch) {
 
 function readRemoteImplementationQueueState(rootDir, config, integrationBranch, branch, agentId) {
   const agent = getAgentConfig(config, agentId) || null;
-  const relativePath = (agent && agent.taskQueue) || buildImplementationQueueRelativePath(agentId);
+  const relativePath = agent && agent.taskQueue;
+  if (!relativePath) {
+    return null;
+  }
   if (path.isAbsolute(relativePath)) {
     return null;
   }
