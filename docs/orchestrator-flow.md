@@ -53,21 +53,21 @@ Tracked truth:
 - `prompts/autonomous/v2/specs/prds/*.json`
 - `prompts/autonomous/v2/specs/prds/queue/*.json`
 - `prompts/autonomous/v2/specs/prds/archived/*.json`
+- `prompts/autonomous/v2/specs/prd-state/*.json`
 
 Local runtime cache:
 
-- `.autonomy/runtime/state/tasks.json`
-- `.autonomy/runtime/state/queues/*.json`
+- `.autonomy/runtime/state/branch-locks.json`
 - `.autonomy/runtime/state/leases.json`
-- `.autonomy/runtime/state/prds.json`
 - `.autonomy/runtime/state/prs.json`
 - `.autonomy/runtime/state/runtime.json`
+- `.autonomy/runtime/state/spec-sync.json`
 - `.autonomy/runtime/agents/*`
 - `.autonomy/worktrees/*`
 - `.autonomy/control/dev-sync`
 
 The scheduler rebuilds runtime state from tracked truth and external systems. The runtime files are operational state, not the long-term source of truth.
-For implementation work specifically, tracked queue files are authoritative and runtime implementation queue files are not.
+For implementation and reviewer work, tracked queue files are authoritative and runtime queue cache files are not.
 
 ## Deterministic vs nondeterministic boundary
 
@@ -76,7 +76,8 @@ Deterministic parts:
 - config loading and validation
 - lock acquisition
 - tracked implementation queue mutation
-- runtime queue and lease mutation for non-implementation agents
+- tracked reviewer queue mutation
+- lease mutation for local runtime coordination
 - PRD sync from `dev`
 - worktree and branch preparation
 - git add/commit/push/merge calls
@@ -274,8 +275,10 @@ Its job is to:
 
 This is one of the most important architectural points in the repo:
 
-- review/runtime queues are local execution cache; implementation execution now advances through tracked queue files in git
+- implementation and reviewer execution advance through tracked queue files in git
+- PM queue state remains operational local state resolved from its configured `taskQueue`
 - committed PRD specs on `dev` are the durable planning contract
+- tracked PRD lifecycle state lives in `prompts/autonomous/v2/specs/prd-state/*.json`
 - restart/recovery is based on reconstructing from git and GitHub, not trusting stale runtime files blindly
 
 ## State machine summary

@@ -4,13 +4,14 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { validateAutonomyConfig } = require('./src/autonomy-v2-config');
 const { shouldForceApproveAfterRepeatedReviews } = require('./src/autonomy-v2-default-runner');
 
 const PROJECT_ROOT = path.join(__dirname);
 const CLI_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2');
 const SERVER_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2-server');
 
-test('packaged autonomy-v2 runs init, prd:add, and PM planning against an external workspace root', () => {
+test('packaged autonomy-v2 runs init, prd:add, and imports tracked task specs against an external workspace root', () => {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-package-'));
 
   fs.mkdirSync(path.join(repoDir, 'src', 'apps', 'aquarium'), { recursive: true });
@@ -92,13 +93,15 @@ test('packaged autonomy-v2 runs init, prd:add, and PM planning against an extern
   }));
 
   assert.equal(tickResult.sync.imported.length, 1);
-  const runtimePrds = JSON.parse(fs.readFileSync(
-    path.join(repoDir, '.autonomy', 'runtime', 'state', 'prds.json'),
-    'utf8'
-  ));
-  assert.equal(runtimePrds.prds[0].id, 'prd-package-001');
-  assert.equal(runtimePrds.prds[0].status, 'planned');
-  assert.deepEqual(runtimePrds.prds[0].plannedTaskIds, ['prd-package-001-architecture-agent-1']);
+  const trackedQueue = readGitJson(
+    repoDir,
+    'dev:prompts/autonomous/v2/queues/architecture-agent.json'
+  );
+  assert.equal(findTaskInQueue(trackedQueue, 'prd-package-001-architecture-agent-1').prdId, 'prd-package-001');
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-package-001.json'),
+    false
+  );
 });
 
 test('packaged autonomy-v2 queues PRD additions when one is already active', () => {
@@ -282,20 +285,33 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
     false
   );
 
-  const paths = getAutonomyPathsForTest(repoDir);
-  fs.writeFileSync(paths.prdsState, `${JSON.stringify({ prds: [] }, null, 2)}\n`, 'utf8');
+  const controlWorktree = path.join(repoDir, '.autonomy', 'control', 'dev-sync');
+  fs.rmSync(
+    path.join(controlWorktree, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'prd-queue-promo-001.json'),
+    { force: true }
+  );
+  fs.writeFileSync(
+    path.join(controlWorktree, 'prompts', 'autonomous', 'v2', 'queues', 'reviewer.json'),
+    `${JSON.stringify({ agentId: 'reviewer', role: 'review', tasks: [] }, null, 2)}\n`,
+    'utf8'
+  );
+  git(controlWorktree, [
+    'add',
+    '--all',
+    '--',
+    'prompts/autonomous/v2/specs/prds/prd-queue-promo-001.json',
+    'prompts/autonomous/v2/queues/reviewer.json',
+  ]);
+  git(controlWorktree, ['commit', '-m', 'archive active prd for promotion test']);
 
   const secondTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
     env: {
       AUTONOMY_CODEX_STUB: '1',
     },
   }));
-  assert.equal(secondTick.sync.imported.includes('prd-queue-promo-002'), true);
-
-  const runtimePrds = JSON.parse(fs.readFileSync(paths.prdsState, 'utf8'));
-  assert.equal(runtimePrds.prds.length, 2);
+  assert.equal(secondTick.started.some((entry) => entry.agentId === 'pm-agent'), true);
   assert.equal(
-    runtimePrds.prds.some((prd) => prd.id === 'prd-queue-promo-002'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-queue-promo-002.json'),
     true
   );
 });
@@ -533,6 +549,140 @@ test('packaged autonomy-v2 rejects invalid agent config values', () => {
   );
 });
 
+test('packaged autonomy-v2 backfills missing pm taskQueue for older repos', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-pm-task-queue-');
+  initAutonomyRepo(repoDir);
+
+  const agentsPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json');
+  const agentsConfig = JSON.parse(fs.readFileSync(agentsPath, 'utf8'));
+  delete agentsConfig.agents.find((agent) => agent.id === 'pm-agent').taskQueue;
+  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
+
+  const statusOutput = JSON.parse(runNode(CLI_BIN, ['status', '--root', repoDir, '--json']));
+  assert.ok(Array.isArray(statusOutput.agents));
+
+  const tickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+  assert.ok(Array.isArray(tickResult.dueAgents));
+});
+
+test('init restores missing pm taskQueue using the repo queue layout', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-init-migrate-task-queue-');
+  initAutonomyRepo(repoDir);
+
+  const agentsPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json');
+  const agentsConfig = JSON.parse(fs.readFileSync(agentsPath, 'utf8'));
+  delete agentsConfig.agents.find((agent) => agent.id === 'pm-agent').taskQueue;
+  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+
+  const migratedConfig = JSON.parse(fs.readFileSync(agentsPath, 'utf8'));
+  const pmAgent = migratedConfig.agents.find((agent) => agent.id === 'pm-agent');
+
+  assert.equal(pmAgent.taskQueue, 'prompts/autonomous/v2/queues/pm-agent.json');
+});
+
+test('validateAutonomyConfig defaults missing taskQueue fields to the repo queue layout', () => {
+  const config = {
+    schemaVersion: 1,
+    agents: [
+      {
+        id: 'pm-agent',
+        personaName: 'pm-agent',
+        role: 'pm',
+        systemPrompt: 'prompts/autonomous/v2/agents/pm-agent/system.md',
+        gitIdentity: {
+          name: 'pm',
+          email: 'pm@example.com',
+        },
+      },
+      {
+        id: 'architecture-agent',
+        personaName: 'architecture-agent',
+        role: 'implementation',
+        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
+        taskQueue: 'prompts/autonomous/v2/queues/architecture-agent.json',
+        systemPrompt: 'prompts/autonomous/v2/agents/architecture-agent/system.md',
+        gitIdentity: {
+          name: 'architecture',
+          email: 'architecture@example.com',
+        },
+        checks: ['npm run typecheck'],
+      },
+      {
+        id: 'reviewer',
+        personaName: 'reviewer',
+        role: 'review',
+        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
+        taskQueue: 'prompts/autonomous/v2/queues/reviewer.json',
+        systemPrompt: 'prompts/autonomous/v2/agents/reviewer/system.md',
+        gitIdentity: {
+          name: 'reviewer',
+          email: 'reviewer@example.com',
+        },
+      },
+    ],
+  };
+
+  const validated = validateAutonomyConfig(config, 'fixtures/agents.json');
+  const pmAgent = validated.agents.find((agent) => agent.id === 'pm-agent');
+
+  assert.equal(pmAgent.taskQueue, 'prompts/autonomous/v2/queues/pm-agent.json');
+});
+
+test('validateAutonomyConfig rejects runtime-managed reviewer queue paths', () => {
+  const config = {
+    schemaVersion: 1,
+    agents: [
+      {
+        id: 'pm-agent',
+        personaName: 'pm-agent',
+        role: 'pm',
+        taskQueue: 'prompts/autonomous/v2/queues/pm-agent.json',
+        systemPrompt: 'prompts/autonomous/v2/agents/pm-agent/system.md',
+        gitIdentity: {
+          name: 'pm',
+          email: 'pm@example.com',
+        },
+      },
+      {
+        id: 'architecture-agent',
+        personaName: 'architecture-agent',
+        role: 'implementation',
+        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
+        taskQueue: 'prompts/autonomous/v2/queues/architecture-agent.json',
+        systemPrompt: 'prompts/autonomous/v2/agents/architecture-agent/system.md',
+        gitIdentity: {
+          name: 'architecture',
+          email: 'architecture@example.com',
+        },
+        checks: ['npm run typecheck'],
+      },
+      {
+        id: 'reviewer',
+        personaName: 'reviewer',
+        role: 'review',
+        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
+        taskQueue: 'prompts/autonomous/v2/state/queues/reviewer.json',
+        systemPrompt: 'prompts/autonomous/v2/agents/reviewer/system.md',
+        gitIdentity: {
+          name: 'reviewer',
+          email: 'reviewer@example.com',
+        },
+      },
+    ],
+  };
+
+  assert.throws(
+    () => validateAutonomyConfig(config, 'fixtures/agents.json'),
+    /review agent "reviewer" cannot use runtime-managed taskQueue paths/
+  );
+});
+
 test('reviewer auto-approves on 4th+ review cycle regardless of review reasons', () => {
   const cleanCheckResults = [
     { command: 'npm run typecheck', status: 'passed' },
@@ -663,7 +813,6 @@ function getAutonomyPathsForTest(rootDir) {
   const runtimeAutonomyDir = path.join(rootDir, '.autonomy', 'runtime');
   const stateDir = path.join(runtimeAutonomyDir, 'state');
   return {
-    prdsState: path.join(stateDir, 'prds.json'),
     prsState: path.join(stateDir, 'prs.json'),
     branchLocksState: path.join(stateDir, 'branch-locks.json'),
   };

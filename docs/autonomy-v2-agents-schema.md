@@ -55,7 +55,7 @@ Each agent must be an object with the fields below.
   "role": "implementation",
   "systemPrompt": "prompts/autonomous/v2/agents/aquarium-agent/system.md",
   "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-  "taskQueue": "prompts/autonomous/v2/state/queues/aquarium-agent.json",
+  "taskQueue": "prompts/autonomous/v2/queues/aquarium-agent.json",
   "gitIdentity": {
     "name": "automation-bot[bot]",
     "email": "automation-bot[bot]@users.noreply.github.com"
@@ -89,6 +89,11 @@ Each agent must be an object with the fields below.
 - `taskQueue` paths may point into repo paths or runtime-managed queue paths.
 - Unknown keys on agent objects are currently preserved and passed through as-is.
 
+### Queue path behavior
+- Implementation queues are read from tracked refs and committed back to the integration branch.
+- Non-implementation queues are loaded from the resolved filesystem path in the current checkout.
+- For non-implementation agents, `state/...` and `prompts/autonomous/v2/state/...` paths resolve into `.autonomy/runtime/state/...`.
+
 ## 4) Scope/behavior contract by role
 
 - `pm`:
@@ -109,7 +114,7 @@ Each agent must be an object with the fields below.
 During `autonomy-v2 init`, generated defaults are written for:
 - `prompts/autonomous/v2/config/agents.json`
 - `prompts/autonomous/v2/config/sprint.json`
-- Default queue files under `prompts|.autonomy runtime state` according to each agent’s `taskQueue`
+- Default queue files at the resolved path for each agent’s `taskQueue`
 
 ## 6) Minimal valid config examples
 
@@ -154,7 +159,7 @@ During `autonomy-v2 init`, generated defaults are written for:
       "role": "implementation",
       "systemPrompt": "prompts/autonomous/v2/agents/aquarium-agent/system.md",
       "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-      "taskQueue": "prompts/autonomous/v2/state/queues/aquarium-agent.json",
+      "taskQueue": "prompts/autonomous/v2/queues/aquarium-agent.json",
       "gitIdentity": {
         "name": "aquarium-bot[bot]",
         "email": "aquarium-bot[bot]@users.noreply.github.com"
@@ -167,7 +172,7 @@ During `autonomy-v2 init`, generated defaults are written for:
       "role": "review",
       "systemPrompt": "prompts/autonomous/v2/agents/reviewer/system.md",
       "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
-      "taskQueue": "prompts/autonomous/v2/state/queues/reviewer.json",
+      "taskQueue": "prompts/autonomous/v2/queues/reviewer.json",
       "gitIdentity": {
         "name": "reviewer-bot[bot]",
         "email": "reviewer-bot[bot]@users.noreply.github.com"

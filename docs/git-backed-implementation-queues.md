@@ -2,6 +2,8 @@
 
 Implementation orchestration now uses tracked per-agent queue files in git.
 
+This document applies only to implementation queues.
+
 The important files are:
 
 - `prompts/autonomous/v2/queues/<agent-id>.json`
@@ -18,6 +20,7 @@ That means:
 - manual implementation task insertion also writes tracked queue files
 - runtime `.autonomy` queue files are not authoritative for implementation work
 - implementation agents do not use runtime leases
+- PM/reviewer queue files may also live in repo paths depending on `taskQueue`, but that does not make them git-backed authoritative queues
 
 For an active implementation branch, the branch-local copy of the same queue file becomes the in-progress execution view for that lane.
 

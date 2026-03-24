@@ -1,4 +1,7 @@
+const path = require('path');
+
 const VALID_AGENT_ROLES = new Set(['pm', 'implementation', 'review']);
+const DEFAULT_TASK_QUEUE_DIR = 'prompts/autonomous/v2/queues';
 
 function validateAutonomyConfig(config, sourcePath = 'prompts/autonomous/v2/config/agents.json') {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
@@ -16,6 +19,10 @@ function validateAutonomyConfig(config, sourcePath = 'prompts/autonomous/v2/conf
   const seenAgentIds = new Set();
   config.agents.forEach((agent, index) => {
     validateAgentConfig(agent, index, sourcePath, seenAgentIds);
+  });
+  config.agents.forEach((agent) => {
+    agent.taskQueue = normalizeNonEmptyString(agent.taskQueue) || buildDefaultTaskQueuePath(agent.id);
+    validateResolvedTaskQueue(agent, sourcePath);
   });
 
   if (Array.isArray(config.mergeActors)) {
@@ -62,7 +69,61 @@ function validateAgentConfig(agent, index, sourcePath, seenAgentIds) {
   if (role !== 'pm') {
     requireRunnerCommand(agent.runnerCommand, sourcePath, agentId);
   }
-  requireNonEmptyString(agent.taskQueue, sourcePath, agentId, 'taskQueue');
+  agent.taskQueue = normalizeNonEmptyString(agent.taskQueue);
+  validateResolvedTaskQueue(agent, sourcePath);
+}
+
+function validateResolvedTaskQueue(agent, sourcePath) {
+  if (!agent || !agent.taskQueue) {
+    return;
+  }
+  const taskQueue = normalizeConfigPath(agent.taskQueue);
+  if (String(agent.role || '') !== 'review') {
+    return;
+  }
+  if (path.posix.isAbsolute(taskQueue)) {
+    throw new Error(`Invalid autonomy config at ${sourcePath}: review agent "${agent.id}" must use a repo-relative taskQueue.`);
+  }
+  if (isRuntimeManagedTaskQueuePath(taskQueue)) {
+    throw new Error(`Invalid autonomy config at ${sourcePath}: review agent "${agent.id}" cannot use runtime-managed taskQueue paths.`);
+  }
+}
+
+function buildDefaultTaskQueuePath(agentId) {
+  return joinConfigPath(DEFAULT_TASK_QUEUE_DIR, `${agentId}.json`);
+}
+
+function joinConfigPath(dirPath, basename) {
+  if (!dirPath || dirPath === '.') {
+    return basename;
+  }
+  return `${trimTrailingSlashes(dirPath)}/${basename}`;
+}
+
+function normalizeTaskQueueDir(dirPath) {
+  const normalized = trimTrailingSlashes(normalizeConfigPath(dirPath));
+  return normalized || DEFAULT_TASK_QUEUE_DIR;
+}
+
+function normalizeConfigPath(value) {
+  return String(value || '').trim().replace(/\\/g, '/');
+}
+
+function isRuntimeManagedTaskQueuePath(value) {
+  const normalized = normalizeConfigPath(value);
+  return normalized === 'state'
+    || normalized.startsWith('state/')
+    || normalized === 'prompts/autonomous/v2/state'
+    || normalized.startsWith('prompts/autonomous/v2/state/');
+}
+
+function trimTrailingSlashes(value) {
+  return String(value || '').replace(/\/+$/g, '');
+}
+
+function normalizeNonEmptyString(value) {
+  const normalized = String(value || '').trim();
+  return normalized || '';
 }
 
 function requireNonEmptyString(value, sourcePath, agentId, fieldName) {
@@ -93,5 +154,6 @@ function requirePositiveInteger(value, sourcePath, fieldName) {
 
 module.exports = {
   VALID_AGENT_ROLES,
+  buildDefaultTaskQueuePath,
   validateAutonomyConfig,
 };

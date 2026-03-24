@@ -2,6 +2,7 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { validateAutonomyConfig } = require('./autonomy-v2-config');
 const { resolveGithubAuthToken } = require('./autonomy-v2-github');
 const { acquireStateLock } = require('./autonomy-v2-lock');
 
@@ -10,6 +11,7 @@ const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const PRD_SPECS_DIR = path.posix.join(...AUTONOMY_SEGMENTS, 'specs', 'prds');
 const PRD_QUEUE_DIR = path.posix.join(PRD_SPECS_DIR, 'queue');
 const PRD_ARCHIVE_DIR = path.posix.join(PRD_SPECS_DIR, 'archived');
+const PRD_STATE_DIR = path.posix.join(...AUTONOMY_SEGMENTS, 'specs', 'prd-state');
 const GIT_NETWORK_TIMEOUT_MS = 15000;
 const HTTP_REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_SYNC_STATE = {
@@ -35,8 +37,6 @@ function getSyncPaths(rootDir) {
   return {
     repoAutonomyDir,
     stateDir,
-    prdsState: path.join(stateDir, 'prds.json'),
-    tasksState: path.join(stateDir, 'tasks.json'),
     prsState: path.join(stateDir, 'prs.json'),
     branchLocksState: path.join(stateDir, 'branch-locks.json'),
     queuesDir: path.join(stateDir, 'queues'),
@@ -192,12 +192,14 @@ function commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, fileU
       if (!relativePath) {
         return null;
       }
-      const content = typeof entry.content === 'string'
-        ? entry.content
-        : `${JSON.stringify(entry.content || {}, null, 2)}\n`;
       return {
         relativePath,
-        content,
+        delete: entry.delete === true,
+        content: entry.delete === true
+          ? null
+          : (typeof entry.content === 'string'
+            ? entry.content
+            : `${JSON.stringify(entry.content || {}, null, 2)}\n`),
       };
     })
     .filter(Boolean);
@@ -219,11 +221,15 @@ function commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, fileU
 
   normalizedUpdates.forEach((entry) => {
     const absolutePath = path.join(controlWorktree, entry.relativePath);
+    if (entry.delete === true) {
+      fs.rmSync(absolutePath, { force: true });
+      return;
+    }
     ensureDir(path.dirname(absolutePath));
     fs.writeFileSync(absolutePath, entry.content, 'utf8');
   });
 
-  runGit(controlWorktree, ['add', '--', ...normalizedUpdates.map((entry) => entry.relativePath)]);
+  runGit(controlWorktree, ['add', '--all', '--', ...normalizedUpdates.map((entry) => entry.relativePath)]);
   if (!gitHasStagedChanges(controlWorktree)) {
     return {
       integrationBranch,
@@ -280,7 +286,8 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
     message: fetchResult.message || '',
   });
   const ref = fetchResult.ref;
-  const config = readJson(path.join(paths.repoAutonomyDir, 'config', 'agents.json'), {});
+  const agentsConfigPath = path.join(paths.repoAutonomyDir, 'config', 'agents.json');
+  const config = validateAutonomyConfig(readJson(agentsConfigPath, {}), agentsConfigPath);
   const sprint = readJson(path.join(paths.repoAutonomyDir, 'config', 'sprint.json'), {});
   const result = {
     integrationBranch,
@@ -354,13 +361,11 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
   const release = acquireStateLock(rootDir);
   try {
     emitSyncProgress(options, 'sync:state-lock:acquired', { lock: 'state-lock' });
-    const prdsState = readJson(paths.prdsState, { prds: [] });
-    const tasksState = readJson(paths.tasksState, { tasks: [] });
     const prsState = readJson(paths.prsState, { pullRequests: [] });
     const branchLocksState = readJson(paths.branchLocksState, { locks: [] });
     const syncState = readJson(paths.specSyncState, DEFAULT_SYNC_STATE);
-    const currentQueueTasks = readExistingQueueTasks(rootDir, config, tasksState.tasks || []);
-    const hasActivePrd = hasActiveRuntimePrd(prdsState.prds || []);
+    const currentQueueTasks = readTrackedReviewerTasksFromRef(rootDir, config, ref);
+    const hasActivePrd = remoteSpecs.some((remoteSpec) => !remoteSpec.isQueued);
     const importedSpecs = remoteSpecs.filter((remoteSpec) => !remoteSpec.isQueued);
     if (!hasActivePrd) {
       const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued);
@@ -406,7 +411,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
       remoteSpecs: importedSpecs,
       trackedImplementationTasksByPrd,
       remoteLaneStates,
-      currentPrds: prdsState.prds || [],
+      currentPrds: [],
       currentTasks: currentQueueTasks,
       currentPrs: prsState.pullRequests || [],
       currentBranchLocks: branchLocksState.locks || [],
@@ -441,10 +446,6 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
       }
       return !derived.derivedTaskIds.has(task.id) && !derived.reconciledTaskIds.has(task.id);
     });
-    const nextTasks = preservedTasks.concat(derived.tasks);
-    const nextPrds = (prdsState.prds || [])
-      .filter((prd) => !importedPrdIds.has(prd.id))
-      .concat(derived.prds);
     const nextPrs = (prsState.pullRequests || [])
       .filter((pr) => !isImportedPrdRecord(pr, importedPrdIds) || !derivedPullRequestIds.has(pr.id))
       .concat(derived.pullRequests);
@@ -457,14 +458,9 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
         return !derivedBranchLockKeys.has(key);
       })
       .concat(derived.branchLocks);
-    writeJson(paths.prdsState, { prds: nextPrds });
-    writeJson(paths.tasksState, { tasks: nextTasks });
     writeJson(paths.prsState, { pullRequests: nextPrs });
     writeJson(paths.branchLocksState, { locks: nextBranchLocks });
-    writeDerivedQueues(rootDir, config, nextTasks);
     emitSyncProgress(options, 'sync:state:written', {
-      prds: nextPrds.length,
-      tasks: nextTasks.length,
       prs: nextPrs.length,
       branchLocks: nextBranchLocks.length,
     });
@@ -531,6 +527,27 @@ function readTrackedImplementationQueuesFromRef(rootDir, config, ref) {
     };
     return queues;
   }, {});
+}
+
+function readTrackedReviewerTasksFromRef(rootDir, config, ref) {
+  return (config.agents || []).reduce((tasks, agent) => {
+    if (String(agent.role || '') !== 'review') {
+      return tasks;
+    }
+    const relativePath = agent.taskQueue;
+    const absolutePath = path.isAbsolute(relativePath)
+      ? relativePath
+      : path.join(rootDir, relativePath);
+    const fallbackQueue = fs.existsSync(absolutePath)
+      ? readJson(absolutePath, { tasks: [] })
+      : {
+          agentId: agent.id,
+          role: agent.role,
+          tasks: [],
+        };
+    const queueState = readJsonFromGitRef(rootDir, ref, relativePath, fallbackQueue);
+    return tasks.concat(Array.isArray(queueState.tasks) ? queueState.tasks : []);
+  }, []);
 }
 
 function buildTrackedImplementationTaskIndex(trackedQueues) {
@@ -1409,68 +1426,6 @@ function buildLaneSourceSummary(prdId, laneTasks) {
   };
 }
 
-function writeDerivedQueues(rootDir, config, tasks) {
-  const queueMap = {};
-  (config.agents || []).forEach((agent) => {
-    if (String(agent.role || '') === 'implementation') {
-      return;
-    }
-    queueMap[agent.id] = {
-      agentId: agent.id,
-      role: agent.role,
-      tasks: [],
-    };
-  });
-  (tasks || []).forEach((task) => {
-    if (!queueMap[task.agentId]) {
-      return;
-    }
-    queueMap[task.agentId].tasks.push(task);
-  });
-  (config.agents || []).forEach((agent) => {
-    if (String(agent.role || '') === 'implementation') {
-      return;
-    }
-    writeJson(resolveTaskQueuePath(rootDir, config, agent.id), queueMap[agent.id]);
-  });
-}
-
-function readExistingQueueTasks(rootDir, config, fallbackTasks) {
-  const aggregated = [];
-  const seen = new Set();
-  (config.agents || []).forEach((agent) => {
-    if (String(agent.role || '') === 'implementation') {
-      return;
-    }
-    const queuePath = resolveTaskQueuePath(rootDir, config, agent.id);
-    if (!fs.existsSync(queuePath)) {
-      return;
-    }
-    const queueState = readJson(queuePath, { tasks: [] });
-    (queueState.tasks || []).forEach((task) => {
-      const taskId = String(task && task.id || '');
-      if (!taskId || seen.has(taskId)) {
-        return;
-      }
-      seen.add(taskId);
-      aggregated.push(task);
-    });
-  });
-  (fallbackTasks || []).forEach((task) => {
-    const agent = getAgentConfig(config, task && task.agentId);
-    if (agent && String(agent.role || '') === 'implementation') {
-      return;
-    }
-    const taskId = String(task && task.id || '');
-    if (!taskId || seen.has(taskId)) {
-      return;
-    }
-    seen.add(taskId);
-    aggregated.push(task);
-  });
-  return aggregated;
-}
-
 function resolveTaskQueuePath(rootDir, config, agentId) {
   const agent = getAgentConfig(config, agentId);
   if (!agent || !agent.taskQueue) {
@@ -1920,6 +1875,130 @@ function buildPrdSpecRelativePath(prdId, options = {}) {
   return path.join(...segments);
 }
 
+function buildPrdStateRelativePath(prdId) {
+  return path.join(PRD_STATE_DIR, `${sanitizeFileSegment(prdId)}.json`);
+}
+
+function buildPrdStatePayload({ prdId, status, plannedTaskIds, lastError, createdAt, updatedAt }) {
+  const payload = {
+    schemaVersion: 1,
+    prdId: String(prdId),
+    status: String(status || '').trim(),
+    createdAt: createdAt || new Date().toISOString(),
+    updatedAt: updatedAt || new Date().toISOString(),
+  };
+  const planned = normalizeStringList(plannedTaskIds);
+  if (planned.length > 0) {
+    payload.plannedTaskIds = planned;
+  }
+  if (typeof lastError === 'string' && lastError.trim()) {
+    payload.lastError = lastError.trim();
+  }
+  return payload;
+}
+
+function parsePrdState(rawContent, sourcePath) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawContent);
+  } catch (error) {
+    throw new Error(`Invalid JSON in ${sourcePath}: ${error.message}`);
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error(`PRD state ${sourcePath} must be a JSON object.`);
+  }
+  if (!parsed.prdId) {
+    throw new Error(`PRD state ${sourcePath} must include prdId.`);
+  }
+  if (!['planning', 'planned', 'failed'].includes(String(parsed.status || ''))) {
+    throw new Error(`PRD state ${sourcePath} must include a valid status.`);
+  }
+  return buildPrdStatePayload({
+    prdId: parsed.prdId,
+    status: parsed.status,
+    plannedTaskIds: parsed.plannedTaskIds,
+    lastError: parsed.lastError,
+    createdAt: parsed.createdAt,
+    updatedAt: parsed.updatedAt,
+  });
+}
+
+function resolveTrackedRef(rootDir, integrationBranch) {
+  const remoteRef = `origin/${integrationBranch}`;
+  if (gitRefExists(rootDir, remoteRef)) {
+    return remoteRef;
+  }
+  if (gitRefExists(rootDir, integrationBranch)) {
+    return integrationBranch;
+  }
+  return null;
+}
+
+function listTrackedPrdSpecs(rootDir, integrationBranch) {
+  const ref = resolveTrackedRef(rootDir, integrationBranch);
+  if (!ref) {
+    return [];
+  }
+
+  const specFiles = listTreeFiles(rootDir, ref, PRD_SPECS_DIR)
+    .filter((filePath) => filePath.endsWith('.json'))
+    .filter((filePath) => !filePath.startsWith(`${PRD_ARCHIVE_DIR}/`))
+    .filter((filePath) => !filePath.startsWith(`${PRD_QUEUE_DIR}/`));
+  const queueSpecFiles = listTreeFiles(rootDir, ref, PRD_QUEUE_DIR)
+    .filter((filePath) => filePath.endsWith('.json'))
+    .filter((filePath) => !filePath.startsWith(`${PRD_ARCHIVE_DIR}/`));
+  const allSpecCandidates = [
+    ...specFiles.map((filePath) => ({ filePath, isQueued: false })),
+    ...queueSpecFiles.map((filePath) => ({ filePath, isQueued: true })),
+  ];
+  const specs = [];
+  const seenPrdIds = new Set();
+  allSpecCandidates.forEach((candidate) => {
+    const spec = parsePrdSpec(readTreeFile(rootDir, ref, candidate.filePath), candidate.filePath);
+    if (seenPrdIds.has(spec.id)) {
+      return;
+    }
+    seenPrdIds.add(spec.id);
+    specs.push({
+      spec,
+      isQueued: candidate.isQueued,
+      relativePath: candidate.filePath,
+      ref,
+    });
+  });
+  return specs;
+}
+
+function readTrackedPrdStateMap(rootDir, integrationBranch) {
+  const ref = resolveTrackedRef(rootDir, integrationBranch);
+  const states = new Map();
+  if (!ref) {
+    return states;
+  }
+  const stateFiles = listTreeFiles(rootDir, ref, PRD_STATE_DIR)
+    .filter((filePath) => filePath.endsWith('.json'));
+  stateFiles.forEach((relativePath) => {
+    const state = parsePrdState(readTreeFile(rootDir, ref, relativePath), relativePath);
+    states.set(state.prdId, state);
+  });
+  return states;
+}
+
+function commitTrackedPrdStateToIntegrationBranch(rootDir, integrationBranch, prdState, options = {}) {
+  const payload = buildPrdStatePayload(prdState);
+  return commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, [{
+    relativePath: buildPrdStateRelativePath(payload.prdId),
+    content: payload,
+  }], options);
+}
+
+function deleteTrackedPrdStateFromIntegrationBranch(rootDir, integrationBranch, prdId, options = {}) {
+  return commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, [{
+    relativePath: buildPrdStateRelativePath(prdId),
+    delete: true,
+  }], options);
+}
+
 function slugify(value) {
   return String(value || '')
     .toLowerCase()
@@ -2248,10 +2327,15 @@ module.exports = {
   DEFAULT_SYNC_STATE,
   PRD_SPECS_DIR,
   buildPrdSpecPayload,
+  buildPrdStateRelativePath,
   commitPrdSpecToIntegrationBranch,
+  commitTrackedPrdStateToIntegrationBranch,
   commitTrackedFilesToIntegrationBranch,
+  deleteTrackedPrdStateFromIntegrationBranch,
   getSyncPaths,
   hasActivePrdSpecInIntegrationBranch,
   hasPrdSpecInIntegrationBranch,
+  listTrackedPrdSpecs,
+  readTrackedPrdStateMap,
   syncPrdSpecsFromIntegrationBranch,
 };

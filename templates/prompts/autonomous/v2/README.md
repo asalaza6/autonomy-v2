@@ -97,6 +97,8 @@ What is true on `dev` today:
 - When safe, local `dev` is fast-forwarded to the fetched remote ref so the checkout stays aligned.
 - `pm-agent` uses Codex CLI to turn a freeform PRD into lane task specs.
 - PM persists those generated implementation tasks into tracked per-agent queue files on `dev`.
+- The starter template stores `pm-agent`, implementation-agent, and `reviewer` queue files under `prompts/autonomous/v2/queues/`.
+- Only implementation queues are currently treated as tracked queue truth; `.autonomy/runtime/state/*` remains operational cache and derived state.
 - Implementation agents use Codex CLI inside isolated git worktrees.
 - Each implementation lane reuses one deterministic lane branch and worktree.
 - One PR is created per `prd + implementation-agent` lane.
@@ -291,10 +293,10 @@ Useful places to inspect:
 
 - server stdout
 - `.autonomy/runtime/agents/<agent>/log.md`
-- `.autonomy/runtime/state/prds.json`
-- `.autonomy/runtime/state/tasks.json`
 - `.autonomy/runtime/state/prs.json`
 - `.autonomy/runtime/state/runtime.json`
+- `prompts/autonomous/v2/queues/*.json`
+- `prompts/autonomous/v2/specs/prd-state/*.json`
 
 The per-agent logs are the fastest way to see:
 

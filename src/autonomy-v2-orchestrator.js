@@ -5,8 +5,11 @@ const { acquireStateLock } = require('./autonomy-v2-lock');
 const { validateAutonomyConfig } = require('./autonomy-v2-config');
 const { planPrdTasksWithCodex } = require('./autonomy-v2-codex');
 const {
+  commitTrackedPrdStateToIntegrationBranch,
   commitPrdSpecToIntegrationBranch,
   commitTrackedFilesToIntegrationBranch,
+  listTrackedPrdSpecs,
+  readTrackedPrdStateMap,
   syncPrdSpecsFromIntegrationBranch,
 } = require('./autonomy-v2-dev-sync');
 
@@ -50,8 +53,6 @@ function getPaths(rootDir) {
     stateDir,
     agentsConfig: path.join(configDir, 'agents.json'),
     sprintConfig: path.join(configDir, 'sprint.json'),
-    tasksState: path.join(stateDir, 'tasks.json'),
-    prdsState: path.join(stateDir, 'prds.json'),
     runtimeState: path.join(stateDir, 'runtime.json'),
     prsState: path.join(stateDir, 'prs.json'),
     branchLocksState: path.join(stateDir, 'branch-locks.json'),
@@ -173,7 +174,8 @@ function loadQueues(rootDir, config) {
   (config.agents || []).forEach((agent) => {
     const queuePath = resolveQueuePath(rootDir, agent);
     const fallbackValue = buildTaskQueueState(agent, []);
-    queues[agent.id] = String(agent.role || '') === 'implementation'
+    const usesTrackedQueue = String(agent.role || '') === 'implementation' || String(agent.role || '') === 'review';
+    queues[agent.id] = usesTrackedQueue
       ? readJsonFromGitRef(
           rootDir,
           resolveTrackedQueueRef(rootDir, config.integrationBranch),
@@ -208,27 +210,68 @@ function writeQueue(rootDir, agent, queue) {
   writeJson(queuePath, queue);
 }
 
-function writeQueueAndAggregate(rootDir, config, agentId, queue) {
-  const paths = getPaths(rootDir);
+function commitTrackedQueue(rootDir, config, agent, queue, options = {}) {
+  const relativePath = agent.taskQueue;
+  if (!relativePath || path.isAbsolute(relativePath)) {
+    throw new Error(`Tracked queue for "${agent.id}" must use a repo-relative path.`);
+  }
+  return commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, [{
+    relativePath,
+    content: buildTaskQueueState(agent, listTasks(queue)),
+  }], options);
+}
+
+function writeQueueAndAggregate(rootDir, config, agentId, queue, options = {}) {
   const agent = getAgent(config, agentId);
+  if (String(agent.role || '') === 'review') {
+    commitTrackedQueue(rootDir, config, agent, queue, {
+      commitMessage: options.commitMessage || `autonomy(queue): update ${agent.id}`,
+      gitIdentity: options.gitIdentity || agent.gitIdentity,
+    });
+    return;
+  }
   writeQueue(rootDir, agent, queue);
-  const queues = loadQueues(rootDir, config);
-  queues[agentId] = queue;
-  writeJson(paths.tasksState, {
-    tasks: Object.values(queues)
-      .filter((entry) => String((entry && entry.role) || '') !== 'implementation')
-      .flatMap((entry) => listTasks(entry)),
+}
+
+function loadPrds(rootDir, config, options = {}) {
+  const specEntries = listTrackedPrdSpecs(rootDir, config.integrationBranch);
+  const prdStateMap = readTrackedPrdStateMap(rootDir, config.integrationBranch);
+  const queues = options.queues || loadQueues(rootDir, config);
+  const tasksByPrdId = new Map();
+  Object.values(queues).forEach((queue) => {
+    listTasks(queue).forEach((task) => {
+      if (!task || !task.prdId) {
+        return;
+      }
+      const tasks = tasksByPrdId.get(task.prdId) || [];
+      tasks.push(task);
+      tasksByPrdId.set(task.prdId, tasks);
+    });
   });
-}
 
-function loadPrds(rootDir) {
-  const paths = getPaths(rootDir);
-  return readJson(paths.prdsState, { prds: [] });
-}
-
-function writePrds(rootDir, prds) {
-  const paths = getPaths(rootDir);
-  writeJson(paths.prdsState, prds);
+  return {
+    prds: specEntries.map((entry) => {
+      const trackedState = prdStateMap.get(entry.spec.id) || null;
+      const plannedTaskIds = trackedState && Array.isArray(trackedState.plannedTaskIds) && trackedState.plannedTaskIds.length > 0
+        ? trackedState.plannedTaskIds.slice()
+        : ((tasksByPrdId.get(entry.spec.id) || []).map((task) => task.id));
+      let status = 'queued';
+      if (trackedState && (trackedState.status === 'planning' || trackedState.status === 'failed')) {
+        status = trackedState.status;
+      } else if ((trackedState && trackedState.status === 'planned') || plannedTaskIds.length > 0) {
+        status = 'planned';
+      } else if (entry.isQueued) {
+        status = 'queued';
+      }
+      return {
+        ...entry.spec,
+        status,
+        plannedTaskIds,
+        updatedAt: trackedState && trackedState.updatedAt ? trackedState.updatedAt : entry.spec.createdAt,
+        lastError: trackedState && trackedState.lastError ? trackedState.lastError : undefined,
+      };
+    }),
+  };
 }
 
 function loadRuntime(rootDir) {
@@ -522,11 +565,11 @@ function refreshRuntime(rootDir, config, queues, runtime) {
           delete task.dispatcher;
           queueChanged = true;
         });
-        if (queueChanged) {
-          recoveredAgents.add(agent.id);
-        }
-        return;
+      if (queueChanged) {
+        recoveredAgents.add(agent.id);
       }
+      return;
+    }
 
       if (agent.role === 'implementation') {
         return;
@@ -536,12 +579,9 @@ function refreshRuntime(rootDir, config, queues, runtime) {
 
   if (recoveredAgents.size > 0) {
     recoveredAgents.forEach((agentId) => {
-      writeQueue(rootDir, getAgent(config, agentId), queues[agentId]);
-    });
-    writeJson(getPaths(rootDir).tasksState, {
-      tasks: Object.values(queues)
-        .filter((queue) => String((queue && queue.role) || '') !== 'implementation')
-        .flatMap((queue) => listTasks(queue)),
+      writeQueueAndAggregate(rootDir, config, agentId, queues[agentId], {
+        commitMessage: `autonomy(queue): recover ${agentId}`,
+      });
     });
   }
 }
@@ -554,8 +594,8 @@ function workerIsRunning(runtime, agentId) {
   return worker.status === 'running' && (!worker.pid || isProcessAlive(worker.pid));
 }
 
-function listPrds(prdsState) {
-  return Array.isArray(prdsState && prdsState.prds) ? prdsState.prds : [];
+function listPrds(prds) {
+  return Array.isArray(prds && prds.prds) ? prds.prds : [];
 }
 
 function comparePrdBacklogOrder(left, right) {
@@ -689,7 +729,7 @@ function runSchedulerTick(rootDir, options = {}) {
     const { config } = loadConfig(rootDir);
     const queues = loadQueues(rootDir, config);
     const branchLocks = loadBranchLocks(rootDir);
-    const prds = loadPrds(rootDir);
+    const prds = loadPrds(rootDir, config, { queues });
     runtime = loadRuntime(rootDir);
     emitSchedulerProgress(options, 'state:loaded', {
       agents: (config.agents || []).length,
@@ -890,7 +930,7 @@ function runWorkerOnce(rootDir, agentId) {
 }
 
 function runPmWorker(rootDir, config, sprint, agent) {
-  const prd = claimQueuedPrd(rootDir);
+  const prd = claimQueuedPrd(rootDir, config, agent);
   if (!prd) {
     return { ok: true, status: 'noop', reason: 'no_queued_prd' };
   }
@@ -926,7 +966,7 @@ function runPmWorker(rootDir, config, sprint, agent) {
     });
     createdTaskIds.push(...sanitizedPlannedSpecs.map((spec) => spec.id));
   } catch (error) {
-    finalizePrd(rootDir, prd.id, {
+    finalizePrd(rootDir, config, agent, prd.id, {
       status: 'failed',
       error: extractExecError(error),
     });
@@ -943,7 +983,7 @@ function runPmWorker(rootDir, config, sprint, agent) {
     throw error;
   }
 
-  finalizePrd(rootDir, prd.id, {
+  finalizePrd(rootDir, config, agent, prd.id, {
     status: 'planned',
     plannedTaskIds: createdTaskIds,
   });
@@ -1155,7 +1195,7 @@ function runImplementationWorker(rootDir, config, agent) {
   const queues = loadQueues(rootDir, config);
   const queue = queues[agent.id];
   const branchLocks = loadBranchLocks(rootDir);
-  const prds = loadPrds(rootDir);
+  const prds = loadPrds(rootDir, config, { queues });
   const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
   const task = selectImplementationTask(listTasks(queueContext.queue), prds.prds || []);
   if (!task) {
@@ -1261,37 +1301,55 @@ function getImplementationTaskPriority(task) {
   return 10;
 }
 
-function claimQueuedPrd(rootDir) {
+function claimQueuedPrd(rootDir, config, agent) {
   const release = acquireStateLock(rootDir);
   try {
-    const prds = loadPrds(rootDir);
+    const prds = loadPrds(rootDir, config);
     const prd = listPrds(prds)
       .filter((candidate) => candidate.status === 'queued')
       .sort(comparePrdBacklogOrder)[0];
     if (!prd) {
       return null;
     }
+    const now = new Date().toISOString();
+    commitTrackedPrdStateToIntegrationBranch(rootDir, config.integrationBranch, {
+      prdId: prd.id,
+      status: 'planning',
+      createdAt: now,
+      updatedAt: now,
+    }, {
+      commitMessage: `autonomy(prd-state): planning ${prd.id}`,
+      gitIdentity: agent.gitIdentity,
+    });
     prd.status = 'planning';
-    prd.updatedAt = new Date().toISOString();
-    writePrds(rootDir, prds);
+    prd.updatedAt = now;
     return JSON.parse(JSON.stringify(prd));
   } finally {
     release();
   }
 }
 
-function finalizePrd(rootDir, prdId, patch) {
+function finalizePrd(rootDir, config, agent, prdId, patch) {
   const release = acquireStateLock(rootDir);
   try {
-    const prds = loadPrds(rootDir);
-    const prd = (prds.prds || []).find((candidate) => candidate.id === prdId);
-    if (!prd) {
-      return;
-    }
-    Object.assign(prd, patch, {
-      updatedAt: new Date().toISOString(),
+    const currentState = readTrackedPrdStateMap(rootDir, config.integrationBranch).get(prdId) || null;
+    const now = new Date().toISOString();
+    const rawError = patch.error || patch.lastError || '';
+    commitTrackedPrdStateToIntegrationBranch(rootDir, config.integrationBranch, {
+      prdId,
+      status: patch.status || (currentState && currentState.status) || 'planned',
+      plannedTaskIds: Array.isArray(patch.plannedTaskIds)
+        ? patch.plannedTaskIds
+        : (currentState && currentState.plannedTaskIds) || [],
+      lastError: patch.status === 'failed'
+        ? (typeof rawError === 'string' ? rawError : extractExecError(rawError))
+        : '',
+      createdAt: currentState && currentState.createdAt ? currentState.createdAt : now,
+      updatedAt: now,
+    }, {
+      commitMessage: `autonomy(prd-state): ${patch.status || 'update'} ${prdId}`,
+      gitIdentity: agent.gitIdentity,
     });
-    writePrds(rootDir, prds);
   } finally {
     release();
   }
@@ -1309,7 +1367,10 @@ function claimQueuedReviewTask(rootDir, config, agentId) {
     reviewTask.status = 'assigned';
     reviewTask.dispatchedAt = new Date().toISOString();
     reviewTask.dispatcher = 'scheduler';
-    writeQueueAndAggregate(rootDir, config, agentId, reviewerQueue);
+    writeQueueAndAggregate(rootDir, config, agentId, reviewerQueue, {
+      commitMessage: `autonomy(queue): assign ${reviewTask.id}`,
+      gitIdentity: getAgent(config, agentId).gitIdentity,
+    });
     return JSON.parse(JSON.stringify(reviewTask));
   } finally {
     release();
@@ -1398,7 +1459,10 @@ function markReviewDispatchFailure(rootDir, config, agentId, taskId, message) {
     task.lastError = message;
     delete task.dispatchedAt;
     delete task.dispatcher;
-    writeQueueAndAggregate(rootDir, config, agentId, queue);
+    writeQueueAndAggregate(rootDir, config, agentId, queue, {
+      commitMessage: `autonomy(queue): fail ${taskId}`,
+      gitIdentity: getAgent(config, agentId).gitIdentity,
+    });
   } finally {
     release();
   }

@@ -8,7 +8,7 @@ The current default configuration lives in the consumer repo under:
 
 - `prompts/autonomous/v2/config/agents.json`
 - `prompts/autonomous/v2/config/sprint.json`
-- `prompts/autonomous/v2/queues/<implementation-agent>.json`
+- `prompts/autonomous/v2/queues/<agent-id>.json`
 
 The runtime state stays separate under:
 
@@ -16,7 +16,9 @@ The runtime state stays separate under:
 - `.autonomy/worktrees/`
 
 The entire `.autonomy/` directory is scaffolded as local runtime state and is ignored by default.
-Tracked implementation queue files are not part of `.autonomy/`; they live in the repository tree and are committed to git.
+Queue files may live in the repository tree or under runtime state depending on each agent's `taskQueue`.
+In the starter template, `pm-agent`, `architecture-agent`, and `reviewer` all use repo-relative queue files under `prompts/autonomous/v2/queues/`.
+Only implementation queues are currently treated as git-backed authoritative queue state.
 
 ## What `init` Creates
 
@@ -110,8 +112,11 @@ The active config supports any number of agents. Common fields are:
 
 Queue defaults:
 
-- implementation agents default to tracked queue files in `prompts/autonomous/v2/queues/<agent-id>.json`
-- review and other runtime-managed queues remain under `.autonomy/runtime/state/queues/`
+- implementation agents default to repo-relative queue files in `prompts/autonomous/v2/queues/<agent-id>.json`
+- non-implementation agents use their configured `taskQueue`
+- for non-implementation agents, repo-relative queue paths stay in the repo tree
+- `prompts/autonomous/v2/state/...` and `state/...` queue paths resolve into `.autonomy/runtime/state/...`
+- the starter template uses repo-relative queue files for `pm-agent` and `reviewer`
 
 The scaffold generator derives system prompts, handoff files, log files, and queue files from the config entries, so adding a new implementation lane does not require package changes.
 
@@ -119,5 +124,7 @@ The scaffold generator derives system prompts, handoff files, log files, and que
 
 - `status` reports the loaded config path and the loaded agent list.
 - Scheduler and CLI commands read the repo-local config, not package-global state.
-- Implementation queues are tracked in git; review queues, leases, logs, worker status, and worktrees remain local runtime cache.
+- Implementation queues are git-backed and authoritative; they are read from tracked refs and committed back to the integration branch.
+- PM and review queues are local operational queue files resolved from `taskQueue`; in the starter template they live in repo paths, but they are not treated as tracked git-backed queue truth.
+- Leases, worker status, logs, worktrees, branch locks, sync state, and runtime projections remain local runtime state.
 - Implementation task completion is observed from tracked queue state plus git branch state, not from runtime implementation queue files.
