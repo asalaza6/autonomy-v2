@@ -30,6 +30,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "check:lines": "node scripts/check-line-count.js",
     "clean": "rm -rf dist",
     "test": "npm run build && node --test dist/tests/**/*.test.js",
     "smoke": "npm run build && node --test dist/tests/smoke/package-smoke.test.js",
