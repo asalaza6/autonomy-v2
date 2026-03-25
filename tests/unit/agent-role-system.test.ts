@@ -5,6 +5,7 @@ import path from 'path';
 
 import { getAgentDefinition, listAgentDefinitions, } from '../../src/agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES, listAgentRoleIds, } from '../../src/agents/role-catalog.js';
+import { validateImplementationChecks } from '../../src/autonomy-v2/scaffold/index.js';
 import { validateAutonomyConfig } from '../../src/config/index.js';
 
 import { fileURLToPath } from 'url';
@@ -118,6 +119,46 @@ test('config validation still enforces role-specific constraints through definit
   const validated = validateAutonomyConfig(config, 'agents.json');
   assert.equal(validated.agents[0].taskQueue, 'prompts/autonomous/v2/queues/pm-agent.json');
   assert.equal(validated.agents[2].taskQueue, 'prompts/autonomous/v2/queues/gate.json');
+});
+
+test('agent definitions own role-specific scaffold prompts', () => {
+  const config = {
+    agents: [],
+    integrationBranch: 'dev',
+    productionBranch: 'main',
+    projectName: 'example-repo',
+  };
+
+  const pmPrompt = getAgentDefinition(AGENT_ROLES.PM).buildSystemPrompt({
+    id: 'pm-agent',
+    role: AGENT_ROLES.PM,
+  }, config);
+  const implementationPrompt = getAgentDefinition(AGENT_ROLES.IMPLEMENTATION).buildSystemPrompt({
+    id: 'builder',
+    role: AGENT_ROLES.IMPLEMENTATION,
+    checks: ['npm test'],
+    include: ['src/**'],
+  }, config);
+  const reviewPrompt = getAgentDefinition(AGENT_ROLES.REVIEW).buildSystemPrompt({
+    id: 'gate',
+    role: AGENT_ROLES.REVIEW,
+  }, config);
+
+  assert.match(pmPrompt, /PRD inbox/);
+  assert.match(implementationPrompt, /Required Checks/);
+  assert.match(reviewPrompt, /Review Priorities/);
+});
+
+test('implementation scaffold validation is definition-backed', () => {
+  assert.throws(() => validateImplementationChecks({
+    agents: [
+      {
+        id: 'builder',
+        role: AGENT_ROLES.IMPLEMENTATION,
+        checks: [],
+      },
+    ],
+  }, 'agents.json'));
 });
 
 function listJsFiles(rootDir) {

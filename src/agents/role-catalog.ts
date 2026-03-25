@@ -69,10 +69,6 @@ function getRoleAgentLabel(value) {
   return `${getRoleLabel(value)} agent`;
 }
 
-function buildRoleScopedLabel(value, suffix) {
-  return `${getRoleLabel(value)} ${suffix}`;
-}
-
 function buildRoleEventName(value, suffix) {
   return `${normalizeAgentRole(value)}:${suffix}`;
 }
@@ -83,7 +79,7 @@ export { RUNNER_TYPES };
 
 export { TASK_TYPES };
 export { buildRoleEventName };
-export { buildRoleScopedLabel };
+
 export { getRunnerTypeForRole };
 export { getRoleAgentLabel };
 export { getRoleLabel };

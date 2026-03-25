@@ -1,17 +1,12 @@
-#!/usr/bin/env node
-
 import fs from 'fs';
 import https from 'https';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { loadAutonomyEnv } from '../../env/index.js';
 import { validateAutonomyConfig } from '../../config/index.js';
 import { DEFAULT_SYNC_STATE, buildPrdSpecPayload, buildPrdStateRelativePath, commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, hasActivePrdSpecInIntegrationBranch, hasPrdSpecInIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap, syncPrdSpecsFromIntegrationBranch, } from '../../sync/index.js';
 import { resolveGithubAuthToken } from '../../github/index.js';
-import { withStateLock } from '../../lock/index.js';
-import { AGENT_ROLES, TASK_TYPES, buildRoleEventName, getRoleAgentLabel, getRoleLabel, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
-import { collectAgentScaffoldEntries, getTemplateContent, pruneStaleAgentScaffold, resolveTemplateTargetPath, validateImplementationChecks, } from '../scaffold/index.js';
-import type { AnyRecord, AutonomyConfig, BranchLocksState, CliOptions, PullRequestRecord, PrState, PrdSpecPayload, QueueMap, QueueState, ReviewDecisionRecord, TaskRecord, TrackedPrdRecord } from '../../types.js';
+import { AGENT_ROLES, TASK_TYPES, getRoleAgentLabel, getRoleLabel, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
+import type { AnyRecord, AutonomyConfig, BranchLocksState, PullRequestRecord, PrState, PrdSpecPayload, QueueMap, QueueState, TaskRecord, TrackedPrdRecord } from '../../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -79,169 +74,6 @@ const BASE_TEMPLATE_FILES = [
   'specs/prd-state/README.md',
   'specs/prds/archived/README.md',
 ];
-
-export async function main(argv: string[] = process.argv.slice(2)) {
-  const { command, options } = parseCli(argv);
-  const rootDir = resolveRootDir(options.root);
-  loadAutonomyEnv(rootDir);
-
-  try {
-    const runCommand = (handler) => {
-      if (!isMutatingCommand(command)) {
-        return handler();
-      }
-      return withStateLock(rootDir, handler);
-    };
-
-    switch (command) {
-      case 'init':
-        await runCommand(() => handleInit(rootDir, options));
-        break;
-      case 'status':
-        handleStatus(rootDir, options);
-        break;
-      case 'task:add':
-        await runCommand(() => handleTaskAdd(rootDir, options));
-        break;
-      case 'task:finish':
-        await runCommand(() => handleTaskFinish(rootDir, options));
-        break;
-      case 'task:list':
-        handleTaskList(rootDir, options);
-        break;
-      case 'prd:add':
-        await runCommand(() => handlePrdAdd(rootDir, options));
-        break;
-      case 'prd:list':
-        handlePrdList(rootDir, options);
-        break;
-      case 'prd:archive-completed':
-        await runCommand(() => handleArchiveCompletedPrds(rootDir, options));
-        break;
-      case 'worktree:prepare':
-        await runCommand(() => handlePrepareWorktree(rootDir, options));
-        break;
-      case 'scope:validate':
-        handleScopeValidate(rootDir, options);
-        break;
-      case 'pr:record':
-        await runCommand(() => handlePrRecord(rootDir, options));
-        break;
-      case buildRoleEventName(AGENT_ROLES.REVIEW, 'record'):
-        await runCommand(() => handleReviewRecord(rootDir, options));
-        break;
-      case 'merge':
-        await runCommand(() => handleMerge(rootDir, options));
-        break;
-      case 'runtime:status':
-        handleRuntimeStatus(rootDir, options);
-        break;
-      case 'help':
-      case '--help':
-      case '-h':
-      case '':
-        printHelp();
-        break;
-      default:
-        throw new Error(`Unknown command "${command}". Run "autonomy-v2 --help".`);
-    }
-  } catch (error) {
-    console.error(`ERROR: ${error.message}`);
-    process.exitCode = 1;
-  }
-}
-
-function parseCli(argv: string[]): { command: string; options: CliOptions } {
-  const options: CliOptions = {};
-  const positionals: string[] = [];
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-    if (token.startsWith('--')) {
-      const key = token.slice(2);
-      const next = argv[index + 1];
-      if (typeof next === 'undefined' || next.startsWith('--')) {
-        addOption(options, key, true);
-      } else {
-        addOption(options, key, next);
-        index += 1;
-      }
-      continue;
-    }
-
-    positionals.push(token);
-  }
-
-  return {
-    command: positionals[0] || '',
-    options,
-  };
-}
-
-function isMutatingCommand(command) {
-  return new Set([
-    'init',
-    'task:add',
-    'task:finish',
-    'prd:add',
-    'prd:archive-completed',
-    'worktree:prepare',
-    'pr:record',
-    buildRoleEventName(AGENT_ROLES.REVIEW, 'record'),
-    'merge',
-  ]).has(command);
-}
-
-function addOption(options: CliOptions, key: string, value: string | boolean) {
-  if (Object.prototype.hasOwnProperty.call(options, key)) {
-    if (!Array.isArray(options[key])) {
-      options[key] = [options[key]];
-    }
-    options[key].push(value);
-    return;
-  }
-
-  options[key] = value;
-}
-
-function printHelp() {
-  console.log(`
-Autonomy v2 CLI
-
-Usage:
-  autonomy-v2 <command> [options]
-
-Commands:
-  init
-  status [--sync]
-  task:add --id <id> --title <title> --agent <agent-id> [--acceptance <text>]
-  task:finish --task <task-id>
-  task:list [--status <status>]
-  prd:add --id <id> --title <title> [--specification <text>] [--requirement <text>] [--task-spec <json>]
-  prd:list [--status <status>] [--sync]
-  prd:archive-completed
-  worktree:prepare --task <task-id> [--create]
-  scope:validate --task <task-id> [--files <path1,path2>] [--worktree <path>]
-  pr:record --task <task-id> --head-branch <branch> [--publish]
-  ${buildRoleEventName(AGENT_ROLES.REVIEW, 'record')} --pr <pr-id> --reviewer <agent-id> --decision <approve|changes-requested> [--publish]
-  merge --pr <pr-id> --actor <agent-id> [--execute]
-  runtime:status
-
-Global options:
-  --root <path>    Use a custom repo root
-  --json           Print JSON output when supported
-`);
-}
-
-function resolveRootDir(rootOption) {
-  if (!rootOption) {
-    return process.cwd();
-  }
-
-  return path.isAbsolute(rootOption)
-    ? rootOption
-    : path.resolve(process.cwd(), rootOption);
-}
 
 function getAutonomyPaths(rootDir) {
   const repoAutonomyDir = path.join(rootDir, ...DEFAULT_AUTONOMY_SEGMENTS);
@@ -465,1188 +297,6 @@ function archiveCompletedPrdSpecs(rootDir, state) {
     });
   });
   return archived;
-}
-
-function handleInit(rootDir, options) {
-  const bootstrapRootFiles = new Set(['.env.autonomy', '.gitignore']);
-  const created = [];
-  const skipped = [];
-  const removed = [];
-  const updated = [];
-  const paths = getAutonomyPaths(rootDir);
-
-  ensureDir(paths.configDir);
-  ensureDir(paths.repoAutonomyDir);
-  ensureDir(paths.runtimeAutonomyDir);
-
-  for (const relativeFile of BASE_TEMPLATE_FILES) {
-    const targetPath = resolveTemplateTargetPath(rootDir, relativeFile, {
-      getAutonomyPaths,
-    });
-    ensureDir(path.dirname(targetPath));
-    const preserveIfExists = relativeFile === 'config/agents.json' || relativeFile === 'config/sprint.json';
-    const isBootstrapRootFile = bootstrapRootFiles.has(relativeFile);
-    const shouldSkipExisting = fs.existsSync(targetPath)
-      && (preserveIfExists || (!isBootstrapRootFile && options.force !== true));
-    if (shouldSkipExisting) {
-      skipped.push(relativeFile);
-      continue;
-    }
-
-    const templateContent = getTemplateContent(relativeFile, {
-      generatedTemplateFiles: GENERATED_TEMPLATE_FILES,
-      templateRoot: TEMPLATE_ROOT,
-    });
-    fs.writeFileSync(targetPath, templateContent, 'utf8');
-    created.push(relativeFile);
-  }
-
-  if (options.force === true) {
-    [
-      path.join(paths.stateDir, 'tasks.json'),
-      path.join(paths.stateDir, 'prds.json'),
-    ].forEach((stalePath) => {
-      if (!fs.existsSync(stalePath)) {
-        return;
-      }
-      fs.rmSync(stalePath, { force: true });
-      removed.push(path.relative(rootDir, stalePath));
-    });
-  }
-
-  const rawConfigText = fs.readFileSync(paths.agentsConfig, 'utf8');
-  const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
-  const normalizedConfigText = `${JSON.stringify(config, null, 2)}\n`;
-  if (rawConfigText !== normalizedConfigText) {
-    fs.writeFileSync(paths.agentsConfig, normalizedConfigText, 'utf8');
-    removeListEntry(skipped, 'config/agents.json');
-    updated.push('config/agents.json');
-  }
-  validateImplementationChecks(config, paths.agentsConfig);
-  const agentEntries = collectAgentScaffoldEntries(rootDir, config, {
-    getAgentLogPath,
-    getAutonomyPaths,
-    resolveTaskQueuePath,
-    templateRoot: TEMPLATE_ROOT,
-  });
-
-  for (const entry of agentEntries) {
-    ensureDir(path.dirname(entry.targetPath));
-    if (fs.existsSync(entry.targetPath) && options.force !== true) {
-      skipped.push(entry.relativeFile);
-      continue;
-    }
-
-    fs.writeFileSync(entry.targetPath, entry.content, 'utf8');
-    created.push(entry.relativeFile);
-  }
-
-  if (options.force === true) {
-    removed.push(...pruneStaleAgentScaffold(rootDir, agentEntries, {
-      getAutonomyPaths,
-    }));
-  }
-
-  const payload = {
-    rootDir,
-    created,
-    skipped,
-    removed,
-    updated,
-  };
-
-  printOutput(options, payload, () => {
-    console.log(`Initialized autonomy v2 scaffold at ${paths.repoAutonomyDir}`);
-    console.log(`Runtime state path: ${paths.runtimeAutonomyDir}`);
-    console.log(`Created: ${created.length}`);
-    console.log(`Skipped: ${skipped.length}`);
-    if (updated.length > 0) {
-      console.log(`Updated: ${updated.length}`);
-    }
-    if (removed.length > 0) {
-      console.log(`Removed: ${removed.length}`);
-    }
-  });
-}
-
-function removeListEntry(list, value) {
-  const index = list.indexOf(value);
-  if (index >= 0) {
-    list.splice(index, 1);
-  }
-}
-
-function handleStatus(rootDir, options) {
-  ensureInitialized(rootDir);
-  syncIntegrationSpecs(rootDir, options);
-  const paths = getAutonomyPaths(rootDir);
-  const runtime = fs.existsSync(paths.runtimeState)
-    ? readJson(paths.runtimeState)
-    : { workers: {} };
-  const { config, sprint, taskQueues, prs, branchLocks } = loadAllState(rootDir);
-  const prds = loadTrackedPrds(rootDir, config, {
-    taskQueues,
-    prs,
-  });
-  const taskCounts = countBy(listTasks(taskQueues), 'status');
-  const prCounts = countBy(prs.pullRequests, 'status');
-  const queues = (config.agents || []).map((agent) => {
-    const queue = getTaskQueue(taskQueues, config, agent.id);
-    return {
-      agentId: queue.agentId,
-      role: queue.role,
-      taskCount: queue.tasks.length,
-      statuses: countBy(queue.tasks, 'status'),
-    };
-  });
-  const agentStatuses = buildAgentStatusSummaries({
-    rootDir,
-    config,
-    taskQueues,
-    prs,
-    branchLocks,
-    runtime,
-    prds,
-  });
-  const pullRequestStatuses = buildPullRequestStatusSummaries({
-    taskQueues,
-    prs,
-    runtime,
-    branchLocks,
-  });
-  const payload = {
-    configPath: path.relative(rootDir, paths.agentsConfig),
-    sprintPath: path.relative(rootDir, paths.sprintConfig),
-    configSchemaVersion: typeof config.schemaVersion === 'undefined' ? null : config.schemaVersion,
-    integrationBranch: config.integrationBranch,
-    productionBranch: config.productionBranch,
-    blockedBranches: config.blockedBranches || [],
-    sprint,
-    agents: config.agents || [],
-    agentStatuses,
-    queues,
-    taskCounts,
-    prCounts,
-    pullRequestStatuses,
-    branchLockCount: branchLocks.locks.length,
-  };
-
-  printOutput(options, payload, () => {
-    console.log(`Config file: ${path.relative(rootDir, paths.agentsConfig)}`);
-    console.log(`Sprint file: ${path.relative(rootDir, paths.sprintConfig)}`);
-    if (typeof config.schemaVersion !== 'undefined') {
-      console.log(`Config schema version: ${config.schemaVersion}`);
-    }
-    console.log(`Integration branch: ${config.integrationBranch}`);
-    console.log(`Production branch: ${config.productionBranch}`);
-    console.log(`Blocked branches: ${(config.blockedBranches || []).join(', ')}`);
-    console.log(`Loaded agents: ${(config.agents || []).map((agent) => `${agent.id}:${agent.role}`).join(', ')}`);
-    console.log('Agent status:');
-    agentStatuses.forEach((agentStatus) => {
-      console.log(formatAgentStatusLine(agentStatus, { includePid: true }));
-    });
-    console.log(`Tasks: ${formatCountSummary(taskCounts) || 'none'}`);
-    queues.forEach((queue) => {
-      console.log(`Queue ${queue.agentId}: ${formatCountSummary(queue.statuses) || 'empty'}`);
-    });
-    console.log(`PRs: ${formatCountSummary(prCounts) || 'none'}`);
-    if (pullRequestStatuses.length > 0) {
-      console.log('Active PRs:');
-      pullRequestStatuses.forEach((prStatus) => {
-        console.log(formatPullRequestStatusLine(prStatus));
-      });
-    }
-    console.log(`Branch locks: ${branchLocks.locks.length}`);
-  });
-}
-
-function handleTaskAdd(rootDir, options) {
-  ensureInitialized(rootDir);
-  const { config, sprint, taskQueues } = loadAllState(rootDir);
-  const taskId = requireOption(options, 'id');
-  const title = requireOption(options, 'title');
-  const agentId = requireOption(options, 'agent');
-  const agent = getAgent(config, agentId);
-
-  if (!isImplementationRole(agent.role)) {
-    throw new Error(`Agent "${agentId}" is not an ${getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)}.`);
-  }
-  if (listTasks(taskQueues).some((task) => task.id === taskId)) {
-    throw new Error(`Task "${taskId}" already exists.`);
-  }
-
-  const checks = getListOption(options, 'check');
-  const acceptance = getListOption(options, 'acceptance');
-  const now = new Date().toISOString();
-  const task = {
-    id: taskId,
-    title,
-    description: getStringOption(options, 'description', ''),
-    agentId,
-    prdId: getStringOption(options, 'prd-id', ''),
-    laneKey: getStringOption(options, 'lane-key', ''),
-    type: getStringOption(options, 'type', TASK_TYPES.DEFAULT),
-    sprintId: getStringOption(options, 'sprint-id', sprint.sprintId || 'shared'),
-    baseBranch: getStringOption(options, 'base-branch', sprint.defaultTaskBaseBranch || config.integrationBranch),
-    checks: checks.length > 0 ? checks : agent.checks || [],
-    acceptance,
-    source: getStringOption(options, 'source', 'manual'),
-    state: 'queued',
-    status: 'queued',
-    createdAt: now,
-    updatedAt: now,
-  };
-  task.laneKey = task.laneKey || buildTaskLaneKey(task);
-  if (!task.prdId) {
-    delete task.prdId;
-  }
-
-  const queue = getTaskQueue(taskQueues, config, agentId);
-  queue.tasks.push(task);
-  commitTrackedImplementationQueue(rootDir, config, agent, queue, {
-    commitMessage: `autonomy(queue): add ${task.id}`,
-    gitIdentity: agent.gitIdentity,
-  });
-  writeTaskQueues(rootDir, config, taskQueues);
-  appendAgentLog(rootDir, config, agentId, 'task:add', {
-    input: {
-      id: taskId,
-      title,
-      acceptance,
-    },
-    output: {
-      status: task.status,
-      baseBranch: task.baseBranch,
-    },
-  });
-
-  printOutput(options, task, () => {
-    console.log(`Added task ${task.id} for ${task.agentId}`);
-  });
-}
-
-function handleTaskFinish(rootDir, options) {
-  ensureInitialized(rootDir);
-  const { config, taskQueues, branchLocks } = loadAllState(rootDir);
-  const task = getTask(taskQueues, requireOption(options, 'task'));
-  const agent = getAgent(config, task.agentId);
-  const queue = getTaskQueue(taskQueues, config, task.agentId);
-  const taskIndex = queue.tasks.findIndex((candidate) => candidate.id === task.id);
-  if (taskIndex === -1) {
-    throw new Error(`Task "${task.id}" is not present in queue "${task.agentId}".`);
-  }
-  if (isImplementationRole(agent.role)) {
-    const laneKey = task.laneKey || buildTaskLaneKey(task);
-    const claimedBranch = resolveImplementationBranchRef(rootDir, config, branchLocks, task.agentId, laneKey, { task });
-    if (claimedBranch) {
-      throw new Error(
-        `${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)[0].toUpperCase()}${getRoleLabel(AGENT_ROLES.IMPLEMENTATION).slice(1)} lane "${laneKey}" is active on branch "${claimedBranch}". Finish it from the lane worktree instead of mutating ${config.integrationBranch}.`
-      );
-    }
-    const now = new Date().toISOString();
-    task.state = 'done';
-    task.status = 'done';
-    task.updatedAt = now;
-    task.completedAt = now;
-    task.completionMode = getStringOption(options, 'completion-mode', 'noop');
-    delete task.lastError;
-    if (!queue.tasks.some((candidate) => candidate.id !== task.id && getImplementationTaskState(candidate) === 'active')) {
-      const nextTask = queue.tasks.find((candidate) => candidate.id !== task.id && getImplementationTaskState(candidate) === 'queued');
-      if (nextTask) {
-        nextTask.state = 'active';
-        nextTask.status = 'active';
-        nextTask.startedAt = nextTask.startedAt || now;
-        nextTask.updatedAt = now;
-      }
-    }
-    commitTrackedImplementationQueue(rootDir, config, agent, queue, {
-      commitMessage: `autonomy(queue): finish ${task.id}`,
-      gitIdentity: agent.gitIdentity,
-    });
-    writeTaskQueues(rootDir, config, taskQueues);
-  } else {
-    queue.tasks.splice(taskIndex, 1);
-    writeTaskQueues(rootDir, config, taskQueues);
-  }
-  appendAgentLog(rootDir, config, task.agentId, 'task:finish', {
-    input: {
-      taskId: task.id,
-      laneKey: task.laneKey || buildTaskLaneKey(task),
-      type: task.type,
-    },
-    output: {
-      removed: isImplementationRole(agent.role) ? false : true,
-      state: task.state || task.status || null,
-      completionMode: task.completionMode || null,
-    },
-  });
-
-  printOutput(options, task, () => {
-    console.log(`Finished task ${task.id} for ${task.agentId}`);
-  });
-}
-
-function handleTaskList(rootDir, options) {
-  ensureInitialized(rootDir);
-  const { taskQueues } = loadAllState(rootDir);
-  const statusFilter = options.status;
-  const agentFilter = getStringOption(options, 'agent', '');
-  const filtered = listTasks(taskQueues).filter((task) => {
-    if (statusFilter && task.status !== statusFilter) {
-      return false;
-    }
-    if (agentFilter && task.agentId !== agentFilter) {
-      return false;
-    }
-    return true;
-  });
-
-  printOutput(options, filtered, () => {
-    if (filtered.length === 0) {
-      console.log('No tasks found.');
-      return;
-    }
-
-    filtered.forEach((task) => {
-      console.log(`${task.id} | ${task.status} | ${task.agentId} | ${task.title}`);
-    });
-  });
-}
-
-function handlePrdAdd(rootDir, options) {
-  ensureInitialized(rootDir);
-  const paths = getAutonomyPaths(rootDir);
-  const config = readJson(paths.agentsConfig);
-  const id = requireOption(options, 'id');
-  const title = requireOption(options, 'title');
-  const trackedPrds = loadTrackedPrds(rootDir, config, {
-    prs: readJson(paths.prsState),
-  });
-  const hasActivePrd = (trackedPrds.prds || []).some((prd) => ['planning', 'planned', 'queued'].includes(
-    String((prd && prd.status) || '')
-  ));
-  const hasActiveIntegrationPrdSpec = hasActivePrdSpecInIntegrationBranch(rootDir, config.integrationBranch);
-  const hasExistingPrdSpec = hasPrdSpecInIntegrationBranch(rootDir, config.integrationBranch, id);
-
-  const now = new Date().toISOString();
-  const specification = getStringOption(options, 'specification', '');
-  const requirements = getListOption(options, 'requirement');
-  const rawTaskSpecs = Object.prototype.hasOwnProperty.call(options, 'task-spec')
-    ? (Array.isArray(options['task-spec']) ? options['task-spec'] : [options['task-spec']])
-    : [];
-  const taskSpecs = rawTaskSpecs.map((entry, index) => {
-    try {
-      const parsed = JSON.parse(String(entry));
-      if (!parsed.id || !parsed.title || !parsed.agentId) {
-        throw new Error('task-spec must include id, title, and agentId');
-      }
-      return parsed;
-    } catch (error) {
-      throw new Error(`Invalid --task-spec at index ${index}: ${error.message}`);
-    }
-  });
-  if (taskSpecs.length === 0 && !specification && requirements.length === 0) {
-    throw new Error('Provide at least one --task-spec or a --specification/--requirement input for PM planning.');
-  }
-  if (taskSpecs.length > 0 && (hasActivePrd || hasActiveIntegrationPrdSpec || hasExistingPrdSpec)) {
-    throw new Error(`Cannot enqueue ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} task specs while the PRD spec would be queued instead of active on the integration branch.`);
-  }
-
-  const prdSpec = buildPrdSpecPayload({
-    id,
-    title,
-    createdAt: now,
-    specification,
-    requirements,
-  });
-  const pmAgent = getAgent(config, `${AGENT_ROLES.PM}-agent`);
-  const commitResult = commitPrdSpecToIntegrationBranch(rootDir, config.integrationBranch, prdSpec, {
-    commitMessage: `autonomy(prd): upsert ${id}`,
-    gitIdentity: pmAgent.gitIdentity,
-    queueSpec: hasActivePrd || hasActiveIntegrationPrdSpec || hasExistingPrdSpec,
-  });
-  let queueCommitResult: AnyRecord | null = null;
-  if (taskSpecs.length > 0) {
-    queueCommitResult = commitTrackedFilesToIntegrationBranch(
-      rootDir,
-      config.integrationBranch,
-      buildTrackedImplementationQueueUpdates(
-        rootDir,
-        config,
-        sanitizePlannedTaskSpecs(taskSpecs),
-        {
-          prd: {
-            id,
-            title,
-            createdAt: now,
-            sprintId: getStringOption(options, 'sprint-id', ''),
-          },
-          sprint: readJson(paths.sprintConfig),
-          source: 'manual',
-        }
-      ),
-      {
-        commitMessage: `autonomy(queue): enqueue ${id}`,
-        gitIdentity: pmAgent.gitIdentity,
-      }
-    );
-  }
-  appendAgentLog(rootDir, config, pmAgent.id, 'prd:committed', {
-    input: {
-      prdId: id,
-      taskCount: taskSpecs.length,
-      integrationBranch: config.integrationBranch,
-    },
-    output: {
-      committed: commitResult.committed,
-      pushed: commitResult.pushed,
-      commitSha: commitResult.commitSha,
-      specPath: commitResult.specPath,
-      queueCommitSha: queueCommitResult ? queueCommitResult.commitSha : null,
-      queuePaths: queueCommitResult ? queueCommitResult.paths : [],
-      pushMessage: commitResult.pushMessage || null,
-    },
-  });
-
-  printOutput(options, {
-    ...prdSpec,
-    integrationBranch: config.integrationBranch,
-    commit: commitResult,
-    queueCommit: queueCommitResult,
-  }, () => {
-    console.log(`Committed PRD spec ${id} to ${config.integrationBranch}`);
-    console.log(`Spec: ${commitResult.specPath}`);
-    if (commitResult.commitSha) {
-      console.log(`Commit: ${commitResult.commitSha}`);
-    }
-    if (commitResult.pushMessage) {
-      console.log(commitResult.pushMessage);
-    }
-  });
-}
-
-function handlePrdList(rootDir, options) {
-  ensureInitialized(rootDir);
-  syncIntegrationSpecs(rootDir, options);
-  const paths = getAutonomyPaths(rootDir);
-  const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
-  const prds = loadTrackedPrds(rootDir, config, {
-    prs: readJson(paths.prsState),
-  });
-  const statusFilter = getStringOption(options, 'status', '');
-  const filtered = prds.prds.filter((prd) => !statusFilter || prd.status === statusFilter);
-
-  printOutput(options, filtered, () => {
-    if (filtered.length === 0) {
-      console.log('No PRDs found.');
-      return;
-    }
-    filtered.forEach((prd) => {
-      console.log(`${prd.id} | ${prd.status} | planned=${(prd.plannedTaskIds || []).length} | ${prd.title}`);
-    });
-  });
-}
-
-function handleArchiveCompletedPrds(rootDir, options) {
-  ensureInitialized(rootDir);
-  const state = loadAllState(rootDir);
-  const prds = loadTrackedPrds(rootDir, state.config, {
-    taskQueues: state.taskQueues,
-    prs: state.prs,
-  });
-  const archived = archiveCompletedPrdSpecs(rootDir, {
-    config: state.config,
-    taskQueues: state.taskQueues,
-    prs: state.prs,
-    prds,
-  });
-
-  printOutput(options, { archived }, () => {
-    if (archived.length === 0) {
-      console.log('No completed PRD specs were archived.');
-      return;
-    }
-    console.log(`Archived ${archived.length} completed PRD spec${archived.length === 1 ? '' : 's'}:`);
-    archived.forEach((entry) => {
-      console.log(`- ${entry.id} | ${entry.from} -> ${entry.to}`);
-    });
-  });
-}
-
-function handlePrepareWorktree(rootDir, options) {
-  ensureInitialized(rootDir);
-  const state = loadAllState(rootDir);
-  const taskId = requireOption(options, 'task');
-  const task = resolveTaskForWorktreePreparation(rootDir, state, taskId);
-  const agent = getAgent(state.config, task.agentId);
-  if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
-    throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
-  }
-  const create = options.create === true;
-  const payload = prepareTaskWorktree(rootDir, state.config, state.branchLocks, task, { create });
-  writeJson(getAutonomyPaths(rootDir).branchLocksState, state.branchLocks);
-
-  appendAgentLog(rootDir, state.config, task.agentId, 'worktree:prepare', {
-    input: {
-      taskId: task.id,
-      create,
-    },
-    output: payload,
-  });
-
-  printOutput(options, payload, () => {
-    console.log(`${create ? 'Created' : 'Planned'} worktree for ${task.id}`);
-    console.log(`Branch: ${payload.branch}`);
-    console.log(`Worktree: ${payload.worktreePath}`);
-  });
-}
-
-function resolveTaskForWorktreePreparation(rootDir, state, taskId) {
-  const liveTask = findTask(state.taskQueues, taskId);
-  if (liveTask) {
-    return liveTask;
-  }
-  const completedTask = findCompletedTask(state.branchLocks, taskId);
-  if (completedTask) {
-    return completedTask;
-  }
-  const branchTask = findImplementationTaskInBranchQueues(rootDir, state.config, state.branchLocks, taskId);
-  if (branchTask) {
-    return branchTask;
-  }
-  throw new Error(`Unknown task "${taskId}".`);
-}
-
-function prepareTaskWorktree(rootDir: string, config: AutonomyConfig, branchLocksState: BranchLocksState, task: TaskRecord, options: AnyRecord = {}) {
-  const agent = getAgent(config, task.agentId);
-  if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
-    throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
-  }
-  const create = options.create === true;
-  const branchName = options.branchName || buildTaskBranchName(config, task);
-  const worktreePath = options.worktreePath || buildWorktreePath(rootDir, config, task);
-  let mode = create ? 'created' : 'planned';
-
-  if (create) {
-    const baseBranch = task.baseBranch || config.integrationBranch;
-    const baseRef = resolveBaseRef(rootDir, baseBranch);
-    ensureDir(path.dirname(worktreePath));
-    const worktreeExists = fs.existsSync(worktreePath);
-    const branchExists = gitRefExists(rootDir, branchName);
-
-    if (!worktreeExists && branchExists) {
-      runGitWorktreeAdd(rootDir, [worktreePath, branchName], worktreePath);
-      mode = 'reused-branch';
-    } else if (!worktreeExists) {
-      runGitWorktreeAdd(rootDir, ['-b', branchName, worktreePath, baseRef], worktreePath);
-      mode = 'created';
-    } else if (!isGitWorktree(worktreePath)) {
-      throw new Error(`Worktree path "${worktreePath}" exists but is not a git worktree.`);
-    } else {
-      mode = 'reused-worktree';
-    }
-    configureWorktreeGitIdentity(worktreePath, agent);
-  }
-
-  upsertBranchLock(branchLocksState, {
-    taskId: task.id,
-    laneKey: buildTaskLaneKey(task),
-    agentId: task.agentId,
-    branch: branchName,
-    worktreePath,
-    baseBranch: task.baseBranch || config.integrationBranch,
-    mode,
-    updatedAt: new Date().toISOString(),
-  });
-
-  return {
-    taskId: task.id,
-    branch: branchName,
-    worktreePath,
-    mode,
-  };
-}
-
-function handleScopeValidate(rootDir, options) {
-  ensureInitialized(rootDir);
-  const { config, taskQueues } = loadAllState(rootDir);
-  const task = getTask(taskQueues, requireOption(options, 'task'));
-  const agent = getAgent(config, task.agentId);
-  const files = collectFilesForValidation(rootDir, options);
-  if (files.length === 0) {
-    throw new Error('No files provided for validation. Use --files or --worktree.');
-  }
-
-  const result = evaluateScope({
-    files,
-    agent,
-    task,
-  });
-
-  if (!result.ok) {
-    process.exitCode = 1;
-  }
-
-  printOutput(options, result, () => {
-    console.log(result.ok ? 'Scope validation passed.' : 'Scope validation failed.');
-    if (result.violations.length > 0) {
-      result.violations.forEach((violation) => {
-        console.log(`- ${violation.file}: ${violation.reason}`);
-      });
-    }
-  });
-}
-
-async function handlePrRecord(rootDir, options) {
-  ensureInitialized(rootDir);
-  const state = loadAllState(rootDir);
-  const task = resolvePrRecordTask(rootDir, state, requireOption(options, 'task'));
-  const agent = getAgent(state.config, task.agentId);
-  if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
-    throw new Error(`Agent "${agent.id}" cannot publish pull requests.`);
-  }
-  const headBranch = requireOption(options, 'head-branch');
-  const baseBranch = getStringOption(options, 'base-branch', task.baseBranch || state.config.integrationBranch);
-  if ((state.config.blockedBranches || []).includes(baseBranch) || baseBranch !== state.config.integrationBranch) {
-    throw new Error(`PR base branch must be ${state.config.integrationBranch}; received ${baseBranch}.`);
-  }
-
-  const laneKey = task.laneKey || buildTaskLaneKey(task);
-  const explicitCompletedTaskIds = uniqueStrings(getListOption(options, 'completed-task'));
-  const completedLaneTasks = listCompletedLaneTasks(state.branchLocks, task.agentId, laneKey);
-  const completedTaskIds = uniqueStrings([
-    ...(explicitCompletedTaskIds.length > 0 ? explicitCompletedTaskIds : [task.id]),
-    ...completedLaneTasks.map((candidate) => candidate.id),
-  ]);
-  const laneScopeViolations = uniqueScopeViolations(completedLaneTasks.flatMap((candidate) => {
-    return collectTaskScopeViolations(candidate);
-  }));
-  const laneTasks = isImplementationRole(agent.role)
-    ? listImplementationLaneTasks(rootDir, state, task.agentId, laneKey, { task }).tasks
-    : listLaneTasks(state.taskQueues, task.agentId, laneKey);
-  const pendingLaneTasks = laneTasks
-    .filter((candidate) => !completedTaskIds.includes(candidate.id));
-  let record = findPullRequestByLane(state.prs, task);
-  const now = new Date().toISOString();
-  if (!record) {
-    const defaultSource = buildLaneSourceSummary(task, completedLaneTasks, pendingLaneTasks);
-    record = {
-      id: buildStablePullRequestId(laneKey),
-      taskId: task.id,
-      laneKey,
-      prdId: task.prdId || null,
-      sprintId: task.sprintId || null,
-      agentId: task.agentId,
-      sourceTitle: getStringOption(options, 'title', defaultSource.title),
-      sourceBody: getStringOption(options, 'body', defaultSource.body),
-      taskIds: uniqueStrings([
-        ...completedLaneTasks.map((candidate) => candidate.id),
-        task.id,
-        ...pendingLaneTasks.map((candidate) => candidate.id),
-        ...completedTaskIds,
-      ]),
-      completedTaskIds: completedTaskIds.slice(),
-      pendingTaskIds: pendingLaneTasks.map((candidate) => candidate.id),
-      checks: uniqueStrings([
-        ...completedLaneTasks.flatMap((candidate) => candidate.checks || []),
-        ...(task.checks || []),
-        ...pendingLaneTasks.flatMap((candidate) => candidate.checks || []),
-      ]),
-      acceptance: uniqueStrings([
-        ...completedLaneTasks.flatMap((candidate) => candidate.acceptance || []),
-        ...(task.acceptance || []),
-        ...pendingLaneTasks.flatMap((candidate) => candidate.acceptance || []),
-      ]),
-      scopeViolations: laneScopeViolations.slice(),
-      headBranch,
-      baseBranch,
-      status: pendingLaneTasks.length === 0 ? 'open' : 'building',
-      reviews: [],
-      createdAt: now,
-      updatedAt: now,
-      remote: null,
-    };
-    state.prs.pullRequests.push(record);
-  } else {
-    record.sourceTitle = getStringOption(options, 'title', record.sourceTitle || task.title);
-    record.sourceBody = getStringOption(options, 'body', record.sourceBody || task.description || '');
-    record.taskId = task.id;
-    record.laneKey = laneKey;
-    record.prdId = task.prdId || record.prdId || null;
-    record.sprintId = task.sprintId || record.sprintId || null;
-    record.taskIds = uniqueStrings([
-      ...completedLaneTasks.map((candidate) => candidate.id),
-      ...(record.taskIds || []),
-      task.id,
-      ...pendingLaneTasks.map((candidate) => candidate.id),
-      ...completedTaskIds,
-    ]);
-    record.completedTaskIds = uniqueStrings([
-      ...(record.completedTaskIds || []),
-      ...completedTaskIds,
-    ]);
-    record.pendingTaskIds = pendingLaneTasks.map((candidate) => candidate.id);
-    record.checks = uniqueStrings([
-      ...completedLaneTasks.flatMap((candidate) => candidate.checks || []),
-      ...(record.checks || []),
-      ...(task.checks || []),
-      ...pendingLaneTasks.flatMap((candidate) => candidate.checks || []),
-    ]);
-    record.acceptance = uniqueStrings([
-      ...completedLaneTasks.flatMap((candidate) => candidate.acceptance || []),
-      ...(record.acceptance || []),
-      ...(task.acceptance || []),
-      ...pendingLaneTasks.flatMap((candidate) => candidate.acceptance || []),
-    ]);
-    record.scopeViolations = uniqueScopeViolations([
-      ...(record.scopeViolations || []),
-      ...laneScopeViolations,
-    ]);
-    record.headBranch = headBranch;
-    record.baseBranch = baseBranch;
-    record.status = pendingLaneTasks.length === 0 ? 'open' : 'building';
-    record.updatedAt = now;
-    delete record.conflict;
-  }
-
-  record.title = buildPersonaPrTitle(agent, record.sourceTitle);
-  record.body = buildPersonaPrBody(agent, task, state.sprint, record.sourceBody);
-
-  if (options.publish === true && (!record.remote || !record.remote.number)) {
-    const repo = resolveGithubRepo(rootDir);
-    const token = resolveGithubAuthToken({ required: true });
-    const published = await createOrFindPullRequest(repo, token, {
-      title: record.title,
-      body: record.body,
-      head: headBranch,
-      base: baseBranch,
-      draft: options.draft === true,
-    });
-    record.remote = {
-      number: published.number,
-      url: published.html_url,
-    };
-    const labels = buildPullRequestLabels(agent, baseBranch);
-    if (labels.length > 0) {
-      await addIssueLabels(repo, token, published.number, labels);
-      record.labels = labels;
-    }
-  } else if (record.remote && record.remote.number && !record.labels) {
-    const labels = buildPullRequestLabels(agent, baseBranch);
-    if (labels.length > 0) {
-      record.labels = labels;
-    }
-  }
-
-  let reviewerTask = null;
-  if (pendingLaneTasks.length === 0) {
-    reviewerTask = queueReviewerTask(state.taskQueues, state.config, record, task, now);
-  }
-  const paths = getAutonomyPaths(rootDir);
-  writeJson(paths.prsState, state.prs);
-  writeTaskQueues(rootDir, state.config, state.taskQueues);
-  appendAgentLog(rootDir, state.config, task.agentId, 'pr:record', {
-    input: {
-      taskId: task.id,
-      laneKey,
-      headBranch,
-      baseBranch,
-      completedTaskIds,
-    },
-    output: {
-      prId: record.id,
-      status: record.status,
-      remote: record.remote,
-      pendingTaskIds: record.pendingTaskIds,
-      scopeViolations: record.scopeViolations || [],
-    },
-  });
-  if (reviewerTask) {
-    appendAgentLog(rootDir, state.config, reviewerTask.agentId, buildRoleEventName(AGENT_ROLES.REVIEW, 'queued'), {
-      input: {
-        prId: record.id,
-        sourceTaskId: task.id,
-        sourceAgentId: task.agentId,
-      },
-      output: {
-        reviewerTaskId: reviewerTask.id,
-        reviewRound: reviewerTask.reviewRound,
-        status: reviewerTask.status,
-      },
-    });
-  }
-
-  printOutput(options, record, () => {
-    console.log(`Recorded PR ${record.id} for task ${task.id}`);
-    if (record.remote) {
-      console.log(`Remote PR #${record.remote.number}: ${record.remote.url}`);
-    }
-  });
-}
-
-async function handleReviewRecord(rootDir: string, options: CliOptions) {
-  ensureInitialized(rootDir);
-  const state = loadAllState(rootDir);
-  const pr = getPr(state.prs, requireOption(options, 'pr'));
-  const reviewerId = requireOption(options, 'reviewer');
-  const reviewer = getAgent(state.config, reviewerId);
-  if (!isReviewRole(reviewer.role)) {
-    throw new Error(`Agent "${reviewerId}" is not a ${getRoleLabel(AGENT_ROLES.REVIEW)}er.`);
-  }
-  if (reviewerId === pr.agentId) {
-    throw new Error(`${getRoleLabel(AGENT_ROLES.REVIEW)[0].toUpperCase()}${getRoleLabel(AGENT_ROLES.REVIEW).slice(1)}er cannot ${getRoleLabel(AGENT_ROLES.REVIEW)} their own PR.`);
-  }
-
-  const decision = normalizeReviewDecision(requireOption(options, 'decision'));
-  const rawSummary = getStringOption(options, 'summary', '');
-  const decisionRecord: ReviewDecisionRecord = {
-    reviewerId,
-    decision,
-    summary: rawSummary,
-    publishedSummary: buildSignedReviewSummary(reviewer, rawSummary),
-    reviewedAt: new Date().toISOString(),
-  };
-  pr.reviews.push(decisionRecord);
-  pr.updatedAt = decisionRecord.reviewedAt;
-  pr.status = decision === 'approved' ? 'approved' : 'changes_requested';
-
-  const task = findTask(state.taskQueues, pr.taskId);
-  const implementationAgent = getAgent(state.config, pr.agentId);
-  const usesTrackedImplementationQueue = isImplementationRole(implementationAgent.role);
-  let followupTask = null;
-  const followupPatch = decision === 'changes_requested'
-    ? {
-        id: buildLaneFollowupTaskId(pr),
-        title: `Address ${getRoleLabel(AGENT_ROLES.REVIEW)} for ${pr.title}`,
-        description: rawSummary || `Address ${getRoleLabel(AGENT_ROLES.REVIEW)}er feedback for ${pr.title}`,
-        type: 'review_followup',
-        source: 'review_followup',
-        createdAt: decisionRecord.reviewedAt,
-        updatedAt: decisionRecord.reviewedAt,
-      }
-    : null;
-  if (decision === 'changes_requested' && usesTrackedImplementationQueue) {
-    followupTask = appendTrackedBranchFollowupTask(rootDir, state, pr, followupPatch);
-  }
-  if (task && !followupTask && (!usesTrackedImplementationQueue || decision === 'approved')) {
-    task.status = decision === 'approved' ? 'approved' : 'changes_requested';
-    task.updatedAt = decisionRecord.reviewedAt;
-    if (decision === 'changes_requested') {
-      task.title = `Address ${getRoleLabel(AGENT_ROLES.REVIEW)} for ${pr.title}`;
-      task.description = rawSummary || `Address ${getRoleLabel(AGENT_ROLES.REVIEW)}er feedback for ${pr.title}`;
-      task.acceptance = [task.description];
-      task.type = task.type || 'review_followup';
-      task.prId = pr.id;
-      pr.pendingTaskIds = uniqueStrings([...(pr.pendingTaskIds || []), task.id]);
-    }
-  } else if (decision === 'changes_requested') {
-    followupTask = followupTask || enqueueLaneFollowupTask(state.taskQueues, state.config, pr, followupPatch);
-  }
-  if (followupTask) {
-    pr.taskIds = uniqueStrings([...(pr.taskIds || []), followupTask.id]);
-    pr.pendingTaskIds = uniqueStrings([...(pr.pendingTaskIds || []), followupTask.id]);
-  }
-  const reviewerTask = ensureReviewerTask(state.taskQueues, state.config, pr, {
-    id: pr.taskId,
-    title: pr.sourceTitle,
-    acceptance: pr.acceptance || [],
-    agentId: pr.agentId,
-  }, decisionRecord.reviewedAt);
-  reviewerTask.status = decision === 'approved' ? 'approved' : 'changes_requested';
-  reviewerTask.reviewedAt = decisionRecord.reviewedAt;
-  reviewerTask.lastDecision = decision;
-  const reviewedCommitCount = Number(pr.commitCount || (pr.remote && pr.remote.commitCount) || 0);
-  if (Number.isFinite(reviewedCommitCount) && reviewedCommitCount > 0) {
-    reviewerTask.reviewedCommitCount = reviewedCommitCount;
-  } else {
-    delete reviewerTask.reviewedCommitCount;
-  }
-  delete reviewerTask.lastError;
-  delete reviewerTask.lastMergeFailureMessage;
-  reviewerTask.updatedAt = decisionRecord.reviewedAt;
-
-  if (options.publish === true) {
-    if (!pr.remote || !pr.remote.number) {
-      throw new Error(`Cannot publish ${getRoleLabel(AGENT_ROLES.REVIEW)} without a remote PR number.`);
-    }
-    const repo = resolveGithubRepo(rootDir);
-    const token = resolveGithubAuthToken({ required: true });
-    try {
-      await publishReview(repo, token, pr.remote.number, decisionRecord);
-    } catch (error) {
-      if (!isSelfPullRequestReviewError(error)) {
-        throw error;
-      }
-      await addIssueComment(repo, token, pr.remote.number, decisionRecord.publishedSummary || decisionRecord.summary || '');
-      decisionRecord.remotePublishFallback = 'issue_comment';
-    }
-  }
-
-  const paths = getAutonomyPaths(rootDir);
-  writeJson(paths.prsState, state.prs);
-  writeTaskQueues(rootDir, state.config, state.taskQueues);
-  appendAgentLog(rootDir, state.config, reviewerId, buildRoleEventName(AGENT_ROLES.REVIEW, 'record'), {
-    input: {
-      prId: pr.id,
-      decision,
-      summary: decisionRecord.summary,
-    },
-    output: {
-      reviewerTaskId: reviewerTask.id,
-      status: reviewerTask.status,
-    },
-  });
-  appendAgentLog(rootDir, state.config, pr.agentId, buildRoleEventName(AGENT_ROLES.REVIEW, 'feedback'), {
-    input: {
-      prId: pr.id,
-      reviewerId,
-    },
-    output: {
-      decision,
-      taskStatus: followupTask
-        ? followupTask.status
-        : task
-          ? task.status
-          : decision === 'approved'
-            ? 'approved'
-            : 'queued_followup',
-    },
-  });
-
-  printOutput(options, { pr, [getRoleLabel(AGENT_ROLES.REVIEW)]: decisionRecord }, () => {
-    console.log(`Recorded ${decision} ${getRoleLabel(AGENT_ROLES.REVIEW)} on ${pr.id}`);
-  });
-}
-
-async function handleMerge(rootDir, options) {
-  ensureInitialized(rootDir);
-  const state = loadAllState(rootDir);
-  const pr = getPr(state.prs, requireOption(options, 'pr'));
-  const actorId = requireOption(options, 'actor');
-  const actor = getAgent(state.config, actorId);
-  const implementationAgent = getAgent(state.config, pr.agentId);
-  const laneTasks = isImplementationRole(implementationAgent.role)
-    ? listImplementationLaneTasks(rootDir, state, pr.agentId, pr.laneKey || pr.taskId, { pr }).tasks
-    : listLaneTasks(state.taskQueues, pr.agentId, pr.laneKey || pr.taskId);
-  const pendingLaneTasks = laneTasks.filter((candidate) => !isTerminalTaskStatus(getImplementationTaskState(candidate)));
-
-  const evaluation = evaluateMerge({
-    config: state.config,
-    pr,
-    actor,
-  });
-  if (!evaluation.ok || pendingLaneTasks.length > 0 || (pr.pendingTaskIds || []).length > 0) {
-    process.exitCode = 1;
-    printOutput(options, evaluation, () => {
-      console.log('Merge blocked.');
-      evaluation.reasons.forEach((reason) => console.log(`- ${reason}`));
-      if (pendingLaneTasks.length > 0 || (pr.pendingTaskIds || []).length > 0) {
-        console.log(`- pending lane tasks must be completed before merge`);
-      }
-    });
-    return;
-  }
-
-  if (options.execute === true) {
-    if (pr.remote && pr.remote.number) {
-      const repo = resolveGithubRepo(rootDir);
-      const token = resolveGithubAuthToken({ required: true });
-      const mergeResponse = await mergePullRequest(repo, token, pr.remote.number, {
-        merge_method: state.config.mergeStrategy || 'merge',
-        commit_title: buildMergeCommitTitle(actor, pr),
-      });
-      pr.remote.mergeSha = mergeResponse.sha;
-    } else {
-      const mergeResponse = performLocalMerge(rootDir, state.config, pr, actor);
-      if (!mergeResponse.ok) {
-        const conflictedAt = new Date().toISOString();
-        pr.status = 'conflicted';
-        pr.updatedAt = conflictedAt;
-        pr.conflict = {
-          conflictedAt,
-          message: mergeResponse.message,
-        };
-        pr.conflicts = Array.isArray(pr.conflicts) ? pr.conflicts : [];
-        pr.conflicts.push({
-          conflictedAt,
-          message: mergeResponse.message,
-        });
-        const task = findTask(state.taskQueues, pr.taskId);
-        const usesTrackedImplementationQueue = isImplementationRole(getAgent(state.config, pr.agentId).role);
-        let conflictTask = null;
-        if (usesTrackedImplementationQueue) {
-          conflictTask = appendTrackedBranchFollowupTask(rootDir, state, pr, {
-            id: buildLaneConflictTaskId(pr),
-            title: `Resolve merge conflict for ${pr.title}`,
-            description: mergeResponse.message,
-            type: 'conflict_resolution',
-            source: 'conflict_resolution',
-            createdAt: conflictedAt,
-            updatedAt: conflictedAt,
-          });
-        } else if (task) {
-          task.status = 'conflicted';
-          task.updatedAt = conflictedAt;
-        } else {
-          conflictTask = enqueueLaneFollowupTask(state.taskQueues, state.config, pr, {
-            id: buildLaneConflictTaskId(pr),
-            title: `Resolve merge conflict for ${pr.title}`,
-            description: mergeResponse.message,
-            type: 'conflict_resolution',
-            createdAt: conflictedAt,
-            updatedAt: conflictedAt,
-          });
-        }
-        const reviewerTask = getReviewerTask(state.taskQueues, state.config, pr);
-        if (reviewerTask) {
-          reviewerTask.status = 'blocked_conflict';
-          reviewerTask.updatedAt = conflictedAt;
-        }
-
-        const paths = getAutonomyPaths(rootDir);
-        writeJson(paths.prsState, state.prs);
-        writeTaskQueues(rootDir, state.config, state.taskQueues);
-        appendAgentLog(rootDir, state.config, actor.id, 'merge:conflict', {
-          input: {
-            prId: pr.id,
-            baseBranch: pr.baseBranch,
-          },
-          output: {
-            status: pr.status,
-            message: mergeResponse.message,
-          },
-        });
-        appendAgentLog(rootDir, state.config, pr.agentId, 'merge:conflict-assigned', {
-          input: {
-            prId: pr.id,
-            reviewerId: actor.id,
-          },
-          output: {
-            status: conflictTask
-              ? conflictTask.status
-              : task
-                ? task.status
-                : 'queued_conflict_resolution',
-            message: mergeResponse.message,
-          },
-        });
-        throw new Error(`Merge conflict while merging ${pr.id}: ${mergeResponse.message}`);
-      }
-
-      pr.local = {
-        mergeSha: mergeResponse.sha,
-      };
-    }
-  }
-
-  if (options.execute === true) {
-    const mergedAt = new Date().toISOString();
-    pr.status = 'merged';
-    pr.mergedAt = mergedAt;
-    pr.updatedAt = mergedAt;
-    const task = findTask(state.taskQueues, pr.taskId);
-    if (task) {
-      task.status = 'merged';
-      task.updatedAt = mergedAt;
-    }
-    const reviewerTask = getReviewerTask(state.taskQueues, state.config, pr);
-    if (reviewerTask) {
-      reviewerTask.status = 'merged';
-      reviewerTask.mergedAt = mergedAt;
-      delete reviewerTask.lastError;
-      delete reviewerTask.lastMergeFailureMessage;
-      reviewerTask.updatedAt = mergedAt;
-    }
-
-    const paths = getAutonomyPaths(rootDir);
-    writeJson(paths.prsState, state.prs);
-    writeTaskQueues(rootDir, state.config, state.taskQueues);
-    const prds = loadTrackedPrds(rootDir, state.config, {
-      taskQueues: state.taskQueues,
-      prs: state.prs,
-    });
-    const archivedSpecs = archiveCompletedPrdSpecs(rootDir, {
-      config: state.config,
-      taskQueues: state.taskQueues,
-      prs: state.prs,
-      prds,
-    });
-    appendAgentLog(rootDir, state.config, actor.id, 'merge:success', {
-      input: {
-        prId: pr.id,
-        baseBranch: pr.baseBranch,
-      },
-      output: {
-        status: pr.status,
-        mergedAt,
-        archivedSpecs: archivedSpecs.map((entry) => entry.id),
-      },
-    });
-    appendAgentLog(rootDir, state.config, pr.agentId, 'merge:success', {
-      input: {
-        prId: pr.id,
-        reviewerId: actor.id,
-      },
-      output: {
-        status: task ? task.status : 'merged',
-        mergedAt,
-        archivedSpecs: archivedSpecs.map((entry) => entry.id),
-      },
-    });
-  }
-
-  printOutput(options, evaluation, () => {
-    console.log(options.execute === true ? `Merged ${pr.id} into ${pr.baseBranch}` : `Merge check passed for ${pr.id}`);
-  });
-}
-
-function handleRuntimeStatus(rootDir, options) {
-  ensureInitialized(rootDir);
-  const paths = getAutonomyPaths(rootDir);
-  const runtime = fs.existsSync(paths.runtimeState)
-    ? readJson(paths.runtimeState)
-    : { workers: {} };
-  const { config, taskQueues, prs, branchLocks } = loadAllState(rootDir);
-  const prds = loadTrackedPrds(rootDir, config, {
-    taskQueues,
-    prs,
-  });
-  const agentStatuses = buildAgentStatusSummaries({
-    rootDir,
-    config,
-    taskQueues,
-    prs,
-    branchLocks,
-    runtime,
-    prds,
-  });
-  const pullRequestStatuses = buildPullRequestStatusSummaries({
-    taskQueues,
-    prs,
-    runtime,
-    branchLocks,
-  });
-
-  const payload = {
-    workers: runtime.workers || {},
-    agentStatuses,
-    pullRequestStatuses,
-    prdCounts: countBy(prds.prds || [], 'status'),
-  };
-
-  printOutput(options, payload, () => {
-    console.log(`Workers: ${Object.keys(payload.workers).length}`);
-    agentStatuses.forEach((agentStatus) => {
-      console.log(formatAgentStatusLine(agentStatus, { includePid: true }));
-    });
-    if (pullRequestStatuses.length > 0) {
-      console.log('Active PRs:');
-      pullRequestStatuses.forEach((prStatus) => {
-        console.log(formatPullRequestStatusLine(prStatus));
-      });
-    }
-    console.log(`PRDs: ${formatCountSummary(payload.prdCounts) || 'none'}`);
-  });
 }
 
 function ensureInitialized(rootDir) {
@@ -2705,6 +1355,22 @@ function resolvePrRecordTask(rootDir, state, taskId) {
   throw new Error(`Unknown task "${taskId}".`);
 }
 
+function resolveTaskForWorktreePreparation(rootDir, state, taskId) {
+  const liveTask = findTask(state.taskQueues, taskId);
+  if (liveTask) {
+    return liveTask;
+  }
+  const completedTask = findCompletedTask(state.branchLocks, taskId);
+  if (completedTask) {
+    return completedTask;
+  }
+  const branchTask = findImplementationTaskInBranchQueues(rootDir, state.config, state.branchLocks, taskId);
+  if (branchTask) {
+    return branchTask;
+  }
+  throw new Error(`Unknown task "${taskId}".`);
+}
+
 function findCompletedTask(branchLocksState, taskId) {
   for (const branchLock of (branchLocksState && branchLocksState.locks) || []) {
     const task = ((branchLock && branchLock.completedTasks) || []).find((candidate) => candidate.id === taskId);
@@ -2851,6 +1517,56 @@ function listCompletedLaneTasks(branchLocksState, agentId, laneKey) {
   return branchLock.completedTasks
     .slice()
     .sort((left, right) => String(left.completedAt || '').localeCompare(String(right.completedAt || '')));
+}
+
+function prepareTaskWorktree(rootDir: string, config: AutonomyConfig, branchLocksState: BranchLocksState, task: TaskRecord, options: AnyRecord = {}) {
+  const agent = getAgent(config, task.agentId);
+  if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
+    throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
+  }
+  const create = options.create === true;
+  const branchName = options.branchName || buildTaskBranchName(config, task);
+  const worktreePath = options.worktreePath || buildWorktreePath(rootDir, config, task);
+  let mode = create ? 'created' : 'planned';
+
+  if (create) {
+    const baseBranch = task.baseBranch || config.integrationBranch;
+    const baseRef = resolveBaseRef(rootDir, baseBranch);
+    ensureDir(path.dirname(worktreePath));
+    const worktreeExists = fs.existsSync(worktreePath);
+    const branchExists = gitRefExists(rootDir, branchName);
+
+    if (!worktreeExists && branchExists) {
+      runGitWorktreeAdd(rootDir, [worktreePath, branchName], worktreePath);
+      mode = 'reused-branch';
+    } else if (!worktreeExists) {
+      runGitWorktreeAdd(rootDir, ['-b', branchName, worktreePath, baseRef], worktreePath);
+      mode = 'created';
+    } else if (!isGitWorktree(worktreePath)) {
+      throw new Error(`Worktree path "${worktreePath}" exists but is not a git worktree.`);
+    } else {
+      mode = 'reused-worktree';
+    }
+    configureWorktreeGitIdentity(worktreePath, agent);
+  }
+
+  upsertBranchLock(branchLocksState, {
+    taskId: task.id,
+    laneKey: buildTaskLaneKey(task),
+    agentId: task.agentId,
+    branch: branchName,
+    worktreePath,
+    baseBranch: task.baseBranch || config.integrationBranch,
+    mode,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return {
+    taskId: task.id,
+    branch: branchName,
+    worktreePath,
+    mode,
+  };
 }
 
 function getPrimaryReviewer(config) {
@@ -3741,46 +2457,89 @@ function isSelfPullRequestReviewError(error) {
   return payloadErrors.some((entry) => String(entry || '').toLowerCase().includes('own pull request'));
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-export { handleArchiveCompletedPrds };
-export { handleInit };
-export { handleMerge };
-export { handlePrdAdd };
-export { handlePrdList };
-export { handlePrRecord };
-export { handlePrepareWorktree };
-export { handleReviewRecord };
-export { handleRuntimeStatus };
-export { handleScopeValidate };
-export { handleStatus };
-export { handleTaskAdd };
-export { handleTaskFinish };
-export { handleTaskList };
-export { isMutatingCommand };
-
-
-
-
-
-export { parseCli };
-export { printHelp };
-
-export { resolveRootDir };
+export {
+  BASE_TEMPLATE_FILES,
+  GENERATED_TEMPLATE_FILES,
+  TEMPLATE_ROOT,
+  addIssueComment,
+  addIssueLabels,
+  appendAgentLog,
+  appendTrackedBranchFollowupTask,
+  archiveCompletedPrdSpecs,
+  buildAgentStatusSummaries,
+  buildLaneConflictTaskId,
+  buildLaneFollowupTaskId,
+  buildLaneSourceSummary,
+  buildMergeCommitTitle,
+  buildPersonaPrBody,
+  buildPersonaPrTitle,
+  buildPrdSpecPayload,
+  buildPullRequestLabels,
+  buildPullRequestStatusSummaries,
+  
+  buildSignedReviewSummary,
+  buildStablePullRequestId,
+  buildTaskLaneKey,
+  buildTrackedImplementationQueueUpdates,
+  collectFilesForValidation,
+  collectTaskScopeViolations,
+  commitPrdSpecToIntegrationBranch,
+  commitTrackedFilesToIntegrationBranch,
+  commitTrackedImplementationQueue,
+  countBy,
+  createOrFindPullRequest,
+  ensureDir,
+  
+  ensureInitialized,
+  ensureReviewerTask,
+  enqueueLaneFollowupTask,
+  evaluateMerge,
+  evaluateScope,
+  findPullRequestByLane,
+  findTask,
+  formatAgentStatusLine,
+  formatCountSummary,
+  formatPullRequestStatusLine,
+  getAgent,
+  getAgentLogPath,
+  getAutonomyPaths,
+  getImplementationTaskState,
+  getListOption,
+  getPr,
+  getReviewerTask,
+  getStringOption,
+  getTask,
+  getTaskQueue,
+  hasActivePrdSpecInIntegrationBranch,
+  hasPrdSpecInIntegrationBranch,
+  isSelfPullRequestReviewError,
+  isTerminalTaskStatus,
+  listCompletedLaneTasks,
+  listImplementationLaneTasks,
+  listLaneTasks,
+  listTasks,
+  loadAllState,
+  loadTrackedPrds,
+  mergePullRequest,
+  normalizeReviewDecision,
+  performLocalMerge,
+  prepareTaskWorktree,
+  printOutput,
+  publishReview,
+  queueReviewerTask,
+  readJson,
+  requireOption,
+  resolveGithubAuthToken,
+  resolveGithubRepo,
+  resolveImplementationBranchRef,
+  resolvePrRecordTask,
+  resolveTaskForWorktreePreparation,
+  resolveTaskQueuePath,
+  sanitizePlannedTaskSpecs,
+  syncIntegrationSpecs,
+  uniqueScopeViolations,
+  uniqueStrings,
+  validateAutonomyConfig,
+  writeJson,
+  writeTaskQueues,
+};

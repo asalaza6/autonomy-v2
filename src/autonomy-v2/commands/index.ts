@@ -36,7 +36,7 @@ const COMMAND_HANDLERS = new Map([
 
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
-  const rootDir = resolveRootDir(options.root);
+  const rootDir = resolveRootDir(String(options.root || ''));
   loadAutonomyEnv(rootDir);
 
   try {

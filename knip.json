@@ -3,6 +3,9 @@
   "entry": [
     "src/autonomy-v2/index.ts",
     "src/server/index.ts",
-    "src/server/worker/index.ts"
+    "src/server/worker/index.ts",
+    "bin/autonomy-v2-server.ts",
+    "bin/autonomy-v2-smoke.ts",
+    "bin/autonomy-v2.ts"
   ]
 }
