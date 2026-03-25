@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const DEFAULT_ERROR_PREVIEW_LIMIT = 4000;
 
@@ -130,7 +130,23 @@ function sleepMs(durationMs) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs);
 }
 
-module.exports = {
+
+export { ensureDir };
+export { extractExecError };
+export { logRunnerErrorEvent };
+export { logRunnerEvent };
+export { normalizeNonEmptyString };
+export { readJson };
+export { requireEnv };
+export { slugify };
+export { sleepMs };
+export { summarizeText };
+export { trimForErrorReport };
+export { trimLeadingSeparator };
+export { uniqueScopeViolations };
+export { uniqueStrings };
+export { writeJson };
+export default {
   ensureDir,
   extractExecError,
   logRunnerErrorEvent,
@@ -145,5 +161,6 @@ module.exports = {
   trimLeadingSeparator,
   uniqueScopeViolations,
   uniqueStrings,
-  writeJson,
+  writeJson
 };
+

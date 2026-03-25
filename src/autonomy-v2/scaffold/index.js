@@ -1,15 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const { getAgentDefinition } = require('../../agents/AgentDefinitionRegistry');
-const {
-  AGENT_ROLES,
-  buildRoleScopedLabel,
-  getRoleAgentLabel,
-  getRoleLabel,
-  isImplementationRole,
-  isPmRole,
-  isReviewRole,
-} = require('../../agents/role-catalog');
+import fs from 'fs';
+import path from 'path';
+import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
+import { AGENT_ROLES, buildRoleScopedLabel, getRoleAgentLabel, getRoleLabel, isImplementationRole, isPmRole, isReviewRole, } from '../../agents/role-catalog.js';
 
 function validateImplementationChecks(config, sourcePath) {
   const invalidAgents = [];
@@ -316,11 +308,19 @@ function buildQueueTemplate(agentId, role) {
   )}\n`;
 }
 
-module.exports = {
+
+export { buildQueueTemplate };
+export { collectAgentScaffoldEntries };
+export { getTemplateContent };
+export { pruneStaleAgentScaffold };
+export { resolveTemplateTargetPath };
+export { validateImplementationChecks };
+export default {
   buildQueueTemplate,
   collectAgentScaffoldEntries,
   getTemplateContent,
   pruneStaleAgentScaffold,
   resolveTemplateTargetPath,
-  validateImplementationChecks,
+  validateImplementationChecks
 };
+

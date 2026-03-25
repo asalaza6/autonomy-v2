@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const { spawnSync } = require('child_process');
+import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'child_process';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const TARGET_DIRS = ['src', 'tests', 'bin'];
 
@@ -73,3 +77,4 @@ function isCheckableFile(filePath) {
 }
 
 main();
+

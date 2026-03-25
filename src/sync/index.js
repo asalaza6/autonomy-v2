@@ -1,17 +1,15 @@
-const fs = require('fs');
-const path = require('path');
-const { execFileSync } = require('child_process');
-const { validateAutonomyConfig } = require('../config');
-const { resolveGithubAuthToken } = require('../github');
-const { acquireStateLock } = require('../lock');
-const {
-  AGENT_ROLES,
-  TASK_TYPES,
-  getRoleLabel,
-  isImplementationRole,
-  isReviewRole,
-} = require('../agents/role-catalog');
+import fs from 'fs';
+import path from 'path';
+import { execFileSync } from 'child_process';
+import { validateAutonomyConfig } from '../config/index.js';
+import { resolveGithubAuthToken } from '../github/index.js';
+import { acquireStateLock } from '../lock/index.js';
+import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole, } from '../agents/role-catalog.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const PRD_SPECS_DIR = path.posix.join(...AUTONOMY_SEGMENTS, 'specs', 'prds');
@@ -2138,7 +2136,7 @@ function execHttpRequest(options) {
 
 function buildHttpClientScript() {
   return `
-const https = require('https');
+import https from 'https';
 const options = JSON.parse(process.env.AUTONOMY_HTTP_OPTIONS);
 const timeoutMs = Number(process.env.AUTONOMY_HTTP_TIMEOUT_MS || '15000');
 const req = https.request(options, (res) => {
@@ -2164,7 +2162,22 @@ req.end();
 `;
 }
 
-module.exports = {
+
+export { DEFAULT_SYNC_STATE };
+export { PRD_SPECS_DIR };
+export { buildPrdSpecPayload };
+export { buildPrdStateRelativePath };
+export { commitPrdSpecToIntegrationBranch };
+export { commitTrackedPrdStateToIntegrationBranch };
+export { commitTrackedFilesToIntegrationBranch };
+export { deleteTrackedPrdStateFromIntegrationBranch };
+export { getSyncPaths };
+export { hasActivePrdSpecInIntegrationBranch };
+export { hasPrdSpecInIntegrationBranch };
+export { listTrackedPrdSpecs };
+export { readTrackedPrdStateMap };
+export { syncPrdSpecsFromIntegrationBranch };
+export default {
   DEFAULT_SYNC_STATE,
   PRD_SPECS_DIR,
   buildPrdSpecPayload,
@@ -2178,5 +2191,6 @@ module.exports = {
   hasPrdSpecInIntegrationBranch,
   listTrackedPrdSpecs,
   readTrackedPrdStateMap,
-  syncPrdSpecsFromIntegrationBranch,
+  syncPrdSpecsFromIntegrationBranch
 };
+

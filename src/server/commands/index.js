@@ -1,19 +1,13 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const { execFileSync } = require('child_process');
-const {
-  resolveRootDir,
-  runSchedulerTick,
-} = require('../orchestrator');
-const { loadAutonomyEnv } = require('../../env');
-const { acquireServerLock } = require('../../lock');
-const {
-  AGENT_ROLES,
-  buildRoleEventName,
-  getRoleLabel,
-} = require('../../agents/role-catalog');
+import fs from 'fs';
+import path from 'path';
+import { execFileSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { resolveRootDir, runSchedulerTick, } from '../orchestrator/index.js';
+import { loadAutonomyEnv } from '../../env/index.js';
+import { acquireServerLock } from '../../lock/index.js';
+import { AGENT_ROLES, buildRoleEventName, getRoleLabel, } from '../../agents/role-catalog.js';
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const MAX_CONSECUTIVE_TICK_FAILURES = 3;
 
@@ -745,14 +739,34 @@ function formatWorkerStreamPrefixKey(agentId, pid, streamName, contextState = {}
   return `${agentId} | pid=${pid}${contextSegment} | ${streamName}`;
 }
 
-if (require.main === module) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
     console.error(`ERROR: ${error.message}`);
     process.exit(1);
   });
 }
 
-module.exports = {
+
+export { buildTickEventPayload };
+export { buildAgentTraceCommand };
+export { buildTraceOptions };
+export { classifyWorkerStreamLine };
+export { extractWorkerErrorSummaryFromLine };
+export { extractWorkerContextFromLine };
+export { formatServerEventLine };
+export { formatWorkerStreamPrefix };
+export { formatWorkerStreamPrefixKey };
+export { formatWorkerStreamLine };
+export { getAgentTraceLogPath };
+export { formatTickSummaryLine };
+export { logTickResultWithWriter as logTickResult };
+export { main };
+export { normalizeTraceTerminal };
+export { shouldIncludeWorkerExitError };
+export { summarizeTickResult };
+export { parseCli };
+export { writePrefixedChunks };
+export default {
   buildTickEventPayload,
   buildAgentTraceCommand,
   buildTraceOptions,
@@ -771,5 +785,5 @@ module.exports = {
   shouldIncludeWorkerExitError,
   summarizeTickResult,
   parseCli,
-  writePrefixedChunks,
+  writePrefixedChunks
 };

@@ -1,44 +1,21 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const https = require('https');
-const path = require('path');
-const { execFileSync } = require('child_process');
-const { loadAutonomyEnv } = require('../../env');
-const { validateAutonomyConfig } = require('../../config');
-const {
-  DEFAULT_SYNC_STATE,
-  buildPrdSpecPayload,
-  buildPrdStateRelativePath,
-  commitPrdSpecToIntegrationBranch,
-  commitTrackedFilesToIntegrationBranch,
-  hasActivePrdSpecInIntegrationBranch,
-  hasPrdSpecInIntegrationBranch,
-  listTrackedPrdSpecs,
-  readTrackedPrdStateMap,
-  syncPrdSpecsFromIntegrationBranch,
-} = require('../../sync');
-const { resolveGithubAuthToken } = require('../../github');
-const { withStateLock } = require('../../lock');
-const {
-  AGENT_ROLES,
-  TASK_TYPES,
-  buildRoleEventName,
-  getRoleAgentLabel,
-  getRoleLabel,
-  isImplementationRole,
-  isPmRole,
-  isReviewRole,
-  usesTrackedQueueForRole,
-} = require('../../agents/role-catalog');
-const {
-  collectAgentScaffoldEntries,
-  getTemplateContent,
-  pruneStaleAgentScaffold,
-  resolveTemplateTargetPath,
-  validateImplementationChecks,
-} = require('../scaffold');
+import fs from 'fs';
+import https from 'https';
+import path from 'path';
+import { execFileSync } from 'child_process';
+import { loadAutonomyEnv } from '../../env/index.js';
+import { validateAutonomyConfig } from '../../config/index.js';
+import { DEFAULT_SYNC_STATE, buildPrdSpecPayload, buildPrdStateRelativePath, commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, hasActivePrdSpecInIntegrationBranch, hasPrdSpecInIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap, syncPrdSpecsFromIntegrationBranch, } from '../../sync/index.js';
+import { resolveGithubAuthToken } from '../../github/index.js';
+import { withStateLock } from '../../lock/index.js';
+import { AGENT_ROLES, TASK_TYPES, buildRoleEventName, getRoleAgentLabel, getRoleLabel, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
+import { collectAgentScaffoldEntries, getTemplateContent, pruneStaleAgentScaffold, resolveTemplateTargetPath, validateImplementationChecks, } from '../scaffold/index.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const PACKAGE_ROOT = path.join(__dirname, '..', '..', '..');
 const TEMPLATE_ROOT = path.join(PACKAGE_ROOT, 'templates', 'prompts', 'autonomous', 'v2');
 const DEFAULT_AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
@@ -3771,7 +3748,50 @@ function isSelfPullRequestReviewError(error) {
   return payloadErrors.some((entry) => String(entry || '').toLowerCase().includes('own pull request'));
 }
 
-module.exports = {
+
+export { addOption };
+export { archiveCompletedPrdSpecs };
+export { buildAgentStatusSummaries };
+export { buildMergeCommitTitle };
+export { buildPersonaPrBody };
+export { buildPersonaPrTitle };
+export { buildPullRequestStatusSummaries };
+export { buildPullRequestLabels };
+export { buildSignedReviewSummary };
+export { buildTaskBranchName };
+export { buildWorktreePath };
+export { evaluateMerge };
+export { evaluateScope };
+export { extractExecError };
+export { findArchivablePrdIds };
+export { globToRegExp };
+export { getListOption };
+export { getStringOption };
+export { handleArchiveCompletedPrds };
+export { handleInit };
+export { handleMerge };
+export { handlePrdAdd };
+export { handlePrdList };
+export { handlePrRecord };
+export { handlePrepareWorktree };
+export { handleReviewRecord };
+export { handleRuntimeStatus };
+export { handleScopeValidate };
+export { handleStatus };
+export { handleTaskAdd };
+export { handleTaskFinish };
+export { handleTaskList };
+export { isMutatingCommand };
+export { matchesAnyGlob };
+export { main };
+export { normalizeReviewDecision };
+export { parseGithubRemoteUrl };
+export { performLocalMerge };
+export { parseCli };
+export { printHelp };
+export { requireOption };
+export { resolveRootDir };
+export default {
   addOption,
   archiveCompletedPrdSpecs,
   buildAgentStatusSummaries,
@@ -3813,5 +3833,6 @@ module.exports = {
   parseCli,
   printHelp,
   requireOption,
-  resolveRootDir,
+  resolveRootDir
 };
+

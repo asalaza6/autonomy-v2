@@ -1,27 +1,17 @@
-const fs = require('fs');
-const path = require('path');
-const { execFileSync, spawn } = require('child_process');
-const { acquireStateLock } = require('../../lock');
-const { validateAutonomyConfig } = require('../../config');
-const { planPrdTasksWithCodex } = require('../../codex');
-const { getAgentDefinition } = require('../../agents/AgentDefinitionRegistry');
-const {
-  AGENT_ROLES,
-  TASK_TYPES,
-  isImplementationRole,
-  isPmRole,
-  isReviewRole,
-  usesTrackedQueueForRole,
-} = require('../../agents/role-catalog');
-const {
-  commitTrackedPrdStateToIntegrationBranch,
-  commitPrdSpecToIntegrationBranch,
-  commitTrackedFilesToIntegrationBranch,
-  listTrackedPrdSpecs,
-  readTrackedPrdStateMap,
-  syncPrdSpecsFromIntegrationBranch,
-} = require('../../sync');
+import fs from 'fs';
+import path from 'path';
+import { execFileSync, spawn } from 'child_process';
+import { acquireStateLock } from '../../lock/index.js';
+import { validateAutonomyConfig } from '../../config/index.js';
+import { planPrdTasksWithCodex } from '../../codex/index.js';
+import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
+import { AGENT_ROLES, TASK_TYPES, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
+import { commitTrackedPrdStateToIntegrationBranch, commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap, syncPrdSpecsFromIntegrationBranch, } from '../../sync/index.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const CLI_PATH = path.join(__dirname, '..', '..', 'autonomy-v2', 'index.js');
@@ -1487,7 +1477,20 @@ function useCodexStub() {
   return process.env.AUTONOMY_CODEX_STUB === '1';
 }
 
-module.exports = {
+
+export { extractExecError };
+export { findDueAgents };
+export { getPaths };
+export { loadConfig };
+export { loadPrds };
+export { loadQueues };
+export { loadRuntime };
+export { readJson };
+export { resolveRootDir };
+export { runSchedulerTick };
+export { runWorkerOnce };
+export { writeJson };
+export default {
   extractExecError,
   findDueAgents,
   getPaths,
@@ -1499,5 +1502,6 @@ module.exports = {
   resolveRootDir,
   runSchedulerTick,
   runWorkerOnce,
-  writeJson,
+  writeJson
 };
+

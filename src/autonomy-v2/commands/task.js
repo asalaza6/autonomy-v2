@@ -1,4 +1,4 @@
-const shared = require('./shared');
+import shared from './shared.js';
 
 function run(rootDir, options, command) {
   if (command === 'task:add') {
@@ -10,6 +10,9 @@ function run(rootDir, options, command) {
   return shared.handleTaskList(rootDir, options);
 }
 
-module.exports = {
-  run,
+
+export { run };
+export default {
+  run
 };
+

@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 function sleepMs(durationMs) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs);
@@ -94,10 +94,17 @@ async function withStateLock(rootDir, callback, options = {}) {
   }
 }
 
-module.exports = {
+
+export { acquireLock };
+export { acquireServerLock };
+export { acquireStateLock };
+export { isProcessAlive };
+export { withStateLock };
+export default {
   acquireLock,
   acquireServerLock,
   acquireStateLock,
   isProcessAlive,
-  withStateLock,
+  withStateLock
 };
+

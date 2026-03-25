@@ -1,12 +1,16 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { execFileSync } = require('child_process');
-const { validateAutonomyConfig } = require('../../src/config');
-const { shouldForceApproveAfterRepeatedReviews } = require('../../src/autonomy-v2/runner/default-runner');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { execFileSync } from 'child_process';
+import { validateAutonomyConfig } from '../../src/config/index.js';
+import { shouldForceApproveAfterRepeatedReviews } from '../../src/autonomy-v2/runner/default-runner.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const CLI_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2');
 const SERVER_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2-server');
@@ -811,3 +815,4 @@ function git(cwd, args) {
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
 }
+

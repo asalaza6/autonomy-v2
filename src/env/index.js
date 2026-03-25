@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 const DEFAULT_ENV_FILES = [
   '.env.autonomy.local',
@@ -48,6 +48,9 @@ function parseEnvFile(filePath) {
   });
 }
 
-module.exports = {
-  loadAutonomyEnv,
+
+export { loadAutonomyEnv };
+export default {
+  loadAutonomyEnv
 };
+

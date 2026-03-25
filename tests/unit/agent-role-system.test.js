@@ -1,18 +1,16 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'fs';
+import path from 'path';
 
-const {
-  getAgentDefinition,
-  listAgentDefinitions,
-} = require('../../src/agents/AgentDefinitionRegistry');
-const {
-  AGENT_ROLES,
-  listAgentRoleIds,
-} = require('../../src/agents/role-catalog');
-const { validateAutonomyConfig } = require('../../src/config');
+import { getAgentDefinition, listAgentDefinitions, } from '../../src/agents/AgentDefinitionRegistry.js';
+import { AGENT_ROLES, listAgentRoleIds, } from '../../src/agents/role-catalog.js';
+import { validateAutonomyConfig } from '../../src/config/index.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const SRC_ROOT = path.join(PROJECT_ROOT, 'src');
 const ROLE_CATALOG_PATH = path.join(SRC_ROOT, 'agents', 'role-catalog.js');
@@ -124,3 +122,4 @@ function listJsFiles(rootDir) {
     return entry.name.endsWith('.js') ? [entryPath] : [];
   });
 }
+

@@ -1,9 +1,12 @@
-const shared = require('./shared');
+import shared from './shared.js';
 
 function run(rootDir, options) {
   return shared.handleInit(rootDir, options);
 }
 
-module.exports = {
-  run,
+
+export { run };
+export default {
+  run
 };
+

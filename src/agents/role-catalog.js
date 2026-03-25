@@ -87,7 +87,26 @@ function buildRoleEventName(value, suffix) {
   return `${normalizeAgentRole(value)}:${suffix}`;
 }
 
-module.exports = {
+
+export { AGENT_ROLES };
+export { RUNNER_TYPES };
+export { ROLE_IDS };
+export { TASK_TYPES };
+export { buildRoleEventName };
+export { buildRoleScopedLabel };
+export { getRunnerTypeForRole };
+export { getRoleAgentLabel };
+export { getRoleLabel };
+export { getTaskTypeForRole };
+export { isAgentRole };
+export { isImplementationRole };
+export { isPmRole };
+export { isReviewRole };
+export { listAgentRoleIds };
+export { normalizeAgentRole };
+export { requiresRunnerForRole };
+export { usesTrackedQueueForRole };
+export default {
   AGENT_ROLES,
   RUNNER_TYPES,
   ROLE_IDS,
@@ -105,5 +124,6 @@ module.exports = {
   listAgentRoleIds,
   normalizeAgentRole,
   requiresRunnerForRole,
-  usesTrackedQueueForRole,
+  usesTrackedQueueForRole
 };
+

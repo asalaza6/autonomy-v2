@@ -44,6 +44,9 @@ class AgentDefinition {
   }
 }
 
-module.exports = {
-  AgentDefinition,
+
+export { AgentDefinition };
+export default {
+  AgentDefinition
 };
+

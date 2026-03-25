@@ -345,7 +345,11 @@ function runReviewStubFlow(params, deps) {
   });
 }
 
-module.exports = {
+
+export { runReviewFlow };
+export { runReviewStubFlow };
+export default {
   runReviewFlow,
-  runReviewStubFlow,
+  runReviewStubFlow
 };
+

@@ -382,7 +382,11 @@ function runImplementationStubFlow(params, deps) {
   });
 }
 
-module.exports = {
+
+export { runImplementationFlow };
+export { runImplementationStubFlow };
+export default {
   runImplementationFlow,
-  runImplementationStubFlow,
+  runImplementationStubFlow
 };
+

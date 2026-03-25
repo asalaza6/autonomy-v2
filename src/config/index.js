@@ -1,10 +1,6 @@
-const path = require('path');
-const { getAgentDefinition } = require('../agents/AgentDefinitionRegistry');
-const {
-  isAgentRole,
-  listAgentRoleIds,
-  normalizeAgentRole,
-} = require('../agents/role-catalog');
+import path from 'path';
+import { getAgentDefinition } from '../agents/AgentDefinitionRegistry.js';
+import { isAgentRole, listAgentRoleIds, normalizeAgentRole, } from '../agents/role-catalog.js';
 
 const VALID_AGENT_ROLES = new Set(listAgentRoleIds());
 const DEFAULT_TASK_QUEUE_DIR = 'prompts/autonomous/v2/queues';
@@ -145,8 +141,13 @@ function requirePositiveInteger(value, sourcePath, fieldName) {
   }
 }
 
-module.exports = {
+
+export { VALID_AGENT_ROLES };
+export { buildDefaultTaskQueuePath };
+export { validateAutonomyConfig };
+export default {
   VALID_AGENT_ROLES,
   buildDefaultTaskQueuePath,
-  validateAutonomyConfig,
+  validateAutonomyConfig
 };
+

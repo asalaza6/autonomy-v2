@@ -1,15 +1,9 @@
 #!/usr/bin/env node
 
-const {
-  extractExecError,
-  getPaths,
-  loadRuntime,
-  resolveRootDir,
-  runWorkerOnce,
-  writeJson,
-} = require('../orchestrator');
-const { loadAutonomyEnv } = require('../../env');
-const { acquireStateLock } = require('../../lock');
+import { extractExecError, getPaths, loadRuntime, resolveRootDir, runWorkerOnce, writeJson, } from '../orchestrator/index.js';
+import { loadAutonomyEnv } from '../../env/index.js';
+import { acquireStateLock } from '../../lock/index.js';
+import { fileURLToPath } from 'url';
 
 function parseCli(argv) {
   const options = {};
@@ -112,17 +106,23 @@ function summarizeWorkerResult(result) {
   };
 }
 
-if (require.main === module) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
     console.error(`ERROR: ${error.message}`);
     process.exit(1);
   });
 }
 
-module.exports = {
+
+export { finalizeWorkerRuntime };
+export { logWorkerEvent };
+export { main };
+export { parseCli };
+export { summarizeWorkerResult };
+export default {
   finalizeWorkerRuntime,
   logWorkerEvent,
   main,
   parseCli,
-  summarizeWorkerResult,
+  summarizeWorkerResult
 };

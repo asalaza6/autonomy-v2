@@ -1,9 +1,12 @@
-const shared = require('./shared');
+import shared from './shared.js';
 
 async function run(rootDir, options) {
   return shared.handleMerge(rootDir, options);
 }
 
-module.exports = {
-  run,
+
+export { run };
+export default {
+  run
 };
+

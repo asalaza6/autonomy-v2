@@ -1,51 +1,23 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
-const { execFileSync } = require('child_process');
-const { evaluateScope } = require('../scope');
-const { hasGithubAuth, resolveGithubAuthToken } = require('../../github');
-const { acquireStateLock } = require('../../lock');
-const {
-  executeTaskWithCodex,
-  reviewPrWithCodex,
-} = require('../../codex');
-const { loadAutonomyEnv } = require('../../env');
-const {
-  AGENT_ROLES,
-  RUNNER_TYPES,
-  TASK_TYPES,
-  buildRoleEventName,
-  getRoleAgentLabel,
-  getRoleLabel,
-  getRunnerTypeForRole,
-  isImplementationRole,
-  usesTrackedQueueForRole,
-} = require('../../agents/role-catalog');
-const { runImplementationFlow } = require('./task-flow');
-const { runReviewFlow } = require('./gate-flow');
-const {
-  ensureDir,
-  extractExecError,
-  logRunnerErrorEvent,
-  logRunnerEvent,
-  normalizeNonEmptyString,
-  readJson,
-  requireEnv,
-  slugify,
-  sleepMs,
-  summarizeText,
-  trimForErrorReport,
-  trimLeadingSeparator,
-  uniqueScopeViolations,
-  uniqueStrings,
-  writeJson,
-} = require('./shared');
-const {
-  postIssueComment,
-  resolveGithubRepo,
-} = require('./net');
+import fs from 'fs';
+import path from 'path';
+import { execFileSync } from 'child_process';
+import { evaluateScope } from '../scope/index.js';
+import { hasGithubAuth, resolveGithubAuthToken } from '../../github/index.js';
+import { acquireStateLock } from '../../lock/index.js';
+import { executeTaskWithCodex, reviewPrWithCodex, } from '../../codex/index.js';
+import { loadAutonomyEnv } from '../../env/index.js';
+import { AGENT_ROLES, RUNNER_TYPES, TASK_TYPES, buildRoleEventName, getRoleAgentLabel, getRoleLabel, getRunnerTypeForRole, isImplementationRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
+import { runImplementationFlow } from './task-flow.js';
+import { runReviewFlow } from './gate-flow.js';
+import { ensureDir, extractExecError, logRunnerErrorEvent, logRunnerEvent, normalizeNonEmptyString, readJson, requireEnv, slugify, sleepMs, summarizeText, trimForErrorReport, trimLeadingSeparator, uniqueScopeViolations, uniqueStrings, writeJson, } from './shared.js';
+import { postIssueComment, resolveGithubRepo, } from './net.js';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const CLI_PATH = path.join(__dirname, '..', 'index.js');
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
@@ -1044,7 +1016,7 @@ function tryMergeWithRetry(rootDir, prId, agentId) {
   };
 }
 
-if (require.main === module) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
     const summary = publishRunnerFailure(error);
     console.error(`ERROR: ${summary}`);
@@ -1052,7 +1024,18 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
+
+export { buildRunnerFailureRecord };
+export { buildMergeFollowupComment };
+export { extractExecError };
+export { isScopeOnlyReviewFeedback };
+export { main };
+export { normalizeNonEmptyString };
+export { publishRunnerFailure };
+export { shouldForceApproveAfterRepeatedReviews };
+export { shouldIgnoreMissingTaskFinishError };
+export { shouldRetryApprovedPrMerge };
+export default {
   buildRunnerFailureRecord,
   buildMergeFollowupComment,
   extractExecError,
@@ -1062,5 +1045,6 @@ module.exports = {
   publishRunnerFailure,
   shouldForceApproveAfterRepeatedReviews,
   shouldIgnoreMissingTaskFinishError,
-  shouldRetryApprovedPrMerge,
+  shouldRetryApprovedPrMerge
 };
+

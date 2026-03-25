@@ -1,6 +1,6 @@
-const path = require('path');
-const { AgentDefinition } = require('./AgentDefinition');
-const { AGENT_ROLES } = require('./role-catalog');
+import path from 'path';
+import { AgentDefinition } from './AgentDefinition.js';
+import { AGENT_ROLES } from './role-catalog.js';
 
 class ReviewAgentDefinition extends AgentDefinition {
   constructor() {
@@ -25,6 +25,9 @@ class ReviewAgentDefinition extends AgentDefinition {
   }
 }
 
-module.exports = {
-  ReviewAgentDefinition,
+
+export { ReviewAgentDefinition };
+export default {
+  ReviewAgentDefinition
 };
+

@@ -1,4 +1,4 @@
-const { execFileSync } = require('child_process');
+import { execFileSync } from 'child_process';
 
 function resolveGithubAuthToken(options = {}) {
   const envToken = String(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim();
@@ -28,7 +28,11 @@ function hasGithubAuth() {
   return Boolean(resolveGithubAuthToken());
 }
 
-module.exports = {
+
+export { hasGithubAuth };
+export { resolveGithubAuthToken };
+export default {
   hasGithubAuth,
-  resolveGithubAuthToken,
+  resolveGithubAuthToken
 };
+

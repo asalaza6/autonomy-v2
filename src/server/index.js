@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 
-const commands = require('./commands');
+import commands from './commands/index.js';
+import { fileURLToPath } from 'url';
 
 async function main(argv = process.argv.slice(2)) {
   return commands.main(argv);
 }
 
-module.exports = {
-  main,
+
+export { main };
+export default {
+  main
 };
 
-if (require.main === module) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
     console.error(`ERROR: ${error.message}`);
     process.exit(1);

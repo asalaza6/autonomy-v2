@@ -1,18 +1,18 @@
-const { loadAutonomyEnv } = require('../../env');
-const { withStateLock } = require('../../lock');
-const { AGENT_ROLES, buildRoleEventName } = require('../../agents/role-catalog');
-const { printHelp } = require('../cli/help');
-const { isMutatingCommand, parseCli, resolveRootDir } = require('../cli/parse');
-const initCommand = require('./init');
-const statusCommand = require('./status');
-const taskCommand = require('./task');
-const prdCommand = require('./prd');
-const worktreeCommand = require('./worktree');
-const scopeCommand = require('./scope');
-const prCommand = require('./pr');
-const gateCommand = require('./gate');
-const mergeCommand = require('./merge');
-const runtimeCommand = require('./runtime');
+import { loadAutonomyEnv } from '../../env/index.js';
+import { withStateLock } from '../../lock/index.js';
+import { AGENT_ROLES, buildRoleEventName } from '../../agents/role-catalog.js';
+import { printHelp } from '../cli/help.js';
+import { isMutatingCommand, parseCli, resolveRootDir } from '../cli/parse.js';
+import initCommand from './init.js';
+import statusCommand from './status.js';
+import taskCommand from './task.js';
+import prdCommand from './prd.js';
+import worktreeCommand from './worktree.js';
+import scopeCommand from './scope.js';
+import prCommand from './pr.js';
+import gateCommand from './gate.js';
+import mergeCommand from './merge.js';
+import runtimeCommand from './runtime.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
 
@@ -61,6 +61,9 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-module.exports = {
-  main,
+
+export { main };
+export default {
+  main
 };
+

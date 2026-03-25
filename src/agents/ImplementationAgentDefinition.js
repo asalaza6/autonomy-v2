@@ -1,5 +1,5 @@
-const { AgentDefinition } = require('./AgentDefinition');
-const { AGENT_ROLES } = require('./role-catalog');
+import { AgentDefinition } from './AgentDefinition.js';
+import { AGENT_ROLES } from './role-catalog.js';
 
 class ImplementationAgentDefinition extends AgentDefinition {
   constructor() {
@@ -20,6 +20,9 @@ class ImplementationAgentDefinition extends AgentDefinition {
   }
 }
 
-module.exports = {
-  ImplementationAgentDefinition,
+
+export { ImplementationAgentDefinition };
+export default {
+  ImplementationAgentDefinition
 };
+

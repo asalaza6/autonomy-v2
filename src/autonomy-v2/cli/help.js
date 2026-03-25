@@ -1,5 +1,9 @@
-const shared = require('../commands/shared');
+import shared from '../commands/shared.js';
 
-module.exports = {
-  printHelp: shared.printHelp,
+
+const printHelp = shared.printHelp;
+export { printHelp };
+export default {
+  printHelp: shared.printHelp
 };
+

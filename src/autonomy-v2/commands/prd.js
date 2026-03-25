@@ -1,4 +1,4 @@
-const shared = require('./shared');
+import shared from './shared.js';
 
 function run(rootDir, options, command) {
   if (command === 'prd:add') {
@@ -10,6 +10,9 @@ function run(rootDir, options, command) {
   return shared.handleArchiveCompletedPrds(rootDir, options);
 }
 
-module.exports = {
-  run,
+
+export { run };
+export default {
+  run
 };
+

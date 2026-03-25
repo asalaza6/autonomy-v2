@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
-const runner = require('.');
+import runner from './index.js';
+import { fileURLToPath } from 'url';
 
-module.exports = runner;
+export * from './index.js';
+export default runner;
+export { runner };
 
-if (require.main === module) {
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
   runner.main().catch((error) => {
     const summary = runner.publishRunnerFailure(error);
     console.error(`ERROR: ${summary}`);

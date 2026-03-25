@@ -1,5 +1,10 @@
-const { execFileSync } = require('child_process');
+import path from 'path';
+import { execFileSync } from 'child_process';
 
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 function resolveGithubRepo(rootDir) {
   const remoteUrl = execFileSync('git', ['config', '--get', 'remote.origin.url'], {
     cwd: rootDir,
@@ -101,7 +106,7 @@ function execHttpRequest(options, body) {
 
 function buildHttpClientScript() {
   return `
-const https = require('https');
+import https from 'https';
 const options = JSON.parse(process.env.AUTONOMY_HTTP_OPTIONS);
 const body = process.env.AUTONOMY_HTTP_BODY || '';
 const req = https.request(options, (res) => {
@@ -125,7 +130,10 @@ req.end();
 `;
 }
 
-module.exports = {
+
+export { postIssueComment };
+export { resolveGithubRepo };
+export default {
   postIssueComment,
-  resolveGithubRepo,
+  resolveGithubRepo
 };

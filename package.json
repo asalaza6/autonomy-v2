@@ -2,7 +2,7 @@
   "name": "@asalaza6/autonomy-v2",
   "version": "1.4.15",
   "description": "Autonomy v2 orchestration package.",
-  "type": "commonjs",
+  "type": "module",
   "private": false,
   "author": "Autonomy V2",
   "license": "UNLICENSED",

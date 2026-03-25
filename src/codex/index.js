@@ -1,13 +1,8 @@
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const { spawn, spawnSync } = require('child_process');
-const {
-  AGENT_ROLES,
-  getRoleAgentLabel,
-  getRoleLabel,
-  isImplementationRole,
-} = require('../agents/role-catalog');
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { spawn, spawnSync } from 'child_process';
+import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel, isImplementationRole, } from '../agents/role-catalog.js';
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
 const DEFAULT_ERROR_PREVIEW_LIMIT = 1000;
@@ -719,9 +714,15 @@ function buildSpawnExitMessage({ code, signal, stdout, stderr }) {
   return 'unknown codex failure';
 }
 
-module.exports = {
+
+export { executeTaskWithCodex };
+export { planPrdTasksWithCodex };
+export { runCodexStructured };
+export { reviewPrWithCodex };
+export default {
   executeTaskWithCodex,
   planPrdTasksWithCodex,
   runCodexStructured,
-  reviewPrWithCodex,
+  reviewPrWithCodex
 };
+

@@ -1,4 +1,5 @@
-const path = require('path');
+import path from 'path';
+import { execFileSync } from 'child_process';
 
 function normalizeRepoPath(filePath) {
   return String(filePath || '').replace(/\\/g, '/').replace(/^\.\//, '');
@@ -78,7 +79,6 @@ function collectFilesForValidation(rootDir, options, getListOption) {
     const worktreePath = path.isAbsolute(options.worktree)
       ? options.worktree
       : path.join(rootDir, options.worktree);
-    const { execFileSync } = require('child_process');
     const output = execFileSync('git', ['diff', '--name-only'], {
       cwd: worktreePath,
       encoding: 'utf8',
@@ -93,10 +93,16 @@ function collectFilesForValidation(rootDir, options, getListOption) {
   return [];
 }
 
-module.exports = {
+
+export { collectFilesForValidation };
+export { evaluateScope };
+export { globToRegExp };
+export { matchesAnyGlob };
+export { normalizeRepoPath };
+export default {
   collectFilesForValidation,
   evaluateScope,
   globToRegExp,
   matchesAnyGlob,
-  normalizeRepoPath,
+  normalizeRepoPath
 };

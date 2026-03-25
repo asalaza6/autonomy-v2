@@ -1,10 +1,7 @@
-const { PmAgentDefinition } = require('./PmAgentDefinition');
-const { ImplementationAgentDefinition } = require('./ImplementationAgentDefinition');
-const { ReviewAgentDefinition } = require('./ReviewAgentDefinition');
-const {
-  listAgentRoleIds,
-  normalizeAgentRole,
-} = require('./role-catalog');
+import { PmAgentDefinition } from './PmAgentDefinition.js';
+import { ImplementationAgentDefinition } from './ImplementationAgentDefinition.js';
+import { ReviewAgentDefinition } from './ReviewAgentDefinition.js';
+import { listAgentRoleIds, normalizeAgentRole, } from './role-catalog.js';
 
 const definitions = new Map([
   [new PmAgentDefinition().roleId, new PmAgentDefinition()],
@@ -29,7 +26,11 @@ function listAgentDefinitions() {
   return listAgentRoleIds().map((roleId) => definitions.get(roleId));
 }
 
-module.exports = {
+
+export { getAgentDefinition };
+export { listAgentDefinitions };
+export default {
   getAgentDefinition,
-  listAgentDefinitions,
+  listAgentDefinitions
 };
+

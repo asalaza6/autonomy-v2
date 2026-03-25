@@ -1,7 +1,15 @@
-const shared = require('../commands/shared');
+import shared from '../commands/shared.js';
 
-module.exports = {
+
+const isMutatingCommand = shared.isMutatingCommand;
+export { isMutatingCommand };
+const parseCli = shared.parseCli;
+export { parseCli };
+const resolveRootDir = shared.resolveRootDir;
+export { resolveRootDir };
+export default {
   isMutatingCommand: shared.isMutatingCommand,
   parseCli: shared.parseCli,
-  resolveRootDir: shared.resolveRootDir,
+  resolveRootDir: shared.resolveRootDir
 };
+
