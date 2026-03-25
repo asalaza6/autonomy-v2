@@ -21,6 +21,7 @@ export default [
     },
     rules: {
       'import/no-default-export': 'error',
+      'no-extra-semi': 'error',
       'no-restricted-syntax': [
         'error',
         {

@@ -96,8 +96,8 @@ async function withStateLock(rootDir: string, callback: () => any, options: AnyR
 }
 
 
-;
+
 export { acquireServerLock };
 export { acquireStateLock };
-;
+
 export { withStateLock };

@@ -309,7 +309,7 @@ function buildQueueTemplate(agentId, role) {
 }
 
 
-;
+
 export { collectAgentScaffoldEntries };
 export { getTemplateContent };
 export { pruneStaleAgentScaffold };

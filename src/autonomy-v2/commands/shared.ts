@@ -3742,24 +3742,24 @@ function isSelfPullRequestReviewError(error) {
 }
 
 
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
-;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export { handleArchiveCompletedPrds };
 export { handleInit };
 export { handleMerge };
@@ -3775,12 +3775,12 @@ export { handleTaskAdd };
 export { handleTaskFinish };
 export { handleTaskList };
 export { isMutatingCommand };
-;
-;
-;
-;
-;
+
+
+
+
+
 export { parseCli };
 export { printHelp };
-;
+
 export { resolveRootDir };

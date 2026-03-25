@@ -80,19 +80,19 @@ function buildRoleEventName(value, suffix) {
 
 export { AGENT_ROLES };
 export { RUNNER_TYPES };
-;
+
 export { TASK_TYPES };
 export { buildRoleEventName };
 export { buildRoleScopedLabel };
 export { getRunnerTypeForRole };
 export { getRoleAgentLabel };
 export { getRoleLabel };
-;
+
 export { isAgentRole };
 export { isImplementationRole };
 export { isPmRole };
 export { isReviewRole };
 export { listAgentRoleIds };
 export { normalizeAgentRole };
-;
+
 export { usesTrackedQueueForRole };

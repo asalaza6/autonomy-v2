@@ -1476,13 +1476,13 @@ function useCodexStub() {
 
 
 export { extractExecError };
-;
+
 export { getPaths };
-;
-;
-;
+
+
+
 export { loadRuntime };
-;
+
 export { resolveRootDir };
 export { runSchedulerTick };
 export { runWorkerOnce };

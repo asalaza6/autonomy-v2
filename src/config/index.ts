@@ -139,6 +139,6 @@ function requirePositiveInteger(value: number, sourcePath: string, fieldName: st
 }
 
 
-;
-;
+
+
 export { validateAutonomyConfig };

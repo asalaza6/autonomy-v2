@@ -69,8 +69,8 @@ function evaluateScope({ files, agent, task: _task }: { files: string[]; agent: 
 }
 
 
-;
+
 export { evaluateScope };
-;
-;
-;
+
+
+
