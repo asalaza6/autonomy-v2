@@ -31,7 +31,9 @@
   "scripts": {
     "test": "node --test tests/**/*.test.js",
     "smoke": "node --test tests/smoke/package-smoke.test.js",
-    "typecheck": "node --check src/autonomy-v2/index.js src/autonomy-v2/commands/index.js src/autonomy-v2/commands/shared.js src/autonomy-v2/commands/init.js src/autonomy-v2/commands/status.js src/autonomy-v2/commands/task.js src/autonomy-v2/commands/prd.js src/autonomy-v2/commands/worktree.js src/autonomy-v2/commands/scope.js src/autonomy-v2/commands/pr.js src/autonomy-v2/commands/gate.js src/autonomy-v2/commands/merge.js src/autonomy-v2/commands/runtime.js src/autonomy-v2/scaffold/index.js src/autonomy-v2/cli/parse.js src/autonomy-v2/cli/help.js src/autonomy-v2/cli/options.js src/autonomy-v2/runner/default-runner.js src/autonomy-v2/runner/index.js src/autonomy-v2/runner/shared.js src/autonomy-v2/runner/net.js src/autonomy-v2/runner/task-flow.js src/autonomy-v2/runner/gate-flow.js src/autonomy-v2/scope/index.js src/server/index.js src/server/commands/index.js src/server/orchestrator/index.js src/server/worker/index.js src/server/worker/runtime.js src/codex/index.js src/config/index.js src/env/index.js src/github/index.js src/lock/index.js src/sync/index.js src/agents/role-catalog.js src/agents/AgentDefinition.js src/agents/PmAgentDefinition.js src/agents/ImplementationAgentDefinition.js src/agents/ReviewAgentDefinition.js src/agents/AgentDefinitionRegistry.js bin/autonomy-v2 bin/autonomy-v2-server bin/autonomy-v2-smoke",
+    "lint": "eslint src tests",
+    "lint:fix": "npm run lint -- --fix",
+    "typecheck": "node scripts/typecheck.js",
     "circular": "npx -y madge --circular --extensions js src",
     "release:patch": "npm run smoke && npm version patch && npm publish --access public",
     "release:minor": "npm run smoke && npm version minor && npm publish --access public",
@@ -44,5 +46,9 @@
     "src",
     "templates",
     "tests"
-  ]
+  ],
+  "devDependencies": {
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0"
+  }
 }
