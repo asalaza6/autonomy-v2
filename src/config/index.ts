@@ -1,11 +1,12 @@
 import path from 'path';
 import { getAgentDefinition } from '../agents/AgentDefinitionRegistry.js';
 import { isAgentRole, listAgentRoleIds, normalizeAgentRole, } from '../agents/role-catalog.js';
+import type { AgentConfig, AutonomyConfig, GitIdentity } from '../types.js';
 
-const VALID_AGENT_ROLES = new Set(listAgentRoleIds());
+const VALID_AGENT_ROLES = new Set<string>(listAgentRoleIds());
 const DEFAULT_TASK_QUEUE_DIR = 'prompts/autonomous/v2/queues';
 
-function validateAutonomyConfig(config, sourcePath = 'prompts/autonomous/v2/config/agents.json') {
+function validateAutonomyConfig(config: AutonomyConfig, sourcePath = 'prompts/autonomous/v2/config/agents.json') {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new Error(`Invalid autonomy config at ${sourcePath}: expected an object.`);
   }
@@ -18,7 +19,7 @@ function validateAutonomyConfig(config, sourcePath = 'prompts/autonomous/v2/conf
     throw new Error(`Invalid autonomy config at ${sourcePath}: expected an agents array.`);
   }
 
-  const seenAgentIds = new Set();
+  const seenAgentIds = new Set<string>();
   config.agents.forEach((agent, index) => {
     validateAgentConfig(agent, index, sourcePath, seenAgentIds);
   });
@@ -43,7 +44,7 @@ function validateAutonomyConfig(config, sourcePath = 'prompts/autonomous/v2/conf
   return config;
 }
 
-function validateAgentConfig(agent, index, sourcePath, seenAgentIds) {
+function validateAgentConfig(agent: AgentConfig, index: number, sourcePath: string, seenAgentIds: Set<string>) {
   if (!agent || typeof agent !== 'object' || Array.isArray(agent)) {
     throw new Error(`Invalid autonomy config at ${sourcePath}: agents[${index}] must be an object.`);
   }
@@ -73,7 +74,7 @@ function validateAgentConfig(agent, index, sourcePath, seenAgentIds) {
   validateResolvedTaskQueue(agent, sourcePath);
 }
 
-function validateResolvedTaskQueue(agent, sourcePath) {
+function validateResolvedTaskQueue(agent: AgentConfig, sourcePath: string) {
   if (!agent || !agent.taskQueue) {
     return;
   }
@@ -84,27 +85,27 @@ function validateResolvedTaskQueue(agent, sourcePath) {
   });
 }
 
-function buildDefaultTaskQueuePath(agentId) {
+function buildDefaultTaskQueuePath(agentId: string) {
   return joinConfigPath(DEFAULT_TASK_QUEUE_DIR, `${agentId}.json`);
 }
 
-function joinConfigPath(dirPath, basename) {
+function joinConfigPath(dirPath: string, basename: string) {
   if (!dirPath || dirPath === '.') {
     return basename;
   }
   return `${trimTrailingSlashes(dirPath)}/${basename}`;
 }
 
-function normalizeTaskQueueDir(dirPath) {
+function normalizeTaskQueueDir(dirPath: string) {
   const normalized = trimTrailingSlashes(normalizeConfigPath(dirPath));
   return normalized || DEFAULT_TASK_QUEUE_DIR;
 }
 
-function normalizeConfigPath(value) {
+function normalizeConfigPath(value: string) {
   return String(value || '').trim().replace(/\\/g, '/');
 }
 
-function isRuntimeManagedTaskQueuePath(value) {
+function isRuntimeManagedTaskQueuePath(value: string) {
   const normalized = normalizeConfigPath(value);
   return normalized === 'state'
     || normalized.startsWith('state/')
@@ -112,22 +113,22 @@ function isRuntimeManagedTaskQueuePath(value) {
     || normalized.startsWith('prompts/autonomous/v2/state/');
 }
 
-function trimTrailingSlashes(value) {
+function trimTrailingSlashes(value: string) {
   return String(value || '').replace(/\/+$/g, '');
 }
 
-function normalizeNonEmptyString(value) {
+function normalizeNonEmptyString(value: unknown) {
   const normalized = String(value || '').trim();
   return normalized || '';
 }
 
-function requireNonEmptyString(value, sourcePath, agentId, fieldName) {
+function requireNonEmptyString(value: unknown, sourcePath: string, agentId: string, fieldName: string) {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`Invalid autonomy config at ${sourcePath}: agent "${agentId}" is missing ${fieldName}.`);
   }
 }
 
-function requireGitIdentity(value, sourcePath, agentId) {
+function requireGitIdentity(value: GitIdentity, sourcePath: string, agentId: string) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`Invalid autonomy config at ${sourcePath}: agent "${agentId}" must define gitIdentity.`);
   }
@@ -135,7 +136,7 @@ function requireGitIdentity(value, sourcePath, agentId) {
   requireNonEmptyString(value.email, sourcePath, agentId, 'gitIdentity.email');
 }
 
-function requirePositiveInteger(value, sourcePath, fieldName) {
+function requirePositiveInteger(value: number, sourcePath: string, fieldName: string) {
   if (!Number.isInteger(value) || value < 1) {
     throw new Error(`Invalid autonomy config at ${sourcePath}: ${fieldName} must be a positive integer.`);
   }
@@ -150,4 +151,3 @@ export default {
   buildDefaultTaskQueuePath,
   validateAutonomyConfig
 };
-

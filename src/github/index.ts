@@ -1,6 +1,7 @@
 import { execFileSync } from 'child_process';
+import type { AnyRecord } from '../types.js';
 
-function resolveGithubAuthToken(options = {}) {
+function resolveGithubAuthToken(options: AnyRecord = {}) {
   const envToken = String(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '').trim();
   if (envToken) {
     return envToken;
@@ -24,7 +25,7 @@ function resolveGithubAuthToken(options = {}) {
   return '';
 }
 
-function hasGithubAuth() {
+function hasGithubAuth(): boolean {
   return Boolean(resolveGithubAuthToken());
 }
 
@@ -35,4 +36,3 @@ export default {
   hasGithubAuth,
   resolveGithubAuthToken
 };
-

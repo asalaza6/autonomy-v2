@@ -1,5 +1,6 @@
 import path from 'path';
 import { execFileSync } from 'child_process';
+import type { AnyRecord, HttpResponse } from '../../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -51,7 +52,7 @@ function postIssueComment(repo, token, issueNumber, body) {
   return githubRequest(repo, token, 'POST', `/issues/${issueNumber}/comments`, { body });
 }
 
-function githubRequest(repo, token, method, endpoint, payload) {
+function githubRequest(repo: AnyRecord, token: string, method: string, endpoint: string, payload: AnyRecord | null) {
   const body = payload ? JSON.stringify(payload) : null;
   const options = {
     hostname: 'api.github.com',
@@ -77,8 +78,8 @@ function githubRequest(repo, token, method, endpoint, payload) {
   throw new Error(`GitHub API ${response.statusCode}: ${response.payload.message || response.raw}`);
 }
 
-function execHttpRequest(options, body) {
-  const result = {
+function execHttpRequest(options: AnyRecord, body: string | null): HttpResponse {
+  const result: HttpResponse = {
     statusCode: 0,
     payload: {},
     raw: '',
@@ -96,7 +97,7 @@ function execHttpRequest(options, body) {
   }).trim();
 
   if (response) {
-    const parsed = JSON.parse(response);
+    const parsed = JSON.parse(response) as AnyRecord;
     result.statusCode = parsed.statusCode;
     result.payload = parsed.payload;
     result.raw = parsed.raw;

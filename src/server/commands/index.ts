@@ -8,12 +8,13 @@ import { resolveRootDir, runSchedulerTick, } from '../orchestrator/index.js';
 import { loadAutonomyEnv } from '../../env/index.js';
 import { acquireServerLock } from '../../lock/index.js';
 import { AGENT_ROLES, buildRoleEventName, getRoleLabel, } from '../../agents/role-catalog.js';
+import type { AnyRecord, CliOptions, TraceContext } from '../../types.js';
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const MAX_CONSECUTIVE_TICK_FAILURES = 3;
 
-function parseCli(argv) {
-  const options = {};
-  const positionals = [];
+function parseCli(argv: string[]): { command: string; options: CliOptions } {
+  const options: CliOptions = {};
+  const positionals: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -37,9 +38,9 @@ function parseCli(argv) {
   };
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
-  const rootDir = resolveRootDir(options.root);
+  const rootDir = resolveRootDir(String(options.root || ''));
   loadAutonomyEnv(rootDir);
 
   if (command === 'tick') {
@@ -218,7 +219,7 @@ function formatTickSummaryLine(result, timestamp = new Date().toISOString()) {
   return parts.join(' | ');
 }
 
-function attachWorkerOutput(attachedWorkers, entry, options = {}) {
+function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord, options: AnyRecord = {}) {
   if (!entry || !entry.child || !entry.pid) {
     return;
   }
@@ -248,7 +249,7 @@ function attachWorkerOutput(attachedWorkers, entry, options = {}) {
     maybeOpenAgentTraceTerminal(entry.agentId, traceLogPath, options);
   }
 
-  const contextState = {};
+  const contextState: TraceContext = {};
   const stdoutState = { buffer: '' };
   const stderrState = { buffer: '' };
   const writeTraceLine = (line) => {
@@ -303,7 +304,7 @@ function attachWorkerOutput(attachedWorkers, entry, options = {}) {
   });
 }
 
-function buildTraceOptions(rootDir, options = {}) {
+function buildTraceOptions(rootDir: string, options: CliOptions = {}) {
   return {
     rootDir,
     sameTerminalTrace: options['same-terminal-trace'] === true,
@@ -333,7 +334,7 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function maybeOpenAgentTraceTerminal(agentId, traceLogPath, options = {}) {
+function maybeOpenAgentTraceTerminal(agentId: string, traceLogPath: string, options: AnyRecord = {}) {
   const openedTraceAgents = options.openedTraceAgents || new Set();
   if (openedTraceAgents.has(agentId)) {
     return false;
@@ -404,10 +405,10 @@ function shellQuote(value) {
   return `'${String(value || '').replace(/'/g, `'\"'\"'`)}'`;
 }
 
-function summarizeTickResult(result) {
+function summarizeTickResult(result: AnyRecord) {
   const dueAgents = Array.isArray(result && result.dueAgents) ? result.dueAgents : [];
   const started = Array.isArray(result && result.started) ? result.started : [];
-  const workers = Object.values((result && result.runtime && result.runtime.workers) || {});
+  const workers = Object.values((result && result.runtime && result.runtime.workers) || {}) as AnyRecord[];
   const active = workers
     .filter((worker) => worker && worker.status === 'running')
     .map((worker) => worker.agentId);
@@ -421,9 +422,9 @@ function summarizeTickResult(result) {
   };
 }
 
-function buildTickEventPayload({ id, sync, durationMs, result }) {
+function buildTickEventPayload({ id, sync, durationMs, result }: { id: any; sync: any; durationMs: any; result: AnyRecord }) {
   const summary = summarizeTickResult(result);
-  const payload = {
+  const payload: AnyRecord = {
     id,
     sync: sync ? 'yes' : 'no',
     durationMs,
@@ -543,7 +544,7 @@ function flushPrefixedChunks(
   state.buffer = '';
 }
 
-function classifyWorkerStreamLine(streamName, line, contextState = {}) {
+function classifyWorkerStreamLine(streamName: string, line: string, contextState: TraceContext = {}) {
   if (streamName !== 'stderr') {
     return streamName;
   }
@@ -598,7 +599,7 @@ function looksLikeWorkerErrorLine(line) {
   return /^(ERROR:|Error:|TypeError:|ReferenceError:|SyntaxError:|RangeError:|URIError:|EvalError:|AggregateError:|Unhandled\b|npm ERR!|node:internal\b|\bat\s+\S)/.test(text);
 }
 
-function updateWorkerContext(contextState, line) {
+function updateWorkerContext(contextState: TraceContext, line: string) {
   const nextContext = extractWorkerContextFromLine(line);
   if (!nextContext) {
     updateWorkerErrorSummary(contextState, line);
@@ -610,7 +611,7 @@ function updateWorkerContext(contextState, line) {
   return contextState;
 }
 
-function updateWorkerErrorSummary(contextState, line) {
+function updateWorkerErrorSummary(contextState: TraceContext, line: string) {
   const nextError = extractWorkerErrorSummaryFromLine(line);
   if (!nextError) {
     return contextState;
@@ -632,7 +633,7 @@ function extractWorkerErrorSummaryFromLine(line) {
   const workerMatch = text.match(/^\[worker\] [^ ]+ error (\{.*\})$/);
   if (workerMatch) {
     try {
-      const payload = JSON.parse(workerMatch[1]);
+      const payload = JSON.parse(workerMatch[1]) as AnyRecord;
       if (payload && payload.message) {
         return {
           summary: String(payload.message).trim(),
@@ -647,7 +648,7 @@ function extractWorkerErrorSummaryFromLine(line) {
   const runnerMatch = text.match(/^\[runner\] [^ ]+:error (\{.*\})$/);
   if (runnerMatch) {
     try {
-      const payload = JSON.parse(runnerMatch[1]);
+      const payload = JSON.parse(runnerMatch[1]) as AnyRecord;
       if (payload && payload.summary) {
         return {
           summary: String(payload.summary).trim(),
@@ -683,20 +684,20 @@ function extractWorkerErrorSummaryFromLine(line) {
   return null;
 }
 
-function shouldIncludeWorkerExitError(code, contextState = {}) {
+function shouldIncludeWorkerExitError(code: number | null, contextState: TraceContext = {}) {
   return code != null && Number(code) !== 0 && Boolean(contextState.errorSummary);
 }
 
-function extractWorkerContextFromLine(line) {
+function extractWorkerContextFromLine(line: string) {
   const match = String(line || '').match(/^\[runner\] ([^ ]+) (\{.*\})$/);
   if (!match) {
     return null;
   }
 
   const [, eventName, rawPayload] = match;
-  let payload;
+  let payload: AnyRecord;
   try {
-    payload = JSON.parse(rawPayload);
+    payload = JSON.parse(rawPayload) as AnyRecord;
   } catch (_) {
     return null;
   }
@@ -732,7 +733,7 @@ function formatWorkerStreamPrefix(agentId, pid, streamName, contextState = {}, t
   return `[${timestamp}] ${formatWorkerStreamPrefixKey(agentId, pid, streamName, contextState)}`;
 }
 
-function formatWorkerStreamPrefixKey(agentId, pid, streamName, contextState = {}) {
+function formatWorkerStreamPrefixKey(agentId: string, pid: number, streamName: string, contextState: TraceContext = {}) {
   const contextSegment = contextState && contextState.label && contextState.value
     ? ` | ${contextState.label}=${contextState.value}`
     : '';

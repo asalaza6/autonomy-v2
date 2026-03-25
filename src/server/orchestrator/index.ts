@@ -7,6 +7,7 @@ import { planPrdTasksWithCodex } from '../../codex/index.js';
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES, TASK_TYPES, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
 import { commitTrackedPrdStateToIntegrationBranch, commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap, syncPrdSpecsFromIntegrationBranch, } from '../../sync/index.js';
+import type { AnyRecord, AutonomyConfig, BranchLock, BranchLocksState, PullRequestRecord, PrState, QueueMap, QueueState, RuntimeState, TaskRecord, TrackedPrdRecord, WorkerRuntime } from '../../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -31,7 +32,7 @@ function emitSchedulerProgress(options, event, payload = {}) {
   }
 }
 
-function resolveRootDir(rootOption) {
+function resolveRootDir(rootOption: string) {
   if (!rootOption) {
     return process.cwd();
   }
@@ -63,11 +64,11 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function readJson(filePath, fallbackValue) {
+function readJson<T = any>(filePath: string, fallbackValue?: T): T {
   if (!fs.existsSync(filePath)) {
-    return fallbackValue;
+    return fallbackValue as T;
   }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
 }
 
 function writeJson(filePath, payload) {
@@ -75,7 +76,7 @@ function writeJson(filePath, payload) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
-function loadConfig(rootDir) {
+function loadConfig(rootDir: string): { config: AutonomyConfig; sprint: AnyRecord } {
   const paths = getPaths(rootDir);
   return {
     config: validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig),
@@ -164,8 +165,8 @@ function gitRefExists(rootDir, ref) {
   }
 }
 
-function loadQueues(rootDir, config) {
-  const queues = {};
+function loadQueues(rootDir: string, config: AutonomyConfig): QueueMap {
+  const queues: QueueMap = {};
   (config.agents || []).forEach((agent) => {
     const queuePath = resolveQueuePath(rootDir, agent);
     const fallbackValue = buildTaskQueueState(agent, []);
@@ -182,8 +183,8 @@ function loadQueues(rootDir, config) {
   return queues;
 }
 
-function buildTaskQueueState(agent, tasks = []) {
-  return getAgentDefinition(agent).buildQueueState(agent, tasks);
+function buildTaskQueueState(agent: AnyRecord, tasks: TaskRecord[] = []): QueueState {
+  return getAgentDefinition(agent as AnyRecord).buildQueueState(agent as any, tasks);
 }
 
 function writeQueue(rootDir, agent, queue) {
@@ -194,7 +195,7 @@ function writeQueue(rootDir, agent, queue) {
   writeJson(queuePath, queue);
 }
 
-function commitTrackedQueue(rootDir, config, agent, queue, options = {}) {
+function commitTrackedQueue(rootDir: string, config: AutonomyConfig, agent: AnyRecord, queue: QueueState, options: AnyRecord = {}) {
   const relativePath = agent.taskQueue;
   if (!relativePath || path.isAbsolute(relativePath)) {
     throw new Error(`Tracked queue for "${agent.id}" must use a repo-relative path.`);
@@ -205,7 +206,7 @@ function commitTrackedQueue(rootDir, config, agent, queue, options = {}) {
   }], options);
 }
 
-function writeQueueAndAggregate(rootDir, config, agentId, queue, options = {}) {
+function writeQueueAndAggregate(rootDir: string, config: AutonomyConfig, agentId: string, queue: QueueState, options: AnyRecord = {}) {
   const agent = getAgent(config, agentId);
   if (isReviewRole(agent.role)) {
     commitTrackedQueue(rootDir, config, agent, queue, {
@@ -217,7 +218,7 @@ function writeQueueAndAggregate(rootDir, config, agentId, queue, options = {}) {
   writeQueue(rootDir, agent, queue);
 }
 
-function loadPrds(rootDir, config, options = {}) {
+function loadPrds(rootDir: string, config: AutonomyConfig, options: AnyRecord = {}): { prds: TrackedPrdRecord[] } {
   const specEntries = listTrackedPrdSpecs(rootDir, config.integrationBranch);
   const prdStateMap = readTrackedPrdStateMap(rootDir, config.integrationBranch);
   const queues = options.queues || loadQueues(rootDir, config);
@@ -280,7 +281,7 @@ function getRunnerErrorReportPath(rootDir, agentId) {
   return path.join(rootDir, ...RUNTIME_SEGMENTS, 'agents', agentId, 'last-runner-error.json');
 }
 
-function appendAgentLog(rootDir, config, agentId, event, payload = {}) {
+function appendAgentLog(rootDir: string, config: AutonomyConfig, agentId: string, event: string, payload: AnyRecord = {}) {
   getAgent(config, agentId);
   const logPath = getAgentLogPath(rootDir, agentId);
   ensureDir(path.dirname(logPath));
@@ -373,7 +374,7 @@ function readImplementationQueueFromGitRef(rootDir, config, agentId, ref, fallba
   return buildTaskQueueState(agent, Array.isArray(queueState.tasks) ? queueState.tasks : []);
 }
 
-function readImplementationQueueSnapshot(rootDir, config, agentId, options = {}) {
+function readImplementationQueueSnapshot(rootDir: string, config: AutonomyConfig, agentId: string, options: AnyRecord = {}) {
   const queueFromBranch = options.branch && gitRefExists(rootDir, options.branch)
     ? readImplementationQueueFromGitRef(rootDir, config, agentId, options.branch, null)
     : null;
@@ -518,9 +519,9 @@ function isProcessAlive(pid) {
   }
 }
 
-function refreshRuntime(rootDir, config, queues, runtime) {
+function refreshRuntime(rootDir: string, config: AutonomyConfig, queues: QueueMap, runtime: RuntimeState) {
   const now = new Date().toISOString();
-  const recoveredAgents = new Set();
+  const recoveredAgents = new Set<string>();
   Object.values(runtime.workers || {}).forEach((worker) => {
     if (worker.status === 'running' && worker.pid && !isProcessAlive(worker.pid)) {
       const agent = getAgent(config, worker.agentId);
@@ -600,7 +601,7 @@ function comparePrdBacklogOrder(left, right) {
   return String(left && left.id || '').localeCompare(String(right && right.id || ''));
 }
 
-function findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, options = {}) {
+function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap, branchLocks: BranchLocksState, prds: { prds: TrackedPrdRecord[] }, runtime: RuntimeState, options: AnyRecord = {}) {
   const due = [];
   const knownPrds = listPrds(prds);
   const hasQueuedPrd = knownPrds.some((prd) => prd.status === 'queued');
@@ -648,7 +649,7 @@ function implementationTaskNeedsDispatch(task) {
   return IMPLEMENTATION_DUE_STATUSES.has(getImplementationTaskState(task));
 }
 
-function setWorkerState(runtime, agentId, patch) {
+function setWorkerState(runtime: RuntimeState, agentId: string, patch: AnyRecord) {
   runtime.workers[agentId] = {
     agentId,
     ...(runtime.workers[agentId] || {}),
@@ -656,7 +657,7 @@ function setWorkerState(runtime, agentId, patch) {
   };
 }
 
-function spawnWorkerProcess(rootDir, agentId, options = {}) {
+function spawnWorkerProcess(rootDir: string, agentId: string, options: AnyRecord = {}) {
   const streamOutput = options.streamOutput === true;
   const child = spawn(process.execPath, [WORKER_PATH, 'run', '--root', rootDir, '--agent', agentId], {
     cwd: rootDir,
@@ -673,7 +674,7 @@ function spawnWorkerProcess(rootDir, agentId, options = {}) {
   return child;
 }
 
-function runSchedulerTick(rootDir, options = {}) {
+function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   const { config: syncConfig } = loadConfig(rootDir);
   const syncStartedAt = Date.now();
   emitSchedulerProgress(options, 'sync:start', {
@@ -816,7 +817,7 @@ function runSchedulerTick(rootDir, options = {}) {
     writeRuntime(rootDir, runtime);
     emitSchedulerProgress(options, 'runtime:write:done', {
       started: started.length,
-      running: Object.values((runtime && runtime.workers) || {})
+      running: (Object.values((runtime && runtime.workers) || {}) as WorkerRuntime[])
         .filter((worker) => worker && worker.status === 'running').length,
     });
   } finally {
@@ -1504,4 +1505,3 @@ export default {
   runWorkerOnce,
   writeJson
 };
-

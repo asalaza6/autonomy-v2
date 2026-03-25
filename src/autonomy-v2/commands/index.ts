@@ -13,6 +13,7 @@ import prCommand from './pr.js';
 import gateCommand from './gate.js';
 import mergeCommand from './merge.js';
 import runtimeCommand from './runtime.js';
+import type { CliOptions } from '../../types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
 
@@ -33,7 +34,7 @@ const COMMAND_HANDLERS = new Map([
   ['runtime:status', runtimeCommand],
 ]);
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   const rootDir = resolveRootDir(options.root);
   loadAutonomyEnv(rootDir);
@@ -49,7 +50,7 @@ async function main(argv = process.argv.slice(2)) {
       throw new Error('Unknown command "'.concat(command, '". Run "autonomy-v2 --help".'));
     }
 
-    const runCommand = () => handler.run(rootDir, options, command);
+    const runCommand = () => handler.run(rootDir, options as CliOptions, command);
     if (!isMutatingCommand(command)) {
       await runCommand();
       return;
@@ -66,4 +67,3 @@ export { main };
 export default {
   main
 };
-

@@ -5,6 +5,7 @@ import { validateAutonomyConfig } from '../config/index.js';
 import { resolveGithubAuthToken } from '../github/index.js';
 import { acquireStateLock } from '../lock/index.js';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole, } from '../agents/role-catalog.js';
+import type { AnyRecord, AutonomyConfig, HttpResponse, PrState, PrdSpecPayload, PrdStateRecord, PullRequestRecord, QueueMap, QueueState, TaskRecord, TrackedPrdRecord } from '../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -24,7 +25,7 @@ const DEFAULT_SYNC_STATE = {
   importedSpecs: {},
 };
 
-function emitSyncProgress(options, event, payload = {}) {
+function emitSyncProgress(options: AnyRecord, event: string, payload: AnyRecord = {}) {
   if (!options || typeof options.onProgress !== 'function') {
     return;
   }
@@ -49,7 +50,7 @@ function getSyncPaths(rootDir) {
   };
 }
 
-function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requirements }) {
+function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requirements }: AnyRecord): PrdSpecPayload {
   const normalizedSpecification = typeof specification === 'string' ? specification.trim() : '';
   const normalizedRequirements = normalizeStringList(requirements);
   const normalizedTasks = Array.isArray(tasks) && tasks.length > 0
@@ -57,7 +58,7 @@ function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requi
         allowEmpty: Boolean(normalizedSpecification) || normalizedRequirements.length > 0,
       })
     : [];
-  const payload = {
+  const payload: PrdSpecPayload = {
     schemaVersion: normalizedSpecification || normalizedRequirements.length > 0 ? 2 : 1,
     id: String(id),
     title: String(title),
@@ -127,7 +128,7 @@ function hasActivePrdSpecInIntegrationBranch(rootDir, integrationBranch) {
   }
 }
 
-function commitPrdSpecToIntegrationBranch(rootDir, integrationBranch, prdSpec, options = {}) {
+function commitPrdSpecToIntegrationBranch(rootDir: string, integrationBranch: string, prdSpec: AnyRecord, options: AnyRecord = {}) {
   const normalizedSpec = buildPrdSpecPayload(prdSpec);
   const paths = getSyncPaths(rootDir);
   const controlWorktree = ensureControlWorktree(rootDir, integrationBranch, paths.controlWorktree);
@@ -181,7 +182,7 @@ function commitPrdSpecToIntegrationBranch(rootDir, integrationBranch, prdSpec, o
   };
 }
 
-function commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, fileUpdates, options = {}) {
+function commitTrackedFilesToIntegrationBranch(rootDir: string, integrationBranch: string, fileUpdates: AnyRecord[], options: AnyRecord = {}) {
   const normalizedUpdates = (Array.isArray(fileUpdates) ? fileUpdates : [])
     .map((entry) => {
       if (!entry || !entry.relativePath) {
@@ -270,7 +271,7 @@ function commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, fileU
   };
 }
 
-function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options = {}) {
+function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: string, options: AnyRecord = {}) {
   const paths = getSyncPaths(rootDir);
   const fetchStartedAt = Date.now();
   emitSyncProgress(options, 'sync:fetch:start', {
@@ -286,9 +287,9 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
   });
   const ref = fetchResult.ref;
   const agentsConfigPath = path.join(paths.repoAutonomyDir, 'config', 'agents.json');
-  const config = validateAutonomyConfig(readJson(agentsConfigPath, {}), agentsConfigPath);
+  const config = validateAutonomyConfig(readJson<AutonomyConfig>(agentsConfigPath, {} as AutonomyConfig), agentsConfigPath);
   const sprint = readJson(path.join(paths.repoAutonomyDir, 'config', 'sprint.json'), {});
-  const result = {
+  const result: AnyRecord = {
     integrationBranch,
     ref,
     fetchedRef: fetchResult.commitSha || null,
@@ -487,7 +488,7 @@ function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
   }
 }
 
-function readTrackedImplementationQueuesFromRef(rootDir, config, ref) {
+function readTrackedImplementationQueuesFromRef(rootDir: string, config: AutonomyConfig, ref: string): QueueMap {
   return (config.agents || []).reduce((queues, agent) => {
     if (!isImplementationRole(agent.role)) {
       return queues;
@@ -515,7 +516,7 @@ function readTrackedImplementationQueuesFromRef(rootDir, config, ref) {
   }, {});
 }
 
-function readTrackedReviewerTasksFromRef(rootDir, config, ref) {
+function readTrackedReviewerTasksFromRef(rootDir: string, config: AutonomyConfig, ref: string): TaskRecord[] {
   return (config.agents || []).reduce((tasks, agent) => {
     if (!isReviewRole(agent.role)) {
       return tasks;
@@ -536,8 +537,8 @@ function readTrackedReviewerTasksFromRef(rootDir, config, ref) {
   }, []);
 }
 
-function buildTrackedImplementationTaskIndex(trackedQueues) {
-  const tasksByPrd = new Map();
+function buildTrackedImplementationTaskIndex(trackedQueues: QueueMap) {
+  const tasksByPrd = new Map<string, TaskRecord[]>();
   Object.values(trackedQueues || {}).forEach((queue) => {
     (queue.tasks || []).forEach((task) => {
       const prdId = String(task && task.prdId || '').trim();
@@ -563,7 +564,7 @@ function getPlannedImplementationTasksForPrd(remoteSpec, trackedImplementationTa
   return [];
 }
 
-function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, trackedImplementationTasksByPrd, config, sprint, options = {}) {
+function resolveRemoteLaneStates(rootDir: string, integrationBranch: string, remoteSpecs: AnyRecord[], trackedImplementationTasksByPrd: Map<string, TaskRecord[]>, config: AutonomyConfig, sprint: AnyRecord, options: AnyRecord = {}) {
   const token = resolveGithubAuthToken();
   let repo = null;
   if (token) {
@@ -574,7 +575,7 @@ function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, tracke
     }
   }
 
-  const result = {};
+  const result: Record<string, AnyRecord> = {};
 
   remoteSpecs.forEach((remoteSpec) => {
     const laneStates = {};
@@ -612,7 +613,7 @@ function resolveRemoteLaneStates(rootDir, integrationBranch, remoteSpecs, tracke
   return result;
 }
 
-function resolveRemoteLaneState(rootDir, repo, token, integrationBranch, branch, config, agentId) {
+function resolveRemoteLaneState(rootDir: string, repo: AnyRecord, token: string, integrationBranch: string, branch: string, config: AutonomyConfig, agentId: string) {
   const branchQueueState = readRemoteImplementationQueueState(rootDir, config, integrationBranch, branch, agentId);
   try {
     if (repo && token) {
@@ -698,7 +699,7 @@ function buildDerivedImportedRuntimeState({
   currentBranchLocks,
   now,
   fetchedRef,
-}) {
+}: AnyRecord) {
   const currentPrdById = new Map((currentPrds || []).map((prd) => [prd.id, prd]));
   const currentTasksByPrId = new Map();
   (currentTasks || []).forEach((task) => {
@@ -709,7 +710,7 @@ function buildDerivedImportedRuntimeState({
     tasks.push(task);
     currentTasksByPrId.set(task.prId, tasks);
   });
-  const currentReviewerTaskByPrId = new Map(
+  const currentReviewerTaskByPrId = new Map<string, TaskRecord>(
     (currentTasks || [])
       .filter((task) => task && task.type === TASK_TYPES.REVIEW && task.prId)
       .map((task) => [task.prId, task])
@@ -874,7 +875,7 @@ function buildDerivedImportedRuntimeState({
   };
 }
 
-function buildDerivedPrdRecord({ integrationBranch, remoteSpec, implementationTasks, laneStates, now, fetchedRef }) {
+function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, implementationTasks, laneStates, now, fetchedRef }: AnyRecord) {
   const planningOnlySpec = requiresPmPlanning(remoteSpec.spec, implementationTasks);
   const groupedTasks = groupLaneTasksByAgent(implementationTasks || []);
   const completedTaskSpecIds = [];
@@ -899,7 +900,7 @@ function buildDerivedPrdRecord({ integrationBranch, remoteSpec, implementationTa
     status = 'completed';
   }
 
-  const record = {
+  const record: AnyRecord = {
     ...remoteSpec.spec,
     completedTaskSpecIds,
     remoteLaneStates: laneStates,
@@ -947,7 +948,7 @@ function buildDerivedPullRequestRecord({
   integrationBranch,
   agentConfig,
   now,
-}) {
+}: AnyRecord): PullRequestRecord {
   const laneKey = `${remoteSpec.spec.id}:${laneTasks[0].agentId}`;
   const prId = buildStablePullRequestId(laneKey);
   const baseTaskIds = laneTasks.map((task) => task.id);
@@ -991,7 +992,7 @@ function buildDerivedPullRequestRecord({
   const reviews = Array.isArray(existingPr && existingPr.reviews)
     ? existingPr.reviews.map((decisionRecord) => ({ ...decisionRecord }))
     : [];
-  const record = {
+  const record: PullRequestRecord = {
     id: prId,
     taskId: existingPr && existingPr.taskId ? existingPr.taskId : laneTasks[0].id,
     laneKey,
@@ -1056,7 +1057,7 @@ function inferLinkedTaskType(taskId) {
 }
 
 
-function buildDerivedReviewerTask(pr, sourceTask, now, existingTask = null, linkedRuntimeTasks = []) {
+function buildDerivedReviewerTask(pr: PullRequestRecord, sourceTask: TaskRecord, now: string, existingTask: TaskRecord | null = null, linkedRuntimeTasks: TaskRecord[] = []) {
   const pendingLinkedTasks = linkedRuntimeTasks.filter((task) => task && task.type !== TASK_TYPES.REVIEW && isPendingRuntimeTask(task));
   const existingStatus = existingTask && existingTask.status ? existingTask.status : '';
   const reviewerHasStaleCommitView = reviewedCommitCountIsStale(pr, existingTask);
@@ -1073,7 +1074,7 @@ function buildDerivedReviewerTask(pr, sourceTask, now, existingTask = null, link
   } else if (pr.status === 'approved' || reviewerTaskIndicatesApproved(existingTask)) {
     status = 'approved';
   }
-  const record = {
+  const record: TaskRecord = {
     id: `${getRoleLabel(AGENT_ROLES.REVIEW)}-${pr.id}`,
     title: `Review ${pr.title}`,
     description: `Review ${pr.id} for ${sourceTask.title}`,
@@ -1267,8 +1268,8 @@ function prdStateChanged(currentPrd, nextPrd) {
   ]);
 }
 
-function groupLaneTasksByAgent(tasks) {
-  return (tasks || []).reduce((accumulator, task) => {
+function groupLaneTasksByAgent(tasks: TaskRecord[]): Record<string, TaskRecord[]> {
+  return (tasks || []).reduce<Record<string, TaskRecord[]>>((accumulator, task) => {
     const agentId = String(task && task.agentId || '').trim();
     if (!agentId) {
       return accumulator;
@@ -1414,11 +1415,11 @@ function readRemoteImplementationQueueState(rootDir, config, integrationBranch, 
   }
 }
 
-function countCompletedRemoteLaneTasks(laneTasks, laneState) {
+function countCompletedRemoteLaneTasks(laneTasks: TaskRecord[], laneState: AnyRecord) {
   if (laneState && laneState.merged) {
     return laneTasks.length;
   }
-  const queueTasksById = new Map(
+  const queueTasksById = new Map<string, TaskRecord>(
     (((laneState && laneState.queueState) || {}).tasks || []).map((task) => [task.id, task])
   );
   if (queueTasksById.size > 0) {
@@ -1430,11 +1431,11 @@ function countCompletedRemoteLaneTasks(laneTasks, laneState) {
   return Math.max(0, Math.min(Number((laneState && laneState.commitCount) || 0), laneTasks.length));
 }
 
-function getPullRequest(repo, token, prNumber) {
+function getPullRequest(repo: AnyRecord, token: string, prNumber: number) {
   return githubRequest(repo, token, 'GET', `/pulls/${encodeURIComponent(String(prNumber))}`);
 }
 
-function compareBranchToBase(repo, token, baseBranch, headBranch) {
+function compareBranchToBase(repo: AnyRecord, token: string, baseBranch: string, headBranch: string) {
   try {
     return githubRequest(
       repo,
@@ -1498,8 +1499,8 @@ function ensureControlWorktree(rootDir, integrationBranch, controlWorktree) {
   return controlWorktree;
 }
 
-function fetchIntegrationBranch(rootDir, integrationBranch, options = {}) {
-  const result = {
+function fetchIntegrationBranch(rootDir: string, integrationBranch: string, options: AnyRecord = {}) {
+  const result: AnyRecord = {
     ref: null,
     commitSha: null,
     message: '',
@@ -1618,8 +1619,8 @@ function alignLocalIntegrationBranch(rootDir, integrationBranch, remoteRef) {
   }
 }
 
-function parsePrdSpec(rawContent, sourcePath) {
-  let parsed;
+function parsePrdSpec(rawContent: string, sourcePath: string): PrdSpecPayload {
+  let parsed: AnyRecord;
   try {
     parsed = JSON.parse(rawContent);
   } catch (error) {
@@ -1643,7 +1644,7 @@ function parsePrdSpec(rawContent, sourcePath) {
   });
 }
 
-function normalizeTaskSpecs(taskSpecs, options = {}) {
+function normalizeTaskSpecs(taskSpecs: AnyRecord[], options: AnyRecord = {}) {
   if (!Array.isArray(taskSpecs) || taskSpecs.length === 0) {
     if (options.allowEmpty === true) {
       return [];
@@ -1705,7 +1706,7 @@ function requiresPmPlanning(spec, implementationTasks = []) {
   return hasPlanningInput && (!Array.isArray(spec.tasks) || spec.tasks.length === 0);
 }
 
-function buildPrdSpecRelativePath(prdId, options = {}) {
+function buildPrdSpecRelativePath(prdId: string, options: AnyRecord = {}) {
   const segments = [...AUTONOMY_SEGMENTS, 'specs', 'prds'];
   if (options.queue) {
     segments.push('queue');
@@ -1718,8 +1719,8 @@ function buildPrdStateRelativePath(prdId) {
   return path.join(PRD_STATE_DIR, `${sanitizeFileSegment(prdId)}.json`);
 }
 
-function buildPrdStatePayload({ prdId, status, plannedTaskIds, lastError, createdAt, updatedAt }) {
-  const payload = {
+function buildPrdStatePayload({ prdId, status, plannedTaskIds, lastError, createdAt, updatedAt }: AnyRecord): PrdStateRecord {
+  const payload: PrdStateRecord = {
     schemaVersion: 1,
     prdId: String(prdId),
     status: String(status || '').trim(),
@@ -1736,8 +1737,8 @@ function buildPrdStatePayload({ prdId, status, plannedTaskIds, lastError, create
   return payload;
 }
 
-function parsePrdState(rawContent, sourcePath) {
-  let parsed;
+function parsePrdState(rawContent: string, sourcePath: string): PrdStateRecord {
+  let parsed: AnyRecord;
   try {
     parsed = JSON.parse(rawContent);
   } catch (error) {
@@ -1967,8 +1968,8 @@ function gitAuthArgs() {
   return ['-c', `http.extraHeader=AUTHORIZATION: basic ${authHeader}`];
 }
 
-function runGit(rootDir, args, options = {}) {
-  const execOptions = {
+function runGit(rootDir: string, args: string[], options: AnyRecord = {}) {
+  const execOptions: any = {
     cwd: rootDir,
     stdio: ['ignore', 'pipe', 'pipe'],
   };
@@ -2000,8 +2001,8 @@ function pruneStaleWorktrees(rootDir) {
   }
 }
 
-function readGit(rootDir, args, options = {}) {
-  const execOptions = {
+function readGit(rootDir: string, args: string[], options: AnyRecord = {}) {
+  const execOptions: any = {
     cwd: rootDir,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -2016,11 +2017,11 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function readJson(filePath, fallbackValue) {
+function readJson<T = any>(filePath: string, fallbackValue?: T): T {
   if (!fs.existsSync(filePath)) {
-    return JSON.parse(JSON.stringify(fallbackValue));
+    return JSON.parse(JSON.stringify(fallbackValue)) as T;
   }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
 }
 
 function writeJson(filePath, payload) {
@@ -2038,7 +2039,7 @@ function extractExecError(error) {
   return error.message;
 }
 
-function resolveGithubRepo(rootDir) {
+function resolveGithubRepo(rootDir: string) {
   const remoteUrl = readGit(rootDir, ['config', '--get', 'remote.origin.url']);
 
   const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
@@ -2076,7 +2077,7 @@ function resolveGithubRepo(rootDir) {
   throw new Error(`Unsupported GitHub remote URL: ${remoteUrl}`);
 }
 
-function listPullRequestsByHead(repo, token, baseBranch, headBranch) {
+function listPullRequestsByHead(repo: AnyRecord, token: string, baseBranch: string, headBranch: string) {
   return githubRequest(
     repo,
     token,
@@ -2105,8 +2106,8 @@ function githubRequest(repo, token, method, endpoint) {
   throw new Error(`GitHub API ${response.statusCode}: ${response.payload.message || response.raw}`);
 }
 
-function execHttpRequest(options) {
-  const result = {
+function execHttpRequest(options: AnyRecord): HttpResponse {
+  const result: HttpResponse = {
     statusCode: 0,
     payload: {},
     raw: '',
@@ -2126,7 +2127,7 @@ function execHttpRequest(options) {
   }).trim();
 
   if (response) {
-    const parsed = JSON.parse(response);
+    const parsed = JSON.parse(response) as AnyRecord;
     result.statusCode = parsed.statusCode;
     result.payload = parsed.payload;
     result.raw = parsed.raw;
@@ -2137,7 +2138,7 @@ function execHttpRequest(options) {
 function buildHttpClientScript() {
   return `
 import https from 'https';
-const options = JSON.parse(process.env.AUTONOMY_HTTP_OPTIONS);
+const options = JSON.parse(process.env.AUTONOMY_HTTP_OPTIONS) as AnyRecord;
 const timeoutMs = Number(process.env.AUTONOMY_HTTP_TIMEOUT_MS || '15000');
 const req = https.request(options, (res) => {
   let raw = '';
@@ -2146,7 +2147,7 @@ const req = https.request(options, (res) => {
   res.on('end', () => {
     let payload = {};
     try {
-      payload = raw ? JSON.parse(raw) : {};
+      payload = raw ? JSON.parse(raw) as AnyRecord : {};
     } catch (_) {}
     process.stdout.write(JSON.stringify({ statusCode: res.statusCode, payload, raw }));
   });
@@ -2193,4 +2194,3 @@ export default {
   readTrackedPrdStateMap,
   syncPrdSpecsFromIntegrationBranch
 };
-

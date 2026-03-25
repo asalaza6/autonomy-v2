@@ -6,6 +6,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 import { validateAutonomyConfig } from '../../src/config/index.js';
 import { shouldForceApproveAfterRepeatedReviews } from '../../src/autonomy-v2/runner/default-runner.js';
+import type { AnyRecord } from '../../src/types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -778,7 +779,7 @@ function findTaskInQueue(queueState, taskId) {
   return (queueState.tasks || []).find((task) => task.id === taskId) || null;
 }
 
-function runNode(scriptPath, args, options = {}) {
+function runNode(scriptPath, args, options: AnyRecord = {}) {
   return execFileSync(process.execPath, [scriptPath, ...args], {
     cwd: options.cwd || PROJECT_ROOT,
     encoding: 'utf8',
@@ -815,4 +816,3 @@ function git(cwd, args) {
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
 }
-

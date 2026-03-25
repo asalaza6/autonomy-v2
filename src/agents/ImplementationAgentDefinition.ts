@@ -1,16 +1,17 @@
 import { AgentDefinition } from './AgentDefinition.js';
 import { AGENT_ROLES } from './role-catalog.js';
+import type { AgentConfig, QueueState, TaskRecord } from '../types.js';
 
 class ImplementationAgentDefinition extends AgentDefinition {
   constructor() {
     super(AGENT_ROLES.IMPLEMENTATION);
   }
 
-  usesTrackedQueue() {
+  usesTrackedQueue(): boolean {
     return true;
   }
 
-  buildQueueState(agent, tasks = []) {
+  buildQueueState(agent: AgentConfig, tasks: TaskRecord[] = []): QueueState {
     return {
       schemaVersion: 1,
       agentId: agent.id,
@@ -25,4 +26,3 @@ export { ImplementationAgentDefinition };
 export default {
   ImplementationAgentDefinition
 };
-

@@ -1,17 +1,18 @@
 import path from 'path';
 import { AgentDefinition } from './AgentDefinition.js';
 import { AGENT_ROLES } from './role-catalog.js';
+import type { AgentConfig } from '../types.js';
 
 class ReviewAgentDefinition extends AgentDefinition {
   constructor() {
     super(AGENT_ROLES.REVIEW);
   }
 
-  usesTrackedQueue() {
+  usesTrackedQueue(): boolean {
     return true;
   }
 
-  validateConfig(agent, sourcePath, helpers) {
+  validateConfig(agent?: AgentConfig, sourcePath = '', helpers: any = {}): void {
     if (!agent || !agent.taskQueue) {
       return;
     }
@@ -30,4 +31,3 @@ export { ReviewAgentDefinition };
 export default {
   ReviewAgentDefinition
 };
-

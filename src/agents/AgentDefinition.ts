@@ -1,25 +1,42 @@
+import type { AgentConfig, QueueState, TaskRecord } from '../types.js';
+
+type AgentDefinitionHelpers = {
+  isAbsolutePath?: (value: string) => boolean;
+  resolveRepoPath?: (rootDir: string, relativePath: string) => string;
+  resolveRuntimePath?: (rootDir: string, relativePath: string) => string;
+  normalizeConfigPath?: (value: string) => string;
+  isRuntimeManagedTaskQueuePath?: (value: string) => boolean;
+  path?: typeof import('path');
+};
+
 class AgentDefinition {
-  constructor(roleId) {
+  roleId: string;
+
+  constructor(roleId: string) {
     this.roleId = roleId;
   }
 
-  validateConfig() {}
+  validateConfig(_agent?: AgentConfig, _sourcePath?: string, _helpers?: AgentDefinitionHelpers): void {}
 
-  resolveTaskQueue(rootDir, agent, helpers) {
+  resolveTaskQueue(rootDir: string, agent: AgentConfig, helpers: AgentDefinitionHelpers): string {
     const relativePath = agent.taskQueue;
     if (!relativePath) {
       throw new Error(`Agent "${agent.id}" is missing required taskQueue in config.`);
     }
-    if (helpers.isAbsolutePath(relativePath)) {
+    if (helpers.isAbsolutePath && helpers.isAbsolutePath(relativePath)) {
       return relativePath;
     }
     if (this.usesTrackedQueue()) {
-      return helpers.resolveRepoPath(rootDir, relativePath);
+      return helpers.resolveRepoPath
+        ? helpers.resolveRepoPath(rootDir, relativePath)
+        : relativePath;
     }
-    return helpers.resolveRuntimePath(rootDir, relativePath);
+    return helpers.resolveRuntimePath
+      ? helpers.resolveRuntimePath(rootDir, relativePath)
+      : relativePath;
   }
 
-  buildQueueState(agent, tasks = []) {
+  buildQueueState(agent: AgentConfig, tasks: TaskRecord[] = []): QueueState {
     return {
       agentId: agent.id,
       role: this.roleId,
@@ -27,19 +44,19 @@ class AgentDefinition {
     };
   }
 
-  usesTrackedQueue() {
+  usesTrackedQueue(): boolean {
     return false;
   }
 
-  requiresRunner() {
+  requiresRunner(): boolean {
     return true;
   }
 
-  entranceCriteria() {
+  entranceCriteria(): { ok: boolean; reason: string } {
     return { ok: true, reason: '' };
   }
 
-  exitCriteria() {
+  exitCriteria(): { status: string; reason: string; sideEffects: any[] } {
     return { status: 'noop', reason: '', sideEffects: [] };
   }
 }
@@ -49,4 +66,3 @@ export { AgentDefinition };
 export default {
   AgentDefinition
 };
-

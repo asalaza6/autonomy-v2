@@ -4,10 +4,11 @@ import { extractExecError, getPaths, loadRuntime, resolveRootDir, runWorkerOnce,
 import { loadAutonomyEnv } from '../../env/index.js';
 import { acquireStateLock } from '../../lock/index.js';
 import { fileURLToPath } from 'url';
+import type { AnyRecord, CliOptions } from '../../types.js';
 
-function parseCli(argv) {
-  const options = {};
-  const positionals = [];
+function parseCli(argv: string[]): { command: string; options: CliOptions } {
+  const options: CliOptions = {};
+  const positionals: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -31,13 +32,13 @@ function parseCli(argv) {
   };
 }
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   if (command !== 'run') {
     throw new Error(`Unknown command "${command}". Use "run".`);
   }
 
-  const rootDir = resolveRootDir(options.root);
+  const rootDir = resolveRootDir(String(options.root || ''));
   loadAutonomyEnv(rootDir);
   if (!options.agent) {
     throw new Error('Missing required option --agent');
@@ -46,9 +47,9 @@ async function main(argv = process.argv.slice(2)) {
   let result = null;
   let error = null;
   try {
-    logWorkerEvent(options.agent, 'start', { rootDir });
-    result = runWorkerOnce(rootDir, options.agent);
-    logWorkerEvent(options.agent, 'result', summarizeWorkerResult(result));
+    logWorkerEvent(String(options.agent), 'start', { rootDir });
+    result = runWorkerOnce(rootDir, String(options.agent));
+    logWorkerEvent(String(options.agent), 'result', summarizeWorkerResult(result));
     if (options.json === true) {
       console.log(JSON.stringify(result, null, 2));
       return;
@@ -56,10 +57,10 @@ async function main(argv = process.argv.slice(2)) {
     console.log(JSON.stringify(result));
   } catch (caughtError) {
     error = caughtError;
-    logWorkerEvent(options.agent, 'error', { message: extractExecError(caughtError) });
+    logWorkerEvent(String(options.agent), 'error', { message: extractExecError(caughtError) });
     throw caughtError;
   } finally {
-    finalizeWorkerRuntime(rootDir, options.agent, result, error);
+    finalizeWorkerRuntime(rootDir, String(options.agent), result, error);
   }
 }
 
@@ -82,7 +83,7 @@ function finalizeWorkerRuntime(rootDir, agentId, result, error) {
   }
 }
 
-function logWorkerEvent(agentId, event, payload = {}) {
+function logWorkerEvent(agentId: string, event: string, payload: AnyRecord = {}) {
   if (process.env.AUTONOMY_STREAM_WORKER_OUTPUT !== '1') {
     return;
   }

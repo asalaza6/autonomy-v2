@@ -11,6 +11,7 @@ import { resolveGithubAuthToken } from '../../github/index.js';
 import { withStateLock } from '../../lock/index.js';
 import { AGENT_ROLES, TASK_TYPES, buildRoleEventName, getRoleAgentLabel, getRoleLabel, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
 import { collectAgentScaffoldEntries, getTemplateContent, pruneStaleAgentScaffold, resolveTemplateTargetPath, validateImplementationChecks, } from '../scaffold/index.js';
+import type { AnyRecord, AutonomyConfig, BranchLocksState, CliOptions, PullRequestRecord, PrState, PrdSpecPayload, QueueMap, QueueState, ReviewDecisionRecord, TaskRecord, TrackedPrdRecord } from '../../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -75,7 +76,7 @@ const BASE_TEMPLATE_FILES = [
   'specs/prds/archived/README.md',
 ];
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   const rootDir = resolveRootDir(options.root);
   loadAutonomyEnv(rootDir);
@@ -146,9 +147,9 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-function parseCli(argv) {
-  const options = {};
-  const positionals = [];
+function parseCli(argv: string[]): { command: string; options: CliOptions } {
+  const options: CliOptions = {};
+  const positionals: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -187,7 +188,7 @@ function isMutatingCommand(command) {
   ]).has(command);
 }
 
-function addOption(options, key, value) {
+function addOption(options: CliOptions, key: string, value: string | boolean) {
   if (Object.prototype.hasOwnProperty.call(options, key)) {
     if (!Array.isArray(options[key])) {
       options[key] = [options[key]];
@@ -309,9 +310,9 @@ function listPrdSpecEntriesInDir(dirPath) {
     });
 }
 
-function findArchivablePrdIds(prdIds, { taskQueues, prs, prds }) {
+function findArchivablePrdIds(prdIds: string[], { taskQueues, prs, prds }: { taskQueues: QueueMap; prs: PrState; prds: { prds: TrackedPrdRecord[] } }) {
   const prdIdSet = new Set(prdIds || []);
-  const prdById = new Map(((prds && prds.prds) || []).map((prd) => [prd.id, prd]));
+  const prdById = new Map<string, TrackedPrdRecord>(((prds && prds.prds) || []).map((prd) => [prd.id, prd]));
   const tasksByPrdId = new Map();
   listTasks(taskQueues).forEach((task) => {
     if (!task || !task.prdId || !prdIdSet.has(task.prdId)) {
@@ -347,9 +348,9 @@ function findArchivablePrdIds(prdIds, { taskQueues, prs, prds }) {
   });
 }
 
-function loadTrackedPrds(rootDir, config, options = {}) {
-  const taskQueues = options.taskQueues || readTaskQueues(rootDir, config);
-  const prs = options.prs || readJson(getAutonomyPaths(rootDir).prsState);
+function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRecord = {}): { prds: TrackedPrdRecord[] } {
+  const taskQueues = (options.taskQueues as QueueMap) || readTaskQueues(rootDir, config);
+  const prs = (options.prs as PrState) || readJson<PrState>(getAutonomyPaths(rootDir).prsState);
   const prdStateMap = readTrackedPrdStateMap(rootDir, config.integrationBranch);
   const tasksByPrdId = new Map();
   const prsByPrdId = new Map();
@@ -415,7 +416,7 @@ function archiveCompletedPrdSpecs(rootDir, state) {
     ].map((entry) => ({
       ...entry,
       relativePath: path.relative(rootDir, entry.filePath),
-      spec: readJson(entry.filePath, {}),
+      spec: readJson<PrdSpecPayload>(entry.filePath, {} as PrdSpecPayload),
     }));
   const archivableIds = new Set(findArchivablePrdIds(
     currentSpecs.map((entry) => entry.id),
@@ -866,7 +867,7 @@ function handlePrdAdd(rootDir, options) {
     gitIdentity: pmAgent.gitIdentity,
     queueSpec: hasActivePrd || hasActiveIntegrationPrdSpec || hasExistingPrdSpec,
   });
-  let queueCommitResult = null;
+  let queueCommitResult: AnyRecord | null = null;
   if (taskSpecs.length > 0) {
     queueCommitResult = commitTrackedFilesToIntegrationBranch(
       rootDir,
@@ -1018,7 +1019,7 @@ function resolveTaskForWorktreePreparation(rootDir, state, taskId) {
   throw new Error(`Unknown task "${taskId}".`);
 }
 
-function prepareTaskWorktree(rootDir, config, branchLocksState, task, options = {}) {
+function prepareTaskWorktree(rootDir: string, config: AutonomyConfig, branchLocksState: BranchLocksState, task: TaskRecord, options: AnyRecord = {}) {
   const agent = getAgent(config, task.agentId);
   if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
     throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
@@ -1285,7 +1286,7 @@ async function handlePrRecord(rootDir, options) {
   });
 }
 
-async function handleReviewRecord(rootDir, options) {
+async function handleReviewRecord(rootDir: string, options: CliOptions) {
   ensureInitialized(rootDir);
   const state = loadAllState(rootDir);
   const pr = getPr(state.prs, requireOption(options, 'pr'));
@@ -1300,7 +1301,7 @@ async function handleReviewRecord(rootDir, options) {
 
   const decision = normalizeReviewDecision(requireOption(options, 'decision'));
   const rawSummary = getStringOption(options, 'summary', '');
-  const decisionRecord = {
+  const decisionRecord: ReviewDecisionRecord = {
     reviewerId,
     decision,
     summary: rawSummary,
@@ -1657,19 +1658,25 @@ function ensureInitialized(rootDir) {
   }
 }
 
-function loadAllState(rootDir) {
+function loadAllState(rootDir: string): {
+  config: AutonomyConfig;
+  sprint: AnyRecord;
+  taskQueues: QueueMap;
+  prs: PrState;
+  branchLocks: BranchLocksState;
+} {
   const paths = getAutonomyPaths(rootDir);
   const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
   return {
     config,
     sprint: readJson(paths.sprintConfig),
     taskQueues: readTaskQueues(rootDir, config),
-    prs: readJson(paths.prsState),
-    branchLocks: readJson(paths.branchLocksState),
+    prs: readJson<PrState>(paths.prsState),
+    branchLocks: readJson<BranchLocksState>(paths.branchLocksState),
   };
 }
 
-function syncIntegrationSpecs(rootDir, options = {}) {
+function syncIntegrationSpecs(rootDir: string, options: AnyRecord = {}) {
   if (options.sync !== true) {
     return null;
   }
@@ -1678,8 +1685,14 @@ function syncIntegrationSpecs(rootDir, options = {}) {
   return syncPrdSpecsFromIntegrationBranch(rootDir, config.integrationBranch);
 }
 
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+function readJson<T = any>(filePath: string, fallbackValue?: T): T {
+  if (!fs.existsSync(filePath)) {
+    if (arguments.length >= 2) {
+      return JSON.parse(JSON.stringify(fallbackValue)) as T;
+    }
+    throw new Error(`Missing JSON file: ${filePath}`);
+  }
+  return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
 }
 
 function writeJson(filePath, payload) {
@@ -1695,7 +1708,7 @@ function getAgentLogPath(rootDir, agentId) {
   return path.join(rootDir, ...DEFAULT_RUNTIME_SEGMENTS, 'agents', agentId, 'log.md');
 }
 
-function appendAgentLog(rootDir, config, agentId, event, payload = {}) {
+function appendAgentLog(rootDir: string, config: AutonomyConfig, agentId: string, event: string, payload: AnyRecord = {}) {
   getAgent(config, agentId);
   const logPath = getAgentLogPath(rootDir, agentId);
   ensureDir(path.dirname(logPath));
@@ -2079,7 +2092,7 @@ function readImplementationQueueFromGitRef(rootDir, config, agentId, ref, fallba
   return buildTaskQueueState(agent, Array.isArray(queueState.tasks) ? queueState.tasks : []);
 }
 
-function readImplementationQueueSnapshot(rootDir, config, agentId, options = {}) {
+function readImplementationQueueSnapshot(rootDir: string, config: AutonomyConfig, agentId: string, options: AnyRecord = {}) {
   const queueFromBranch = options.branch && gitRefExists(rootDir, options.branch)
     ? readImplementationQueueFromGitRef(rootDir, config, agentId, options.branch, null)
     : null;
@@ -2410,7 +2423,7 @@ function summarizeStatusText(value, maxLength = 120) {
   return `${summary.slice(0, maxLength - 1)}…`;
 }
 
-function formatAgentStatusLine(agentStatus, options = {}) {
+function formatAgentStatusLine(agentStatus: AnyRecord, options: AnyRecord = {}) {
   const parts = [
     agentStatus.agentId,
     agentStatus.role,
@@ -2456,7 +2469,7 @@ function resolveTrackedQueueRef(rootDir, integrationBranch) {
   return null;
 }
 
-function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
+function readJsonFromGitRef<T = any>(rootDir: string, ref: string, relativePath: string, fallbackValue: T): T {
   if (!ref || path.isAbsolute(relativePath)) {
     return fallbackValue;
   }
@@ -2468,7 +2481,7 @@ function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
       cwd: rootDir,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-    }));
+    })) as T;
   } catch (_) {
     return fallbackValue;
   }
@@ -2495,8 +2508,8 @@ function trimLeadingSeparator(value) {
   return normalized;
 }
 
-function buildTaskQueueState(agent, tasks = []) {
-  const base = {
+function buildTaskQueueState(agent: AnyRecord, tasks: TaskRecord[] = []): QueueState {
+  const base: QueueState = {
     agentId: agent.id,
     role: agent.role,
     tasks,
@@ -2632,7 +2645,7 @@ function readTaskQueues(rootDir, config) {
   }, {});
 }
 
-function writeTaskQueues(rootDir, config, taskQueues, options = {}) {
+function writeTaskQueues(rootDir: string, config: AutonomyConfig, taskQueues: QueueMap, options: AnyRecord = {}) {
   (config.agents || []).forEach((agent) => {
     if (isImplementationRole(agent.role)) {
       return;
@@ -2649,7 +2662,7 @@ function writeTaskQueues(rootDir, config, taskQueues, options = {}) {
   });
 }
 
-function getTaskQueue(taskQueues, config, agentId) {
+function getTaskQueue(taskQueues: QueueMap, config: AutonomyConfig, agentId: string): QueueState {
   if (taskQueues[agentId]) {
     return taskQueues[agentId];
   }
@@ -2658,11 +2671,11 @@ function getTaskQueue(taskQueues, config, agentId) {
   return taskQueues[agentId];
 }
 
-function listTasks(taskQueues) {
+function listTasks(taskQueues: QueueMap): TaskRecord[] {
   return Object.values(taskQueues).flatMap((queue) => queue.tasks);
 }
 
-function listRuntimeManagedTasks(taskQueues, config) {
+function listRuntimeManagedTasks(taskQueues: QueueMap, config: AutonomyConfig): TaskRecord[] {
   return Object.values(taskQueues)
     .filter((queue) => {
       const agent = getAgent(config, queue.agentId);
@@ -2671,7 +2684,7 @@ function listRuntimeManagedTasks(taskQueues, config) {
     .flatMap((queue) => queue.tasks);
 }
 
-function getTask(taskQueues, taskId) {
+function getTask(taskQueues: QueueMap, taskId: string): TaskRecord {
   const task = findTask(taskQueues, taskId);
   if (task) {
     return task;
@@ -2679,7 +2692,7 @@ function getTask(taskQueues, taskId) {
   throw new Error(`Unknown task "${taskId}".`);
 }
 
-function findTask(taskQueues, taskId) {
+function findTask(taskQueues: QueueMap, taskId: string): TaskRecord | null {
   for (const queue of Object.values(taskQueues)) {
     const task = queue.tasks.find((candidate) => candidate.id === taskId);
     if (task) {
@@ -2751,7 +2764,7 @@ function buildTaskLaneKey(task) {
   return task.id;
 }
 
-function listLaneTasks(taskQueues, agentId, laneKey) {
+function listLaneTasks(taskQueues: QueueMap, agentId: string, laneKey: string): TaskRecord[] {
   return Object.values(taskQueues)
     .filter((queue) => queue.agentId === agentId)
     .flatMap((queue) => queue.tasks)
@@ -2765,7 +2778,7 @@ function findLatestCompletedLaneTask(branchLocksState, agentId, laneKey) {
     : null;
 }
 
-function buildImplementationLaneSeedTask(config, branchLocksState, taskQueues, agentId, laneKey, options = {}) {
+function buildImplementationLaneSeedTask(config: AutonomyConfig, branchLocksState: BranchLocksState, taskQueues: QueueMap, agentId: string, laneKey: string, options: AnyRecord = {}) {
   if (options.task) {
     return options.task;
   }
@@ -2778,7 +2791,7 @@ function buildImplementationLaneSeedTask(config, branchLocksState, taskQueues, a
     return completedTask;
   }
   if (options.pr) {
-    const seedTask = {
+    const seedTask: TaskRecord = {
       id: options.pr.taskId || `${agentId}-${laneKey}`,
       agentId,
       laneKey,
@@ -2793,7 +2806,7 @@ function buildImplementationLaneSeedTask(config, branchLocksState, taskQueues, a
   return null;
 }
 
-function resolveImplementationBranchRef(rootDir, config, branchLocksState, agentId, laneKey, options = {}) {
+function resolveImplementationBranchRef(rootDir: string, config: AutonomyConfig, branchLocksState: BranchLocksState, agentId: string, laneKey: string, options: AnyRecord = {}) {
   const branchLock = findBranchLockByLane(branchLocksState, agentId, laneKey);
   const seedTask = buildImplementationLaneSeedTask(config, branchLocksState, {}, agentId, laneKey, options);
   const branchCandidates = uniqueStrings([
@@ -2807,7 +2820,7 @@ function resolveImplementationBranchRef(rootDir, config, branchLocksState, agent
   return branchCandidates.find((candidate) => gitRefExists(rootDir, candidate)) || null;
 }
 
-function listImplementationLaneTasks(rootDir, state, agentId, laneKey, options = {}) {
+function listImplementationLaneTasks(rootDir: string, state: AnyRecord, agentId: string, laneKey: string, options: AnyRecord = {}) {
   const seedTask = buildImplementationLaneSeedTask(state.config, state.branchLocks, state.taskQueues, agentId, laneKey, options);
   const branch = resolveImplementationBranchRef(rootDir, state.config, state.branchLocks, agentId, laneKey, {
     ...options,
@@ -2968,7 +2981,7 @@ function buildLaneConflictTaskId(pr) {
   return `${pr.agentId}-conflict-${pr.id}-${conflictCount}`;
 }
 
-function ensureImplementationLaneWorktree(rootDir, state, pr, options = {}) {
+function ensureImplementationLaneWorktree(rootDir: string, state: AnyRecord, pr: PullRequestRecord, options: AnyRecord = {}) {
   const agent = getAgent(state.config, pr.agentId);
   if (!isImplementationRole(agent.role)) {
     throw new Error(`Agent "${agent.id}" does not use tracked ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} queues.`);
@@ -3278,7 +3291,7 @@ function runGit(rootDir, args) {
   });
 }
 
-function runGitWorktreeAdd(rootDir, args, worktreePath, options = {}) {
+function runGitWorktreeAdd(rootDir: string, args: string[], worktreePath: string, options: AnyRecord = {}) {
   const runner = options.quiet === true ? runGitQuiet : runGit;
   try {
     runner(rootDir, ['worktree', 'add', ...args]);
@@ -3706,7 +3719,7 @@ function githubRequest(repo, token, method, endpoint, payload) {
     options.headers['Content-Length'] = Buffer.byteLength(body);
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise<any>((resolve, reject) => {
     const request = https.request(options, (response) => {
       let raw = '';
       response.setEncoding('utf8');
@@ -3714,7 +3727,7 @@ function githubRequest(repo, token, method, endpoint, payload) {
         raw += chunk;
       });
       response.on('end', () => {
-        const parsed = raw ? JSON.parse(raw) : {};
+        const parsed: AnyRecord = raw ? JSON.parse(raw) : {};
         if (response.statusCode >= 200 && response.statusCode < 300) {
           resolve(parsed);
           return;
@@ -3835,4 +3848,3 @@ export default {
   requireOption,
   resolveRootDir
 };
-

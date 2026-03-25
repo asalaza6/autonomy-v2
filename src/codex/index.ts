@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel, isImplementationRole, } from '../agents/role-catalog.js';
+import type { AnyRecord } from '../types.js';
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
 const DEFAULT_ERROR_PREVIEW_LIMIT = 1000;
@@ -419,7 +420,7 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
 }
 
 function runCodexCommand({ binary, args, cwd, input, streamOutput }) {
-  return new Promise((resolve, reject) => {
+  return new Promise<void>((resolve, reject) => {
     const child = spawn(binary, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -638,7 +639,7 @@ function trimErrorPreview(value) {
   return `...[truncated]\n${normalized.slice(-DEFAULT_ERROR_PREVIEW_LIMIT)}`;
 }
 
-function logCodexFailure(error, streamOutput) {
+function logCodexFailure(error: Error, streamOutput: boolean) {
   if (!streamOutput) {
     return;
   }
@@ -646,7 +647,7 @@ function logCodexFailure(error, streamOutput) {
   const message = normalizeNonEmptyString(error && error.message);
   const stderr = trimErrorPreview(error && error.stderr);
   const stdout = trimErrorPreview(error && error.stdout);
-  const payload = {
+  const payload: AnyRecord = {
     kind: classifyCodexFailure(summary),
     summary,
   };
@@ -664,7 +665,7 @@ function logCodexFailure(error, streamOutput) {
   console.error(`[codex] error ${JSON.stringify(payload)}`);
 }
 
-function extractExecError(error) {
+function extractExecError(error: Error) {
   const message = normalizeNonEmptyString(error && error.message);
   if (isPreferredCodexErrorMessage(message)) {
     return message;
@@ -725,4 +726,3 @@ export default {
   runCodexStructured,
   reviewPrWithCodex
 };
-

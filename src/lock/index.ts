@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import type { AnyRecord } from '../types.js';
 
-function sleepMs(durationMs) {
+function sleepMs(durationMs: number) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs);
 }
 
-function isProcessAlive(pid) {
+function isProcessAlive(pid: number) {
   if (!pid) {
     return false;
   }
@@ -17,7 +18,7 @@ function isProcessAlive(pid) {
   }
 }
 
-function getLockPaths(rootDir, lockName) {
+function getLockPaths(rootDir: string, lockName: string) {
   const lockDir = path.join(rootDir, '.autonomy', lockName);
   return {
     lockDir,
@@ -25,7 +26,7 @@ function getLockPaths(rootDir, lockName) {
   };
 }
 
-function acquireLock(rootDir, lockName, options = {}) {
+function acquireLock(rootDir: string, lockName: string, options: AnyRecord = {}) {
   const timeoutMs = Number(options.timeoutMs || 10000);
   const pollMs = Number(options.pollMs || 50);
   const startedAt = Date.now();
@@ -74,18 +75,18 @@ function acquireLock(rootDir, lockName, options = {}) {
   }
 }
 
-function acquireStateLock(rootDir, options = {}) {
+function acquireStateLock(rootDir: string, options: AnyRecord = {}) {
   return acquireLock(rootDir, 'state-lock', options);
 }
 
-function acquireServerLock(rootDir, options = {}) {
+function acquireServerLock(rootDir: string, options: AnyRecord = {}) {
   return acquireLock(rootDir, 'server-lock', {
     timeoutMs: Number(options.timeoutMs || 250),
     pollMs: Number(options.pollMs || 50),
   });
 }
 
-async function withStateLock(rootDir, callback, options = {}) {
+async function withStateLock(rootDir: string, callback: () => any, options: AnyRecord = {}) {
   const release = acquireStateLock(rootDir, options);
   try {
     return await callback();
@@ -107,4 +108,3 @@ export default {
   isProcessAlive,
   withStateLock
 };
-

@@ -13,6 +13,7 @@ import { runImplementationFlow } from './task-flow.js';
 import { runReviewFlow } from './gate-flow.js';
 import { ensureDir, extractExecError, logRunnerErrorEvent, logRunnerEvent, normalizeNonEmptyString, readJson, requireEnv, slugify, sleepMs, summarizeText, trimForErrorReport, trimLeadingSeparator, uniqueScopeViolations, uniqueStrings, writeJson, } from './shared.js';
 import { postIssueComment, resolveGithubRepo, } from './net.js';
+import type { AnyRecord, AutonomyConfig, PullRequestRecord, QueueMap, QueueState, TaskRecord } from '../../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -122,7 +123,7 @@ const runnerDependencies = {
   useCodexStub,
 };
 
-function loadState(rootDir, options = {}) {
+function loadState(rootDir: string, options: AnyRecord = {}): { config: AutonomyConfig; queues: QueueMap } {
   const repoAutonomyDir = path.join(rootDir, ...AUTONOMY_SEGMENTS);
   const config = readJson(path.join(repoAutonomyDir, 'config', 'agents.json'));
   const queues = {};
@@ -151,7 +152,7 @@ function buildImplementationQueueRelativePath(agentId) {
   return path.join('prompts', 'autonomous', 'v2', 'queues', `${agentId}.json`);
 }
 
-function buildTaskQueueState(agent, tasks = []) {
+function buildTaskQueueState(agent: AnyRecord, tasks: TaskRecord[] = []): QueueState {
   return isImplementationRole(agent.role)
     ? {
         schemaVersion: 1,
@@ -175,7 +176,7 @@ function isPendingImplementationTask(task) {
   return state === 'active' || state === 'queued';
 }
 
-function getTask(queues, taskId) {
+function getTask(queues: QueueMap, taskId: string): TaskRecord {
   for (const queue of Object.values(queues)) {
     const task = (queue.tasks || []).find((candidate) => candidate.id === taskId);
     if (task) {
@@ -185,7 +186,7 @@ function getTask(queues, taskId) {
   throw new Error(`Unknown task "${taskId}".`);
 }
 
-function getLaneTasks(queues, agentId, laneKey) {
+function getLaneTasks(queues: QueueMap, agentId: string, laneKey: string): TaskRecord[] {
   return Object.values(queues)
     .filter((queue) => queue.agentId === agentId)
     .flatMap((queue) => queue.tasks || [])
@@ -748,7 +749,7 @@ function buildRunnerFailureEventName(context) {
 function publishRunnerFailure(error) {
   const context = getRunnerFailureContext();
   const record = buildRunnerFailureRecord(error, context);
-  const eventPayload = {
+  const eventPayload: AnyRecord = {
     summary: record.summary,
   };
   if (record.taskId) {
@@ -851,7 +852,7 @@ function getPr(rootDir, prId) {
   return pr;
 }
 
-function getReviewTask(queues, reviewTaskId) {
+function getReviewTask(queues: QueueMap, reviewTaskId: string): TaskRecord {
   for (const queue of Object.values(queues)) {
     const task = (queue.tasks || []).find((candidate) => candidate.id === reviewTaskId);
     if (task) {
@@ -940,7 +941,7 @@ function buildMergeFollowupComment(mergeMessage) {
   ].join('\n');
 }
 
-function persistReviewerTaskState(rootDir, config, reviewTaskId, patch) {
+function persistReviewerTaskState(rootDir: string, config: AutonomyConfig, reviewTaskId: string, patch: AnyRecord) {
   const release = acquireStateLock(rootDir);
   try {
     const state = loadState(rootDir);
@@ -958,7 +959,7 @@ function persistReviewerTaskState(rootDir, config, reviewTaskId, patch) {
   }
 }
 
-function writeQueuesState(rootDir, config, queues) {
+function writeQueuesState(rootDir: string, config: AutonomyConfig, queues: QueueMap) {
   (config.agents || []).forEach((agent) => {
     if (isImplementationRole(agent.role)) {
       return;
@@ -1047,4 +1048,3 @@ export default {
   shouldIgnoreMissingTaskFinishError,
   shouldRetryApprovedPrMerge
 };
-

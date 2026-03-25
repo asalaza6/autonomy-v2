@@ -253,6 +253,7 @@ function runReviewStubFlow(params, deps) {
     getPr,
     getPrCommitCount,
     getReviewTask,
+    getRoleAgentLabel,
     getRoleLabel,
     hasGithubAuth,
     loadState,
@@ -352,4 +353,3 @@ export default {
   runReviewFlow,
   runReviewStubFlow
 };
-
