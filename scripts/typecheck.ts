@@ -9,19 +9,21 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const TARGET_DIRS = ['src', 'tests', 'bin'];
+const TARGET_DIRS = ['src', 'tests', 'bin', 'scripts'];
+const TS_COMPILER = path.join(ROOT_DIR, 'node_modules', 'typescript', 'bin', 'tsc');
 
 function main() {
   const files = TARGET_DIRS.flatMap((dir) => listCheckableFiles(path.join(ROOT_DIR, dir)));
+  const jsFiles = files.filter((file) => file.endsWith('.js'));
+  const tsFiles = files.filter((file) => file.endsWith('.ts'));
+  const failures = [];
 
   if (files.length === 0) {
     console.error('No files found for syntax check.');
     process.exit(1);
   }
 
-  const failures = [];
-
-  files.forEach((filePath) => {
+  jsFiles.forEach((filePath) => {
     const result = spawnSync(process.execPath, ['--check', filePath], {
       cwd: ROOT_DIR,
       encoding: 'utf8',
@@ -35,6 +37,25 @@ function main() {
       });
     }
   });
+
+  if (tsFiles.length > 0) {
+    const result = spawnSync(
+      process.execPath,
+      [TS_COMPILER, '--pretty', 'false', '--noEmit', ...tsFiles],
+      {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      }
+    );
+
+    if (result.status !== 0) {
+      failures.push({
+        filePath: 'TypeScript files',
+        output: String(result.stderr || result.stdout || '').trim(),
+      });
+    }
+  }
 
   if (failures.length > 0) {
     failures.forEach(({ filePath, output }) => {
@@ -73,8 +94,7 @@ function isCheckableFile(filePath) {
   if (relativePath.startsWith(`bin${path.sep}`)) {
     return true;
   }
-  return filePath.endsWith('.js');
+  return filePath.endsWith('.ts') || filePath.endsWith('.js');
 }
 
 main();
-

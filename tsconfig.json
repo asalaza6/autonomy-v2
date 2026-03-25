@@ -1,15 +1,22 @@
 {
   "compilerOptions": {
+    "allowJs": false,
     "target": "ES2022",
+    "lib": ["ES2022"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "allowJs": true,
-    "checkJs": false,
-    "noEmit": true
+    "moduleDetection": "force",
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": false,
+    "skipLibCheck": true,
+    "types": ["node"]
   },
   "include": [
-    "src/**/*.js",
-    "bin/**/*.js",
-    "tests/**/*.js"
+    "src/**/*.ts",
+    "bin/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts"
   ]
 }
