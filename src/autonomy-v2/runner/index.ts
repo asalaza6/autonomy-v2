@@ -1023,13 +1023,13 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
 }
 
 
-export { buildRunnerFailureRecord };
-export { buildMergeFollowupComment };
-export { extractExecError };
-export { isScopeOnlyReviewFeedback };
+;
+;
+;
+;
 export { main };
-export { normalizeNonEmptyString };
+;
 export { publishRunnerFailure };
 export { shouldForceApproveAfterRepeatedReviews };
-export { shouldIgnoreMissingTaskFinishError };
-export { shouldRetryApprovedPrMerge };
+;
+;

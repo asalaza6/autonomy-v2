@@ -115,8 +115,8 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
 }
 
 
-export { finalizeWorkerRuntime };
-export { logWorkerEvent };
+;
+;
 export { main };
-export { parseCli };
-export { summarizeWorkerResult };
+;
+;

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip/schema.json",
+  "entry": [
+    "src/autonomy-v2/index.ts",
+    "src/server/index.ts",
+    "src/server/worker/index.ts"
+  ]
+}

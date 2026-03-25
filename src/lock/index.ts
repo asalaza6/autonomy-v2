@@ -96,8 +96,8 @@ async function withStateLock(rootDir: string, callback: () => any, options: AnyR
 }
 
 
-export { acquireLock };
+;
 export { acquireServerLock };
 export { acquireStateLock };
-export { isProcessAlive };
+;
 export { withStateLock };

@@ -2151,14 +2151,14 @@ req.end();
 
 
 export { DEFAULT_SYNC_STATE };
-export { PRD_SPECS_DIR };
+;
 export { buildPrdSpecPayload };
 export { buildPrdStateRelativePath };
 export { commitPrdSpecToIntegrationBranch };
 export { commitTrackedPrdStateToIntegrationBranch };
 export { commitTrackedFilesToIntegrationBranch };
-export { deleteTrackedPrdStateFromIntegrationBranch };
-export { getSyncPaths };
+;
+;
 export { hasActivePrdSpecInIntegrationBranch };
 export { hasPrdSpecInIntegrationBranch };
 export { listTrackedPrdSpecs };

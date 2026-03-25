@@ -748,22 +748,22 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
 }
 
 
-export { buildTickEventPayload };
-export { buildAgentTraceCommand };
-export { buildTraceOptions };
-export { classifyWorkerStreamLine };
-export { extractWorkerErrorSummaryFromLine };
-export { extractWorkerContextFromLine };
-export { formatServerEventLine };
-export { formatWorkerStreamPrefix };
-export { formatWorkerStreamPrefixKey };
-export { formatWorkerStreamLine };
-export { getAgentTraceLogPath };
-export { formatTickSummaryLine };
-export { logTickResultWithWriter as logTickResult };
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
 export { main };
-export { normalizeTraceTerminal };
-export { shouldIncludeWorkerExitError };
-export { summarizeTickResult };
-export { parseCli };
-export { writePrefixedChunks };
+;
+;
+;
+;
+;
