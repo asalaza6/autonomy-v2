@@ -7,9 +7,9 @@ const {
   resolveRootDir,
   runWorkerOnce,
   writeJson,
-} = require('./autonomy-v2-orchestrator');
-const { loadAutonomyEnv } = require('./autonomy-v2-env');
-const { acquireStateLock } = require('./autonomy-v2-lock');
+} = require('../orchestrator');
+const { loadAutonomyEnv } = require('../../env');
+const { acquireStateLock } = require('../../lock');
 
 function parseCli(argv) {
   const options = {};

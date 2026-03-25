@@ -6,9 +6,14 @@ const { execFileSync } = require('child_process');
 const {
   resolveRootDir,
   runSchedulerTick,
-} = require('./autonomy-v2-orchestrator');
-const { loadAutonomyEnv } = require('./autonomy-v2-env');
-const { acquireServerLock } = require('./autonomy-v2-lock');
+} = require('../orchestrator');
+const { loadAutonomyEnv } = require('../../env');
+const { acquireServerLock } = require('../../lock');
+const {
+  AGENT_ROLES,
+  buildRoleEventName,
+  getRoleLabel,
+} = require('../../agents/role-catalog');
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const MAX_CONSECUTIVE_TICK_FAILURES = 3;
 
@@ -702,15 +707,23 @@ function extractWorkerContextFromLine(line) {
     return null;
   }
 
-  if ((eventName === 'implementation:start' || eventName === 'implementation:error') && payload && payload.taskId) {
+  if (
+    (eventName === buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'start')
+      || eventName === buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'error'))
+      && payload && payload.taskId
+  ) {
     return {
       label: 'task',
       value: String(payload.taskId),
     };
   }
-  if ((eventName === 'review:start' || eventName === 'review:error') && payload && payload.reviewTaskId) {
+  if (
+    (eventName === buildRoleEventName(AGENT_ROLES.REVIEW, 'start')
+      || eventName === buildRoleEventName(AGENT_ROLES.REVIEW, 'error'))
+      && payload && payload.reviewTaskId
+  ) {
     return {
-      label: 'review',
+      label: getRoleLabel(AGENT_ROLES.REVIEW),
       value: String(payload.reviewTaskId),
     };
   }

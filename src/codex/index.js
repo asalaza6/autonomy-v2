@@ -2,17 +2,24 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
+const {
+  AGENT_ROLES,
+  getRoleAgentLabel,
+  getRoleLabel,
+  isImplementationRole,
+} = require('../agents/role-catalog');
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
 const DEFAULT_ERROR_PREVIEW_LIMIT = 1000;
 
 function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
-  const implementationAgents = (config.agents || []).filter((candidate) => candidate.role === 'implementation');
+  const implementationAgents = (config.agents || []).filter((candidate) => isImplementationRole(candidate.role));
+  const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
-    'You are planning implementation work for an autonomy-first repository.',
+    `You are planning ${laneLabel} work for an autonomy-first repository.`,
     '',
-    'Available implementation lanes:',
+    `Available ${laneLabel} lanes:`,
     JSON.stringify(
       implementationAgents.map((candidate) => ({
         id: candidate.id,
@@ -39,9 +46,9 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
     ),
     '',
     'Rules:',
-    '- Create implementation tasks only. Do not create reviewer tasks.',
+    `- Create ${laneLabel} tasks only. Do not create reviewer tasks.`,
     '- Keep tasks atomic and lane-scoped.',
-    '- Each task must target exactly one implementation agent.',
+    `- Each task must target exactly one ${getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)}.`,
     '- Scope is defined by the chosen agent include/exclude rules. Do not emit task-level scope fields.',
     '- Prefer stable ids of the form "<prd-id>-<lane>-<n>".',
     '- Acceptance criteria must be concrete and testable.',
@@ -98,9 +105,10 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
 }
 
 async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branch, worktreePath }) {
+  const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
-    'You are executing an implementation lane inside the assigned git worktree.',
+    `You are executing a ${laneLabel} lane inside the assigned git worktree.`,
     '',
     'Hard rules:',
     '- Edit only files within the assigned agent scope and current lane work.',
@@ -152,17 +160,18 @@ async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branc
 }
 
 async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, worktreePath, checkResults, diffFiles, scopeResult }) {
+  const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
-    'You are reviewing an implementation branch for merge into dev.',
+    `You are reviewing a ${laneLabel} branch for merge into dev.`,
     '',
     'Hard rules:',
     '- Do not edit files.',
     '- Review the current branch checked out in this worktree against the base branch.',
     '- Missing or failing required checks are blocking.',
     '- Focus on regressions, correctness, scope violations, weak verification, and merge safety.',
-    '- Treat the PR as lane-scoped: files within the implementation agent scope are in-scope even if sourceTitle/sourceBody mention only the most recent task.',
-    '- Do not request changes solely because the diff includes earlier completed lane-task files that are still within the implementation agent scope.',
+    `- Treat the PR as lane-scoped: files within the ${getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} scope are in-scope even if sourceTitle/sourceBody mention only the most recent task.`,
+    `- Do not request changes solely because the diff includes earlier completed lane-task files that are still within the ${getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} scope.`,
     '',
     'Review task:',
     JSON.stringify(reviewTask, null, 2),
@@ -178,7 +187,7 @@ async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, workt
         taskIds: pr.taskIds || [],
         completedTaskIds: pr.completedTaskIds || [],
         acceptance: pr.acceptance || [],
-        implementationScopeViolations: pr.scopeViolations || [],
+        [`${laneLabel}ScopeViolations`]: pr.scopeViolations || [],
         priorReviews: pr.reviews || [],
       },
       null,
@@ -194,7 +203,7 @@ async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, workt
     'Deterministic scope evaluation for those diff files:',
     JSON.stringify(scopeResult || { ok: true, violations: [] }, null, 2),
     '',
-    'Implementation-time scope violations above are advisory context only; judge merge safety from the current diff and current deterministic scope evaluation.',
+    `${laneLabel[0].toUpperCase()}${laneLabel.slice(1)}-time scope violations above are advisory context only; judge merge safety from the current diff and current deterministic scope evaluation.`,
     '',
     `Compare against origin/${pr.baseBranch} when available; do not rely on a stale local ${pr.baseBranch} ref.`,
     `Review branch: ${branch}`,
@@ -523,7 +532,7 @@ function ensureTrailingNewline(value) {
 
 function validatePlannedTasks({ prd, tasks, implementationAgents, fallbackSprintId }) {
   if (!Array.isArray(tasks) || tasks.length === 0) {
-    throw new Error(`Codex did not return any implementation tasks for PRD "${prd.id}".`);
+    throw new Error(`Codex did not return any ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} tasks for PRD "${prd.id}".`);
   }
 
   const agentMap = new Map(implementationAgents.map((agent) => [agent.id, agent]));
@@ -533,7 +542,7 @@ function validatePlannedTasks({ prd, tasks, implementationAgents, fallbackSprint
     const agentId = String(task.agentId || '').trim();
     const agent = agentMap.get(agentId);
     if (!agent) {
-      throw new Error(`Codex returned unsupported implementation agent "${agentId}".`);
+      throw new Error(`Codex returned unsupported ${getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} "${agentId}".`);
     }
 
     const id = sanitizeTaskId(task.id || buildGeneratedTaskId(prd.id, agentId, index + 1));

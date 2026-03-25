@@ -1,9 +1,18 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawn } = require('child_process');
-const { acquireStateLock } = require('./autonomy-v2-lock');
-const { validateAutonomyConfig } = require('./autonomy-v2-config');
-const { planPrdTasksWithCodex } = require('./autonomy-v2-codex');
+const { acquireStateLock } = require('../../lock');
+const { validateAutonomyConfig } = require('../../config');
+const { planPrdTasksWithCodex } = require('../../codex');
+const { getAgentDefinition } = require('../../agents/AgentDefinitionRegistry');
+const {
+  AGENT_ROLES,
+  TASK_TYPES,
+  isImplementationRole,
+  isPmRole,
+  isReviewRole,
+  usesTrackedQueueForRole,
+} = require('../../agents/role-catalog');
 const {
   commitTrackedPrdStateToIntegrationBranch,
   commitPrdSpecToIntegrationBranch,
@@ -11,12 +20,12 @@ const {
   listTrackedPrdSpecs,
   readTrackedPrdStateMap,
   syncPrdSpecsFromIntegrationBranch,
-} = require('./autonomy-v2-dev-sync');
+} = require('../../sync');
 
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
-const CLI_PATH = path.join(__dirname, 'autonomy-v2.js');
-const WORKER_PATH = path.join(__dirname, 'autonomy-v2-worker.js');
+const CLI_PATH = path.join(__dirname, '..', '..', 'autonomy-v2', 'index.js');
+const WORKER_PATH = path.join(__dirname, '..', 'worker', 'index.js');
 const IMPLEMENTATION_DUE_STATUSES = new Set(['queued', 'active']);
 const BACKLOG_GRACE_MS = 15000;
 
@@ -92,18 +101,13 @@ function getAgent(config, agentId) {
 }
 
 function resolveQueuePath(rootDir, agent) {
-  if (!agent.taskQueue) {
-    throw new Error(`Agent "${agent.id}" is missing required taskQueue in config.`);
-  }
-  const relativePath = agent.taskQueue;
-  if (String(agent.role || '') === 'implementation') {
-    return path.isAbsolute(relativePath)
-      ? relativePath
-      : path.join(rootDir, relativePath);
-  }
-  return path.isAbsolute(relativePath)
-    ? relativePath
-    : resolveRuntimeManagedPath(rootDir, relativePath);
+  return getAgentDefinition(agent).resolveTaskQueue(rootDir, agent, {
+    isAbsolutePath: path.isAbsolute,
+    resolveRepoPath(currentRootDir, relativePath) {
+      return path.join(currentRootDir, relativePath);
+    },
+    resolveRuntimePath: resolveRuntimeManagedPath,
+  });
 }
 
 function buildImplementationQueueRelativePath(agentId) {
@@ -174,7 +178,7 @@ function loadQueues(rootDir, config) {
   (config.agents || []).forEach((agent) => {
     const queuePath = resolveQueuePath(rootDir, agent);
     const fallbackValue = buildTaskQueueState(agent, []);
-    const usesTrackedQueue = String(agent.role || '') === 'implementation' || String(agent.role || '') === 'review';
+    const usesTrackedQueue = usesTrackedQueueForRole(agent.role);
     queues[agent.id] = usesTrackedQueue
       ? readJsonFromGitRef(
           rootDir,
@@ -188,18 +192,7 @@ function loadQueues(rootDir, config) {
 }
 
 function buildTaskQueueState(agent, tasks = []) {
-  return String(agent.role || '') === 'implementation'
-    ? {
-        schemaVersion: 1,
-        agentId: agent.id,
-        role: agent.role,
-        tasks,
-      }
-    : {
-        agentId: agent.id,
-        role: agent.role,
-        tasks,
-      };
+  return getAgentDefinition(agent).buildQueueState(agent, tasks);
 }
 
 function writeQueue(rootDir, agent, queue) {
@@ -223,7 +216,7 @@ function commitTrackedQueue(rootDir, config, agent, queue, options = {}) {
 
 function writeQueueAndAggregate(rootDir, config, agentId, queue, options = {}) {
   const agent = getAgent(config, agentId);
-  if (String(agent.role || '') === 'review') {
+  if (isReviewRole(agent.role)) {
     commitTrackedQueue(rootDir, config, agent, queue, {
       commitMessage: options.commitMessage || `autonomy(queue): update ${agent.id}`,
       gitIdentity: options.gitIdentity || agent.gitIdentity,
@@ -552,7 +545,7 @@ function refreshRuntime(rootDir, config, queues, runtime) {
         return;
       }
 
-      if (agent.role === 'review') {
+      if (isReviewRole(agent.role)) {
         let queueChanged = false;
         listTasks(queue).forEach((task) => {
           if (task.status !== 'assigned') {
@@ -560,7 +553,7 @@ function refreshRuntime(rootDir, config, queues, runtime) {
           }
           task.status = 'failed';
           task.updatedAt = now;
-          task.lastError = 'review worker exited before completion';
+          task.lastError = `${AGENT_ROLES.REVIEW} worker exited before completion`;
           delete task.dispatchedAt;
           delete task.dispatcher;
           queueChanged = true;
@@ -571,7 +564,7 @@ function refreshRuntime(rootDir, config, queues, runtime) {
       return;
     }
 
-      if (agent.role === 'implementation') {
+      if (isImplementationRole(agent.role)) {
         return;
       }
     }
@@ -627,7 +620,7 @@ function findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, opti
       return;
     }
 
-    if (agent.role === 'pm') {
+    if (isPmRole(agent.role)) {
       if (hasQueuedPrd && !hasActivePrd) {
         due.push({ agentId: agent.id, reason: 'queued_prd' });
       }
@@ -643,14 +636,14 @@ function findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, opti
       return;
     }
 
-    if (agent.role === 'review') {
+    if (isReviewRole(agent.role)) {
       if (listTasks(queue).some((task) => task.status === 'queued')) {
         due.push({ agentId: agent.id, reason: 'queued_review' });
       }
       return;
     }
 
-    if (agent.role === 'implementation') {
+    if (isImplementationRole(agent.role)) {
       const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
       if (listTasks(queueContext.queue).some((task) => implementationTaskNeedsDispatch(task))) {
         due.push({ agentId: agent.id, reason: 'queued_task' });
@@ -886,10 +879,10 @@ function hasPendingBacklogWork(rootDir, config, queues, branchLocks) {
     if (!queue) {
       return false;
     }
-    if (agent.role === 'review') {
+    if (isReviewRole(agent.role)) {
       return listTasks(queue).some((task) => task.status === 'queued');
     }
-    if (agent.role === 'implementation') {
+    if (isImplementationRole(agent.role)) {
       const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
       return listTasks(queueContext.queue).some((task) => implementationTaskNeedsDispatch(task));
     }
@@ -901,13 +894,13 @@ function runWorkerOnce(rootDir, agentId) {
   const { config, sprint } = loadConfig(rootDir);
   const agent = getAgent(config, agentId);
   try {
-    if (agent.role === 'pm') {
+    if (isPmRole(agent.role)) {
       return runPmWorker(rootDir, config, sprint, agent);
     }
-    if (agent.role === 'review') {
+    if (isReviewRole(agent.role)) {
       return runReviewerWorker(rootDir, config, agent);
     }
-    if (agent.role === 'implementation') {
+    if (isImplementationRole(agent.role)) {
       return runImplementationWorker(rootDir, config, agent);
     }
 
@@ -1007,7 +1000,7 @@ function runPmWorker(rootDir, config, sprint, agent) {
 }
 
 function buildPmStubTaskSpecs(config, sprint, prd) {
-  const implementationAgents = (config.agents || []).filter((candidate) => String(candidate.role || '') === 'implementation');
+  const implementationAgents = (config.agents || []).filter((candidate) => isImplementationRole(candidate.role));
   const primaryAgent = implementationAgents[0];
   if (!primaryAgent) {
     return [];
@@ -1070,7 +1063,7 @@ function buildTrackedImplementationQueueUpdates(rootDir, config, taskSpecs, { pr
       agentId: spec.agentId,
       prdId: prd.id || undefined,
       laneKey: spec.laneKey || `${prd.id}:${spec.agentId}`,
-      type: spec.type || 'implementation',
+      type: spec.type || TASK_TYPES.DEFAULT,
       source: spec.source || 'planned',
       sprintId: spec.sprintId || prd.sprintId || sprint.sprintId || 'shared',
       baseBranch: config.integrationBranch,

@@ -4,10 +4,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { validateAutonomyConfig } = require('./src/autonomy-v2-config');
-const { shouldForceApproveAfterRepeatedReviews } = require('./src/autonomy-v2-default-runner');
+const { validateAutonomyConfig } = require('../../src/config');
+const { shouldForceApproveAfterRepeatedReviews } = require('../../src/autonomy-v2/runner/default-runner');
 
-const PROJECT_ROOT = path.join(__dirname);
+const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const CLI_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2');
 const SERVER_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2-server');
 

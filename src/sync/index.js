@@ -1,10 +1,16 @@
 const fs = require('fs');
-const https = require('https');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { validateAutonomyConfig } = require('./autonomy-v2-config');
-const { resolveGithubAuthToken } = require('./autonomy-v2-github');
-const { acquireStateLock } = require('./autonomy-v2-lock');
+const { validateAutonomyConfig } = require('../config');
+const { resolveGithubAuthToken } = require('../github');
+const { acquireStateLock } = require('../lock');
+const {
+  AGENT_ROLES,
+  TASK_TYPES,
+  getRoleLabel,
+  isImplementationRole,
+  isReviewRole,
+} = require('../agents/role-catalog');
 
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
@@ -67,11 +73,6 @@ function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requi
   return payload;
 }
 
-function hasActiveRuntimePrd(prds) {
-  return (prds || []).some((prd) => {
-    return ['planning', 'planned', 'queued'].includes(String(prd && prd.status || ''));
-  });
-}
 
 function hasPrdSpecInIntegrationBranch(rootDir, integrationBranch, prdId) {
   const fetchResult = fetchIntegrationBranch(rootDir, integrationBranch);
@@ -432,20 +433,10 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
     });
 
     const importedPrdIds = derived.importedPrdIds;
-    const currentPrById = new Map((prsState.pullRequests || []).map((pr) => [pr.id, pr]));
     const derivedPullRequestIds = new Set((derived.pullRequests || []).map((pr) => pr.id));
     const derivedBranchLockKeys = new Set((derived.branchLocks || []).map((lock) => {
       return `${lock.agentId}:${lock.laneKey || lock.taskId || ''}`;
     }));
-    const preservedTasks = currentQueueTasks.filter((task) => {
-      const currentPr = task && task.prId ? currentPrById.get(task.prId) : null;
-      const importedTask = isImportedPrdRecord(task, importedPrdIds)
-        || (currentPr && isImportedPrdRecord(currentPr, importedPrdIds));
-      if (!importedTask) {
-        return true;
-      }
-      return !derived.derivedTaskIds.has(task.id) && !derived.reconciledTaskIds.has(task.id);
-    });
     const nextPrs = (prsState.pullRequests || [])
       .filter((pr) => !isImportedPrdRecord(pr, importedPrdIds) || !derivedPullRequestIds.has(pr.id))
       .concat(derived.pullRequests);
@@ -483,9 +474,6 @@ function syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, options =
   return result;
 }
 
-function buildImplementationQueueRelativePath(agentId) {
-  return path.posix.join(...AUTONOMY_SEGMENTS, 'queues', `${agentId}.json`);
-}
 
 function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
   if (!ref || path.isAbsolute(relativePath)) {
@@ -503,7 +491,7 @@ function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
 
 function readTrackedImplementationQueuesFromRef(rootDir, config, ref) {
   return (config.agents || []).reduce((queues, agent) => {
-    if (String(agent.role || '') !== 'implementation') {
+    if (!isImplementationRole(agent.role)) {
       return queues;
     }
     const relativePath = agent.taskQueue;
@@ -531,7 +519,7 @@ function readTrackedImplementationQueuesFromRef(rootDir, config, ref) {
 
 function readTrackedReviewerTasksFromRef(rootDir, config, ref) {
   return (config.agents || []).reduce((tasks, agent) => {
-    if (String(agent.role || '') !== 'review') {
+    if (!isReviewRole(agent.role)) {
       return tasks;
     }
     const relativePath = agent.taskQueue;
@@ -714,7 +702,6 @@ function buildDerivedImportedRuntimeState({
   fetchedRef,
 }) {
   const currentPrdById = new Map((currentPrds || []).map((prd) => [prd.id, prd]));
-  const currentTaskById = new Map((currentTasks || []).map((task) => [task.id, task]));
   const currentTasksByPrId = new Map();
   (currentTasks || []).forEach((task) => {
     if (!task || !task.prId) {
@@ -726,7 +713,7 @@ function buildDerivedImportedRuntimeState({
   });
   const currentReviewerTaskByPrId = new Map(
     (currentTasks || [])
-      .filter((task) => task && task.type === 'review' && task.prId)
+      .filter((task) => task && task.type === TASK_TYPES.REVIEW && task.prId)
       .map((task) => [task.prId, task])
   );
   const currentBranchLockByLane = new Map(
@@ -846,7 +833,7 @@ function buildDerivedImportedRuntimeState({
         derivedPullRequests.push(derivedPr);
         const derivedPendingLinkedTaskIds = new Set();
         linkedRuntimeTasks.forEach((task) => {
-          if (!task || task.type === 'review') {
+          if (!task || task.type === TASK_TYPES.REVIEW) {
             return;
           }
           if (!derivedPendingLinkedTaskIds.has(task.id)) {
@@ -889,7 +876,7 @@ function buildDerivedImportedRuntimeState({
   };
 }
 
-function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, implementationTasks, laneStates, now, fetchedRef }) {
+function buildDerivedPrdRecord({ integrationBranch, remoteSpec, implementationTasks, laneStates, now, fetchedRef }) {
   const planningOnlySpec = requiresPmPlanning(remoteSpec.spec, implementationTasks);
   const groupedTasks = groupLaneTasksByAgent(implementationTasks || []);
   const completedTaskSpecIds = [];
@@ -941,7 +928,7 @@ function buildDerivedCompletedTaskSnapshot(task, prdId, integrationBranch, agent
     agentId: task.agentId,
     prdId,
     laneKey: `${prdId}:${task.agentId}`,
-    type: 'implementation',
+    type: TASK_TYPES.DEFAULT,
     sprintId: task.sprintId || 'shared',
     baseBranch: integrationBranch,
     checks: uniqueStrings([...(task.checks || []), ...((agentConfig && agentConfig.checks) || [])]),
@@ -987,7 +974,7 @@ function buildDerivedPullRequestRecord({
   };
   const reviewerHasStaleCommitView = reviewedCommitCountIsStale(prForReviewState, existingReviewerTask);
   const linkedWorkTasks = (linkedRuntimeTasks || [])
-    .filter((task) => task && task.type !== 'review')
+    .filter((task) => task && task.type !== TASK_TYPES.REVIEW)
     .filter((task) => !(reviewerHasStaleCommitView && task.type === 'review_followup'));
   const extraTaskIds = uniqueStrings([
     ...((existingPr && existingPr.taskIds) || []).filter((taskId) => !baseTaskIdSet.has(taskId)),
@@ -1004,7 +991,7 @@ function buildDerivedPullRequestRecord({
     ...((existingPr && existingPr.completedTaskIds) || []).filter((taskId) => !baseTaskIdSet.has(taskId)),
   ]);
   const reviews = Array.isArray(existingPr && existingPr.reviews)
-    ? existingPr.reviews.map((review) => ({ ...review }))
+    ? existingPr.reviews.map((decisionRecord) => ({ ...decisionRecord }))
     : [];
   const record = {
     id: prId,
@@ -1060,97 +1047,8 @@ function buildStablePullRequestId(laneKey) {
   return `pr-${slugify(laneKey || 'lane')}`;
 }
 
-function buildDerivedPendingLinkedTasks({
-  pr,
-  existingPr,
-  existingReviewerTask,
-  linkedRuntimeTasks,
-  laneTasks,
-  now,
-}) {
-  const baseTaskIds = new Set((laneTasks || []).map((task) => task.id));
-  const reviewerHasStaleCommitView = reviewedCommitCountIsStale(pr, existingReviewerTask);
-  const pendingLinkedTasks = (linkedRuntimeTasks || []).filter((task) => {
-    if (!task || task.type === 'review' || !isPendingRuntimeTask(task)) {
-      return false;
-    }
-    return !(reviewerHasStaleCommitView && task.type === 'review_followup');
-  });
 
-  if (pendingLinkedTasks.length > 0) {
-    return pendingLinkedTasks.map((task) => buildDerivedPendingLinkedTask(task, pr, now));
-  }
 
-  const pendingExtraTaskIds = uniqueStrings(
-    ((existingPr && existingPr.pendingTaskIds) || []).filter((taskId) => !baseTaskIds.has(taskId))
-  ).filter((taskId) => !(reviewerHasStaleCommitView && inferLinkedTaskType(taskId) === 'review_followup'));
-  const shouldSynthesizeFollowup = pendingExtraTaskIds.length > 0
-    || (!reviewerHasStaleCommitView && (
-      reviewDecisionIsChangesRequested(findLatestReview(existingPr))
-      || reviewerTaskIndicatesChangesRequested(existingReviewerTask)
-      || pr.status === 'changes_requested'
-    ));
-
-  if (!shouldSynthesizeFollowup) {
-    return [];
-  }
-
-  const taskIds = pendingExtraTaskIds.length > 0
-    ? pendingExtraTaskIds
-    : [buildDerivedReviewFollowupTaskId(pr, existingPr, existingReviewerTask)];
-
-  return taskIds.map((taskId) => buildDerivedPendingLinkedTask({
-    id: taskId,
-    type: inferLinkedTaskType(taskId),
-    title: inferLinkedTaskType(taskId) === 'conflict_resolution'
-      ? `Resolve conflict for ${pr.title}`
-      : `Address review for ${pr.title}`,
-    description: latestReviewSummary(existingPr)
-      || `Address reviewer feedback for ${pr.title}`,
-  }, pr, now));
-}
-
-function buildDerivedPendingLinkedTask(task, pr, now) {
-  const type = task && task.type ? task.type : 'review_followup';
-  const status = normalizePendingLinkedTaskStatus(task && task.status);
-  const description = task.description || latestReviewSummary(pr) || `Address reviewer feedback for ${pr.title}`;
-  const record = {
-    id: task.id,
-    title: task.title || (type === 'conflict_resolution'
-      ? `Resolve conflict for ${pr.title}`
-      : `Address review for ${pr.title}`),
-    description,
-    agentId: pr.agentId,
-    prdId: pr.prdId,
-    laneKey: pr.laneKey,
-    type,
-    sprintId: pr.sprintId || 'shared',
-    baseBranch: pr.baseBranch,
-    checks: normalizeStringList(pr.checks),
-    acceptance: type === 'review_followup'
-      ? buildDerivedReviewFollowupAcceptance(pr, description, task && task.acceptance)
-      : normalizeStringList(pr.acceptance),
-    status,
-    createdAt: task.createdAt || now,
-    updatedAt: now,
-    prId: pr.id,
-  };
-
-  if (task.lastError) {
-    record.lastError = task.lastError;
-  }
-
-  return record;
-}
-
-function buildDerivedReviewFollowupTaskId(pr, existingPr, existingReviewerTask) {
-  const reviewCount = Math.max(
-    Array.isArray(existingPr && existingPr.reviews) ? existingPr.reviews.length : 0,
-    Number(existingReviewerTask && existingReviewerTask.reviewRound) || 0,
-    1
-  );
-  return `${pr.agentId}-followup-${pr.id}-${reviewCount}`;
-}
 
 function inferLinkedTaskType(taskId) {
   if (String(taskId || '').includes('-conflict-')) {
@@ -1159,15 +1057,9 @@ function inferLinkedTaskType(taskId) {
   return 'review_followup';
 }
 
-function normalizePendingLinkedTaskStatus(status) {
-  if (status === 'changes_requested' || status === 'conflicted') {
-    return status;
-  }
-  return 'queued';
-}
 
 function buildDerivedReviewerTask(pr, sourceTask, now, existingTask = null, linkedRuntimeTasks = []) {
-  const pendingLinkedTasks = linkedRuntimeTasks.filter((task) => task && task.type !== 'review' && isPendingRuntimeTask(task));
+  const pendingLinkedTasks = linkedRuntimeTasks.filter((task) => task && task.type !== TASK_TYPES.REVIEW && isPendingRuntimeTask(task));
   const existingStatus = existingTask && existingTask.status ? existingTask.status : '';
   const reviewerHasStaleCommitView = reviewedCommitCountIsStale(pr, existingTask);
   const needsReviewerRecovery = approvedPrNeedsReviewerRecovery(pr, existingTask);
@@ -1184,11 +1076,11 @@ function buildDerivedReviewerTask(pr, sourceTask, now, existingTask = null, link
     status = 'approved';
   }
   const record = {
-    id: `review-${pr.id}`,
+    id: `${getRoleLabel(AGENT_ROLES.REVIEW)}-${pr.id}`,
     title: `Review ${pr.title}`,
     description: `Review ${pr.id} for ${sourceTask.title}`,
     agentId: 'reviewer',
-    type: 'review',
+    type: TASK_TYPES.REVIEW,
     prId: pr.id,
     sourceTaskId: sourceTask.id,
     sourceAgentId: sourceTask.agentId,
@@ -1244,7 +1136,8 @@ function approvedPrNeedsReviewerRecovery(pr, existingTask) {
   if (!prIsApprovedAndOpen(pr) || !existingTask) {
     return false;
   }
-  return /review worker exited before completion/i.test(String(existingTask.lastError || ''));
+  return new RegExp(`${getRoleLabel(AGENT_ROLES.REVIEW)} worker exited before completion`, 'i')
+    .test(String(existingTask.lastError || ''));
 }
 
 function prIsApprovedAndOpen(pr) {
@@ -1301,20 +1194,7 @@ function findLatestReview(pr) {
   return pr.reviews[pr.reviews.length - 1];
 }
 
-function latestReviewSummary(pr) {
-  const review = findLatestReview(pr);
-  return review && review.summary ? String(review.summary) : '';
-}
 
-function buildDerivedReviewFollowupAcceptance(pr, description, existingAcceptance = []) {
-  const explicitAcceptance = normalizeStringList(existingAcceptance);
-  const prAcceptance = normalizeStringList(pr && pr.acceptance);
-  if (explicitAcceptance.length > 0 && !stringListsEqual(explicitAcceptance, prAcceptance)) {
-    return explicitAcceptance;
-  }
-  const summary = String(description || '').trim();
-  return [summary || `Address reviewer feedback for ${pr && pr.title ? pr.title : 'this PR'}`];
-}
 
 function stringListsEqual(left, right) {
   if (left.length !== right.length) {
@@ -1328,12 +1208,12 @@ function stringListsEqual(left, right) {
   return true;
 }
 
-function reviewDecisionIsChangesRequested(review) {
-  return Boolean(review && review.decision === 'changes_requested');
+function reviewDecisionIsChangesRequested(decisionRecord) {
+  return Boolean(decisionRecord && decisionRecord.decision === 'changes_requested');
 }
 
-function reviewDecisionIsApproved(review) {
-  return Boolean(review && review.decision === 'approved');
+function reviewDecisionIsApproved(decisionRecord) {
+  return Boolean(decisionRecord && decisionRecord.decision === 'approved');
 }
 
 function reviewerTaskIndicatesChangesRequested(task) {
@@ -1426,37 +1306,8 @@ function buildLaneSourceSummary(prdId, laneTasks) {
   };
 }
 
-function resolveTaskQueuePath(rootDir, config, agentId) {
-  const agent = getAgentConfig(config, agentId);
-  if (!agent || !agent.taskQueue) {
-    throw new Error(`Agent "${agentId}" is missing taskQueue in config/agents.json`);
-  }
-  const relativePath = agent.taskQueue;
-  return path.isAbsolute(relativePath)
-    ? relativePath
-    : resolveRuntimeManagedPath(rootDir, relativePath);
-}
 
-function resolveRuntimeManagedPath(rootDir, relativePath) {
-  const normalized = path.normalize(relativePath);
-  const trackedStatePrefix = path.join(...AUTONOMY_SEGMENTS, 'state');
-  const runtimeStateDir = path.join(rootDir, ...RUNTIME_SEGMENTS, 'state');
-  if (normalized === trackedStatePrefix || normalized.startsWith(`${trackedStatePrefix}${path.sep}`)) {
-    return path.join(runtimeStateDir, trimLeadingSeparator(normalized.slice(trackedStatePrefix.length)));
-  }
-  if (normalized === 'state' || normalized.startsWith(`state${path.sep}`)) {
-    return path.join(runtimeStateDir, trimLeadingSeparator(normalized.slice('state'.length)));
-  }
-  return path.join(rootDir, normalized);
-}
 
-function trimLeadingSeparator(value) {
-  let normalized = String(value || '');
-  while (normalized.startsWith('/') || normalized.startsWith('\\')) {
-    normalized = normalized.slice(1);
-  }
-  return normalized;
-}
 
 function isImportedPrdRecord(record, importedPrdIds) {
   const laneKey = normalizeLaneKey(record);
@@ -1598,16 +1449,6 @@ function compareBranchToBase(repo, token, baseBranch, headBranch) {
   }
 }
 
-function shouldResetPrd(prd, existingTaskIds) {
-  if (prd.status === 'queued' || prd.status === 'planning' || prd.status === 'failed') {
-    return true;
-  }
-  const plannedTaskIds = Array.isArray(prd.plannedTaskIds) ? prd.plannedTaskIds : [];
-  if (plannedTaskIds.length === 0) {
-    return true;
-  }
-  return plannedTaskIds.every((taskId) => !existingTaskIds.has(taskId));
-}
 
 function buildImportedSpecState(remoteSpec, fetchedRef) {
   return {

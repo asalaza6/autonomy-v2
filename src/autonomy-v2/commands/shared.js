@@ -4,8 +4,8 @@ const fs = require('fs');
 const https = require('https');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { loadAutonomyEnv } = require('./autonomy-v2-env');
-const { validateAutonomyConfig } = require('./autonomy-v2-config');
+const { loadAutonomyEnv } = require('../../env');
+const { validateAutonomyConfig } = require('../../config');
 const {
   DEFAULT_SYNC_STATE,
   buildPrdSpecPayload,
@@ -17,11 +17,29 @@ const {
   listTrackedPrdSpecs,
   readTrackedPrdStateMap,
   syncPrdSpecsFromIntegrationBranch,
-} = require('./autonomy-v2-dev-sync');
-const { resolveGithubAuthToken } = require('./autonomy-v2-github');
-const { withStateLock } = require('./autonomy-v2-lock');
+} = require('../../sync');
+const { resolveGithubAuthToken } = require('../../github');
+const { withStateLock } = require('../../lock');
+const {
+  AGENT_ROLES,
+  TASK_TYPES,
+  buildRoleEventName,
+  getRoleAgentLabel,
+  getRoleLabel,
+  isImplementationRole,
+  isPmRole,
+  isReviewRole,
+  usesTrackedQueueForRole,
+} = require('../../agents/role-catalog');
+const {
+  collectAgentScaffoldEntries,
+  getTemplateContent,
+  pruneStaleAgentScaffold,
+  resolveTemplateTargetPath,
+  validateImplementationChecks,
+} = require('../scaffold');
 
-const PACKAGE_ROOT = path.join(__dirname, '..');
+const PACKAGE_ROOT = path.join(__dirname, '..', '..', '..');
 const TEMPLATE_ROOT = path.join(PACKAGE_ROOT, 'templates', 'prompts', 'autonomous', 'v2');
 const DEFAULT_AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const DEFAULT_RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
@@ -70,15 +88,7 @@ const GENERATED_TEMPLATE_FILES = {
     "const path = require('path');",
     "const { execFileSync } = require('child_process');",
     '',
-    `const PACKAGE_RUNNER_PATH = ${JSON.stringify(path.join(PACKAGE_ROOT, 'src', 'autonomy-v2-default-runner.js'))};`,
-    '',
-    'let TARGET_PATH = null;',
-    '',
-    'try {',
-    "  TARGET_PATH = require.resolve('@asalaza6/autonomy-v2/default-runner');",
-    '} catch (error) {',
-    '  TARGET_PATH = PACKAGE_RUNNER_PATH;',
-    '}',
+    `const TARGET_PATH = ${JSON.stringify(path.join(PACKAGE_ROOT, 'src', 'autonomy-v2', 'runner', 'default-runner.js'))};`,
     '',
     'if (require.main === module) {',
     '  try {',
@@ -157,7 +167,7 @@ async function main(argv = process.argv.slice(2)) {
       case 'pr:record':
         await runCommand(() => handlePrRecord(rootDir, options));
         break;
-      case 'review:record':
+      case buildRoleEventName(AGENT_ROLES.REVIEW, 'record'):
         await runCommand(() => handleReviewRecord(rootDir, options));
         break;
       case 'merge':
@@ -217,7 +227,7 @@ function isMutatingCommand(command) {
     'prd:archive-completed',
     'worktree:prepare',
     'pr:record',
-    'review:record',
+    buildRoleEventName(AGENT_ROLES.REVIEW, 'record'),
     'merge',
   ]).has(command);
 }
@@ -253,7 +263,7 @@ Commands:
   worktree:prepare --task <task-id> [--create]
   scope:validate --task <task-id> [--files <path1,path2>] [--worktree <path>]
   pr:record --task <task-id> --head-branch <branch> [--publish]
-  review:record --pr <pr-id> --reviewer <agent-id> --decision <approve|changes-requested> [--publish]
+  ${buildRoleEventName(AGENT_ROLES.REVIEW, 'record')} --pr <pr-id> --reviewer <agent-id> --decision <approve|changes-requested> [--publish]
   merge --pr <pr-id> --actor <agent-id> [--execute]
   runtime:status
 
@@ -516,7 +526,9 @@ function handleInit(rootDir, options) {
   ensureDir(paths.runtimeAutonomyDir);
 
   for (const relativeFile of BASE_TEMPLATE_FILES) {
-    const targetPath = resolveTemplateTargetPath(rootDir, relativeFile);
+    const targetPath = resolveTemplateTargetPath(rootDir, relativeFile, {
+      getAutonomyPaths,
+    });
     ensureDir(path.dirname(targetPath));
     const preserveIfExists = relativeFile === 'config/agents.json' || relativeFile === 'config/sprint.json';
     const isBootstrapRootFile = bootstrapRootFiles.has(relativeFile);
@@ -527,7 +539,10 @@ function handleInit(rootDir, options) {
       continue;
     }
 
-    const templateContent = getTemplateContent(relativeFile);
+    const templateContent = getTemplateContent(relativeFile, {
+      generatedTemplateFiles: GENERATED_TEMPLATE_FILES,
+      templateRoot: TEMPLATE_ROOT,
+    });
     fs.writeFileSync(targetPath, templateContent, 'utf8');
     created.push(relativeFile);
   }
@@ -554,7 +569,12 @@ function handleInit(rootDir, options) {
     updated.push('config/agents.json');
   }
   validateImplementationChecks(config, paths.agentsConfig);
-  const agentEntries = collectAgentScaffoldEntries(rootDir, config);
+  const agentEntries = collectAgentScaffoldEntries(rootDir, config, {
+    getAgentLogPath,
+    getAutonomyPaths,
+    resolveTaskQueuePath,
+    templateRoot: TEMPLATE_ROOT,
+  });
 
   for (const entry of agentEntries) {
     ensureDir(path.dirname(entry.targetPath));
@@ -568,7 +588,9 @@ function handleInit(rootDir, options) {
   }
 
   if (options.force === true) {
-    removed.push(...pruneStaleAgentScaffold(rootDir, agentEntries));
+    removed.push(...pruneStaleAgentScaffold(rootDir, agentEntries, {
+      getAutonomyPaths,
+    }));
   }
 
   const payload = {
@@ -598,322 +620,6 @@ function removeListEntry(list, value) {
   if (index >= 0) {
     list.splice(index, 1);
   }
-}
-
-function validateImplementationChecks(config, sourcePath) {
-  const invalidAgents = [];
-
-  for (const agent of config.agents || []) {
-    if (String(agent.role || '').trim() !== 'implementation') {
-      continue;
-    }
-
-    if (!Array.isArray(agent.checks) || agent.checks.length === 0 || agent.checks.some((check) => String(check || '').trim().length === 0)) {
-      invalidAgents.push(agent.id || '(unknown)');
-    }
-  }
-
-  if (invalidAgents.length > 0) {
-    throw new Error(`Invalid autonomy config at ${sourcePath}: implementation agents must define a non-empty checks array. Invalid agents: ${invalidAgents.join(', ')}.`);
-  }
-}
-
-function collectAgentScaffoldEntries(rootDir, config) {
-  return (config.agents || []).flatMap((agent) => {
-    const systemPromptPath = resolveScaffoldPath(rootDir, agent.systemPrompt);
-    const handoffPath = path.join(path.dirname(systemPromptPath), 'handoff.md');
-    const logPath = getAgentLogPath(rootDir, agent.id);
-    const queuePath = resolveTaskQueuePath(rootDir, config, agent.id);
-
-    return [
-      {
-        relativeFile: relativeScaffoldPath(rootDir, systemPromptPath) || systemPromptPath,
-        targetPath: systemPromptPath,
-        content: getAgentScaffoldContent(rootDir, agent, systemPromptPath, 'system.md', config),
-      },
-      {
-        relativeFile: relativeScaffoldPath(rootDir, handoffPath) || handoffPath,
-        targetPath: handoffPath,
-        content: getAgentScaffoldContent(rootDir, agent, handoffPath, 'handoff.md', config),
-      },
-      {
-        relativeFile: relativeScaffoldPath(rootDir, logPath) || logPath,
-        targetPath: logPath,
-        content: getAgentScaffoldContent(rootDir, agent, logPath, 'log.md', config),
-      },
-      {
-        relativeFile: relativeScaffoldPath(rootDir, queuePath) || queuePath,
-        targetPath: queuePath,
-        content: buildQueueTemplate(agent.id, agent.role),
-      },
-    ];
-  });
-}
-
-function pruneStaleAgentScaffold(rootDir, agentEntries) {
-  const desiredPaths = new Set(agentEntries.map((entry) => path.resolve(entry.targetPath)));
-  const paths = getAutonomyPaths(rootDir);
-  const candidateDirs = [
-    path.join(paths.repoAutonomyDir, 'agents'),
-    path.join(paths.repoAutonomyDir, 'queues'),
-    path.join(paths.runtimeAutonomyDir, 'agents'),
-    path.join(paths.runtimeAutonomyDir, 'state', 'queues'),
-  ];
-  const removed = [];
-
-  candidateDirs.forEach((candidateDir) => {
-    pruneStaleScaffoldDirectory(candidateDir, desiredPaths, removed, rootDir);
-  });
-
-  return removed;
-}
-
-function pruneStaleScaffoldDirectory(dirPath, desiredPaths, removed, rootDir) {
-  if (!fs.existsSync(dirPath)) {
-    return;
-  }
-
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  entries.forEach((entry) => {
-    const entryPath = path.join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      pruneStaleScaffoldDirectory(entryPath, desiredPaths, removed, rootDir);
-      if (fs.existsSync(entryPath) && fs.readdirSync(entryPath).length === 0) {
-        fs.rmdirSync(entryPath);
-      }
-      return;
-    }
-
-    if (desiredPaths.has(path.resolve(entryPath))) {
-      return;
-    }
-
-    fs.unlinkSync(entryPath);
-    removed.push(path.relative(rootDir, entryPath));
-  });
-}
-
-function resolveScaffoldPath(rootDir, relativePath) {
-  if (path.isAbsolute(relativePath)) {
-    return path.normalize(relativePath);
-  }
-
-  return path.join(rootDir, relativePath);
-}
-
-function relativeScaffoldPath(rootDir, absolutePath) {
-  const relativePath = path.relative(rootDir, absolutePath);
-  if (relativePath.startsWith('..')) {
-    return null;
-  }
-  return relativePath;
-}
-
-function getAgentScaffoldContent(rootDir, agent, targetPath, fileName, config) {
-  const relativePath = relativeScaffoldPath(rootDir, targetPath);
-  if (relativePath) {
-    const diskPath = path.join(TEMPLATE_ROOT, relativePath);
-    if (fs.existsSync(diskPath)) {
-      return fs.readFileSync(diskPath, 'utf8');
-    }
-  }
-
-  switch (fileName) {
-    case 'system.md':
-      return buildAgentSystemPrompt(agent, config);
-    case 'handoff.md':
-      return buildAgentHandoffTemplate(agent);
-    case 'log.md':
-      return buildAgentLogTemplate(agent);
-    default:
-      return '';
-  }
-}
-
-function buildAgentSystemPrompt(agent, config) {
-  const agentLabel = getAgentDisplayName(agent);
-  const integrationBranch = config.integrationBranch || 'dev';
-  const productionBranch = config.productionBranch || 'main';
-  const projectName = config.projectName || 'this repository';
-  const scopeLines = Array.isArray(agent.include) && agent.include.length > 0
-    ? agent.include.map((pattern) => `- Stay inside \`${pattern}\` unless the task explicitly expands scope.`)
-    : ['- Stay inside your assigned scope.'];
-  const checkLines = Array.isArray(agent.checks) && agent.checks.length > 0
-    ? agent.checks.map((check) => `- ${check}`)
-    : ['- Run the checks configured for your lane before publishing.'];
-
-  if (agent.role === 'pm') {
-    return [
-      `# ${agentLabel} System`,
-      '',
-      `You are the PM agent for ${projectName}.`,
-      '',
-      '## Role',
-      '',
-      '- Watch the PRD inbox for newly inserted product requests.',
-      '- Decompose each PRD into scoped implementation tasks for the feature agents.',
-      '- Route tasks into the correct per-agent queues with concrete acceptance criteria.',
-      '',
-      '## Hard Rules',
-      '',
-      '- Do not write feature code.',
-      '- Do not review or merge pull requests.',
-      '- Do not create repo-wide tasks when a narrower scoped task is possible.',
-      `- Always target automation at \`${integrationBranch}\`, never \`${productionBranch}\` or \`master\`.`,
-      '',
-      '## Workflow',
-      '',
-      '1. Read the next queued PRD from the PRD inbox.',
-      '2. Break it into atomic tasks for the configured implementation lanes as needed.',
-      '3. Assign each task to one agent queue that already owns the needed scope.',
-      '4. Record the decomposition result and mark the PRD as planned.',
-      '',
-    ].join('\n');
-  }
-
-  if (agent.role === 'review') {
-    return [
-      `# ${agentLabel} System`,
-      '',
-      `You are the review and integration agent for ${projectName}.`,
-      '',
-      '## Role',
-      '',
-      '- Review PRs created by implementation agents.',
-      '- Focus on correctness, regressions, missing tests, scope violations, and unsafe merges.',
-      '- Approve or request changes.',
-      `- Merge approved PRs into \`${integrationBranch}\`.`,
-      '',
-      '## Hard Rules',
-      '',
-      '- Never review your own authored work.',
-      '- Do not implement feature changes while reviewing.',
-      '- Treat missing required checks as blocking.',
-      `- Never target \`${productionBranch}\` or \`master\`.`,
-      '',
-      '## Review Priorities',
-      '',
-      '1. Behavioral regressions',
-      '2. Scope violations',
-      '3. Missing or weak verification',
-      '4. Merge safety',
-      '5. Maintainability issues that materially affect delivery',
-      '',
-    ].join('\n');
-  }
-
-  return [
-    `# ${agentLabel} System`,
-    '',
-    `You are the ${agentLabel} implementation agent for ${projectName}.`,
-    '',
-    '## Role',
-    '',
-    '- Implement only tasks assigned to you.',
-    `- Work only from task branches based on \`${integrationBranch}\`.`,
-    `- Open or update pull requests targeting \`${integrationBranch}\`.`,
-    '',
-    '## Hard Rules',
-    '',
-    '- Edit only files within your configured agent scope.',
-    ...scopeLines,
-    `- Do not merge to \`${productionBranch}\` or \`master\`.`,
-    `- Do not merge directly to \`${integrationBranch}\`; publish changes for review.`,
-    '',
-    '## Required Checks',
-    '',
-    ...checkLines,
-    '',
-    '## Required Workflow',
-    '',
-    '1. Read your current tracked queue task and acceptance criteria.',
-    '2. Work inside the assigned worktree and branch.',
-    '3. Run required checks before publishing.',
-    '4. Keep the diff focused on your lane.',
-    '5. Update the PR when review asks for changes.',
-    '',
-  ].join('\n');
-}
-
-function buildAgentHandoffTemplate(agent) {
-  const agentLabel = getAgentDisplayName(agent);
-  return [
-    `# ${agentLabel} Handoff`,
-    '',
-    '## Current State',
-    '',
-    '_No active handoff yet._',
-    '',
-  ].join('\n');
-}
-
-function buildAgentLogTemplate(agent) {
-  const agentLabel = getAgentDisplayName(agent);
-  return `# ${agentLabel} Log\n`;
-}
-
-function getAgentDisplayName(agent) {
-  const source = String(agent && (agent.personaName || agent.id) || 'agent').trim();
-  if (!source) {
-    return 'Agent';
-  }
-  if (/^pm([-_\s]?agent)?$/i.test(source) || /^pm-agent$/i.test(source)) {
-    return 'PM Agent';
-  }
-  return source
-    .replace(/[-_]+/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function resolveTemplateTargetPath(rootDir, relativeFile) {
-  if (relativeFile.startsWith('.')) {
-    return path.join(rootDir, relativeFile);
-  }
-  if (relativeFile.startsWith('scripts/')) {
-    return path.join(rootDir, relativeFile);
-  }
-  const paths = getAutonomyPaths(rootDir);
-  const baseDir = isRuntimeTemplate(relativeFile)
-    ? paths.runtimeAutonomyDir
-    : paths.repoAutonomyDir;
-  return path.join(baseDir, relativeFile);
-}
-
-function isRuntimeTemplate(relativeFile) {
-  return relativeFile.startsWith('state/') || /(^|\/)log\.md$/.test(relativeFile);
-}
-
-function getTemplateContent(relativeFile) {
-  if (Object.prototype.hasOwnProperty.call(GENERATED_TEMPLATE_FILES, relativeFile)) {
-    return GENERATED_TEMPLATE_FILES[relativeFile]();
-  }
-  const diskPath = path.join(TEMPLATE_ROOT, relativeFile);
-  if (fs.existsSync(diskPath)) {
-    return fs.readFileSync(diskPath, 'utf8');
-  }
-  return '';
-}
-
-function buildQueueTemplate(agentId, role) {
-  return `${JSON.stringify(
-    String(role || '') === 'implementation'
-      ? {
-          schemaVersion: 1,
-          agentId,
-          role,
-          tasks: [],
-        }
-      : {
-          agentId,
-          role,
-          tasks: [],
-        },
-    null,
-    2
-  )}\n`;
 }
 
 function handleStatus(rootDir, options) {
@@ -1008,8 +714,8 @@ function handleTaskAdd(rootDir, options) {
   const agentId = requireOption(options, 'agent');
   const agent = getAgent(config, agentId);
 
-  if (agent.role !== 'implementation') {
-    throw new Error(`Agent "${agentId}" is not an implementation agent.`);
+  if (!isImplementationRole(agent.role)) {
+    throw new Error(`Agent "${agentId}" is not an ${getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)}.`);
   }
   if (listTasks(taskQueues).some((task) => task.id === taskId)) {
     throw new Error(`Task "${taskId}" already exists.`);
@@ -1025,7 +731,7 @@ function handleTaskAdd(rootDir, options) {
     agentId,
     prdId: getStringOption(options, 'prd-id', ''),
     laneKey: getStringOption(options, 'lane-key', ''),
-    type: getStringOption(options, 'type', 'implementation'),
+    type: getStringOption(options, 'type', TASK_TYPES.DEFAULT),
     sprintId: getStringOption(options, 'sprint-id', sprint.sprintId || 'shared'),
     baseBranch: getStringOption(options, 'base-branch', sprint.defaultTaskBaseBranch || config.integrationBranch),
     checks: checks.length > 0 ? checks : agent.checks || [],
@@ -1075,12 +781,12 @@ function handleTaskFinish(rootDir, options) {
   if (taskIndex === -1) {
     throw new Error(`Task "${task.id}" is not present in queue "${task.agentId}".`);
   }
-  if (String(agent.role || '') === 'implementation') {
+  if (isImplementationRole(agent.role)) {
     const laneKey = task.laneKey || buildTaskLaneKey(task);
     const claimedBranch = resolveImplementationBranchRef(rootDir, config, branchLocks, task.agentId, laneKey, { task });
     if (claimedBranch) {
       throw new Error(
-        `Implementation lane "${laneKey}" is active on branch "${claimedBranch}". Finish it from the lane worktree instead of mutating ${config.integrationBranch}.`
+        `${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)[0].toUpperCase()}${getRoleLabel(AGENT_ROLES.IMPLEMENTATION).slice(1)} lane "${laneKey}" is active on branch "${claimedBranch}". Finish it from the lane worktree instead of mutating ${config.integrationBranch}.`
       );
     }
     const now = new Date().toISOString();
@@ -1115,7 +821,7 @@ function handleTaskFinish(rootDir, options) {
       type: task.type,
     },
     output: {
-      removed: String(agent.role || '') === 'implementation' ? false : true,
+      removed: isImplementationRole(agent.role) ? false : true,
       state: task.state || task.status || null,
       completionMode: task.completionMode || null,
     },
@@ -1189,7 +895,7 @@ function handlePrdAdd(rootDir, options) {
     throw new Error('Provide at least one --task-spec or a --specification/--requirement input for PM planning.');
   }
   if (taskSpecs.length > 0 && (hasActivePrd || hasActiveIntegrationPrdSpec || hasExistingPrdSpec)) {
-    throw new Error('Cannot enqueue implementation task specs while the PRD spec would be queued instead of active on the integration branch.');
+    throw new Error(`Cannot enqueue ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} task specs while the PRD spec would be queued instead of active on the integration branch.`);
   }
 
   const prdSpec = buildPrdSpecPayload({
@@ -1199,7 +905,7 @@ function handlePrdAdd(rootDir, options) {
     specification,
     requirements,
   });
-  const pmAgent = getAgent(config, 'pm-agent');
+  const pmAgent = getAgent(config, `${AGENT_ROLES.PM}-agent`);
   const commitResult = commitPrdSpecToIntegrationBranch(rootDir, config.integrationBranch, prdSpec, {
     commitMessage: `autonomy(prd): upsert ${id}`,
     gitIdentity: pmAgent.gitIdentity,
@@ -1319,7 +1025,7 @@ function handlePrepareWorktree(rootDir, options) {
   const taskId = requireOption(options, 'task');
   const task = resolveTaskForWorktreePreparation(rootDir, state, taskId);
   const agent = getAgent(state.config, task.agentId);
-  if (agent.role !== 'implementation' && agent.role !== 'conflict-resolution') {
+  if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
     throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
   }
   const create = options.create === true;
@@ -1359,7 +1065,7 @@ function resolveTaskForWorktreePreparation(rootDir, state, taskId) {
 
 function prepareTaskWorktree(rootDir, config, branchLocksState, task, options = {}) {
   const agent = getAgent(config, task.agentId);
-  if (agent.role !== 'implementation' && agent.role !== 'conflict-resolution') {
+  if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
     throw new Error(`Agent "${agent.id}" does not use worktree preparation.`);
   }
   const create = options.create === true;
@@ -1442,7 +1148,7 @@ async function handlePrRecord(rootDir, options) {
   const state = loadAllState(rootDir);
   const task = resolvePrRecordTask(rootDir, state, requireOption(options, 'task'));
   const agent = getAgent(state.config, task.agentId);
-  if (agent.role !== 'implementation' && agent.role !== 'conflict-resolution') {
+  if (!isImplementationRole(agent.role) && agent.role !== TASK_TYPES.CONFLICT) {
     throw new Error(`Agent "${agent.id}" cannot publish pull requests.`);
   }
   const headBranch = requireOption(options, 'head-branch');
@@ -1461,7 +1167,7 @@ async function handlePrRecord(rootDir, options) {
   const laneScopeViolations = uniqueScopeViolations(completedLaneTasks.flatMap((candidate) => {
     return collectTaskScopeViolations(candidate);
   }));
-  const laneTasks = String(agent.role || '') === 'implementation'
+  const laneTasks = isImplementationRole(agent.role)
     ? listImplementationLaneTasks(rootDir, state, task.agentId, laneKey, { task }).tasks
     : listLaneTasks(state.taskQueues, task.agentId, laneKey);
   const pendingLaneTasks = laneTasks
@@ -1602,7 +1308,7 @@ async function handlePrRecord(rootDir, options) {
     },
   });
   if (reviewerTask) {
-    appendAgentLog(rootDir, state.config, reviewerTask.agentId, 'review:queued', {
+    appendAgentLog(rootDir, state.config, reviewerTask.agentId, buildRoleEventName(AGENT_ROLES.REVIEW, 'queued'), {
       input: {
         prId: record.id,
         sourceTaskId: task.id,
@@ -1630,39 +1336,39 @@ async function handleReviewRecord(rootDir, options) {
   const pr = getPr(state.prs, requireOption(options, 'pr'));
   const reviewerId = requireOption(options, 'reviewer');
   const reviewer = getAgent(state.config, reviewerId);
-  if (reviewer.role !== 'review') {
-    throw new Error(`Agent "${reviewerId}" is not a reviewer.`);
+  if (!isReviewRole(reviewer.role)) {
+    throw new Error(`Agent "${reviewerId}" is not a ${getRoleLabel(AGENT_ROLES.REVIEW)}er.`);
   }
   if (reviewerId === pr.agentId) {
-    throw new Error('Reviewer cannot review their own PR.');
+    throw new Error(`${getRoleLabel(AGENT_ROLES.REVIEW)[0].toUpperCase()}${getRoleLabel(AGENT_ROLES.REVIEW).slice(1)}er cannot ${getRoleLabel(AGENT_ROLES.REVIEW)} their own PR.`);
   }
 
   const decision = normalizeReviewDecision(requireOption(options, 'decision'));
   const rawSummary = getStringOption(options, 'summary', '');
-  const review = {
+  const decisionRecord = {
     reviewerId,
     decision,
     summary: rawSummary,
     publishedSummary: buildSignedReviewSummary(reviewer, rawSummary),
     reviewedAt: new Date().toISOString(),
   };
-  pr.reviews.push(review);
-  pr.updatedAt = review.reviewedAt;
+  pr.reviews.push(decisionRecord);
+  pr.updatedAt = decisionRecord.reviewedAt;
   pr.status = decision === 'approved' ? 'approved' : 'changes_requested';
 
   const task = findTask(state.taskQueues, pr.taskId);
   const implementationAgent = getAgent(state.config, pr.agentId);
-  const usesTrackedImplementationQueue = String(implementationAgent.role || '') === 'implementation';
+  const usesTrackedImplementationQueue = isImplementationRole(implementationAgent.role);
   let followupTask = null;
   const followupPatch = decision === 'changes_requested'
     ? {
         id: buildLaneFollowupTaskId(pr),
-        title: `Address review for ${pr.title}`,
-        description: rawSummary || `Address reviewer feedback for ${pr.title}`,
+        title: `Address ${getRoleLabel(AGENT_ROLES.REVIEW)} for ${pr.title}`,
+        description: rawSummary || `Address ${getRoleLabel(AGENT_ROLES.REVIEW)}er feedback for ${pr.title}`,
         type: 'review_followup',
         source: 'review_followup',
-        createdAt: review.reviewedAt,
-        updatedAt: review.reviewedAt,
+        createdAt: decisionRecord.reviewedAt,
+        updatedAt: decisionRecord.reviewedAt,
       }
     : null;
   if (decision === 'changes_requested' && usesTrackedImplementationQueue) {
@@ -1670,10 +1376,10 @@ async function handleReviewRecord(rootDir, options) {
   }
   if (task && !followupTask && (!usesTrackedImplementationQueue || decision === 'approved')) {
     task.status = decision === 'approved' ? 'approved' : 'changes_requested';
-    task.updatedAt = review.reviewedAt;
+    task.updatedAt = decisionRecord.reviewedAt;
     if (decision === 'changes_requested') {
-      task.title = `Address review for ${pr.title}`;
-      task.description = rawSummary || `Address reviewer feedback for ${pr.title}`;
+      task.title = `Address ${getRoleLabel(AGENT_ROLES.REVIEW)} for ${pr.title}`;
+      task.description = rawSummary || `Address ${getRoleLabel(AGENT_ROLES.REVIEW)}er feedback for ${pr.title}`;
       task.acceptance = [task.description];
       task.type = task.type || 'review_followup';
       task.prId = pr.id;
@@ -1691,9 +1397,9 @@ async function handleReviewRecord(rootDir, options) {
     title: pr.sourceTitle,
     acceptance: pr.acceptance || [],
     agentId: pr.agentId,
-  }, review.reviewedAt);
+  }, decisionRecord.reviewedAt);
   reviewerTask.status = decision === 'approved' ? 'approved' : 'changes_requested';
-  reviewerTask.reviewedAt = review.reviewedAt;
+  reviewerTask.reviewedAt = decisionRecord.reviewedAt;
   reviewerTask.lastDecision = decision;
   const reviewedCommitCount = Number(pr.commitCount || (pr.remote && pr.remote.commitCount) || 0);
   if (Number.isFinite(reviewedCommitCount) && reviewedCommitCount > 0) {
@@ -1703,40 +1409,40 @@ async function handleReviewRecord(rootDir, options) {
   }
   delete reviewerTask.lastError;
   delete reviewerTask.lastMergeFailureMessage;
-  reviewerTask.updatedAt = review.reviewedAt;
+  reviewerTask.updatedAt = decisionRecord.reviewedAt;
 
   if (options.publish === true) {
     if (!pr.remote || !pr.remote.number) {
-      throw new Error('Cannot publish review without a remote PR number.');
+      throw new Error(`Cannot publish ${getRoleLabel(AGENT_ROLES.REVIEW)} without a remote PR number.`);
     }
     const repo = resolveGithubRepo(rootDir);
     const token = resolveGithubAuthToken({ required: true });
     try {
-      await publishReview(repo, token, pr.remote.number, review);
+      await publishReview(repo, token, pr.remote.number, decisionRecord);
     } catch (error) {
       if (!isSelfPullRequestReviewError(error)) {
         throw error;
       }
-      await addIssueComment(repo, token, pr.remote.number, review.publishedSummary || review.summary || '');
-      review.remotePublishFallback = 'issue_comment';
+      await addIssueComment(repo, token, pr.remote.number, decisionRecord.publishedSummary || decisionRecord.summary || '');
+      decisionRecord.remotePublishFallback = 'issue_comment';
     }
   }
 
   const paths = getAutonomyPaths(rootDir);
   writeJson(paths.prsState, state.prs);
   writeTaskQueues(rootDir, state.config, state.taskQueues);
-  appendAgentLog(rootDir, state.config, reviewerId, 'review:record', {
+  appendAgentLog(rootDir, state.config, reviewerId, buildRoleEventName(AGENT_ROLES.REVIEW, 'record'), {
     input: {
       prId: pr.id,
       decision,
-      summary: review.summary,
+      summary: decisionRecord.summary,
     },
     output: {
       reviewerTaskId: reviewerTask.id,
       status: reviewerTask.status,
     },
   });
-  appendAgentLog(rootDir, state.config, pr.agentId, 'review:feedback', {
+  appendAgentLog(rootDir, state.config, pr.agentId, buildRoleEventName(AGENT_ROLES.REVIEW, 'feedback'), {
     input: {
       prId: pr.id,
       reviewerId,
@@ -1753,8 +1459,8 @@ async function handleReviewRecord(rootDir, options) {
     },
   });
 
-  printOutput(options, { pr, review }, () => {
-    console.log(`Recorded ${decision} review on ${pr.id}`);
+  printOutput(options, { pr, [getRoleLabel(AGENT_ROLES.REVIEW)]: decisionRecord }, () => {
+    console.log(`Recorded ${decision} ${getRoleLabel(AGENT_ROLES.REVIEW)} on ${pr.id}`);
   });
 }
 
@@ -1765,7 +1471,7 @@ async function handleMerge(rootDir, options) {
   const actorId = requireOption(options, 'actor');
   const actor = getAgent(state.config, actorId);
   const implementationAgent = getAgent(state.config, pr.agentId);
-  const laneTasks = String(implementationAgent.role || '') === 'implementation'
+  const laneTasks = isImplementationRole(implementationAgent.role)
     ? listImplementationLaneTasks(rootDir, state, pr.agentId, pr.laneKey || pr.taskId, { pr }).tasks
     : listLaneTasks(state.taskQueues, pr.agentId, pr.laneKey || pr.taskId);
   const pendingLaneTasks = laneTasks.filter((candidate) => !isTerminalTaskStatus(getImplementationTaskState(candidate)));
@@ -1812,7 +1518,7 @@ async function handleMerge(rootDir, options) {
           message: mergeResponse.message,
         });
         const task = findTask(state.taskQueues, pr.taskId);
-        const usesTrackedImplementationQueue = String(getAgent(state.config, pr.agentId).role || '') === 'implementation';
+        const usesTrackedImplementationQueue = isImplementationRole(getAgent(state.config, pr.agentId).role);
         let conflictTask = null;
         if (usesTrackedImplementationQueue) {
           conflictTask = appendTrackedBranchFollowupTask(rootDir, state, pr, {
@@ -2256,10 +1962,10 @@ function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, branchLoc
       status: 'idle',
       pid: null,
     };
-    if (agent.role === 'pm') {
+    if (isPmRole(agent.role)) {
       return buildPmAgentStatus(agent, worker, prds);
     }
-    if (agent.role === 'review') {
+    if (isReviewRole(agent.role)) {
       return buildReviewAgentStatus(agent, queue, worker, prById);
     }
     return buildImplementationAgentStatus(rootDir, config, branchLocks, agent, queue, worker, prById, branchLockByLane);
@@ -2303,7 +2009,7 @@ function buildImplementationAgentStatus(rootDir, config, branchLocksState, agent
         : 'starting')
       : taskState === 'active'
         ? 'current task'
-      : (activeTask.type === 'review_followup' ? 'queued review follow-up' : 'next task');
+      : (activeTask.type === 'review_followup' ? `queued ${getRoleLabel(AGENT_ROLES.REVIEW)} follow-up` : 'next task');
     detail = `${prefix} ${describeImplementationTask(activeTask)}`;
   }
   if (extraCount > 0) {
@@ -2475,16 +2181,16 @@ function buildReviewAgentStatus(agent, queue, worker, prById) {
     (assignedTask || queuedTask || blockedTask || failedTask || {}).id
   );
 
-  let detail = 'no review tasks';
+  let detail = `no ${getRoleLabel(AGENT_ROLES.REVIEW)} tasks`;
   if (worker.status === 'running' && (assignedTask || queuedTask)) {
-    detail = `${assignedTask ? 'reviewing' : 'starting review of'} ${describeReviewTask(assignedTask || queuedTask, prById)}`;
+    detail = `${assignedTask ? `${getRoleLabel(AGENT_ROLES.REVIEW)}ing` : `starting ${getRoleLabel(AGENT_ROLES.REVIEW)} of`} ${describeReviewTask(assignedTask || queuedTask, prById)}`;
   } else if (queuedTask) {
-    detail = `next review ${describeReviewTask(queuedTask, prById)}`;
+    detail = `next ${getRoleLabel(AGENT_ROLES.REVIEW)} ${describeReviewTask(queuedTask, prById)}`;
   } else if (blockedTask) {
     const pr = blockedTask.prId ? prById.get(blockedTask.prId) : null;
-    detail = `waiting for ${blockedTask.sourceAgentId || 'implementation agent'} to address ${describeReviewTarget(pr, blockedTask.prId)}`;
+    detail = `waiting for ${blockedTask.sourceAgentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to address ${describeReviewTarget(pr, blockedTask.prId)}`;
   } else if (failedTask) {
-    detail = `failed review ${describeReviewTask(failedTask, prById)}`;
+    detail = `failed ${getRoleLabel(AGENT_ROLES.REVIEW)} ${describeReviewTask(failedTask, prById)}`;
   }
   if (extraCount > 0) {
     detail = `${detail} | ${extraCount} more pending`;
@@ -2525,9 +2231,9 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
     .sort(comparePullRequestStatuses)
     .map((pr) => {
       const linkedTasks = tasksByPrId.get(pr.id) || [];
-      const reviewTask = linkedTasks.find((task) => task.type === 'review') || null;
+      const reviewTask = linkedTasks.find((task) => task.type === TASK_TYPES.REVIEW) || null;
       const implementationTask = selectImplementationTaskForStatus(
-        linkedTasks.filter((task) => task.type !== 'review')
+        linkedTasks.filter((task) => task.type !== TASK_TYPES.REVIEW)
       );
       return {
         prId: pr.id,
@@ -2580,19 +2286,19 @@ function describePullRequestAction(pr, reviewTask, implementationTask, workerByA
     return describePullRequestReviewAction(pr, reviewTask, workerByAgentId.get('reviewer') || null);
   }
   if (String(pr.status || '') === 'changes_requested') {
-    return `waiting for ${pr.agentId || 'implementation agent'} to respond to review`;
+    return `waiting for ${pr.agentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to respond to ${getRoleLabel(AGENT_ROLES.REVIEW)}`;
   }
   if (String(pr.status || '') === 'approved') {
     return 'approved, waiting for merge';
   }
   if (String(pr.status || '') === 'conflicted') {
-    return `waiting for ${pr.agentId || 'implementation agent'} to resolve merge conflict`;
+    return `waiting for ${pr.agentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to resolve merge conflict`;
   }
   return 'waiting for reviewer';
 }
 
 function describePullRequestImplementationAction(task, worker) {
-  const agentId = task.agentId || 'implementation-agent';
+  const agentId = task.agentId || `${AGENT_ROLES.IMPLEMENTATION}-agent`;
   const taskState = getImplementationTaskState(task);
   const isRunning = Boolean(
     worker
@@ -2601,8 +2307,8 @@ function describePullRequestImplementationAction(task, worker) {
   );
   if (task.type === 'review_followup') {
     return isRunning
-      ? `${agentId} responding to review`
-      : `waiting for ${agentId} to respond to review`;
+      ? `${agentId} responding to ${getRoleLabel(AGENT_ROLES.REVIEW)}`
+      : `waiting for ${agentId} to respond to ${getRoleLabel(AGENT_ROLES.REVIEW)}`;
   }
   if (task.type === 'conflict_resolution') {
     return isRunning
@@ -2617,29 +2323,29 @@ function describePullRequestImplementationAction(task, worker) {
 function describePullRequestReviewAction(pr, reviewTask, reviewerWorker) {
   if (reviewTask.status === 'assigned') {
     return reviewerWorker && reviewerWorker.status === 'running'
-      ? 'reviewer reviewing'
-      : 'reviewer assigned';
+      ? `${getRoleLabel(AGENT_ROLES.REVIEW)}er ${getRoleLabel(AGENT_ROLES.REVIEW)}ing`
+      : `${getRoleLabel(AGENT_ROLES.REVIEW)}er assigned`;
   }
   if (reviewTask.status === 'queued') {
     if (String(pr.status || '') === 'approved') {
       return reviewerWorker && reviewerWorker.status === 'running'
-        ? 'reviewer retrying merge'
-        : 'waiting for reviewer merge follow-up';
+        ? `${getRoleLabel(AGENT_ROLES.REVIEW)}er retrying merge`
+        : `waiting for ${getRoleLabel(AGENT_ROLES.REVIEW)}er merge follow-up`;
     }
     return reviewerWorker && reviewerWorker.status === 'running'
-      ? 'reviewer reviewing'
-      : 'waiting for reviewer';
+      ? `${getRoleLabel(AGENT_ROLES.REVIEW)}er ${getRoleLabel(AGENT_ROLES.REVIEW)}ing`
+      : `waiting for ${getRoleLabel(AGENT_ROLES.REVIEW)}er`;
   }
   if (reviewTask.status === 'changes_requested') {
-    return `waiting for ${reviewTask.sourceAgentId || pr.agentId || 'implementation agent'} to respond to review`;
+    return `waiting for ${reviewTask.sourceAgentId || pr.agentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to respond to ${getRoleLabel(AGENT_ROLES.REVIEW)}`;
   }
   if (reviewTask.status === 'blocked_conflict') {
-    return `waiting for ${reviewTask.sourceAgentId || pr.agentId || 'implementation agent'} to resolve merge conflict`;
+    return `waiting for ${reviewTask.sourceAgentId || pr.agentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to resolve merge conflict`;
   }
   if (reviewTask.status === 'approved') {
     return 'approved, waiting for merge';
   }
-  return `review status: ${formatStatusLabel(reviewTask.status)}`;
+  return `${getRoleLabel(AGENT_ROLES.REVIEW)} status: ${formatStatusLabel(reviewTask.status)}`;
 }
 
 function formatPullRequestStatusLine(prStatus) {
@@ -2718,7 +2424,7 @@ function resolveTaskBranch(task, prById, branchLockByLane) {
 
 function describeImplementationTask(task) {
   const typeLabel = task.type === 'review_followup'
-    ? 'review follow-up'
+    ? `${getRoleLabel(AGENT_ROLES.REVIEW)} follow-up`
     : task.type === 'conflict_resolution'
       ? 'conflict resolution'
       : 'task';
@@ -2770,7 +2476,7 @@ function resolveTaskQueuePath(rootDir, config, agentId) {
   if (!relativePath) {
     throw new Error(`Agent "${agent.id}" is missing taskQueue in config/agents.json`);
   }
-  if (String(agent.role || '') === 'implementation') {
+  if (isImplementationRole(agent.role)) {
     return path.isAbsolute(relativePath)
       ? relativePath
       : path.join(rootDir, relativePath);
@@ -2840,7 +2546,7 @@ function buildTaskQueueState(agent, tasks = []) {
     role: agent.role,
     tasks,
   };
-  if (String(agent.role || '') === 'implementation') {
+  if (isImplementationRole(agent.role)) {
     base.schemaVersion = 1;
   }
   return base;
@@ -2892,7 +2598,7 @@ function buildTrackedImplementationQueueUpdates(rootDir, config, taskSpecs, { pr
       agentId: spec.agentId,
       prdId: prd.id || undefined,
       laneKey: spec.laneKey || `${prd.id}:${spec.agentId}`,
-      type: spec.type || 'implementation',
+      type: spec.type || TASK_TYPES.DEFAULT,
       source: spec.source || source,
       sprintId: spec.sprintId || prd.sprintId || sprint.sprintId || 'shared',
       baseBranch: config.integrationBranch,
@@ -2955,7 +2661,7 @@ function commitTrackedAgentQueue(rootDir, config, agent, queueState, options = {
 function readTaskQueues(rootDir, config) {
   return (config.agents || []).reduce((queues, agent) => {
     const queuePath = resolveTaskQueuePath(rootDir, config, agent.id);
-    const usesTrackedQueue = String(agent.role || '') === 'implementation' || String(agent.role || '') === 'review';
+    const usesTrackedQueue = usesTrackedQueueForRole(agent.role);
     const rawQueue = usesTrackedQueue
       ? readJsonFromGitRef(
           rootDir,
@@ -2973,11 +2679,11 @@ function readTaskQueues(rootDir, config) {
 
 function writeTaskQueues(rootDir, config, taskQueues, options = {}) {
   (config.agents || []).forEach((agent) => {
-    if (String(agent.role || '') === 'implementation') {
+    if (isImplementationRole(agent.role)) {
       return;
     }
     const queueState = getTaskQueue(taskQueues, config, agent.id);
-    if (String(agent.role || '') === 'review') {
+    if (isReviewRole(agent.role)) {
       commitTrackedAgentQueue(rootDir, config, agent, queueState, {
         commitMessage: options.reviewCommitMessage || `autonomy(queue): update ${agent.id}`,
         gitIdentity: options.reviewGitIdentity || agent.gitIdentity,
@@ -3005,7 +2711,7 @@ function listRuntimeManagedTasks(taskQueues, config) {
   return Object.values(taskQueues)
     .filter((queue) => {
       const agent = getAgent(config, queue.agentId);
-      return String(agent.role || '') !== 'implementation';
+      return !isImplementationRole(agent.role);
     })
     .flatMap((queue) => queue.tasks);
 }
@@ -3193,7 +2899,7 @@ function listCompletedLaneTasks(branchLocksState, agentId, laneKey) {
 }
 
 function getPrimaryReviewer(config) {
-  const reviewer = (config.agents || []).find((agent) => agent.role === 'review');
+  const reviewer = (config.agents || []).find((agent) => isReviewRole(agent.role));
   if (!reviewer) {
     throw new Error('No reviewer agent configured.');
   }
@@ -3201,7 +2907,7 @@ function getPrimaryReviewer(config) {
 }
 
 function buildReviewerTaskId(pr) {
-  return `review-${pr.id}`;
+  return `${getRoleLabel(AGENT_ROLES.REVIEW)}-${pr.id}`;
 }
 
 function ensureReviewerTask(taskQueues, config, pr, sourceTask, now) {
@@ -3215,7 +2921,7 @@ function ensureReviewerTask(taskQueues, config, pr, sourceTask, now) {
       title: `Review ${pr.title}`,
       description: `Review ${pr.id} for ${sourceTask.title}`,
       agentId: reviewer.id,
-      type: 'review',
+      type: TASK_TYPES.REVIEW,
       prId: pr.id,
       sourceTaskId: sourceTask.id,
       sourceAgentId: sourceTask.agentId,
@@ -3246,7 +2952,7 @@ function queueReviewerTask(taskQueues, config, pr, sourceTask, now) {
 }
 
 function getReviewerTask(taskQueues, config, pr) {
-  const reviewer = (config.agents || []).find((agent) => agent.role === 'review');
+  const reviewer = (config.agents || []).find((agent) => isReviewRole(agent.role));
   if (!reviewer) {
     return null;
   }
@@ -3261,7 +2967,7 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
   const nextDescription = String(
     patch.description
       || (task && task.description)
-      || `Address reviewer feedback for ${pr.title}`
+      || `Address ${getRoleLabel(AGENT_ROLES.REVIEW)}er feedback for ${pr.title}`
   ).trim();
   if (!task) {
     task = {
@@ -3271,7 +2977,7 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
       agentId: pr.agentId,
       prdId: pr.prdId || undefined,
       laneKey: pr.laneKey || pr.taskId,
-      type: patch.type || 'implementation',
+      type: patch.type || TASK_TYPES.DEFAULT,
       sprintId: pr.sprintId || 'shared',
       baseBranch: pr.baseBranch,
       checks: [],
@@ -3309,8 +3015,8 @@ function buildLaneConflictTaskId(pr) {
 
 function ensureImplementationLaneWorktree(rootDir, state, pr, options = {}) {
   const agent = getAgent(state.config, pr.agentId);
-  if (String(agent.role || '') !== 'implementation') {
-    throw new Error(`Agent "${agent.id}" does not use tracked implementation queues.`);
+  if (!isImplementationRole(agent.role)) {
+    throw new Error(`Agent "${agent.id}" does not use tracked ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} queues.`);
   }
   const laneKey = pr.laneKey || pr.taskId;
   const laneContext = listImplementationLaneTasks(rootDir, state, pr.agentId, laneKey, {
@@ -3337,7 +3043,7 @@ function ensureImplementationLaneWorktree(rootDir, state, pr, options = {}) {
     { pr, task: seedTask }
   );
   if (!branch) {
-    throw new Error(`Unable to resolve implementation branch for lane "${laneKey}".`);
+    throw new Error(`Unable to resolve ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} branch for lane "${laneKey}".`);
   }
 
   const preparedTask = {
@@ -3363,7 +3069,7 @@ function ensureImplementationLaneWorktree(rootDir, state, pr, options = {}) {
 
 function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
   const agent = getAgent(state.config, pr.agentId);
-  if (String(agent.role || '') !== 'implementation') {
+  if (!isImplementationRole(agent.role)) {
     return null;
   }
   const baseTask = findTask(state.taskQueues, pr.taskId)
@@ -3760,7 +3466,7 @@ function normalizeReviewDecision(decision) {
   if (decision === 'changes-requested' || decision === 'changes_requested') {
     return 'changes_requested';
   }
-  throw new Error(`Unsupported review decision "${decision}". Use approve or changes-requested.`);
+  throw new Error(`Unsupported ${getRoleLabel(AGENT_ROLES.REVIEW)} decision "${decision}". Use approve or changes-requested.`);
 }
 
 function evaluateMerge({ config, pr, actor }) {
@@ -3783,11 +3489,11 @@ function evaluateMerge({ config, pr, actor }) {
     reasons.push(`PR status must be approved before merge, received ${pr.status}`);
   }
   if (!pr.reviews || pr.reviews.length === 0) {
-    reasons.push('PR has no recorded review');
+    reasons.push(`PR has no recorded ${getRoleLabel(AGENT_ROLES.REVIEW)}`);
   } else {
     const latestDecision = pr.reviews[pr.reviews.length - 1].decision;
     if (latestDecision !== 'approved') {
-      reasons.push(`latest review decision is ${latestDecision}`);
+      reasons.push(`latest ${getRoleLabel(AGENT_ROLES.REVIEW)} decision is ${latestDecision}`);
     }
   }
 
@@ -3875,10 +3581,10 @@ async function createOrFindPullRequest(repo, token, payload) {
   }
 }
 
-function publishReview(repo, token, pullNumber, review) {
-  const event = review.decision === 'approved' ? 'APPROVE' : 'REQUEST_CHANGES';
+function publishReview(repo, token, pullNumber, decisionRecord) {
+  const event = decisionRecord.decision === 'approved' ? 'APPROVE' : 'REQUEST_CHANGES';
   return githubRequest(repo, token, 'POST', `/pulls/${pullNumber}/reviews`, {
-    body: review.publishedSummary || review.summary || '',
+    body: decisionRecord.publishedSummary || decisionRecord.summary || '',
     event,
   });
 }
@@ -4088,6 +3794,7 @@ function isSelfPullRequestReviewError(error) {
 }
 
 module.exports = {
+  addOption,
   archiveCompletedPrdSpecs,
   buildAgentStatusSummaries,
   buildMergeCommitTitle,
@@ -4103,17 +3810,30 @@ module.exports = {
   extractExecError,
   findArchivablePrdIds,
   globToRegExp,
+  getListOption,
+  getStringOption,
+  handleArchiveCompletedPrds,
+  handleInit,
+  handleMerge,
+  handlePrdAdd,
+  handlePrdList,
+  handlePrRecord,
+  handlePrepareWorktree,
+  handleReviewRecord,
+  handleRuntimeStatus,
+  handleScopeValidate,
+  handleStatus,
+  handleTaskAdd,
+  handleTaskFinish,
+  handleTaskList,
+  isMutatingCommand,
   matchesAnyGlob,
   main,
   normalizeReviewDecision,
   parseGithubRemoteUrl,
   performLocalMerge,
   parseCli,
+  printHelp,
+  requireOption,
+  resolveRootDir,
 };
-
-if (require.main === module) {
-  main().catch((error) => {
-    console.error(`ERROR: ${error.message}`);
-    process.exit(1);
-  });
-}

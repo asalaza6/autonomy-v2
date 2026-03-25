@@ -17,23 +17,22 @@
     "autonomy",
     "agent-system"
   ],
-  "main": "src/autonomy-v2.js",
+  "main": "src/autonomy-v2/index.js",
   "bin": {
     "autonomy-v2": "bin/autonomy-v2",
     "autonomy-v2-server": "bin/autonomy-v2-server",
-    "autonomy-v2-worker": "bin/autonomy-v2-worker",
     "autonomy-v2-smoke": "bin/autonomy-v2-smoke"
   },
   "exports": {
-    ".": "./src/autonomy-v2.js",
-    "./server": "./src/autonomy-v2-server.js",
-    "./worker": "./src/autonomy-v2-worker.js",
-    "./default-runner": "./src/autonomy-v2-default-runner.js",
+    ".": "./src/autonomy-v2/index.js",
+    "./server": "./src/server/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "smoke": "node --test package-smoke.test.js",
-    "typecheck": "node --check src/autonomy-v2-config.js src/autonomy-v2-codex.js src/autonomy-v2-dev-sync.js src/autonomy-v2-env.js src/autonomy-v2-github.js src/autonomy-v2-lock.js src/autonomy-v2-server.js src/autonomy-v2-default-runner.js src/autonomy-v2-worker.js bin/autonomy-v2 bin/autonomy-v2-server bin/autonomy-v2-smoke bin/autonomy-v2-worker",
+    "test": "node --test tests/**/*.test.js",
+    "smoke": "node --test tests/smoke/package-smoke.test.js",
+    "typecheck": "node --check src/autonomy-v2/index.js src/autonomy-v2/commands/index.js src/autonomy-v2/commands/shared.js src/autonomy-v2/commands/init.js src/autonomy-v2/commands/status.js src/autonomy-v2/commands/task.js src/autonomy-v2/commands/prd.js src/autonomy-v2/commands/worktree.js src/autonomy-v2/commands/scope.js src/autonomy-v2/commands/pr.js src/autonomy-v2/commands/gate.js src/autonomy-v2/commands/merge.js src/autonomy-v2/commands/runtime.js src/autonomy-v2/scaffold/index.js src/autonomy-v2/cli/parse.js src/autonomy-v2/cli/help.js src/autonomy-v2/cli/options.js src/autonomy-v2/runner/default-runner.js src/autonomy-v2/runner/index.js src/autonomy-v2/runner/shared.js src/autonomy-v2/runner/net.js src/autonomy-v2/runner/task-flow.js src/autonomy-v2/runner/gate-flow.js src/autonomy-v2/scope/index.js src/server/index.js src/server/commands/index.js src/server/orchestrator/index.js src/server/worker/index.js src/server/worker/runtime.js src/codex/index.js src/config/index.js src/env/index.js src/github/index.js src/lock/index.js src/sync/index.js src/agents/role-catalog.js src/agents/AgentDefinition.js src/agents/PmAgentDefinition.js src/agents/ImplementationAgentDefinition.js src/agents/ReviewAgentDefinition.js src/agents/AgentDefinitionRegistry.js bin/autonomy-v2 bin/autonomy-v2-server bin/autonomy-v2-smoke",
+    "circular": "npx -y madge --circular --extensions js src",
     "release:patch": "npm run smoke && npm version patch && npm publish --access public",
     "release:minor": "npm run smoke && npm version minor && npm publish --access public",
     "release:major": "npm run smoke && npm version major && npm publish --access public",
@@ -44,6 +43,6 @@
     "bin",
     "src",
     "templates",
-    "package-smoke.test.js"
+    "tests"
   ]
 }

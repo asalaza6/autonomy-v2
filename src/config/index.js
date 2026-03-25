@@ -1,6 +1,12 @@
 const path = require('path');
+const { getAgentDefinition } = require('../agents/AgentDefinitionRegistry');
+const {
+  isAgentRole,
+  listAgentRoleIds,
+  normalizeAgentRole,
+} = require('../agents/role-catalog');
 
-const VALID_AGENT_ROLES = new Set(['pm', 'implementation', 'review']);
+const VALID_AGENT_ROLES = new Set(listAgentRoleIds());
 const DEFAULT_TASK_QUEUE_DIR = 'prompts/autonomous/v2/queues';
 
 function validateAutonomyConfig(config, sourcePath = 'prompts/autonomous/v2/config/agents.json') {
@@ -55,18 +61,20 @@ function validateAgentConfig(agent, index, sourcePath, seenAgentIds) {
   }
   seenAgentIds.add(agentId);
 
-  const role = String(agent.role || '').trim();
-  if (!role) {
+  const rawRole = String(agent.role || '').trim();
+  if (!rawRole) {
     throw new Error(`Invalid autonomy config at ${sourcePath}: agents["${agentId}"].role is required.`);
   }
-  if (!VALID_AGENT_ROLES.has(role)) {
-    throw new Error(`Invalid autonomy config at ${sourcePath}: unsupported role "${role}" for agent "${agentId}".`);
+  if (!isAgentRole(rawRole) || !VALID_AGENT_ROLES.has(rawRole)) {
+    throw new Error(`Invalid autonomy config at ${sourcePath}: unsupported role "${rawRole}" for agent "${agentId}".`);
   }
+  const role = normalizeAgentRole(rawRole);
+  agent.role = role;
 
   requireNonEmptyString(agent.systemPrompt, sourcePath, agentId, 'systemPrompt');
   requireGitIdentity(agent.gitIdentity, sourcePath, agentId);
 
-  if (role !== 'pm') {
+  if (getAgentDefinition(role).requiresRunner()) {
     requireRunnerCommand(agent.runnerCommand, sourcePath, agentId);
   }
   agent.taskQueue = normalizeNonEmptyString(agent.taskQueue);
@@ -77,16 +85,11 @@ function validateResolvedTaskQueue(agent, sourcePath) {
   if (!agent || !agent.taskQueue) {
     return;
   }
-  const taskQueue = normalizeConfigPath(agent.taskQueue);
-  if (String(agent.role || '') !== 'review') {
-    return;
-  }
-  if (path.posix.isAbsolute(taskQueue)) {
-    throw new Error(`Invalid autonomy config at ${sourcePath}: review agent "${agent.id}" must use a repo-relative taskQueue.`);
-  }
-  if (isRuntimeManagedTaskQueuePath(taskQueue)) {
-    throw new Error(`Invalid autonomy config at ${sourcePath}: review agent "${agent.id}" cannot use runtime-managed taskQueue paths.`);
-  }
+  getAgentDefinition(agent).validateConfig(agent, sourcePath, {
+    isRuntimeManagedTaskQueuePath,
+    normalizeConfigPath,
+    path,
+  });
 }
 
 function buildDefaultTaskQueuePath(agentId) {

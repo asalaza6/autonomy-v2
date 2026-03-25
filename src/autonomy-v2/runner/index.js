@@ -1,50 +1,55 @@
 #!/usr/bin/env node
 
 const fs = require('fs');
-const https = require('https');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { evaluateScope } = require('./autonomy-v2');
-const { hasGithubAuth, resolveGithubAuthToken } = require('./autonomy-v2-github');
-const { acquireStateLock } = require('./autonomy-v2-lock');
+const { evaluateScope } = require('../scope');
+const { hasGithubAuth, resolveGithubAuthToken } = require('../../github');
+const { acquireStateLock } = require('../../lock');
 const {
   executeTaskWithCodex,
   reviewPrWithCodex,
-} = require('./autonomy-v2-codex');
-const { loadAutonomyEnv } = require('./autonomy-v2-env');
+} = require('../../codex');
+const { loadAutonomyEnv } = require('../../env');
+const {
+  AGENT_ROLES,
+  RUNNER_TYPES,
+  TASK_TYPES,
+  buildRoleEventName,
+  getRoleAgentLabel,
+  getRoleLabel,
+  getRunnerTypeForRole,
+  isImplementationRole,
+  usesTrackedQueueForRole,
+} = require('../../agents/role-catalog');
+const { runImplementationFlow } = require('./task-flow');
+const { runReviewFlow } = require('./gate-flow');
+const {
+  ensureDir,
+  extractExecError,
+  logRunnerErrorEvent,
+  logRunnerEvent,
+  normalizeNonEmptyString,
+  readJson,
+  requireEnv,
+  slugify,
+  sleepMs,
+  summarizeText,
+  trimForErrorReport,
+  trimLeadingSeparator,
+  uniqueScopeViolations,
+  uniqueStrings,
+  writeJson,
+} = require('./shared');
+const {
+  postIssueComment,
+  resolveGithubRepo,
+} = require('./net');
 
-const CLI_PATH = path.join(__dirname, 'autonomy-v2.js');
+const CLI_PATH = path.join(__dirname, '..', 'index.js');
 const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
-const DEFAULT_ERROR_PREVIEW_LIMIT = 4000;
 const REVIEW_AUTO_APPROVAL_THRESHOLD = 4;
-
-function logRunnerEvent(event, payload = {}) {
-  if (process.env.AUTONOMY_STREAM_WORKER_OUTPUT !== '1') {
-    return;
-  }
-  const suffix = payload && Object.keys(payload).length > 0
-    ? ` ${JSON.stringify(payload)}`
-    : '';
-  console.log(`[runner] ${event}${suffix}`);
-}
-
-function logRunnerErrorEvent(event, payload = {}) {
-  if (process.env.AUTONOMY_STREAM_WORKER_OUTPUT !== '1') {
-    return;
-  }
-  const suffix = payload && Object.keys(payload).length > 0
-    ? ` ${JSON.stringify(payload)}`
-    : '';
-  console.error(`[runner] ${event}${suffix}`);
-}
-
-function summarizeText(value) {
-  return String(value || '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)[0] || '';
-}
 
 async function main() {
   const rootDir = requireEnv('AUTONOMY_ROOT');
@@ -76,607 +81,74 @@ async function main() {
   throw new Error(`No supported runner context for agent "${agentId}".`);
 }
 
-async function runImplementation({ rootDir, agentId, taskId, branch, worktreePath }) {
-  if (useCodexStub()) {
-    return runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath });
-  }
-
-  logRunnerEvent('implementation:start', { agentId, taskId, branch, worktreePath });
-  const state = loadState(rootDir, {
-    worktreePath,
-    implementationAgentId: agentId,
-  });
-  const agent = getAgentConfig(state.config, agentId);
-  const task = getTask(state.queues, taskId);
-  const laneKey = buildTaskLaneKey(task);
-  const laneTasks = getLaneTasks(state.queues, agentId, laneKey);
-  const remainingLaneTasks = laneTasks.filter((candidate) => candidate.id !== task.id && isPendingImplementationTask(candidate));
-  const existingPr = getPrForLane(rootDir, agentId, laneKey);
-  const completedLaneTasks = getCompletedLaneTasks(rootDir, agentId, laneKey);
-  logRunnerEvent('implementation:read-task', {
-    taskId: task.id,
-    taskType: task.type || 'implementation',
-    laneKey,
-    laneTaskIds: laneTasks.map((candidate) => candidate.id),
-    remainingLaneTaskIds: remainingLaneTasks.map((candidate) => candidate.id),
-    completedTaskIds: completedLaneTasks.map((candidate) => candidate.id),
-    existingPrId: existingPr ? existingPr.id : null,
-  });
-  if (existingPr) {
-    logRunnerEvent('implementation:read-pr', {
-      taskId: task.id,
-      prId: existingPr.id,
-      status: existingPr.status,
-      commitCount: getPrCommitCount(existingPr),
-      pendingTaskIds: existingPr.pendingTaskIds || [],
-      reviewDecisions: (existingPr.reviews || []).map((review) => review.decision),
-    });
-  }
-  const checkCommands = resolveCheckCommands({
-    task,
-    existingPr,
-    remainingLaneTasks,
-    completedLaneTasks,
-  });
-  ensureCheckEnvironment(worktreePath, checkCommands);
-  const codexResult = await executeTaskWithCodex({
-    rootDir,
-    agent,
-    task,
-    laneTasks,
-    pr: existingPr,
-    branch,
-    worktreePath,
-  });
-  logRunnerEvent('implementation:codex', {
-    taskId: task.id,
-    status: codexResult.status,
-    summary: summarizeText(codexResult.summary || codexResult.notes),
-  });
-
-  const changedFiles = listChangedFiles(worktreePath);
-
-  let scopeResult = {
-    ok: true,
-    files: changedFiles,
-    includeGlobs: [],
-    excludeGlobs: [],
-    violations: [],
-  };
-  if (changedFiles.length > 0) {
-    scopeResult = evaluateScope({
-      files: changedFiles,
-      agent,
-      task,
-    });
-    if (!scopeResult.ok) {
-      logRunnerEvent('implementation:scope-warning', {
-        taskId: task.id,
-        violations: scopeResult.violations,
-      });
-    }
-  }
-
-  const checkResults = runCheckCommands(
-    worktreePath,
-    checkCommands
-  );
-  const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
-  if (failedChecks.length > 0) {
-    throw new Error(`Required checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
-  }
-
-  const completionMode = changedFiles.length > 0 ? 'code' : 'noop';
-  const queueUpdate = markImplementationTaskComplete(worktreePath, state.config, task, branch, completionMode);
-  const filesToCommit = uniqueStrings(changedFiles.concat([queueUpdate.relativePath]));
-  const commitMessage = buildCommitMessage(agentId, task, completedLaneTasks.length > 0 || Boolean(existingPr));
-  runGit(worktreePath, ['add', '--all', '--', ...filesToCommit]);
-  runGit(worktreePath, ['commit', '-m', commitMessage]);
-  const commitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
-  const queueCommitUpdate = recordImplementationTaskCommitSha(worktreePath, state.config, task, commitSha);
-  if (queueCommitUpdate.changed) {
-    runGit(worktreePath, ['add', '--', queueCommitUpdate.relativePath]);
-    runGit(worktreePath, ['commit', '-m', buildQueueMetadataCommitMessage(agentId, task)]);
-  }
-  const queueMetadataCommitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
-  logRunnerEvent('implementation:commit', {
-    taskId: task.id,
-    branch,
-    commitMessage,
-    commitSha,
-    queueMetadataCommitSha,
-    changedFiles: filesToCommit,
-    completionMode,
-  });
-  const completedTaskIds = recordLaneTaskCompletion(rootDir, task, branch, worktreePath, scopeResult)
-    .map((candidate) => candidate.id);
-  const pushResult = tryPushBranch(worktreePath, branch);
-  logRunnerEvent('implementation:push', {
-    taskId: task.id,
-    branch,
-    pushed: pushResult.ok,
-    message: pushResult.message,
-  });
-  if (Boolean(existingPr) || remainingLaneTasks.length === 0) {
-    logRunnerEvent('implementation:record-pr', {
-      taskId: task.id,
-      branch,
-      existingPrId: existingPr ? existingPr.id : null,
-      completedTaskIds,
-      publish: Boolean(pushResult.ok && hasGithubAuth()),
-    });
-  }
-  finalizeTaskRun({
-    rootDir,
-    task,
-    branch,
-    completedTaskIds,
-    publish: pushResult.ok && hasGithubAuth(),
-    shouldRecordPr: Boolean(existingPr) || remainingLaneTasks.length === 0,
-  });
-  logRunnerEvent('implementation:done', {
-    taskId: task.id,
-    changedFiles: changedFiles.length,
-    commitMessage,
-    pushed: pushResult.ok,
-    published: Boolean(pushResult.ok && hasGithubAuth()),
-    prRecorded: Boolean(existingPr) || remainingLaneTasks.length === 0,
-  });
-
-  appendRunnerLog(rootDir, agentId, 'runner:implementation', {
-    input: {
-      taskId: task.id,
-      laneKey,
-      laneTaskIds: laneTasks.map((candidate) => candidate.id),
-      remainingLaneTaskIds: remainingLaneTasks.map((candidate) => candidate.id),
-      branch,
-      worktreePath,
-    },
-    output: {
-      changedFiles,
-      checkResults,
-      codex: codexResult,
-      scopeResult,
-      commitMessage,
-      commitSha,
-      queueMetadataCommitSha,
-      completionMode,
-      completedTaskIds,
-      prRecorded: Boolean(existingPr) || remainingLaneTasks.length === 0,
-      pushed: pushResult.ok,
-      published: Boolean(pushResult.ok && hasGithubAuth()),
-      pushMessage: pushResult.message,
-    },
-  });
+async function runImplementation(params) {
+  return runImplementationFlow(params, runnerDependencies);
 }
 
-function runImplementationStub({ rootDir, agentId, taskId, branch, worktreePath }) {
-  logRunnerEvent('implementation:start', { agentId, taskId, branch, worktreePath, stub: true });
-  const state = loadState(rootDir, {
-    worktreePath,
-    implementationAgentId: agentId,
-  });
-  const agent = getAgentConfig(state.config, agentId);
-  const task = getTask(state.queues, taskId);
-  const laneKey = buildTaskLaneKey(task);
-  const laneTasks = getLaneTasks(state.queues, agentId, laneKey);
-  const remainingLaneTasks = laneTasks.filter((candidate) => candidate.id !== task.id && isPendingImplementationTask(candidate));
-  const existingPr = getPrForLane(rootDir, agentId, laneKey);
-  const completedLaneTasks = getCompletedLaneTasks(rootDir, agentId, laneKey);
-  logRunnerEvent('implementation:read-task', {
-    taskId: task.id,
-    taskType: task.type || 'implementation',
-    laneKey,
-    laneTaskIds: laneTasks.map((candidate) => candidate.id),
-    remainingLaneTaskIds: remainingLaneTasks.map((candidate) => candidate.id),
-    completedTaskIds: completedLaneTasks.map((candidate) => candidate.id),
-    existingPrId: existingPr ? existingPr.id : null,
-    stub: true,
-  });
-  if (existingPr) {
-    logRunnerEvent('implementation:read-pr', {
-      taskId: task.id,
-      prId: existingPr.id,
-      status: existingPr.status,
-      commitCount: getPrCommitCount(existingPr),
-      pendingTaskIds: existingPr.pendingTaskIds || [],
-      reviewDecisions: (existingPr.reviews || []).map((review) => review.decision),
-      stub: true,
-    });
-  }
-  const targetFile = resolveTargetFile(worktreePath, task, agent);
-  ensureDir(path.dirname(targetFile));
-  const alreadyExists = fs.existsSync(targetFile);
-  const generatedAt = new Date().toISOString();
-  const content = alreadyExists
-    ? `${fs.readFileSync(targetFile, 'utf8').trimEnd()}\n- Follow-up (${task.id}): ${generatedAt}\n`
-    : [
-      `# ${task.title}`,
-      '',
-      `- Agent: ${agentId}`,
-      `- Task: ${task.id}`,
-      `- Lane: ${laneKey}`,
-      `- Generated: ${generatedAt}`,
-      task.description ? `- Description: ${task.description}` : null,
-      '',
-      '## Acceptance',
-      ...(task.acceptance || []).map((entry) => `- ${entry}`),
-      '- Automated implementation runner created this draft change.',
-      '',
-    ].filter(Boolean).join('\n');
-
-  fs.writeFileSync(targetFile, content, 'utf8');
-  const queueUpdate = markImplementationTaskComplete(worktreePath, state.config, task, branch, 'code');
-  const stagedFiles = [path.relative(worktreePath, targetFile), queueUpdate.relativePath];
-  runGit(worktreePath, ['add', '--', ...stagedFiles]);
-  const commitMessage = buildCommitMessage(agentId, task, completedLaneTasks.length > 0 || Boolean(existingPr));
-  runGit(worktreePath, ['commit', '-m', commitMessage]);
-  const commitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
-  const queueCommitUpdate = recordImplementationTaskCommitSha(worktreePath, state.config, task, commitSha);
-  if (queueCommitUpdate.changed) {
-    runGit(worktreePath, ['add', '--', queueCommitUpdate.relativePath]);
-    runGit(worktreePath, ['commit', '-m', buildQueueMetadataCommitMessage(agentId, task)]);
-  }
-  const queueMetadataCommitSha = readGit(worktreePath, ['rev-parse', 'HEAD']);
-  logRunnerEvent('implementation:commit', {
-    taskId: task.id,
-    branch,
-    commitMessage,
-    commitSha,
-    queueMetadataCommitSha,
-    changedFiles: stagedFiles,
-    stub: true,
-  });
-  const completedTaskIds = recordLaneTaskCompletion(rootDir, task, branch, worktreePath)
-    .map((candidate) => candidate.id);
-  const pushResult = tryPushBranch(worktreePath, branch);
-  logRunnerEvent('implementation:push', {
-    taskId: task.id,
-    branch,
-    pushed: pushResult.ok,
-    message: pushResult.message,
-    stub: true,
-  });
-  if (Boolean(existingPr) || remainingLaneTasks.length === 0) {
-    logRunnerEvent('implementation:record-pr', {
-      taskId: task.id,
-      branch,
-      existingPrId: existingPr ? existingPr.id : null,
-      completedTaskIds,
-      publish: Boolean(pushResult.ok && hasGithubAuth()),
-      stub: true,
-    });
-  }
-  finalizeTaskRun({
-    rootDir,
-    task,
-    branch,
-    completedTaskIds,
-    publish: pushResult.ok && hasGithubAuth(),
-    shouldRecordPr: Boolean(existingPr) || remainingLaneTasks.length === 0,
-  });
-  logRunnerEvent('implementation:done', {
-    taskId: task.id,
-    changedFiles: 1,
-    commitMessage,
-    pushed: pushResult.ok,
-    published: Boolean(pushResult.ok && hasGithubAuth()),
-    prRecorded: Boolean(existingPr) || remainingLaneTasks.length === 0,
-    stub: true,
-  });
-
-  appendRunnerLog(rootDir, agentId, 'runner:implementation', {
-    input: {
-      taskId: task.id,
-      laneKey,
-      laneTaskIds: laneTasks.map((candidate) => candidate.id),
-      remainingLaneTaskIds: remainingLaneTasks.map((candidate) => candidate.id),
-      branch,
-      worktreePath,
-    },
-    output: {
-      targetFiles: [path.relative(worktreePath, targetFile)],
-      commitMessages: commitMessage ? [commitMessage] : [],
-      commitSha,
-      queueMetadataCommitSha,
-      completionMode: 'code',
-      completedTaskIds,
-      prRecorded: Boolean(existingPr) || remainingLaneTasks.length === 0,
-      pushed: pushResult.ok,
-      published: Boolean(pushResult.ok && hasGithubAuth()),
-      pushMessage: pushResult.message,
-    },
-  });
+async function runReviewer(params) {
+  return runReviewFlow(params, runnerDependencies);
 }
 
-async function runReviewer({ rootDir, agentId, reviewTaskId, prId, sourceAgentId }) {
-  if (useCodexStub()) {
-    return runReviewerStub({ rootDir, agentId, reviewTaskId, prId, sourceAgentId });
-  }
-
-  logRunnerEvent('review:start', { agentId, reviewTaskId, prId, sourceAgentId });
-  const state = loadState(rootDir);
-  const agent = getAgentConfig(state.config, agentId);
-  const reviewerTask = getReviewTask(state.queues, reviewTaskId);
-  const pr = getPr(rootDir, prId);
-  const reviewRound = Number(reviewerTask.reviewRound || 1);
-  logRunnerEvent('review:read-task', {
-    reviewTaskId,
-    prId: pr.id,
-    sourceAgentId,
-    reviewRound,
-    prStatus: pr.status,
-    commitCount: getPrCommitCount(pr),
-    lastDecision: reviewerTask.lastDecision || null,
-  });
-  if (shouldRetryApprovedPrMerge(pr, reviewerTask)) {
-    logRunnerEvent('review:merge-retry', {
-      reviewTaskId,
-      prId: pr.id,
-      reviewRound,
-      commitCount: getPrCommitCount(pr),
-    });
-    const mergeResult = tryMergeWithRetry(rootDir, pr.id, agentId);
-    const mergeCommentPublished = !mergeResult.merged
-      ? publishMergeFollowupCommentIfNeeded(rootDir, pr, reviewerTask, mergeResult.message)
-      : false;
-    if (!mergeResult.merged) {
-      persistReviewerTaskState(rootDir, state.config, reviewTaskId, {
-        status: 'approved',
-        updatedAt: new Date().toISOString(),
-        lastError: null,
-        lastMergeFailureMessage: normalizeNonEmptyString(mergeResult.message),
-      });
-    }
-    logRunnerEvent('review:done', {
-      reviewTaskId,
-      prId: pr.id,
-      decision: 'approve',
-      merged: mergeResult.merged,
-      mergeMessage: mergeResult.message,
-      followupOnly: true,
-    });
-
-    appendRunnerLog(rootDir, agentId, 'runner:review', {
-      input: {
-        reviewTaskId,
-        prId: pr.id,
-        reviewRound,
-        followupOnly: true,
-      },
-      output: {
-        decision: 'approve',
-        merged: mergeResult.merged,
-        mergeMessage: mergeResult.message,
-        mergeCommentPublished,
-      },
-    });
-    return;
-  }
-  const reviewContext = ensureReviewContext(rootDir, pr);
-  const reviewCommits = listBranchCommits(reviewContext.worktreePath, pr.baseBranch);
-  logRunnerEvent('review:read-commits', {
-    reviewTaskId,
-    prId: pr.id,
-    baseBranch: pr.baseBranch,
-    commitCount: reviewCommits.length,
-    commits: reviewCommits,
-  });
-  const reviewDiffFiles = listReviewDiffFiles(reviewContext.worktreePath, pr.baseBranch);
-  logRunnerEvent('review:read-diff', {
-    reviewTaskId,
-    prId: pr.id,
-    baseBranch: pr.baseBranch,
-    fileCount: reviewDiffFiles.length,
-    files: reviewDiffFiles,
-  });
-  const scopeResult = evaluateScope({
-    files: reviewDiffFiles,
-    agent: getAgentConfig(state.config, sourceAgentId || pr.agentId),
-    task: {
-      id: pr.taskId,
-    },
-  });
-  ensureCheckEnvironment(reviewContext.worktreePath, pr.checks || []);
-  const checkResults = runCheckCommands(reviewContext.worktreePath, pr.checks || []);
-  const codexReview = await reviewPrWithCodex({
-    rootDir,
-    agent,
-    reviewTask: reviewerTask,
-    pr,
-    branch: reviewContext.branch,
-    worktreePath: reviewContext.worktreePath,
-    checkResults,
-    diffFiles: reviewDiffFiles,
-    scopeResult,
-  });
-  logRunnerEvent('review:codex', {
-    reviewTaskId,
-    decision: codexReview.decision,
-    summary: summarizeText(codexReview.summary),
-  });
-  const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
-  const shouldForceApproveAfterThreeRounds = shouldForceApproveAfterRepeatedReviews(pr, checkResults, scopeResult);
-  const scopeConcernOnly = scopeResult.ok && isScopeOnlyReviewFeedback(codexReview);
-  const decision = shouldForceApproveAfterThreeRounds
-    ? 'approve'
-    : failedChecks.length > 0
-    ? 'changes-requested'
-    : !scopeResult.ok
-      ? 'changes-requested'
-      : scopeConcernOnly
-        ? 'approve'
-        : codexReview.decision === 'approved'
-          ? 'approve'
-          : 'changes-requested';
-  const summaryParts = scopeConcernOnly
-    ? [buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
-    : [codexReview.summary].concat(codexReview.concerns || []);
-  if (shouldForceApproveAfterThreeRounds) {
-    summaryParts.push('Auto-approval threshold reached: 4+ reviewer rounds with passing checks/scope.');
-  }
-  if (failedChecks.length > 0) {
-    summaryParts.push(`Blocking checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
-  }
-  if (!scopeResult.ok) {
-    summaryParts.push(`Blocking scope violations: ${scopeResult.violations.map((entry) => `${entry.file} (${entry.reason})`).join(', ')}`);
-  }
-  const summary = summaryParts.filter(Boolean).join('\n');
-
-  const reviewArgs = [
-    CLI_PATH,
-    'review:record',
-    '--root',
-    rootDir,
-    '--pr',
-    pr.id,
-    '--reviewer',
-    agentId,
-    '--decision',
-    decision,
-    '--summary',
-    summary,
-  ];
-  if (pr.remote && pr.remote.number && hasGithubAuth()) {
-    reviewArgs.push('--publish');
-  }
-  execFileSync(process.execPath, reviewArgs, {
-    cwd: rootDir,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  let merged = false;
-  let mergeMessage = null;
-  let mergeCommentPublished = false;
-  if (decision === 'approve') {
-    logRunnerEvent('review:merge-attempt', {
-      reviewTaskId,
-      prId: pr.id,
-      reviewRound,
-    });
-    const mergeResult = tryMergeWithRetry(rootDir, pr.id, agentId);
-    merged = mergeResult.merged;
-    mergeMessage = mergeResult.message;
-    if (!merged) {
-      mergeCommentPublished = publishMergeFollowupCommentIfNeeded(rootDir, pr, reviewerTask, mergeMessage);
-      persistReviewerTaskState(rootDir, state.config, reviewTaskId, {
-        status: 'approved',
-        updatedAt: new Date().toISOString(),
-        lastMergeFailureMessage: normalizeNonEmptyString(mergeMessage),
-      });
-    }
-  }
-  logRunnerEvent('review:done', {
-    reviewTaskId,
-    prId: pr.id,
-    decision,
-    merged,
-    mergeMessage,
-  });
-
-  appendRunnerLog(rootDir, agentId, 'runner:review', {
-    input: {
-      reviewTaskId,
-      prId: pr.id,
-      reviewRound,
-      branch: reviewContext.branch,
-      worktreePath: reviewContext.worktreePath,
-    },
-    output: {
-      codex: codexReview,
-      diffFiles: reviewDiffFiles,
-      scopeResult,
-      checkResults,
-      decision,
-      scopeConcernOnly,
-      summary,
-      merged,
-      mergeMessage,
-      mergeCommentPublished,
-    },
-  });
-}
-
-function runReviewerStub({ rootDir, agentId, reviewTaskId, prId, sourceAgentId }) {
-  logRunnerEvent('review:start', { agentId, reviewTaskId, prId, sourceAgentId, stub: true });
-  const state = loadState(rootDir);
-  const reviewerTask = getReviewTask(state.queues, reviewTaskId);
-  const pr = getPr(rootDir, prId);
-  const reviewRound = Number(reviewerTask.reviewRound || 1);
-  logRunnerEvent('review:read-task', {
-    reviewTaskId,
-    prId: pr.id,
-    sourceAgentId,
-    reviewRound,
-    prStatus: pr.status,
-    commitCount: getPrCommitCount(pr),
-    lastDecision: reviewerTask.lastDecision || null,
-    stub: true,
-  });
-  const decision = reviewRound === 1 ? 'changes-requested' : 'approve';
-  const summary = reviewRound === 1
-    ? `Add one more ${sourceAgentId.replace(/-agent$/, '') || 'feature'} follow-up line before merge.`
-    : `Ready to merge ${pr.title}.`;
-
-  if (pr.remote && pr.remote.number && hasGithubAuth()) {
-    const repo = resolveGithubRepo(rootDir);
-    postIssueComment(repo, resolveGithubAuthToken({ required: true }), pr.remote.number, `reviewer-agent:\n\n${summary}`);
-  }
-
-  execFileSync(process.execPath, [
-    CLI_PATH,
-    'review:record',
-    '--root',
-    rootDir,
-    '--pr',
-    pr.id,
-    '--reviewer',
-    agentId,
-    '--decision',
-    decision,
-    '--summary',
-    summary,
-  ], {
-    cwd: rootDir,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  let merged = false;
-  let mergeMessage = null;
-  if (decision === 'approve') {
-    logRunnerEvent('review:merge-attempt', {
-      reviewTaskId,
-      prId: pr.id,
-      reviewRound,
-      stub: true,
-    });
-    const mergeResult = tryMergeWithRetry(rootDir, pr.id, agentId);
-    merged = mergeResult.merged;
-    mergeMessage = mergeResult.message;
-  }
-  logRunnerEvent('review:done', {
-    reviewTaskId,
-    prId: pr.id,
-    decision,
-    merged,
-    mergeMessage,
-    stub: true,
-  });
-
-  appendRunnerLog(rootDir, agentId, 'runner:review', {
-    input: {
-      reviewTaskId,
-      prId: pr.id,
-      reviewRound,
-    },
-    output: {
-      decision,
-      summary,
-      merged,
-      mergeMessage,
-    },
-  });
-}
+const runnerDependencies = {
+  AGENT_ROLES,
+  CLI_PATH,
+  TASK_TYPES,
+  appendRunnerLog,
+  buildCommitMessage,
+  buildQueueMetadataCommitMessage,
+  buildRoleEventName,
+  buildScopeSafeApprovalSummary,
+  buildTaskLaneKey,
+  ensureCheckEnvironment,
+  ensureDir,
+  ensureReviewContext,
+  evaluateScope,
+  execFileSync,
+  executeTaskWithCodex,
+  finalizeTaskRun,
+  fs,
+  getAgentConfig,
+  getCompletedLaneTasks,
+  getLaneTasks,
+  getPr,
+  getPrCommitCount,
+  getPrForLane,
+  getReviewTask,
+  getRoleAgentLabel,
+  getRoleLabel,
+  getTask,
+  hasGithubAuth,
+  isPendingImplementationTask,
+  isScopeOnlyReviewFeedback,
+  listBranchCommits,
+  listChangedFiles,
+  listReviewDiffFiles,
+  loadState,
+  logRunnerEvent,
+  markImplementationTaskComplete,
+  normalizeNonEmptyString,
+  path,
+  persistReviewerTaskState,
+  postIssueComment,
+  publishMergeFollowupCommentIfNeeded,
+  readGit,
+  recordImplementationTaskCommitSha,
+  recordLaneTaskCompletion,
+  resolveCheckCommands,
+  resolveGithubAuthToken,
+  resolveGithubRepo,
+  resolveTargetFile,
+  reviewPrWithCodex,
+  runCheckCommands,
+  runGit,
+  shouldForceApproveAfterRepeatedReviews,
+  shouldRetryApprovedPrMerge,
+  summarizeText,
+  tryMergeWithRetry,
+  tryPushBranch,
+  uniqueStrings,
+  useCodexStub,
+};
 
 function loadState(rootDir, options = {}) {
   const repoAutonomyDir = path.join(rootDir, ...AUTONOMY_SEGMENTS);
@@ -684,7 +156,7 @@ function loadState(rootDir, options = {}) {
   const queues = {};
   (config.agents || []).forEach((agent) => {
     const relativePath = agent.taskQueue;
-    const queuePath = String(agent.role || '') === 'implementation'
+    const queuePath = isImplementationRole(agent.role)
       ? (
         options.worktreePath && options.implementationAgentId === agent.id
           ? path.join(options.worktreePath, relativePath)
@@ -708,7 +180,7 @@ function buildImplementationQueueRelativePath(agentId) {
 }
 
 function buildTaskQueueState(agent, tasks = []) {
-  return String(agent.role || '') === 'implementation'
+  return isImplementationRole(agent.role)
     ? {
         schemaVersion: 1,
         agentId: agent.id,
@@ -1183,7 +655,7 @@ function buildTaskSnapshot(task, scopeResult) {
     agentId: task.agentId,
     prdId: task.prdId || null,
     laneKey: buildTaskLaneKey(task),
-    type: task.type || 'implementation',
+    type: task.type || TASK_TYPES.DEFAULT,
     sprintId: task.sprintId || null,
     baseBranch: task.baseBranch || null,
     checks: uniqueStrings(task.checks || []),
@@ -1197,34 +669,6 @@ function findBranchLock(branchLocks, agentId, laneKey) {
   return (branchLocks.locks || []).find((candidate) => {
     return candidate.agentId === agentId && (candidate.laneKey || candidate.taskId) === laneKey;
   }) || null;
-}
-
-function uniqueStrings(values) {
-  const seen = new Set();
-  return values.reduce((accumulator, value) => {
-    const normalized = String(value || '').trim();
-    if (!normalized || seen.has(normalized)) {
-      return accumulator;
-    }
-    seen.add(normalized);
-    accumulator.push(normalized);
-    return accumulator;
-  }, []);
-}
-
-function uniqueScopeViolations(values) {
-  const seen = new Set();
-  return (values || []).reduce((accumulator, value) => {
-    const file = String(value && value.file || '').trim();
-    const reason = String(value && value.reason || '').trim();
-    const key = `${file}::${reason}`;
-    if (!file || !reason || seen.has(key)) {
-      return accumulator;
-    }
-    seen.add(key);
-    accumulator.push({ file, reason });
-    return accumulator;
-  }, []);
 }
 
 function useCodexStub() {
@@ -1279,9 +723,9 @@ function appendRunnerLog(rootDir, agentId, event, payload) {
 
 function getRunnerFailureContext() {
   const runnerType = process.env.AUTONOMY_TASK_ID
-    ? 'implementation'
+    ? getRunnerTypeForRole(AGENT_ROLES.IMPLEMENTATION)
     : process.env.AUTONOMY_REVIEW_TASK_ID
-      ? 'review'
+      ? getRunnerTypeForRole(AGENT_ROLES.REVIEW)
       : 'unknown';
   return {
     rootDir: normalizeNonEmptyString(process.env.AUTONOMY_ROOT),
@@ -1294,20 +738,6 @@ function getRunnerFailureContext() {
     branch: normalizeNonEmptyString(process.env.AUTONOMY_BRANCH),
     worktreePath: normalizeNonEmptyString(process.env.AUTONOMY_WORKTREE),
   };
-}
-
-function trimForErrorReport(value, { preferTail = false } = {}) {
-  const normalized = normalizeNonEmptyString(value);
-  if (!normalized) {
-    return null;
-  }
-  if (normalized.length <= DEFAULT_ERROR_PREVIEW_LIMIT) {
-    return normalized;
-  }
-  if (preferTail) {
-    return `...[truncated]\n${normalized.slice(-DEFAULT_ERROR_PREVIEW_LIMIT)}`;
-  }
-  return `${normalized.slice(0, DEFAULT_ERROR_PREVIEW_LIMIT)}\n...[truncated]`;
 }
 
 function buildRunnerFailureRecord(error, context = getRunnerFailureContext()) {
@@ -1334,11 +764,11 @@ function buildRunnerFailureRecord(error, context = getRunnerFailureContext()) {
 }
 
 function buildRunnerFailureEventName(context) {
-  if (context.runnerType === 'implementation') {
-    return 'implementation:error';
+  if (context.runnerType === RUNNER_TYPES.DEFAULT) {
+    return buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'error');
   }
-  if (context.runnerType === 'review') {
-    return 'review:error';
+  if (context.runnerType === RUNNER_TYPES.REVIEW) {
+    return buildRoleEventName(AGENT_ROLES.REVIEW, 'error');
   }
   return 'error';
 }
@@ -1431,15 +861,6 @@ function gitRefExists(rootDir, ref) {
   }
 }
 
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function writeJson(filePath, payload) {
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-}
-
 function getPrForLane(rootDir, agentId, laneKey) {
   const prsPath = path.join(rootDir, ...RUNTIME_SEGMENTS, 'state', 'prs.json');
   const prsState = readJson(prsPath);
@@ -1465,11 +886,7 @@ function getReviewTask(queues, reviewTaskId) {
       return task;
     }
   }
-  throw new Error(`Unknown review task "${reviewTaskId}".`);
-}
-
-function ensureDir(dirPath) {
-  fs.mkdirSync(dirPath, { recursive: true });
+  throw new Error(`Unknown ${getRoleLabel(AGENT_ROLES.REVIEW)} task "${reviewTaskId}".`);
 }
 
 function resolveRuntimeManagedPath(rootDir, relativePath) {
@@ -1480,30 +897,6 @@ function resolveRuntimeManagedPath(rootDir, relativePath) {
     return path.join(runtimeStateDir, trimLeadingSeparator(normalized.slice(trackedStatePrefix.length)));
   }
   return path.join(rootDir, normalized);
-}
-
-function trimLeadingSeparator(value) {
-  let normalized = String(value || '');
-  while (normalized.startsWith('/') || normalized.startsWith('\\')) {
-    normalized = normalized.slice(1);
-  }
-  return normalized;
-}
-
-function slugify(value) {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-{2,}/g, '-');
-}
-
-function requireEnv(key) {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing required environment variable ${key}`);
-  }
-  return value;
 }
 
 function shouldRetryApprovedPrMerge(pr, reviewerTask) {
@@ -1567,11 +960,11 @@ function publishMergeFollowupCommentIfNeeded(rootDir, pr, reviewerTask, mergeMes
 
 function buildMergeFollowupComment(mergeMessage) {
   return [
-    'reviewer-agent:',
+    `${getRoleAgentLabel(AGENT_ROLES.REVIEW).replace(/\s+/g, '-')}:`,
     '',
     'I approved this PR, but the automatic merge did not complete.',
     `Latest merge result: ${mergeMessage}`,
-    'If new commits land, I will review the updated diff again; otherwise this PR is waiting on merge conditions to clear.',
+    `If new commits land, I will ${getRoleLabel(AGENT_ROLES.REVIEW)} the updated diff again; otherwise this PR is waiting on merge conditions to clear.`,
   ].join('\n');
 }
 
@@ -1595,7 +988,7 @@ function persistReviewerTaskState(rootDir, config, reviewTaskId, patch) {
 
 function writeQueuesState(rootDir, config, queues) {
   (config.agents || []).forEach((agent) => {
-    if (String(agent.role || '') === 'implementation') {
+    if (isImplementationRole(agent.role)) {
       return;
     }
     const relativePath = agent.taskQueue;
@@ -1608,27 +1001,10 @@ function writeQueuesState(rootDir, config, queues) {
     tasks: Object.values(queues)
       .filter((queue) => {
         const agent = getAgentConfig(config, queue.agentId);
-        return String((agent && agent.role) || queue.role || '') !== 'implementation';
+        return !isImplementationRole((agent && agent.role) || queue.role || '');
       })
       .flatMap((queue) => queue.tasks || []),
   });
-}
-
-function normalizeNonEmptyString(value) {
-  const normalized = String(value || '').trim();
-  return normalized || null;
-}
-
-function extractExecError(error) {
-  const stderr = normalizeNonEmptyString(error.stderr);
-  if (stderr) {
-    return stderr;
-  }
-  const stdout = normalizeNonEmptyString(error.stdout);
-  if (stdout) {
-    return stdout;
-  }
-  return normalizeNonEmptyString(error.message) || 'Command failed without stderr/stdout output.';
 }
 
 function tryMergeWithRetry(rootDir, prId, agentId) {
@@ -1668,135 +1044,6 @@ function tryMergeWithRetry(rootDir, prId, agentId) {
   };
 }
 
-function sleepMs(durationMs) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs);
-}
-
-function resolveGithubRepo(rootDir) {
-  const remoteUrl = execFileSync('git', ['config', '--get', 'remote.origin.url'], {
-    cwd: rootDir,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
-
-  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
-  if (sshMatch) {
-    return {
-      owner: sshMatch[1],
-      repo: sshMatch[2],
-    };
-  }
-
-  try {
-    const parsedUrl = new URL(remoteUrl);
-    if (parsedUrl.hostname === 'github.com') {
-      const trimmedPath = parsedUrl.pathname.replace(/^\/+/, '').replace(/\.git$/, '');
-      const segments = trimmedPath.split('/').filter(Boolean);
-      if (segments.length >= 2) {
-        return {
-          owner: segments[0],
-          repo: segments.slice(1).join('/'),
-        };
-      }
-    }
-  } catch (error) {
-    // Fall back to regex parsing for non-URL formats.
-  }
-
-  const httpsMatch = remoteUrl.match(/^(?:https?:\/\/)?(?:[^@/]+@)?github\.com[/:]([^/]+)\/(.+?)(?:\.git)?$/);
-  if (httpsMatch) {
-    return {
-      owner: httpsMatch[1],
-      repo: httpsMatch[2],
-    };
-  }
-
-  throw new Error(`Unsupported GitHub remote URL: ${remoteUrl}`);
-}
-
-function postIssueComment(repo, token, issueNumber, body) {
-  return githubRequest(repo, token, 'POST', `/issues/${issueNumber}/comments`, { body });
-}
-
-function githubRequest(repo, token, method, endpoint, payload) {
-  const body = payload ? JSON.stringify(payload) : null;
-  const options = {
-    hostname: 'api.github.com',
-    path: `/repos/${repo.owner}/${repo.repo}${endpoint}`,
-    method,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'User-Agent': 'autonomy-v2-runner',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  };
-
-  if (body) {
-    options.headers['Content-Length'] = Buffer.byteLength(body);
-  }
-
-  const response = execHttpRequest(options, body);
-  if (response.statusCode >= 200 && response.statusCode < 300) {
-    return response.payload;
-  }
-  throw new Error(`GitHub API ${response.statusCode}: ${response.payload.message || response.raw}`);
-}
-
-function execHttpRequest(options, body) {
-  const result = {
-    statusCode: 0,
-    payload: {},
-    raw: '',
-  };
-
-  const response = execFileSync(process.execPath, ['-e', buildHttpClientScript()], {
-    cwd: __dirname,
-    env: {
-      ...process.env,
-      AUTONOMY_HTTP_OPTIONS: JSON.stringify(options),
-      AUTONOMY_HTTP_BODY: body || '',
-    },
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim();
-
-  if (response) {
-    const parsed = JSON.parse(response);
-    result.statusCode = parsed.statusCode;
-    result.payload = parsed.payload;
-    result.raw = parsed.raw;
-  }
-  return result;
-}
-
-function buildHttpClientScript() {
-  return `
-const https = require('https');
-const options = JSON.parse(process.env.AUTONOMY_HTTP_OPTIONS);
-const body = process.env.AUTONOMY_HTTP_BODY || '';
-const req = https.request(options, (res) => {
-  let raw = '';
-  res.setEncoding('utf8');
-  res.on('data', (chunk) => { raw += chunk; });
-  res.on('end', () => {
-    let payload = {};
-    try {
-      payload = raw ? JSON.parse(raw) : {};
-    } catch (_) {}
-    process.stdout.write(JSON.stringify({ statusCode: res.statusCode, payload, raw }));
-  });
-});
-req.on('error', (error) => {
-  process.stderr.write(error.message);
-  process.exit(1);
-});
-if (body) req.write(body);
-req.end();
-`;
-}
-
 if (require.main === module) {
   main().catch((error) => {
     const summary = publishRunnerFailure(error);
@@ -1812,6 +1059,7 @@ module.exports = {
   isScopeOnlyReviewFeedback,
   main,
   normalizeNonEmptyString,
+  publishRunnerFailure,
   shouldForceApproveAfterRepeatedReviews,
   shouldIgnoreMissingTaskFinishError,
   shouldRetryApprovedPrMerge,
