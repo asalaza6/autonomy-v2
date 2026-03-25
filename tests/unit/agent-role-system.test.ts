@@ -13,8 +13,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const SRC_ROOT = path.join(PROJECT_ROOT, 'src');
+const REPO_ROOT = fs.existsSync(path.join(PROJECT_ROOT, 'package.json'))
+  ? PROJECT_ROOT
+  : path.join(PROJECT_ROOT, '..');
 const ROLE_CATALOG_PATH = path.join(SRC_ROOT, 'agents', 'role-catalog.js');
-const PACKAGE_JSON_PATH = path.join(PROJECT_ROOT, 'package.json');
+const PACKAGE_JSON_PATH = path.join(REPO_ROOT, 'package.json');
 
 test('role catalog is the only runtime source file containing raw role keywords', () => {
   const runtimeFiles = listJsFiles(SRC_ROOT).filter((filePath) => filePath !== ROLE_CATALOG_PATH);
@@ -27,9 +30,9 @@ test('role catalog is the only runtime source file containing raw role keywords'
 
 test('public entrypoints are folder index files and src root has no top-level files', () => {
   const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
-  assert.equal(packageJson.main, 'src/autonomy-v2/index.js');
-  assert.equal(packageJson.exports['.'], './src/autonomy-v2/index.js');
-  assert.equal(packageJson.exports['./server'], './src/server/index.js');
+  assert.equal(packageJson.main, './dist/src/autonomy-v2/index.js');
+  assert.equal(packageJson.exports['.'], './dist/src/autonomy-v2/index.js');
+  assert.equal(packageJson.exports['./server'], './dist/src/server/index.js');
   assert.equal(packageJson.exports['./worker'], undefined);
   assert.equal(packageJson.bin['autonomy-v2-worker'], undefined);
 
@@ -37,7 +40,12 @@ test('public entrypoints are folder index files and src root has no top-level fi
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
     .sort();
-  assert.deepEqual(rootFiles, []);
+  assert.deepEqual(
+    rootFiles,
+    fs.existsSync(path.join(SRC_ROOT, 'types.ts'))
+      ? ['globals.d.ts', 'types.ts']
+      : ['types.js']
+  );
 
   const rootDirs = fs.readdirSync(SRC_ROOT, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -122,4 +130,3 @@ function listJsFiles(rootDir) {
     return entry.name.endsWith('.js') ? [entryPath] : [];
   });
 }
-

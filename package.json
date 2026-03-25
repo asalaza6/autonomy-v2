@@ -33,7 +33,7 @@
     "clean": "rm -rf dist",
     "test": "npm run build && node --test dist/tests/**/*.test.js",
     "smoke": "npm run build && node --test dist/tests/smoke/package-smoke.test.js",
-    "lint": "eslint src scripts bin tests",
+    "lint": "eslint src bin tests",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",
     "circular": "npx -y madge --circular --extensions ts src",

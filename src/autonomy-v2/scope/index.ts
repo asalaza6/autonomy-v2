@@ -1,6 +1,4 @@
-import path from 'path';
 import type { AnyRecord } from '../../types.js';
-import { execFileSync } from 'child_process';
 
 function normalizeRepoPath(filePath) {
   return String(filePath || '').replace(/\\/g, '/').replace(/^\.\//, '');
@@ -68,30 +66,6 @@ function evaluateScope({ files, agent, task: _task }: { files: string[]; agent: 
     excludeGlobs,
     violations,
   };
-}
-
-function collectFilesForValidation(rootDir, options, getListOption) {
-  const explicitFiles = getListOption(options, 'files');
-  if (explicitFiles.length > 0) {
-    return explicitFiles.map(normalizeRepoPath);
-  }
-
-  if (options.worktree) {
-    const worktreePath = path.isAbsolute(options.worktree)
-      ? options.worktree
-      : path.join(rootDir, options.worktree);
-    const output = execFileSync('git', ['diff', '--name-only'], {
-      cwd: worktreePath,
-      encoding: 'utf8',
-    });
-    return output
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map(normalizeRepoPath);
-  }
-
-  return [];
 }
 
 

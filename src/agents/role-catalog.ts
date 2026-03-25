@@ -55,16 +55,6 @@ function usesTrackedQueueForRole(value) {
   return isImplementationRole(value) || isReviewRole(value);
 }
 
-function requiresRunnerForRole(value) {
-  return !isPmRole(value);
-}
-
-function getTaskTypeForRole(value) {
-  return isReviewRole(value)
-    ? TASK_TYPES.REVIEW
-    : TASK_TYPES.DEFAULT;
-}
-
 function getRunnerTypeForRole(value) {
   return isReviewRole(value)
     ? RUNNER_TYPES.REVIEW

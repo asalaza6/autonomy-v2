@@ -1818,13 +1818,6 @@ function commitTrackedPrdStateToIntegrationBranch(rootDir, integrationBranch, pr
   }], options);
 }
 
-function deleteTrackedPrdStateFromIntegrationBranch(rootDir, integrationBranch, prdId, options = {}) {
-  return commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, [{
-    relativePath: buildPrdStateRelativePath(prdId),
-    delete: true,
-  }], options);
-}
-
 function slugify(value) {
   return String(value || '')
     .toLowerCase()

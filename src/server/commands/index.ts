@@ -204,21 +204,6 @@ function logTickResultWithWriter(result, writeLine = console.log, timestampFacto
   return emitted;
 }
 
-function formatTickSummaryLine(result, timestamp = new Date().toISOString()) {
-  const summary = summarizeTickResult(result);
-  const parts = [
-    `[${timestamp}] tick`,
-    `due=${summary.due}`,
-    `started=${summary.started}`,
-    `running=${summary.running}`,
-    `idle=${summary.idle}`,
-  ];
-  if (summary.active.length > 0) {
-    parts.push(`active=${summary.active.join(',')}`);
-  }
-  return parts.join(' | ');
-}
-
 function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord, options: AnyRecord = {}) {
   if (!entry || !entry.child || !entry.pid) {
     return;
@@ -403,40 +388,6 @@ function toAppleScriptString(value) {
 
 function shellQuote(value) {
   return `'${String(value || '').replace(/'/g, `'\"'\"'`)}'`;
-}
-
-function summarizeTickResult(result: AnyRecord) {
-  const dueAgents = Array.isArray(result && result.dueAgents) ? result.dueAgents : [];
-  const started = Array.isArray(result && result.started) ? result.started : [];
-  const workers = Object.values((result && result.runtime && result.runtime.workers) || {}) as AnyRecord[];
-  const active = workers
-    .filter((worker) => worker && worker.status === 'running')
-    .map((worker) => worker.agentId);
-
-  return {
-    due: dueAgents.length,
-    started: started.length,
-    running: active.length,
-    idle: workers.filter((worker) => worker && worker.status === 'idle').length,
-    active,
-  };
-}
-
-function buildTickEventPayload({ id, sync, durationMs, result }: { id: any; sync: any; durationMs: any; result: AnyRecord }) {
-  const summary = summarizeTickResult(result);
-  const payload: AnyRecord = {
-    id,
-    sync: sync ? 'yes' : 'no',
-    durationMs,
-    due: summary.due,
-    started: summary.started,
-    running: summary.running,
-    idle: summary.idle,
-  };
-  if (summary.active.length > 0) {
-    payload.active = summary.active.join(',');
-  }
-  return payload;
 }
 
 function formatServerEventLine(event, fields = {}, timestamp = new Date().toISOString()) {

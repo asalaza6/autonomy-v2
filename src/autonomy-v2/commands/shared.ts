@@ -17,7 +17,11 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PACKAGE_ROOT = path.join(__dirname, '..', '..', '..');
+const DIST_PACKAGE_ROOT = path.join(__dirname, '..', '..', '..');
+const SOURCE_PACKAGE_ROOT = path.join(DIST_PACKAGE_ROOT, '..');
+const PACKAGE_ROOT = fs.existsSync(path.join(DIST_PACKAGE_ROOT, 'templates'))
+  ? DIST_PACKAGE_ROOT
+  : SOURCE_PACKAGE_ROOT;
 const TEMPLATE_ROOT = path.join(PACKAGE_ROOT, 'templates', 'prompts', 'autonomous', 'v2');
 const DEFAULT_AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const DEFAULT_RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
@@ -76,7 +80,7 @@ const BASE_TEMPLATE_FILES = [
   'specs/prds/archived/README.md',
 ];
 
-async function main(argv: string[] = process.argv.slice(2)) {
+export async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   const rootDir = resolveRootDir(options.root);
   loadAutonomyEnv(rootDir);

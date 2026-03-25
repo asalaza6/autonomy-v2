@@ -904,11 +904,6 @@ function getPrCommitCount(pr) {
   return Number.isFinite(count) ? count : 0;
 }
 
-function shouldIgnoreMissingTaskFinishError(error, taskId) {
-  const message = extractExecError(error);
-  return message.includes(`Unknown task "${taskId}"`);
-}
-
 function publishMergeFollowupCommentIfNeeded(rootDir, pr, reviewerTask, mergeMessage) {
   const normalizedMessage = normalizeNonEmptyString(mergeMessage) || 'Automatic merge did not complete.';
   if (normalizedMessage === reviewerTask.lastMergeFailureMessage) {
