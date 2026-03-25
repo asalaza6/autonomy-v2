@@ -5,7 +5,7 @@ import { validateAutonomyConfig } from '../config/index.js';
 import { resolveGithubAuthToken } from '../github/index.js';
 import { acquireStateLock } from '../lock/index.js';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole, } from '../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, HttpResponse, PrState, PrdSpecPayload, PrdStateRecord, PullRequestRecord, QueueMap, QueueState, TaskRecord, TrackedPrdRecord } from '../types.js';
+import type { AnyRecord, AutonomyConfig, HttpResponse, PrdSpecPayload, PrdStateRecord, PullRequestRecord, QueueMap, TaskRecord } from '../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -875,7 +875,7 @@ function buildDerivedImportedRuntimeState({
   };
 }
 
-function buildDerivedPrdRecord({ integrationBranch, config, sprint, remoteSpec, implementationTasks, laneStates, now, fetchedRef }: AnyRecord) {
+function buildDerivedPrdRecord({ integrationBranch, remoteSpec, implementationTasks, laneStates, now, fetchedRef }: AnyRecord) {
   const planningOnlySpec = requiresPmPlanning(remoteSpec.spec, implementationTasks);
   const groupedTasks = groupLaneTasksByAgent(implementationTasks || []);
   const completedTaskSpecIds = [];
@@ -1191,20 +1191,6 @@ function findLatestReview(pr) {
     return null;
   }
   return pr.reviews[pr.reviews.length - 1];
-}
-
-
-
-function stringListsEqual(left, right) {
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function reviewDecisionIsChangesRequested(decisionRecord) {

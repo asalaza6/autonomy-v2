@@ -7,7 +7,7 @@ import { planPrdTasksWithCodex } from '../../codex/index.js';
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES, TASK_TYPES, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
 import { commitTrackedPrdStateToIntegrationBranch, commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap, syncPrdSpecsFromIntegrationBranch, } from '../../sync/index.js';
-import type { AnyRecord, AutonomyConfig, BranchLock, BranchLocksState, PullRequestRecord, PrState, QueueMap, QueueState, RuntimeState, TaskRecord, TrackedPrdRecord, WorkerRuntime } from '../../types.js';
+import type { AnyRecord, AutonomyConfig, BranchLocksState, QueueMap, QueueState, RuntimeState, TaskRecord, TrackedPrdRecord, WorkerRuntime } from '../../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -100,10 +100,6 @@ function resolveQueuePath(rootDir, agent) {
     },
     resolveRuntimePath: resolveRuntimeManagedPath,
   });
-}
-
-function buildImplementationQueueRelativePath(agentId) {
-  return path.join('prompts', 'autonomous', 'v2', 'queues', `${agentId}.json`);
 }
 
 function resolveTrackedQueueRef(rootDir, integrationBranch) {

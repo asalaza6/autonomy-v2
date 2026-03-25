@@ -8,12 +8,12 @@ import { hasGithubAuth, resolveGithubAuthToken } from '../../github/index.js';
 import { acquireStateLock } from '../../lock/index.js';
 import { executeTaskWithCodex, reviewPrWithCodex, } from '../../codex/index.js';
 import { loadAutonomyEnv } from '../../env/index.js';
-import { AGENT_ROLES, RUNNER_TYPES, TASK_TYPES, buildRoleEventName, getRoleAgentLabel, getRoleLabel, getRunnerTypeForRole, isImplementationRole, usesTrackedQueueForRole, } from '../../agents/role-catalog.js';
+import { AGENT_ROLES, RUNNER_TYPES, TASK_TYPES, buildRoleEventName, getRoleAgentLabel, getRoleLabel, getRunnerTypeForRole, isImplementationRole, } from '../../agents/role-catalog.js';
 import { runImplementationFlow } from './task-flow.js';
 import { runReviewFlow } from './gate-flow.js';
 import { ensureDir, extractExecError, logRunnerErrorEvent, logRunnerEvent, normalizeNonEmptyString, readJson, requireEnv, slugify, sleepMs, summarizeText, trimForErrorReport, trimLeadingSeparator, uniqueScopeViolations, uniqueStrings, writeJson, } from './shared.js';
 import { postIssueComment, resolveGithubRepo, } from './net.js';
-import type { AnyRecord, AutonomyConfig, PullRequestRecord, QueueMap, QueueState, TaskRecord } from '../../types.js';
+import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../../types.js';
 
 import { fileURLToPath } from 'url';
 
@@ -148,9 +148,6 @@ function loadState(rootDir: string, options: AnyRecord = {}): { config: Autonomy
   };
 }
 
-function buildImplementationQueueRelativePath(agentId) {
-  return path.join('prompts', 'autonomous', 'v2', 'queues', `${agentId}.json`);
-}
 
 function buildTaskQueueState(agent: AnyRecord, tasks: TaskRecord[] = []): QueueState {
   return isImplementationRole(agent.role)
@@ -887,7 +884,7 @@ function shouldRetryApprovedPrMerge(pr, reviewerTask) {
   return true;
 }
 
-function shouldForceApproveAfterRepeatedReviews(pr, checkResults, scopeResult) {
+function shouldForceApproveAfterRepeatedReviews(pr) {
   const normalizedPr = pr || {};
   const reviewCount = Number.isFinite(Number(normalizedPr.reviews && normalizedPr.reviews.length))
     ? Number(normalizedPr.reviews.length)

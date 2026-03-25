@@ -10,11 +10,9 @@ async function runImplementationFlow(params, deps) {
     buildQueueMetadataCommitMessage,
     buildTaskLaneKey,
     ensureCheckEnvironment,
-    ensureDir,
     evaluateScope,
     executeTaskWithCodex,
     finalizeTaskRun,
-    fs,
     getAgentConfig,
     getCompletedLaneTasks,
     getLaneTasks,
@@ -27,12 +25,10 @@ async function runImplementationFlow(params, deps) {
     loadState,
     logRunnerEvent,
     markImplementationTaskComplete,
-    path,
     readGit,
     recordImplementationTaskCommitSha,
     recordLaneTaskCompletion,
     resolveCheckCommands,
-    resolveTargetFile,
     runCheckCommands,
     runGit,
     summarizeText,
@@ -241,7 +237,6 @@ function runImplementationStubFlow(params, deps) {
     resolveTargetFile,
     runGit,
     tryPushBranch,
-    useCodexStub,
   } = deps;
 
   logRunnerEvent(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'start'), { agentId, taskId, branch, worktreePath, stub: true });

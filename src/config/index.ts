@@ -96,10 +96,6 @@ function joinConfigPath(dirPath: string, basename: string) {
   return `${trimTrailingSlashes(dirPath)}/${basename}`;
 }
 
-function normalizeTaskQueueDir(dirPath: string) {
-  const normalized = trimTrailingSlashes(normalizeConfigPath(dirPath));
-  return normalized || DEFAULT_TASK_QUEUE_DIR;
-}
 
 function normalizeConfigPath(value: string) {
   return String(value || '').trim().replace(/\\/g, '/');

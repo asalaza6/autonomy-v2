@@ -267,13 +267,7 @@ function getArchivedPrdSpecsDir(rootDir) {
   return path.join(rootDir, ...PRD_ARCHIVE_SEGMENTS);
 }
 
-function getPrdSpecPath(rootDir, prdId) {
-  return path.join(getPrdSpecsDir(rootDir), `${prdId}.json`);
-}
 
-function getArchivedPrdSpecPath(rootDir, prdId) {
-  return path.join(getArchivedPrdSpecsDir(rootDir), `${prdId}.json`);
-}
 
 function listCurrentPrdSpecEntries(rootDir) {
   const specsDir = getPrdSpecsDir(rootDir);
@@ -2454,9 +2448,6 @@ function resolveTaskQueuePath(rootDir, config, agentId) {
     : resolveRuntimeManagedPath(rootDir, relativePath);
 }
 
-function buildImplementationQueueRelativePath(agentId) {
-  return path.join('prompts', 'autonomous', 'v2', 'queues', `${agentId}.json`);
-}
 
 function resolveTrackedQueueRef(rootDir, integrationBranch) {
   const remoteRef = `origin/${integrationBranch}`;
@@ -2675,14 +2666,6 @@ function listTasks(taskQueues: QueueMap): TaskRecord[] {
   return Object.values(taskQueues).flatMap((queue) => queue.tasks);
 }
 
-function listRuntimeManagedTasks(taskQueues: QueueMap, config: AutonomyConfig): TaskRecord[] {
-  return Object.values(taskQueues)
-    .filter((queue) => {
-      const agent = getAgent(config, queue.agentId);
-      return !isImplementationRole(agent.role);
-    })
-    .flatMap((queue) => queue.tasks);
-}
 
 function getTask(taskQueues: QueueMap, taskId: string): TaskRecord {
   const task = findTask(taskQueues, taskId);
@@ -3355,7 +3338,7 @@ function collectFilesForValidation(rootDir, options) {
   return [];
 }
 
-function evaluateScope({ files, agent, task }) {
+function evaluateScope({ files, agent }) {
   const violations = [];
   const includeGlobs = agent.include || [];
   const excludeGlobs = agent.exclude || [];
@@ -3522,13 +3505,6 @@ function parseGithubRemoteUrl(remoteUrl) {
   return null;
 }
 
-function requireEnv(name) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Environment variable ${name} is required.`);
-  }
-  return value;
-}
 
 function publishPullRequest(repo, token, payload) {
   return githubRequest(repo, token, 'POST', '/pulls', payload);
