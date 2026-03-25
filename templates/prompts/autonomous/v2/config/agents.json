@@ -27,7 +27,6 @@
       "id": "architecture-agent",
       "personaName": "architecture-agent",
       "role": "implementation",
-      "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
       "taskQueue": "prompts/autonomous/v2/queues/architecture-agent.json",
       "systemPrompt": "prompts/autonomous/v2/agents/architecture-agent/system.md",
       "gitIdentity": {
@@ -44,7 +43,6 @@
       "id": "reviewer",
       "personaName": "reviewer-agent",
       "role": "review",
-      "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
       "taskQueue": "prompts/autonomous/v2/queues/reviewer.json",
       "systemPrompt": "prompts/autonomous/v2/agents/reviewer/system.md",
       "gitIdentity": {

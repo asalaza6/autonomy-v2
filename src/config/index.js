@@ -73,10 +73,6 @@ function validateAgentConfig(agent, index, sourcePath, seenAgentIds) {
 
   requireNonEmptyString(agent.systemPrompt, sourcePath, agentId, 'systemPrompt');
   requireGitIdentity(agent.gitIdentity, sourcePath, agentId);
-
-  if (getAgentDefinition(role).requiresRunner()) {
-    requireRunnerCommand(agent.runnerCommand, sourcePath, agentId);
-  }
   agent.taskQueue = normalizeNonEmptyString(agent.taskQueue);
   validateResolvedTaskQueue(agent, sourcePath);
 }
@@ -132,12 +128,6 @@ function normalizeNonEmptyString(value) {
 function requireNonEmptyString(value, sourcePath, agentId, fieldName) {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`Invalid autonomy config at ${sourcePath}: agent "${agentId}" is missing ${fieldName}.`);
-  }
-}
-
-function requireRunnerCommand(value, sourcePath, agentId) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((entry) => String(entry || '').trim().length === 0)) {
-    throw new Error(`Invalid autonomy config at ${sourcePath}: agent "${agentId}" must define a runnerCommand array.`);
   }
 }
 

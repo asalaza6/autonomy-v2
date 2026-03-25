@@ -31,7 +31,6 @@ test('packaged autonomy-v2 runs init, prd:add, and imports tracked task specs ag
   runNode(CLI_BIN, ['init', '--root', repoDir]);
 
   assert.ok(fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json')));
-  assert.ok(fs.existsSync(path.join(repoDir, 'scripts', 'autonomy-v2-default-runner.js')));
   assert.ok(fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'state', 'runtime.json')));
 
   const agentsConfig = JSON.parse(fs.readFileSync(
@@ -44,15 +43,6 @@ test('packaged autonomy-v2 runs init, prd:add, and imports tracked task specs ag
     ['pm-agent', 'architecture-agent', 'reviewer']
   );
   assert.deepEqual(agentsConfig.mergeActors, ['reviewer']);
-  assert.deepEqual(
-    agentsConfig.agents.find((agent) => agent.id === 'architecture-agent').runnerCommand,
-    ['node', 'scripts/autonomy-v2-default-runner.js']
-  );
-  assert.deepEqual(
-    agentsConfig.agents.find((agent) => agent.id === 'reviewer').runnerCommand,
-    ['node', 'scripts/autonomy-v2-default-runner.js']
-  );
-
   const sprintConfig = JSON.parse(fs.readFileSync(
     path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'sprint.json'),
     'utf8'
@@ -327,7 +317,6 @@ test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on 
     id: 'billing-agent',
     personaName: 'billing-agent',
     role: 'implementation',
-    runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
     systemPrompt: 'prompts/autonomous/v2/agents/billing-agent/system.md',
     taskQueue: 'prompts/autonomous/v2/queues/billing-agent.json',
     gitIdentity: {
@@ -547,6 +536,7 @@ test('packaged autonomy-v2 rejects invalid agent config values', () => {
     () => runNode(CLI_BIN, ['status', '--root', repoDir]),
     /id is required/i
   );
+
 });
 
 test('packaged autonomy-v2 backfills missing pm taskQueue for older repos', () => {
@@ -604,7 +594,6 @@ test('validateAutonomyConfig defaults missing taskQueue fields to the repo queue
         id: 'architecture-agent',
         personaName: 'architecture-agent',
         role: 'implementation',
-        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
         taskQueue: 'prompts/autonomous/v2/queues/architecture-agent.json',
         systemPrompt: 'prompts/autonomous/v2/agents/architecture-agent/system.md',
         gitIdentity: {
@@ -617,7 +606,6 @@ test('validateAutonomyConfig defaults missing taskQueue fields to the repo queue
         id: 'reviewer',
         personaName: 'reviewer',
         role: 'review',
-        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
         taskQueue: 'prompts/autonomous/v2/queues/reviewer.json',
         systemPrompt: 'prompts/autonomous/v2/agents/reviewer/system.md',
         gitIdentity: {
@@ -653,7 +641,6 @@ test('validateAutonomyConfig rejects runtime-managed reviewer queue paths', () =
         id: 'architecture-agent',
         personaName: 'architecture-agent',
         role: 'implementation',
-        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
         taskQueue: 'prompts/autonomous/v2/queues/architecture-agent.json',
         systemPrompt: 'prompts/autonomous/v2/agents/architecture-agent/system.md',
         gitIdentity: {
@@ -666,7 +653,6 @@ test('validateAutonomyConfig rejects runtime-managed reviewer queue paths', () =
         id: 'reviewer',
         personaName: 'reviewer',
         role: 'review',
-        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
         taskQueue: 'prompts/autonomous/v2/state/queues/reviewer.json',
         systemPrompt: 'prompts/autonomous/v2/agents/reviewer/system.md',
         gitIdentity: {

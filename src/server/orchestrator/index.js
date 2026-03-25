@@ -26,6 +26,7 @@ const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const CLI_PATH = path.join(__dirname, '..', '..', 'autonomy-v2', 'index.js');
 const WORKER_PATH = path.join(__dirname, '..', 'worker', 'index.js');
+const DEFAULT_RUNNER_PATH = path.join(__dirname, '..', '..', 'autonomy-v2', 'runner', 'default-runner.js');
 const IMPLEMENTATION_DUE_STATUSES = new Set(['queued', 'active']);
 const BACKLOG_GRACE_MS = 15000;
 
@@ -1112,20 +1113,18 @@ function runReviewerWorker(rootDir, config, agent) {
   }
 
   let runner = null;
-  if (Array.isArray(agent.runnerCommand) && agent.runnerCommand.length > 0) {
-    try {
-      runner = executeRunnerCommand(agent.runnerCommand, {
-        AUTONOMY_ROOT: rootDir,
-        AUTONOMY_AGENT_ID: agent.id,
-        AUTONOMY_REVIEW_TASK_ID: reviewTask.id,
-        AUTONOMY_PR_ID: reviewTask.prId || '',
-        AUTONOMY_SOURCE_AGENT_ID: reviewTask.sourceAgentId || '',
-        AUTONOMY_ERROR_REPORT: getRunnerErrorReportPath(rootDir, agent.id),
-      });
-    } catch (error) {
-      markReviewDispatchFailure(rootDir, config, agent.id, reviewTask.id, extractExecError(error));
-      throw error;
-    }
+  try {
+    runner = executeRunnerCommand([process.execPath, DEFAULT_RUNNER_PATH], {
+      AUTONOMY_ROOT: rootDir,
+      AUTONOMY_AGENT_ID: agent.id,
+      AUTONOMY_REVIEW_TASK_ID: reviewTask.id,
+      AUTONOMY_PR_ID: reviewTask.prId || '',
+      AUTONOMY_SOURCE_AGENT_ID: reviewTask.sourceAgentId || '',
+      AUTONOMY_ERROR_REPORT: getRunnerErrorReportPath(rootDir, agent.id),
+    });
+  } catch (error) {
+    markReviewDispatchFailure(rootDir, config, agent.id, reviewTask.id, extractExecError(error));
+    throw error;
   }
   appendAgentLog(rootDir, config, agent.id, 'worker:dispatch', {
     input: {
@@ -1216,20 +1215,18 @@ function runImplementationWorker(rootDir, config, agent) {
   }
 
   let runner = null;
-  if (Array.isArray(agent.runnerCommand) && agent.runnerCommand.length > 0) {
-    try {
-      runner = executeRunnerCommand(agent.runnerCommand, {
-        AUTONOMY_ROOT: rootDir,
-        AUTONOMY_AGENT_ID: agent.id,
-        AUTONOMY_TASK_ID: dispatchTask.id,
-        AUTONOMY_BRANCH: branch,
-        AUTONOMY_WORKTREE: worktreePath,
-        AUTONOMY_ERROR_REPORT: getRunnerErrorReportPath(rootDir, agent.id),
-      });
-    } catch (error) {
-      markImplementationDispatchFailure(rootDir, config, agent.id, dispatchTask.id, extractExecError(error));
-      throw error;
-    }
+  try {
+    runner = executeRunnerCommand([process.execPath, DEFAULT_RUNNER_PATH], {
+      AUTONOMY_ROOT: rootDir,
+      AUTONOMY_AGENT_ID: agent.id,
+      AUTONOMY_TASK_ID: dispatchTask.id,
+      AUTONOMY_BRANCH: branch,
+      AUTONOMY_WORKTREE: worktreePath,
+      AUTONOMY_ERROR_REPORT: getRunnerErrorReportPath(rootDir, agent.id),
+    });
+  } catch (error) {
+    markImplementationDispatchFailure(rootDir, config, agent.id, dispatchTask.id, extractExecError(error));
+    throw error;
   }
 
   appendAgentLog(rootDir, config, agent.id, 'worker:dispatch', {

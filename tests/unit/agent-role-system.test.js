@@ -97,7 +97,6 @@ test('config validation still enforces role-specific constraints through definit
         role: AGENT_ROLES.IMPLEMENTATION,
         taskQueue: 'prompts/autonomous/v2/queues/builder.json',
         systemPrompt: 'prompts/autonomous/v2/agents/builder/system.md',
-        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
         gitIdentity: { name: 'builder', email: 'builder@example.com' },
       },
       {
@@ -105,7 +104,6 @@ test('config validation still enforces role-specific constraints through definit
         role: AGENT_ROLES.REVIEW,
         taskQueue: 'prompts/autonomous/v2/queues/gate.json',
         systemPrompt: 'prompts/autonomous/v2/agents/gate/system.md',
-        runnerCommand: ['node', 'scripts/autonomy-v2-default-runner.js'],
         gitIdentity: { name: 'gate', email: 'gate@example.com' },
       },
     ],

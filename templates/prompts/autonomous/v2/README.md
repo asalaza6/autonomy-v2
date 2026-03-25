@@ -44,7 +44,7 @@ The default setup ships with:
 
 Other repos can add or remove implementation agents by editing `agents.json` and rerunning `init --force`.
 
-`init` also writes a repo-local `scripts/autonomy-v2-default-runner.js` wrapper so the default agent config can keep using the repository runner command shape.
+Implementation and review execution uses the packaged fixed runner at `src/autonomy-v2/runner/default-runner.js`.
 
 Lane ownership is path-scoped in the active config:
 
@@ -337,6 +337,5 @@ Current limitations worth knowing:
 - [`[package] scripts/autonomy-v2-server.js`](scripts/autonomy-v2-server.js)
 - [`[package] scripts/autonomy-v2-worker.js`](scripts/autonomy-v2-worker.js)
 - [`[package] scripts/autonomy-v2-orchestrator.js`](scripts/autonomy-v2-orchestrator.js)
-- [`[package] scripts/autonomy-v2-default-runner.js`](scripts/autonomy-v2-default-runner.js)
 - [`[package] prompts/autonomous/v2/config/agents.json`](prompts/autonomous/v2/config/agents.json)
 - [`[package] prompts/autonomous/v2/config/sprint.json`](prompts/autonomous/v2/config/sprint.json)

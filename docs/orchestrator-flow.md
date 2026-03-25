@@ -6,7 +6,7 @@ The short version is:
 
 - `autonomy-v2-server` is a polling scheduler.
 - `autonomy-v2-worker` is a single-agent execution wrapper.
-- `src/autonomy-v2-orchestrator.js` is the deterministic control loop.
+- `src/server/orchestrator/index.js` is the deterministic control loop.
 - Codex is used inside bounded points for planning, implementation, and review.
 - Git, GitHub, runtime state files, leases, and worktrees are the deterministic guardrails around those AI calls.
 
@@ -24,9 +24,9 @@ The short version is:
   Long-running poll loop. Acquires the server lock and repeatedly calls one scheduler tick.
 - `src/autonomy-v2-worker.js`
   Runs one worker cycle for one agent and finalizes runtime metadata.
-- `src/autonomy-v2-orchestrator.js`
+- `src/server/orchestrator/index.js`
   Core scheduler. Loads config/runtime state, syncs PRD specs, decides which agents are due, spawns workers, and records execution state.
-- `src/autonomy-v2-default-runner.js`
+- `src/autonomy-v2/runner/default-runner.js`
   Default implementation/review runner. Wraps Codex with deterministic repo checks, git operations, PR updates, and error reporting.
 - `src/autonomy-v2-codex.js`
   Codex integration. Uses structured output for planning/review and freeform execution for implementation.
@@ -34,7 +34,7 @@ The short version is:
   Reconciles tracked PRD truth and tracked implementation queues on `dev` with local runtime state.
 - `src/autonomy-v2-lock.js`
   Filesystem locks for server and state mutations.
-- `src/autonomy-v2-config.js`
+- `src/config/index.js`
   Agent config validation.
 - `src/autonomy-v2-github.js`
   GitHub token resolution.
@@ -174,7 +174,7 @@ It does four things:
 3. emits worker log events when streaming is enabled
 4. marks the worker idle in runtime state in a `finally` block
 
-`runWorkerOnce()` in `src/autonomy-v2-orchestrator.js` dispatches by agent role:
+`runWorkerOnce()` in `src/server/orchestrator/index.js` dispatches by agent role:
 
 - `pm` -> `runPmWorker()`
 - `implementation` -> `runImplementationWorker()`
@@ -209,7 +209,7 @@ In `runImplementationWorker()`:
 2. select one dispatchable task
 3. if needed, claim the next queued task on `dev`
 4. prepare the task worktree and deterministic lane branch
-5. execute the configured runner command
+5. execute the fixed packaged default runner in the worktree
 
 In the default runner:
 
@@ -239,7 +239,7 @@ Review is also a deterministic wrapper around Codex, but read-only.
 In `runReviewerWorker()`:
 
 1. claim one queued review task
-2. invoke the configured review runner
+2. invoke the fixed packaged default runner
 
 In the default runner:
 
@@ -389,9 +389,9 @@ If you need to understand the repo quickly, read in this order:
 1. `README.md`
 2. `templates/prompts/autonomous/v2/README.md`
 3. `src/autonomy-v2-server.js`
-4. `src/autonomy-v2-orchestrator.js`
+4. `src/server/orchestrator/index.js`
 5. `src/autonomy-v2-worker.js`
-6. `src/autonomy-v2-default-runner.js`
+6. `src/autonomy-v2/runner/default-runner.js`
 7. `src/autonomy-v2-codex.js`
 8. `src/autonomy-v2-dev-sync.js`
 9. `src/autonomy-v2.js`

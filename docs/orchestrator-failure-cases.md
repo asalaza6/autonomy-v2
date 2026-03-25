@@ -52,7 +52,6 @@ Examples:
 - unsupported agent roles
 - missing `systemPrompt`
 - missing `gitIdentity`
-- missing `runnerCommand` for non-PM agents
 - invalid `mergeActors`
 
 Why these are real failures:
@@ -74,7 +73,7 @@ Examples:
 - missing required environment variables
 - missing GitHub auth for operations that require GitHub
 - invalid root path
-- required executable not present for a configured runner
+- required executable not present for the default runner
 - invalid `--poll-ms` or `--sync-ms`
 
 Why these are real failures:
@@ -192,7 +191,7 @@ Implementation is where the repo currently mixes AI outcomes with orchestration 
 
 - cannot resolve or claim the tracked queue task safely
 - cannot prepare the worktree or branch
-- runner command cannot be launched
+- default runner command cannot be launched
 - deterministic required checks fail when the policy says they are blocking
 - git add/commit/push fails when those steps are required for the chosen transition
 - tracked queue completion or queue metadata persistence fails after work has been produced
