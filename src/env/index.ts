@@ -50,7 +50,3 @@ function parseEnvFile(filePath) {
 
 
 export { loadAutonomyEnv };
-export default {
-  loadAutonomyEnv
-};
-

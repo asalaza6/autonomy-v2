@@ -884,7 +884,7 @@ function shouldRetryApprovedPrMerge(pr, reviewerTask) {
   return true;
 }
 
-function shouldForceApproveAfterRepeatedReviews(pr) {
+function shouldForceApproveAfterRepeatedReviews(pr, _checkResults, _scopeResult) {
   const normalizedPr = pr || {};
   const reviewCount = Number.isFinite(Number(normalizedPr.reviews && normalizedPr.reviews.length))
     ? Number(normalizedPr.reviews.length)
@@ -1033,15 +1033,3 @@ export { publishRunnerFailure };
 export { shouldForceApproveAfterRepeatedReviews };
 export { shouldIgnoreMissingTaskFinishError };
 export { shouldRetryApprovedPrMerge };
-export default {
-  buildRunnerFailureRecord,
-  buildMergeFollowupComment,
-  extractExecError,
-  isScopeOnlyReviewFeedback,
-  main,
-  normalizeNonEmptyString,
-  publishRunnerFailure,
-  shouldForceApproveAfterRepeatedReviews,
-  shouldIgnoreMissingTaskFinishError,
-  shouldRetryApprovedPrMerge
-};

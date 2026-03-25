@@ -767,24 +767,3 @@ export { shouldIncludeWorkerExitError };
 export { summarizeTickResult };
 export { parseCli };
 export { writePrefixedChunks };
-export default {
-  buildTickEventPayload,
-  buildAgentTraceCommand,
-  buildTraceOptions,
-  classifyWorkerStreamLine,
-  extractWorkerErrorSummaryFromLine,
-  extractWorkerContextFromLine,
-  formatServerEventLine,
-  formatWorkerStreamPrefix,
-  formatWorkerStreamPrefixKey,
-  formatWorkerStreamLine,
-  getAgentTraceLogPath,
-  formatTickSummaryLine,
-  logTickResult: logTickResultWithWriter,
-  main,
-  normalizeTraceTerminal,
-  shouldIncludeWorkerExitError,
-  summarizeTickResult,
-  parseCli,
-  writePrefixedChunks
-};

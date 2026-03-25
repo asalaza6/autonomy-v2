@@ -380,8 +380,3 @@ function runImplementationStubFlow(params, deps) {
 
 export { runImplementationFlow };
 export { runImplementationStubFlow };
-export default {
-  runImplementationFlow,
-  runImplementationStubFlow
-};
-

@@ -142,8 +142,3 @@ function requirePositiveInteger(value: number, sourcePath: string, fieldName: st
 export { VALID_AGENT_ROLES };
 export { buildDefaultTaskQueuePath };
 export { validateAutonomyConfig };
-export default {
-  VALID_AGENT_ROLES,
-  buildDefaultTaskQueuePath,
-  validateAutonomyConfig
-};

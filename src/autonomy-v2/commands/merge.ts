@@ -1,12 +1,8 @@
-import shared from './shared.js';
+import { handleMerge } from './shared.js';
 
 async function run(rootDir, options) {
-  return shared.handleMerge(rootDir, options);
+  return handleMerge(rootDir, options);
 }
 
 
 export { run };
-export default {
-  run
-};
-

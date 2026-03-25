@@ -720,9 +720,3 @@ export { executeTaskWithCodex };
 export { planPrdTasksWithCodex };
 export { runCodexStructured };
 export { reviewPrWithCodex };
-export default {
-  executeTaskWithCodex,
-  planPrdTasksWithCodex,
-  runCodexStructured,
-  reviewPrWithCodex
-};

@@ -120,10 +120,3 @@ export { logWorkerEvent };
 export { main };
 export { parseCli };
 export { summarizeWorkerResult };
-export default {
-  finalizeWorkerRuntime,
-  logWorkerEvent,
-  main,
-  parseCli,
-  summarizeWorkerResult
-};

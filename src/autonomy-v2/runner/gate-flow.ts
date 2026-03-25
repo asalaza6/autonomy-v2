@@ -345,7 +345,3 @@ function runReviewStubFlow(params, deps) {
 
 export { runReviewFlow };
 export { runReviewStubFlow };
-export default {
-  runReviewFlow,
-  runReviewStubFlow
-};

@@ -1,12 +1,8 @@
-import shared from './shared.js';
+import { handleScopeValidate } from './shared.js';
 
 function run(rootDir, options) {
-  return shared.handleScopeValidate(rootDir, options);
+  return handleScopeValidate(rootDir, options);
 }
 
 
 export { run };
-export default {
-  run
-};
-

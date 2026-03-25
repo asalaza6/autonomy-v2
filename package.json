@@ -49,10 +49,11 @@
     "docs"
   ],
   "devDependencies": {
-    "eslint": "^10.1.0",
     "@types/node": "^20.16.0",
     "@typescript-eslint/eslint-plugin": "^8.37.0",
     "@typescript-eslint/parser": "^8.37.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-import": "^2.32.0",
     "globals": "^17.4.0",
     "typescript": "^5.8.3"
   }

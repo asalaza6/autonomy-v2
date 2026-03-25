@@ -3338,7 +3338,7 @@ function collectFilesForValidation(rootDir, options) {
   return [];
 }
 
-function evaluateScope({ files, agent }) {
+function evaluateScope({ files, agent, task: _task }: { files: string[]; agent: AnyRecord; task?: AnyRecord }) {
   const violations = [];
   const includeGlobs = agent.include || [];
   const excludeGlobs = agent.exclude || [];
@@ -3780,47 +3780,3 @@ export { parseCli };
 export { printHelp };
 export { requireOption };
 export { resolveRootDir };
-export default {
-  addOption,
-  archiveCompletedPrdSpecs,
-  buildAgentStatusSummaries,
-  buildMergeCommitTitle,
-  buildPersonaPrBody,
-  buildPersonaPrTitle,
-  buildPullRequestStatusSummaries,
-  buildPullRequestLabels,
-  buildSignedReviewSummary,
-  buildTaskBranchName,
-  buildWorktreePath,
-  evaluateMerge,
-  evaluateScope,
-  extractExecError,
-  findArchivablePrdIds,
-  globToRegExp,
-  getListOption,
-  getStringOption,
-  handleArchiveCompletedPrds,
-  handleInit,
-  handleMerge,
-  handlePrdAdd,
-  handlePrdList,
-  handlePrRecord,
-  handlePrepareWorktree,
-  handleReviewRecord,
-  handleRuntimeStatus,
-  handleScopeValidate,
-  handleStatus,
-  handleTaskAdd,
-  handleTaskFinish,
-  handleTaskList,
-  isMutatingCommand,
-  matchesAnyGlob,
-  main,
-  normalizeReviewDecision,
-  parseGithubRemoteUrl,
-  performLocalMerge,
-  parseCli,
-  printHelp,
-  requireOption,
-  resolveRootDir
-};

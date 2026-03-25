@@ -315,12 +315,3 @@ export { getTemplateContent };
 export { pruneStaleAgentScaffold };
 export { resolveTemplateTargetPath };
 export { validateImplementationChecks };
-export default {
-  buildQueueTemplate,
-  collectAgentScaffoldEntries,
-  getTemplateContent,
-  pruneStaleAgentScaffold,
-  resolveTemplateTargetPath,
-  validateImplementationChecks
-};
-

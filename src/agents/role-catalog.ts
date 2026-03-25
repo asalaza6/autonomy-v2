@@ -106,24 +106,3 @@ export { listAgentRoleIds };
 export { normalizeAgentRole };
 export { requiresRunnerForRole };
 export { usesTrackedQueueForRole };
-export default {
-  AGENT_ROLES,
-  RUNNER_TYPES,
-  ROLE_IDS,
-  TASK_TYPES,
-  buildRoleEventName,
-  buildRoleScopedLabel,
-  getRunnerTypeForRole,
-  getRoleAgentLabel,
-  getRoleLabel,
-  getTaskTypeForRole,
-  isAgentRole,
-  isImplementationRole,
-  isPmRole,
-  isReviewRole,
-  listAgentRoleIds,
-  normalizeAgentRole,
-  requiresRunnerForRole,
-  usesTrackedQueueForRole
-};
-

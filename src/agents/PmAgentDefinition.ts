@@ -13,7 +13,3 @@ class PmAgentDefinition extends AgentDefinition {
 
 
 export { PmAgentDefinition };
-export default {
-  PmAgentDefinition
-};
-

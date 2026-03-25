@@ -1,4 +1,5 @@
 import path from 'path';
+import type { AnyRecord } from '../../types.js';
 import { execFileSync } from 'child_process';
 
 function normalizeRepoPath(filePath) {
@@ -42,7 +43,7 @@ function globToRegExp(glob) {
   return new RegExp(`${pattern}$`);
 }
 
-function evaluateScope({ files, agent }) {
+function evaluateScope({ files, agent, task: _task }: { files: string[]; agent: AnyRecord; task?: AnyRecord }) {
   const violations = [];
   const includeGlobs = agent.include || [];
   const excludeGlobs = agent.exclude || [];
@@ -99,10 +100,3 @@ export { evaluateScope };
 export { globToRegExp };
 export { matchesAnyGlob };
 export { normalizeRepoPath };
-export default {
-  collectFilesForValidation,
-  evaluateScope,
-  globToRegExp,
-  matchesAnyGlob,
-  normalizeRepoPath
-};

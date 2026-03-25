@@ -23,6 +23,3 @@ class ImplementationAgentDefinition extends AgentDefinition {
 
 
 export { ImplementationAgentDefinition };
-export default {
-  ImplementationAgentDefinition
-};

@@ -28,6 +28,3 @@ class ReviewAgentDefinition extends AgentDefinition {
 
 
 export { ReviewAgentDefinition };
-export default {
-  ReviewAgentDefinition
-};

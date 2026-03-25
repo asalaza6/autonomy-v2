@@ -1,18 +1,14 @@
-import shared from './shared.js';
+import { handleTaskAdd, handleTaskFinish, handleTaskList } from './shared.js';
 
 function run(rootDir, options, command) {
   if (command === 'task:add') {
-    return shared.handleTaskAdd(rootDir, options);
+    return handleTaskAdd(rootDir, options);
   }
   if (command === 'task:finish') {
-    return shared.handleTaskFinish(rootDir, options);
+    return handleTaskFinish(rootDir, options);
   }
-  return shared.handleTaskList(rootDir, options);
+  return handleTaskList(rootDir, options);
 }
 
 
 export { run };
-export default {
-  run
-};
-

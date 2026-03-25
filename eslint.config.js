@@ -1,4 +1,5 @@
 import globals from 'globals';
+import importPlugin from 'eslint-plugin-import';
 import tsParser from '@typescript-eslint/parser';
 import tsESLint from '@typescript-eslint/eslint-plugin';
 
@@ -15,9 +16,18 @@ export default [
       globals: globals.node,
     },
     plugins: {
+      import: importPlugin,
       '@typescript-eslint': tsESLint,
     },
     rules: {
+      'import/no-default-export': 'error',
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportNamespaceSpecifier',
+          message: 'Use named imports instead of namespace imports.',
+        },
+      ],
       'no-unused-vars': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',

@@ -63,6 +63,3 @@ class AgentDefinition {
 
 
 export { AgentDefinition };
-export default {
-  AgentDefinition
-};

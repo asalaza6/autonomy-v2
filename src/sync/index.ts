@@ -2164,19 +2164,3 @@ export { hasPrdSpecInIntegrationBranch };
 export { listTrackedPrdSpecs };
 export { readTrackedPrdStateMap };
 export { syncPrdSpecsFromIntegrationBranch };
-export default {
-  DEFAULT_SYNC_STATE,
-  PRD_SPECS_DIR,
-  buildPrdSpecPayload,
-  buildPrdStateRelativePath,
-  commitPrdSpecToIntegrationBranch,
-  commitTrackedPrdStateToIntegrationBranch,
-  commitTrackedFilesToIntegrationBranch,
-  deleteTrackedPrdStateFromIntegrationBranch,
-  getSyncPaths,
-  hasActivePrdSpecInIntegrationBranch,
-  hasPrdSpecInIntegrationBranch,
-  listTrackedPrdSpecs,
-  readTrackedPrdStateMap,
-  syncPrdSpecsFromIntegrationBranch
-};

@@ -32,7 +32,3 @@ function hasGithubAuth(): boolean {
 
 export { hasGithubAuth };
 export { resolveGithubAuthToken };
-export default {
-  hasGithubAuth,
-  resolveGithubAuthToken
-};

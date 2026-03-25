@@ -134,7 +134,3 @@ req.end();
 
 export { postIssueComment };
 export { resolveGithubRepo };
-export default {
-  postIssueComment,
-  resolveGithubRepo
-};

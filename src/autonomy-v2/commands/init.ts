@@ -1,12 +1,8 @@
-import shared from './shared.js';
+import { handleInit } from './shared.js';
 
 function run(rootDir, options) {
-  return shared.handleInit(rootDir, options);
+  return handleInit(rootDir, options);
 }
 
 
 export { run };
-export default {
-  run
-};
-

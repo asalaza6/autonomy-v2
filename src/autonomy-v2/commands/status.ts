@@ -1,12 +1,8 @@
-import shared from './shared.js';
+import { handleStatus } from './shared.js';
 
 function run(rootDir, options) {
-  return shared.handleStatus(rootDir, options);
+  return handleStatus(rootDir, options);
 }
 
 
 export { run };
-export default {
-  run
-};
-

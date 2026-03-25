@@ -101,10 +101,3 @@ export { acquireServerLock };
 export { acquireStateLock };
 export { isProcessAlive };
 export { withStateLock };
-export default {
-  acquireLock,
-  acquireServerLock,
-  acquireStateLock,
-  isProcessAlive,
-  withStateLock
-};

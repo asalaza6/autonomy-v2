@@ -35,7 +35,3 @@ function listAgentDefinitions() {
 
 export { getAgentDefinition };
 export { listAgentDefinitions };
-export default {
-  getAgentDefinition,
-  listAgentDefinitions
-};

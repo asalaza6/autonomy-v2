@@ -1,18 +1,14 @@
-import shared from './shared.js';
+import { handleArchiveCompletedPrds, handlePrdAdd, handlePrdList } from './shared.js';
 
 function run(rootDir, options, command) {
   if (command === 'prd:add') {
-    return shared.handlePrdAdd(rootDir, options);
+    return handlePrdAdd(rootDir, options);
   }
   if (command === 'prd:list') {
-    return shared.handlePrdList(rootDir, options);
+    return handlePrdList(rootDir, options);
   }
-  return shared.handleArchiveCompletedPrds(rootDir, options);
+  return handleArchiveCompletedPrds(rootDir, options);
 }
 
 
 export { run };
-export default {
-  run
-};
-

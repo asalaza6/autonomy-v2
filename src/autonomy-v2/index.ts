@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 
-import commands from './commands/index.js';
+import { main as commandsMain } from './commands/index.js';
 import { fileURLToPath } from 'url';
 
 async function main(argv = process.argv.slice(2)) {
-  return commands.main(argv);
+  return commandsMain(argv);
 }
 
 
 export { main };
-export default {
-  main
-};
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {

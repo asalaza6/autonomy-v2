@@ -3,35 +3,35 @@ import { withStateLock } from '../../lock/index.js';
 import { AGENT_ROLES, buildRoleEventName } from '../../agents/role-catalog.js';
 import { printHelp } from '../cli/help.js';
 import { isMutatingCommand, parseCli, resolveRootDir } from '../cli/parse.js';
-import initCommand from './init.js';
-import statusCommand from './status.js';
-import taskCommand from './task.js';
-import prdCommand from './prd.js';
-import worktreeCommand from './worktree.js';
-import scopeCommand from './scope.js';
-import prCommand from './pr.js';
-import gateCommand from './gate.js';
-import mergeCommand from './merge.js';
-import runtimeCommand from './runtime.js';
+import { run as initRun } from './init.js';
+import { run as statusRun } from './status.js';
+import { run as taskRun } from './task.js';
+import { run as prdRun } from './prd.js';
+import { run as worktreeRun } from './worktree.js';
+import { run as scopeRun } from './scope.js';
+import { run as prRun } from './pr.js';
+import { run as gateRun } from './gate.js';
+import { run as mergeRun } from './merge.js';
+import { run as runtimeRun } from './runtime.js';
 import type { CliOptions } from '../../types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
 
 const COMMAND_HANDLERS = new Map([
-  ['init', initCommand],
-  ['status', statusCommand],
-  ['task:add', taskCommand],
-  ['task:finish', taskCommand],
-  ['task:list', taskCommand],
-  ['prd:add', prdCommand],
-  ['prd:list', prdCommand],
-  ['prd:archive-completed', prdCommand],
-  ['worktree:prepare', worktreeCommand],
-  ['scope:validate', scopeCommand],
-  ['pr:record', prCommand],
-  [REVIEW_RECORD_COMMAND, gateCommand],
-  ['merge', mergeCommand],
-  ['runtime:status', runtimeCommand],
+  ['init', initRun],
+  ['status', statusRun],
+  ['task:add', taskRun],
+  ['task:finish', taskRun],
+  ['task:list', taskRun],
+  ['prd:add', prdRun],
+  ['prd:list', prdRun],
+  ['prd:archive-completed', prdRun],
+  ['worktree:prepare', worktreeRun],
+  ['scope:validate', scopeRun],
+  ['pr:record', prRun],
+  [REVIEW_RECORD_COMMAND, gateRun],
+  ['merge', mergeRun],
+  ['runtime:status', runtimeRun],
 ]);
 
 async function main(argv: string[] = process.argv.slice(2)) {
@@ -50,7 +50,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
       throw new Error('Unknown command "'.concat(command, '". Run "autonomy-v2 --help".'));
     }
 
-    const runCommand = () => handler.run(rootDir, options as CliOptions, command);
+    const runCommand = () => handler(rootDir, options as CliOptions, command);
     if (!isMutatingCommand(command)) {
       await runCommand();
       return;
@@ -64,6 +64,3 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
 
 export { main };
-export default {
-  main
-};

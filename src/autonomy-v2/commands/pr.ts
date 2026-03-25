@@ -1,12 +1,8 @@
-import shared from './shared.js';
+import { handlePrRecord } from './shared.js';
 
 async function run(rootDir, options) {
-  return shared.handlePrRecord(rootDir, options);
+  return handlePrRecord(rootDir, options);
 }
 
 
 export { run };
-export default {
-  run
-};
-
