@@ -1,2 +1,5 @@
 node_modules/
 dist/
+docs/export-graph.html
+docs/export-graph.mmd
+docs/export-graph.svg
