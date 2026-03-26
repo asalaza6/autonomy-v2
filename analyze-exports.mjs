@@ -1161,7 +1161,7 @@ function buildHtml(entries, options) {
             }
           }
 
-          return lines.join("\\n");
+          return lines.join(String.fromCharCode(10));
         }
 
         function hydrateRootButtons() {
@@ -1220,6 +1220,7 @@ function buildHtml(entries, options) {
           mermaidDiagram.style.width = "max-content";
           mermaidContent.style.width = "max-content";
           mermaidContent.style.minWidth = "max-content";
+          mermaidDiagram.removeAttribute("data-processed");
           try {
             await mermaid.run({ nodes: [mermaidDiagram] });
           } catch (error) {
