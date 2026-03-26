@@ -927,6 +927,15 @@ function buildHtml(entries, options) {
         display: block;
       }
 
+      .analytics-tooltip ul {
+        margin: 8px 0 0 0;
+        padding: 0 0 0 16px;
+      }
+
+      .analytics-tooltip li {
+        margin: 0 0 2px 0;
+      }
+
       .analytics-row {
         display: contents;
       }
@@ -945,7 +954,39 @@ function buildHtml(entries, options) {
       .analytics-number {
         color: #0f172a;
         font-variant-numeric: tabular-nums;
-        text-align: right;
+        text-align: left;
+        padding-left: 2px;
+        position: relative;
+      }
+
+      .analytics-count {
+        display: inline-block;
+        min-width: 1ch;
+      }
+
+      .analytics-number .analytics-tooltip {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 8px);
+        z-index: 20;
+        display: none;
+        min-width: 180px;
+        max-width: 260px;
+        padding: 10px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: 500;
+        white-space: normal;
+      }
+
+      .analytics-number:hover .analytics-tooltip,
+      .analytics-number:focus-within .analytics-tooltip {
+        display: block;
       }
 
       .analytics-file {
@@ -1440,12 +1481,24 @@ function buildHtml(entries, options) {
             if (targetRow.depth > sourceRow.depth) {
               sourceRow.negativeImports = (sourceRow.negativeImports ?? 0) + 1;
               targetRow.negativeExports = (targetRow.negativeExports ?? 0) + 1;
+              sourceRow.negativeImportFiles = sourceRow.negativeImportFiles ?? [];
+              targetRow.negativeExportFiles = targetRow.negativeExportFiles ?? [];
+              sourceRow.negativeImportFiles.push(targetRow.path);
+              targetRow.negativeExportFiles.push(sourceRow.path);
             } else if (targetRow.depth < sourceRow.depth) {
               sourceRow.negativeExports = (sourceRow.negativeExports ?? 0) + 1;
               targetRow.negativeImports = (targetRow.negativeImports ?? 0) + 1;
+              sourceRow.negativeExportFiles = sourceRow.negativeExportFiles ?? [];
+              targetRow.negativeImportFiles = targetRow.negativeImportFiles ?? [];
+              sourceRow.negativeExportFiles.push(targetRow.path);
+              targetRow.negativeImportFiles.push(sourceRow.path);
             } else {
               sourceRow.balance = (sourceRow.balance ?? 0) + 1;
               targetRow.balance = (targetRow.balance ?? 0) + 1;
+              sourceRow.balanceFiles = sourceRow.balanceFiles ?? [];
+              targetRow.balanceFiles = targetRow.balanceFiles ?? [];
+              sourceRow.balanceFiles.push(targetRow.path);
+              targetRow.balanceFiles.push(sourceRow.path);
             }
           });
 
@@ -1453,6 +1506,9 @@ function buildHtml(entries, options) {
             row.negativeImports = row.negativeImports ?? 0;
             row.negativeExports = row.negativeExports ?? 0;
             row.balance = row.balance ?? 0;
+            row.negativeImportFiles = row.negativeImportFiles ?? [];
+            row.negativeExportFiles = row.negativeExportFiles ?? [];
+            row.balanceFiles = row.balanceFiles ?? [];
           });
 
           fileRows.sort(compareAnalyticsRows);
@@ -1544,6 +1600,19 @@ function buildHtml(entries, options) {
             return String(value ?? 0);
           }
 
+          function formatTooltipList(files) {
+            const uniqueFiles = [...new Set((files ?? []).filter(Boolean))].sort();
+            if (uniqueFiles.length === 0) {
+              return "<div>None</div>";
+            }
+
+            return "<ul>" + uniqueFiles.map((filePath) => "<li>" + escapeMermaidLabel(getFileName(filePath)) + "</li>").join("") + "</ul>";
+          }
+
+          function buildTooltip(files) {
+            return '<span class="analytics-tooltip">' + formatTooltipList(files) + "</span>";
+          }
+
           const rowsHtml = fileRows
             .map((row) => {
               return (
@@ -1553,9 +1622,30 @@ function buildHtml(entries, options) {
                 '">' +
                 escapeMermaidLabel(row.label) +
                 "</div>" +
-                '<div class="analytics-cell analytics-number">' + formatCount(row.negativeImports) + "</div>" +
-                '<div class="analytics-cell analytics-number">' + formatCount(row.negativeExports) + "</div>" +
-                '<div class="analytics-cell analytics-number">' + formatCount(row.balance) + "</div>"
+                '<div class="analytics-cell analytics-number">' +
+                '<span class="analytics-count" title="' +
+                escapeMermaidLabel(getFileName(row.path)) +
+                '">' +
+                formatCount(row.negativeImports) +
+                "</span>" +
+                buildTooltip(row.negativeImportFiles) +
+                "</div>" +
+                '<div class="analytics-cell analytics-number">' +
+                '<span class="analytics-count" title="' +
+                escapeMermaidLabel(getFileName(row.path)) +
+                '">' +
+                formatCount(row.negativeExports) +
+                "</span>" +
+                buildTooltip(row.negativeExportFiles) +
+                "</div>" +
+                '<div class="analytics-cell analytics-number">' +
+                '<span class="analytics-count" title="' +
+                escapeMermaidLabel(getFileName(row.path)) +
+                '">' +
+                formatCount(row.balance) +
+                "</span>" +
+                buildTooltip(row.balanceFiles) +
+                "</div>"
               );
             })
             .join("");
