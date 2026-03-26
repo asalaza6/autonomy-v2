@@ -613,7 +613,7 @@ function buildMermaidTree(context, selectedFileId = null) {
   return lines.join("\n");
 }
 
-function buildTreeGraphPayload(context) {
+function buildTreeGridData(context) {
   const graph = buildFileDependencyGraph(context);
   const incomingCounts = new Map();
 
@@ -637,7 +637,203 @@ function buildTreeGraphPayload(context) {
     roots: Array.from(incomingCounts.entries())
       .filter(([, incoming]) => incoming === 0)
       .map(([fileId]) => fileId)
-      .sort(),
+    .sort(),
+  };
+}
+
+function buildReadableGridExport(treePayload, rootFileId = null) {
+  if (!treePayload) {
+    return null;
+  }
+
+  const fileById = new Map(treePayload.files.map((entry) => [entry.id, entry]));
+  const allFileIds = new Set(fileById.keys());
+  const selectedRootId =
+    rootFileId && rootFileId !== "all" && allFileIds.has(rootFileId)
+      ? rootFileId
+      : treePayload.roots[0] ?? "all";
+  const visibleFiles = new Set();
+
+  if (selectedRootId !== "all") {
+    const queue = [selectedRootId];
+    while (queue.length > 0) {
+      const source = queue.shift();
+      if (visibleFiles.has(source)) {
+        continue;
+      }
+
+      visibleFiles.add(source);
+      treePayload.edges.forEach(({ source: edgeSource, target }) => {
+        if (edgeSource === source && allFileIds.has(target) && !visibleFiles.has(target)) {
+          queue.push(target);
+        }
+      });
+    }
+  } else {
+    allFileIds.forEach((fileId) => {
+      visibleFiles.add(fileId);
+    });
+  }
+
+  const filteredEdges = treePayload.edges.filter(
+    ({ source, target }) => visibleFiles.has(source) && visibleFiles.has(target)
+  );
+
+  const incomingCounts = new Map();
+  visibleFiles.forEach((fileId) => {
+    incomingCounts.set(fileId, 0);
+  });
+  filteredEdges.forEach(({ target }) => {
+    incomingCounts.set(target, (incomingCounts.get(target) ?? 0) + 1);
+  });
+
+  const levelByFile = new Map();
+  let frontier = Array.from(visibleFiles)
+    .filter((fileId) => (incomingCounts.get(fileId) ?? 0) === 0)
+    .sort();
+  frontier.forEach((fileId) => {
+    levelByFile.set(fileId, 0);
+  });
+
+  const remainingIncoming = new Map(incomingCounts);
+
+  while (frontier.length > 0) {
+    const nextFrontier = [];
+    frontier.forEach((source) => {
+      const sourceLevel = levelByFile.get(source);
+      if (sourceLevel === undefined) {
+        return;
+      }
+
+      treePayload.edges.forEach(({ source: edgeSource, target }) => {
+        if (edgeSource !== source || !visibleFiles.has(target)) {
+          return;
+        }
+
+        const nextLevel = sourceLevel + 1;
+        const existing = levelByFile.get(target);
+        if (existing === undefined || nextLevel > existing) {
+          levelByFile.set(target, nextLevel);
+        }
+
+        const updated = Math.max(0, (remainingIncoming.get(target) ?? 0) - 1);
+        remainingIncoming.set(target, updated);
+        if (updated === 0) {
+          nextFrontier.push(target);
+        }
+      });
+    });
+    frontier = [...new Set(nextFrontier)].sort();
+  }
+
+  const unresolved = Array.from(visibleFiles).filter((fileId) => !levelByFile.has(fileId));
+  if (unresolved.length > 0) {
+    let fallbackLevel = 0;
+    if (levelByFile.size > 0) {
+      fallbackLevel = Math.max(...Array.from(levelByFile.values())) + 1;
+    }
+
+    unresolved.forEach((fileId) => {
+      levelByFile.set(fileId, fallbackLevel);
+      fallbackLevel += 1;
+    });
+  }
+
+  const rows = Array.from(visibleFiles)
+    .map((fileId) => {
+      const file = fileById.get(fileId);
+      if (!file) {
+        return null;
+      }
+
+      return {
+        depth: levelByFile.get(fileId) ?? 0,
+        file: file.relative,
+        name: file.label,
+        path: file.path,
+        directory: file.directory,
+        negativeImports: 0,
+        negativeExports: 0,
+        balance: 0,
+        negativeImportFiles: [],
+        negativeExportFiles: [],
+        balanceFiles: [],
+      };
+    })
+    .filter(Boolean);
+
+  const rowById = new Map(
+    Array.from(visibleFiles)
+      .map((fileId, index) => [fileId, rows[index]])
+      .filter(([, row]) => row)
+  );
+
+  filteredEdges.forEach(({ source, target }) => {
+    const sourceRow = rowById.get(source);
+    const targetRow = rowById.get(target);
+    if (!sourceRow || !targetRow) {
+      return;
+    }
+
+    if (targetRow.depth > sourceRow.depth) {
+      sourceRow.negativeImports += 1;
+      targetRow.negativeExports += 1;
+      sourceRow.negativeImportFiles.push(targetRow.file);
+      targetRow.negativeExportFiles.push(sourceRow.file);
+    } else if (targetRow.depth < sourceRow.depth) {
+      sourceRow.negativeExports += 1;
+      targetRow.negativeImports += 1;
+      sourceRow.negativeExportFiles.push(targetRow.file);
+      targetRow.negativeImportFiles.push(sourceRow.file);
+    } else {
+      sourceRow.balance += 1;
+      targetRow.balance += 1;
+      sourceRow.balanceFiles.push(targetRow.file);
+      targetRow.balanceFiles.push(sourceRow.file);
+    }
+  });
+
+  const sortedRows = rows
+    .map((row) => ({
+      depth: row.depth,
+      file: row.file,
+      name: row.name,
+      path: row.path,
+      directory: row.directory,
+      negativeImports: row.negativeImports,
+      negativeExports: row.negativeExports,
+      balance: row.balance,
+      negativeImportFiles: Array.from(new Set(row.negativeImportFiles)).sort(),
+      negativeExportFiles: Array.from(new Set(row.negativeExportFiles)).sort(),
+      balanceFiles: Array.from(new Set(row.balanceFiles)).sort(),
+    }))
+    .sort((left, right) => left.depth - right.depth || left.file.localeCompare(right.file));
+
+  const maxDepth = sortedRows.reduce((max, row) => Math.max(max, row.depth), 0);
+  const rootFile = selectedRootId === "all" ? null : fileById.get(selectedRootId) ?? null;
+
+  return {
+    columns: [
+      { key: "depth", label: "D", name: "Depth" },
+      { key: "file", label: "File", name: "File" },
+      { key: "negativeImports", label: "NI", name: "Negative imports" },
+      { key: "negativeExports", label: "NE", name: "Negative exports" },
+      { key: "balance", label: "B", name: "Balance" },
+    ],
+    root: rootFile
+      ? {
+          id: rootFile.id,
+          path: rootFile.path,
+          name: rootFile.label,
+          relative: rootFile.relative,
+        }
+      : null,
+    stats: {
+      files: sortedRows.length,
+      edges: filteredEdges.length,
+      maxDepth,
+    },
+    rows: sortedRows,
   };
 }
 
@@ -707,21 +903,21 @@ function buildDot(entries, options) {
   return lines.join("\n");
 }
 
-function buildHtml(entries, options, treePayload = null, treePayloadSource = null) {
+function buildHtml(entries, options, treeGridData = null, treeGridDataSource = null) {
   const context = buildGraphContext(entries, options);
   const useTree = Boolean(options.tree);
   const mermaid = useTree ? buildMermaidTree(context) : buildMermaid(entries, options);
   const importerCount = new Set(entries.flatMap((entry) => entry.importedBy)).size;
   const edgeCount = entries.reduce((count, entry) => count + entry.importedBy.length, 0);
-  const resolvedTreePayload = useTree ? treePayload ?? buildTreeGraphPayload(context) : null;
+  const resolvedTreeGridData = useTree ? treeGridData ?? buildTreeGridData(context) : null;
   const initialRootId =
-    resolvedTreePayload && resolvedTreePayload.roots.length > 0 ? resolvedTreePayload.roots[0] : "all";
+    resolvedTreeGridData && resolvedTreeGridData.roots.length > 0 ? resolvedTreeGridData.roots[0] : "all";
   const mermaidDefinition = JSON.stringify(mermaid);
-  const treePayloadJson = resolvedTreePayload
-    ? JSON.stringify(resolvedTreePayload, null, 2)
+  const treeGridDataJson = resolvedTreeGridData
+    ? JSON.stringify(resolvedTreeGridData, null, 2)
     : "null";
-  const treePayloadSourceJson =
-    useTree && treePayloadSource ? JSON.stringify(treePayloadSource) : "null";
+  const treeGridDataSourceJson =
+    useTree && treeGridDataSource ? JSON.stringify(treeGridDataSource) : "null";
 
   return `<!doctype html>
 <html lang="en">
@@ -1150,10 +1346,10 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
         const maxScale = Number.POSITIVE_INFINITY;
         const stepScale = 0.1;
         const isTreeMode = ${useTree ? "true" : "false"};
-        const treePayloadSource = ${treePayloadSourceJson};
-        const embeddedTreePayload = ${treePayloadJson};
+        const treeGridDataSource = ${treeGridDataSourceJson};
+        const embeddedTreeGridData = ${treeGridDataJson};
         const rootCache = new Map();
-        let treePayload = null;
+        let treeGridData = null;
         let fileById = new Map();
         let activeRoot = "${initialRootId}";
         let currentScale = 1;
@@ -1280,20 +1476,20 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
           isAutoFit = true;
         }
 
-        async function loadTreePayload() {
-          if (treePayloadSource) {
+        async function loadTreeGridData() {
+          if (treeGridDataSource) {
             try {
-              const response = await fetch(treePayloadSource, { cache: "no-store" });
+              const response = await fetch(treeGridDataSource, { cache: "no-store" });
               if (!response.ok) {
                 throw new Error("HTTP " + response.status);
               }
               return await response.json();
             } catch (error) {
-              console.warn("Falling back to embedded tree payload.", error);
+              console.warn("Falling back to embedded grid data.", error);
             }
           }
 
-          return embeddedTreePayload;
+          return embeddedTreeGridData;
         }
 
         function escapeMermaidLabel(value) {
@@ -1330,7 +1526,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
         }
 
         function getFilePath(fileId) {
-          if (!treePayload) {
+          if (!treeGridData) {
             return fileId;
           }
           const entry = fileById.get(fileId);
@@ -1367,13 +1563,13 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
         }
 
         function buildTreeViewState(rootFileId) {
-          if (!treePayload) {
+          if (!treeGridData) {
             return null;
           }
 
           const levelByFile = new Map();
           const visibleFiles = new Set();
-          const allFileIds = new Set(treePayload.files.map((entry) => entry.id));
+          const allFileIds = new Set(treeGridData.files.map((entry) => entry.id));
 
           if (rootFileId && rootFileId !== "all" && allFileIds.has(rootFileId)) {
             const queue = [rootFileId];
@@ -1383,7 +1579,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
                 continue;
               }
               visibleFiles.add(source);
-              treePayload.edges.forEach(({ source: edgeSource, target }) => {
+              treeGridData.edges.forEach(({ source: edgeSource, target }) => {
                 if (edgeSource === source && allFileIds.has(target) && !visibleFiles.has(target)) {
                   queue.push(target);
                 }
@@ -1395,7 +1591,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
             });
           }
 
-          const filteredEdges = treePayload.edges.filter(
+          const filteredEdges = treeGridData.edges.filter(
             ({ source, target }) => visibleFiles.has(source) && visibleFiles.has(target)
           );
           const incomingCounts = new Map();
@@ -1423,7 +1619,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
               if (sourceLevel === undefined) {
                 return;
               }
-              treePayload.edges.forEach(({ source: edgeSource, target }) => {
+              treeGridData.edges.forEach(({ source: edgeSource, target }) => {
                 if (edgeSource !== source || !visibleFiles.has(target)) {
                   return;
                 }
@@ -1460,7 +1656,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
             .filter(Boolean)
             .sort();
 
-          const fileLookup = new Map(treePayload.files.map((entry) => [entry.path, entry]));
+          const fileLookup = new Map(treeGridData.files.map((entry) => [entry.path, entry]));
           const levels = new Map();
           for (const [fileId, level] of levelByFile.entries()) {
             if (!levels.has(level)) {
@@ -1555,7 +1751,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
             state;
 
           const lines = [
-            "%% " + visiblePaths.length + " files, " + treePayload.files.length + " total files, " + filteredEdges.length + " edges",
+            "%% " + visiblePaths.length + " files, " + treeGridData.files.length + " total files, " + filteredEdges.length + " edges",
             "flowchart TD",
             "direction TB",
             "classDef fileNode fill:#e2e8f0,stroke:#334155,stroke-width:1px,color:#0f172a;",
@@ -1603,7 +1799,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
         }
 
         function renderTreeAnalytics(rootFileId) {
-          if (!analyticsPanel || !treePayload) {
+          if (!analyticsPanel || !treeGridData) {
             return;
           }
 
@@ -1733,7 +1929,7 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
         }
 
         function hydrateRootButtons() {
-          if (!isTreeMode || !rootControls || !rootButtons || !treePayload) {
+          if (!isTreeMode || !rootControls || !rootButtons || !treeGridData) {
             return;
           }
           const allButton = document.createElement("button");
@@ -1744,11 +1940,11 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
           allButton.addEventListener("click", () => switchRoot("all"));
           rootButtons.appendChild(allButton);
 
-          if (treePayload.roots.length === 0) {
+          if (treeGridData.roots.length === 0) {
             return;
           }
-          treePayload.roots.forEach((rootId) => {
-            const file = treePayload.files.find((entry) => entry.id === rootId);
+          treeGridData.roots.forEach((rootId) => {
+            const file = treeGridData.files.find((entry) => entry.id === rootId);
             if (!file) {
               return;
             }
@@ -1861,11 +2057,11 @@ function buildHtml(entries, options, treePayload = null, treePayloadSource = nul
         });
 
         if (isTreeMode) {
-          loadTreePayload().then((payload) => {
-            treePayload = payload;
-            fileById = new Map(treePayload.files.map((entry) => [entry.id, entry]));
+          loadTreeGridData().then((payload) => {
+            treeGridData = payload;
+            fileById = new Map(treeGridData.files.map((entry) => [entry.id, entry]));
             activeRoot =
-              treePayload.roots.length > 0 ? treePayload.roots[0] : "all";
+              treeGridData.roots.length > 0 ? treeGridData.roots[0] : "all";
 
             hydrateRootButtons();
             setActiveRoot(activeRoot);
@@ -2003,16 +2199,16 @@ async function writeOutput(outputPath, contents) {
   await fs.writeFile(outputPath, contents, "utf8");
 }
 
-function getTreePayloadOutputPath(outputPath) {
+function getTreeGridDataOutputPath(outputPath) {
   if (!outputPath) {
     return null;
   }
 
   if (/\.html?$/i.test(outputPath)) {
-    return outputPath.replace(/\.html?$/i, ".tree.json");
+    return outputPath.replace(/\.html?$/i, ".grid.json");
   }
 
-  return `${outputPath}.tree.json`;
+  return `${outputPath}.grid.json`;
 }
 
 async function main() {
@@ -2029,13 +2225,17 @@ async function main() {
       : await buildExportMap(options.tsconfig),
     options
   );
-  const treePayload =
+  const treeGridData =
     options.format === "html" && options.tree
-      ? buildTreeGraphPayload(buildGraphContext(entries, options))
+      ? buildTreeGridData(buildGraphContext(entries, options))
       : null;
-  const treePayloadOutputPath =
+  const gridExport =
+    treeGridData && options.format === "html" && options.tree
+      ? buildReadableGridExport(treeGridData)
+      : null;
+  const treeGridDataOutputPath =
     options.format === "html" && options.tree && options.output
-      ? getTreePayloadOutputPath(options.output)
+      ? getTreeGridDataOutputPath(options.output)
       : null;
 
   const output =
@@ -2043,19 +2243,19 @@ async function main() {
       ? buildJson(entries)
       : options.format === "mermaid"
         ? buildMermaid(entries, options)
-        : options.format === "dot"
-          ? buildDot(entries, options)
+          : options.format === "dot"
+            ? buildDot(entries, options)
           : buildHtml(
               entries,
               options,
-              treePayload,
-              treePayloadOutputPath ? path.basename(treePayloadOutputPath) : null
+              treeGridData,
+              null
             );
 
   if (options.output) {
     await writeOutput(options.output, output);
-    if (treePayload && treePayloadOutputPath) {
-      await writeOutput(treePayloadOutputPath, `${JSON.stringify(treePayload, null, 2)}\n`);
+    if (gridExport && treeGridDataOutputPath) {
+      await writeOutput(treeGridDataOutputPath, `${JSON.stringify(gridExport, null, 2)}\n`);
     }
     process.stdout.write(`${options.output}\n`);
     return;

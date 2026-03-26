@@ -1,0 +1,1303 @@
+{
+  "columns": [
+    {
+      "key": "depth",
+      "label": "D",
+      "name": "Depth"
+    },
+    {
+      "key": "file",
+      "label": "File",
+      "name": "File"
+    },
+    {
+      "key": "negativeImports",
+      "label": "NI",
+      "name": "Negative imports"
+    },
+    {
+      "key": "negativeExports",
+      "label": "NE",
+      "name": "Negative exports"
+    },
+    {
+      "key": "balance",
+      "label": "B",
+      "name": "Balance"
+    }
+  ],
+  "root": {
+    "id": "node_1",
+    "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/bin/autonomy-v2-server.ts",
+    "name": "autonomy-v2-server.ts",
+    "relative": "bin/autonomy-v2-server.ts"
+  },
+  "stats": {
+    "files": 55,
+    "edges": 247,
+    "maxDepth": 47
+  },
+  "rows": [
+    {
+      "depth": 0,
+      "file": "bin/autonomy-v2-server.ts",
+      "name": "autonomy-v2-server.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/bin/autonomy-v2-server.ts",
+      "directory": "bin",
+      "negativeImports": 1,
+      "negativeExports": 0,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/server/index.ts"
+      ],
+      "negativeExportFiles": [],
+      "balanceFiles": []
+    },
+    {
+      "depth": 1,
+      "file": "src/server/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/index.ts",
+      "directory": "src/server",
+      "negativeImports": 1,
+      "negativeExports": 1,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "negativeExportFiles": [
+        "bin/autonomy-v2-server.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 2,
+      "file": "src/server/commands/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/commands/index.ts",
+      "directory": "src/server/commands",
+      "negativeImports": 9,
+      "negativeExports": 1,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/env/index.ts",
+        "src/lock/index.ts",
+        "src/server/commands/tick-log.ts",
+        "src/server/commands/trace.ts",
+        "src/server/commands/worker-streams.ts",
+        "src/server/orchestrator/index.ts",
+        "src/server/orchestrator/paths.ts",
+        "src/server/orchestrator/scheduler.ts",
+        "src/types.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/index.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 3,
+      "file": "src/env/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/env/index.ts",
+      "directory": "src/env",
+      "negativeImports": 0,
+      "negativeExports": 1,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 3,
+      "file": "src/lock/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/lock/index.ts",
+      "directory": "src/lock",
+      "negativeImports": 5,
+      "negativeExports": 1,
+      "balance": 1,
+      "negativeImportFiles": [
+        "src/server/orchestrator/planning.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/server/orchestrator/workers.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "balanceFiles": [
+        "src/server/orchestrator/scheduler.ts"
+      ]
+    },
+    {
+      "depth": 3,
+      "file": "src/server/commands/tick-log.ts",
+      "name": "tick-log.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/commands/tick-log.ts",
+      "directory": "src/server/commands",
+      "negativeImports": 0,
+      "negativeExports": 1,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 3,
+      "file": "src/server/commands/worker-streams.ts",
+      "name": "worker-streams.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/commands/worker-streams.ts",
+      "directory": "src/server/commands",
+      "negativeImports": 3,
+      "negativeExports": 1,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/server/commands/trace.ts",
+        "src/types.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 3,
+      "file": "src/server/orchestrator/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/index.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 9,
+      "negativeExports": 1,
+      "balance": 4,
+      "negativeImportFiles": [
+        "src/server/orchestrator/git.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/server/orchestrator/state.ts",
+        "src/server/orchestrator/workers.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "balanceFiles": [
+        "src/server/orchestrator/paths.ts",
+        "src/server/orchestrator/scheduler.ts"
+      ]
+    },
+    {
+      "depth": 3,
+      "file": "src/server/orchestrator/paths.ts",
+      "name": "paths.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/paths.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 5,
+      "negativeExports": 1,
+      "balance": 2,
+      "negativeImportFiles": [
+        "src/server/orchestrator/constants.ts",
+        "src/server/orchestrator/git.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/state.ts",
+        "src/server/orchestrator/workers.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "balanceFiles": [
+        "src/server/orchestrator/index.ts"
+      ]
+    },
+    {
+      "depth": 3,
+      "file": "src/server/orchestrator/scheduler.ts",
+      "name": "scheduler.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/scheduler.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 7,
+      "negativeExports": 1,
+      "balance": 3,
+      "negativeImportFiles": [
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/server/orchestrator/state.ts",
+        "src/server/orchestrator/workers.ts",
+        "src/sync/index.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts"
+      ],
+      "balanceFiles": [
+        "src/lock/index.ts",
+        "src/server/orchestrator/index.ts"
+      ]
+    },
+    {
+      "depth": 4,
+      "file": "src/agents/role-catalog.ts",
+      "name": "role-catalog.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/agents/role-catalog.ts",
+      "directory": "src/agents",
+      "negativeImports": 19,
+      "negativeExports": 1,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/agents/ImplementationAgentDefinition.ts",
+        "src/agents/PmAgentDefinition.ts",
+        "src/agents/ReviewAgentDefinition.ts",
+        "src/autonomy-v2/commands/shared-agent-status.ts",
+        "src/autonomy-v2/commands/shared-pr-status.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts",
+        "src/codex/planning.ts",
+        "src/codex/worker.ts",
+        "src/config/index.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/server/orchestrator/workers.ts",
+        "src/sync/derived-pr.ts",
+        "src/sync/derived-state.ts",
+        "src/sync/lanes.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/commands/worker-streams.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 4,
+      "file": "src/server/commands/trace.ts",
+      "name": "trace.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/commands/trace.ts",
+      "directory": "src/server/commands",
+      "negativeImports": 1,
+      "negativeExports": 2,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/types.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/commands/index.ts",
+        "src/server/commands/worker-streams.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 5,
+      "file": "src/types.ts",
+      "name": "types.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/types.ts",
+      "directory": "src",
+      "negativeImports": 30,
+      "negativeExports": 5,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinition.ts",
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/agents/ImplementationAgentDefinition.ts",
+        "src/agents/PmAgentDefinition.ts",
+        "src/agents/ReviewAgentDefinition.ts",
+        "src/autonomy-v2/commands/shared-agent-status.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-github.ts",
+        "src/autonomy-v2/commands/shared-lanes.ts",
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts",
+        "src/autonomy-v2/commands/shared-scope.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts",
+        "src/codex/shared.ts",
+        "src/config/index.ts",
+        "src/github/index.ts",
+        "src/server/orchestrator/git.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/server/orchestrator/state.ts",
+        "src/sync/core.ts",
+        "src/sync/derived-pr.ts",
+        "src/sync/derived-state.ts",
+        "src/sync/git-shared.ts",
+        "src/sync/git.ts",
+        "src/sync/github.ts",
+        "src/sync/lanes.ts",
+        "src/sync/prd.ts",
+        "src/sync/syncer.ts"
+      ],
+      "negativeExportFiles": [
+        "src/lock/index.ts",
+        "src/server/commands/index.ts",
+        "src/server/commands/trace.ts",
+        "src/server/commands/worker-streams.ts",
+        "src/server/orchestrator/scheduler.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 6,
+      "file": "src/server/orchestrator/git.ts",
+      "name": "git.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/git.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 4,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/server/orchestrator/helpers.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/workers.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/orchestrator/index.ts",
+        "src/server/orchestrator/paths.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 7,
+      "file": "src/server/orchestrator/state.ts",
+      "name": "state.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/state.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 9,
+      "negativeExports": 5,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared.ts",
+        "src/config/index.ts",
+        "src/server/orchestrator/helpers.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/server/orchestrator/workers.ts",
+        "src/sync/git.ts",
+        "src/sync/index.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/orchestrator/index.ts",
+        "src/server/orchestrator/paths.ts",
+        "src/server/orchestrator/scheduler.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 8,
+      "file": "src/server/orchestrator/workers.ts",
+      "name": "workers.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/workers.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 4,
+      "negativeExports": 8,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/server/orchestrator/constants.ts",
+        "src/server/orchestrator/helpers.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/server/orchestrator/queues.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/lock/index.ts",
+        "src/server/orchestrator/git.ts",
+        "src/server/orchestrator/index.ts",
+        "src/server/orchestrator/paths.ts",
+        "src/server/orchestrator/scheduler.ts",
+        "src/server/orchestrator/state.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 9,
+      "file": "src/server/orchestrator/constants.ts",
+      "name": "constants.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/constants.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 2,
+      "negativeExports": 2,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/server/orchestrator/helpers.ts",
+        "src/server/orchestrator/runtime.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/orchestrator/paths.ts",
+        "src/server/orchestrator/workers.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 10,
+      "file": "src/server/orchestrator/queues.ts",
+      "name": "queues.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/queues.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 7,
+      "negativeExports": 8,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/server/orchestrator/helpers.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/sync/git.ts",
+        "src/sync/index.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/server/orchestrator/git.ts",
+        "src/server/orchestrator/index.ts",
+        "src/server/orchestrator/paths.ts",
+        "src/server/orchestrator/scheduler.ts",
+        "src/server/orchestrator/state.ts",
+        "src/server/orchestrator/workers.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 11,
+      "file": "src/server/orchestrator/runtime.ts",
+      "name": "runtime.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/runtime.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 1,
+      "negativeExports": 8,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/server/orchestrator/helpers.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/lock/index.ts",
+        "src/server/orchestrator/constants.ts",
+        "src/server/orchestrator/index.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/scheduler.ts",
+        "src/server/orchestrator/state.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 12,
+      "file": "src/sync/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/index.ts",
+      "directory": "src/sync",
+      "negativeImports": 15,
+      "negativeExports": 3,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/sync/constants.ts",
+        "src/sync/git.ts",
+        "src/sync/prd.ts",
+        "src/sync/syncer.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/scheduler.ts",
+        "src/server/orchestrator/state.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 13,
+      "file": "src/sync/syncer.ts",
+      "name": "syncer.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/syncer.ts",
+      "directory": "src/sync",
+      "negativeImports": 10,
+      "negativeExports": 5,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/config/index.ts",
+        "src/sync/constants.ts",
+        "src/sync/core.ts",
+        "src/sync/derived-state.ts",
+        "src/sync/git-shared.ts",
+        "src/sync/git.ts",
+        "src/sync/lanes.ts",
+        "src/sync/prd.ts"
+      ],
+      "negativeExportFiles": [
+        "src/lock/index.ts",
+        "src/server/orchestrator/scheduler.ts",
+        "src/sync/index.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 14,
+      "file": "src/server/orchestrator/helpers.ts",
+      "name": "helpers.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/helpers.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 2,
+      "negativeExports": 6,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/server/orchestrator/planning.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/orchestrator/constants.ts",
+        "src/server/orchestrator/git.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/runtime.ts",
+        "src/server/orchestrator/state.ts",
+        "src/server/orchestrator/workers.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 15,
+      "file": "src/autonomy-v2/commands/shared.ts",
+      "name": "shared.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 31,
+      "negativeExports": 5,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-agent-status.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-github.ts",
+        "src/autonomy-v2/commands/shared-lanes.ts",
+        "src/autonomy-v2/commands/shared-pr-status.ts",
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts",
+        "src/autonomy-v2/commands/shared-scope.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts",
+        "src/config/index.ts",
+        "src/github/index.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/sync/git-shared.ts",
+        "src/sync/git.ts",
+        "src/sync/lanes.ts",
+        "src/sync/prd.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/state.ts",
+        "src/sync/index.ts",
+        "src/sync/syncer.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 16,
+      "file": "src/config/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/config/index.ts",
+      "directory": "src/config",
+      "negativeImports": 4,
+      "negativeExports": 6,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/sync/git.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/server/orchestrator/state.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 17,
+      "file": "src/sync/git.ts",
+      "name": "git.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/git.ts",
+      "directory": "src/sync",
+      "negativeImports": 8,
+      "negativeExports": 9,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts",
+        "src/server/orchestrator/planning.ts",
+        "src/sync/constants.ts",
+        "src/sync/core.ts",
+        "src/sync/git-shared.ts",
+        "src/sync/prd.ts"
+      ],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared.ts",
+        "src/config/index.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/state.ts",
+        "src/sync/index.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 18,
+      "file": "src/server/orchestrator/planning.ts",
+      "name": "planning.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/planning.ts",
+      "directory": "src/server/orchestrator",
+      "negativeImports": 2,
+      "negativeExports": 11,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/codex/index.ts",
+        "src/codex/planning.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/lock/index.ts",
+        "src/server/orchestrator/git.ts",
+        "src/server/orchestrator/helpers.ts",
+        "src/server/orchestrator/index.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/server/orchestrator/state.ts",
+        "src/server/orchestrator/workers.ts",
+        "src/sync/git.ts",
+        "src/sync/index.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 19,
+      "file": "src/agents/AgentDefinitionRegistry.ts",
+      "name": "AgentDefinitionRegistry.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/agents/AgentDefinitionRegistry.ts",
+      "directory": "src/agents",
+      "negativeImports": 3,
+      "negativeExports": 5,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/ImplementationAgentDefinition.ts",
+        "src/agents/PmAgentDefinition.ts",
+        "src/agents/ReviewAgentDefinition.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/config/index.ts",
+        "src/server/orchestrator/helpers.ts",
+        "src/server/orchestrator/queues.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 20,
+      "file": "src/sync/constants.ts",
+      "name": "constants.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/constants.ts",
+      "directory": "src/sync",
+      "negativeImports": 5,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/sync/core.ts",
+        "src/sync/github.ts",
+        "src/sync/lanes.ts",
+        "src/sync/prd.ts"
+      ],
+      "negativeExportFiles": [
+        "src/sync/git.ts",
+        "src/sync/index.ts",
+        "src/sync/syncer.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 21,
+      "file": "src/sync/prd.ts",
+      "name": "prd.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/prd.ts",
+      "directory": "src/sync",
+      "negativeImports": 3,
+      "negativeExports": 8,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/sync/derived-state.ts",
+        "src/sync/lanes.ts"
+      ],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared.ts",
+        "src/sync/constants.ts",
+        "src/sync/git.ts",
+        "src/sync/index.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 22,
+      "file": "src/sync/core.ts",
+      "name": "core.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/core.ts",
+      "directory": "src/sync",
+      "negativeImports": 1,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/sync/lanes.ts"
+      ],
+      "negativeExportFiles": [
+        "src/sync/constants.ts",
+        "src/sync/git.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 23,
+      "file": "src/sync/derived-state.ts",
+      "name": "derived-state.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/derived-state.ts",
+      "directory": "src/sync",
+      "negativeImports": 2,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/sync/derived-pr.ts",
+        "src/sync/lanes.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/sync/prd.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 24,
+      "file": "src/sync/git-shared.ts",
+      "name": "git-shared.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/git-shared.ts",
+      "directory": "src/sync",
+      "negativeImports": 3,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/github/index.ts",
+        "src/sync/github.ts",
+        "src/sync/lanes.ts"
+      ],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared.ts",
+        "src/sync/git.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 25,
+      "file": "src/sync/lanes.ts",
+      "name": "lanes.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/lanes.ts",
+      "directory": "src/sync",
+      "negativeImports": 2,
+      "negativeExports": 9,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/github/index.ts",
+        "src/sync/github.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/sync/constants.ts",
+        "src/sync/core.ts",
+        "src/sync/derived-state.ts",
+        "src/sync/git-shared.ts",
+        "src/sync/prd.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 26,
+      "file": "src/autonomy-v2/commands/shared-agent-status.ts",
+      "name": "shared-agent-status.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-agent-status.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 4,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-lanes.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 27,
+      "file": "src/autonomy-v2/commands/shared-core.ts",
+      "name": "shared-core.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-core.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 8,
+      "negativeExports": 8,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-github.ts",
+        "src/autonomy-v2/commands/shared-lanes.ts",
+        "src/autonomy-v2/commands/shared-pr-status.ts",
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts",
+        "src/autonomy-v2/commands/shared-scope.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts"
+      ],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared-agent-status.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/config/index.ts",
+        "src/sync/constants.ts",
+        "src/sync/index.ts",
+        "src/sync/syncer.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 28,
+      "file": "src/autonomy-v2/commands/shared-github.ts",
+      "name": "shared-github.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-github.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 1,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-repo.ts"
+      ],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 29,
+      "file": "src/autonomy-v2/commands/shared-lanes.ts",
+      "name": "shared-lanes.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-lanes.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 3,
+      "negativeExports": 5,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts"
+      ],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared-agent-status.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 30,
+      "file": "src/autonomy-v2/commands/shared-pr-status.ts",
+      "name": "shared-pr-status.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-pr-status.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 2,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 31,
+      "file": "src/autonomy-v2/commands/shared-prds.ts",
+      "name": "shared-prds.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-prds.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 1,
+      "negativeExports": 8,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-queues.ts"
+      ],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/config/index.ts",
+        "src/sync/git.ts",
+        "src/sync/index.ts",
+        "src/sync/prd.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 32,
+      "file": "src/autonomy-v2/commands/shared-queues.ts",
+      "name": "shared-queues.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-queues.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 2,
+      "negativeExports": 11,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-repo.ts",
+        "src/autonomy-v2/commands/shared-worktrees.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared-agent-status.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-lanes.ts",
+        "src/autonomy-v2/commands/shared-pr-status.ts",
+        "src/autonomy-v2/commands/shared-prds.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/sync/git.ts",
+        "src/sync/index.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 33,
+      "file": "src/autonomy-v2/commands/shared-repo.ts",
+      "name": "shared-repo.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-repo.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 1,
+      "negativeExports": 10,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/autonomy-v2/commands/shared-worktrees.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared-agent-status.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-github.ts",
+        "src/autonomy-v2/commands/shared-lanes.ts",
+        "src/autonomy-v2/commands/shared-pr-status.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 34,
+      "file": "src/autonomy-v2/commands/shared-scope.ts",
+      "name": "shared-scope.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-scope.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 0,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 35,
+      "file": "src/autonomy-v2/commands/shared-worktrees.ts",
+      "name": "shared-worktrees.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/shared-worktrees.ts",
+      "directory": "src/autonomy-v2/commands",
+      "negativeImports": 0,
+      "negativeExports": 10,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/autonomy-v2/commands/shared-core.ts",
+        "src/autonomy-v2/commands/shared-lanes.ts",
+        "src/autonomy-v2/commands/shared-queues.ts",
+        "src/autonomy-v2/commands/shared-repo.ts",
+        "src/autonomy-v2/commands/shared.ts",
+        "src/sync/git.ts",
+        "src/sync/index.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 36,
+      "file": "src/github/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/github/index.ts",
+      "directory": "src/github",
+      "negativeImports": 0,
+      "negativeExports": 5,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/autonomy-v2/commands/shared.ts",
+        "src/sync/git-shared.ts",
+        "src/sync/lanes.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 37,
+      "file": "src/codex/index.ts",
+      "name": "index.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/codex/index.ts",
+      "directory": "src/codex",
+      "negativeImports": 4,
+      "negativeExports": 1,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/codex/planning.ts",
+        "src/codex/worker.ts"
+      ],
+      "negativeExportFiles": [
+        "src/server/orchestrator/planning.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 38,
+      "file": "src/codex/planning.ts",
+      "name": "planning.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/codex/planning.ts",
+      "directory": "src/codex",
+      "negativeImports": 2,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/codex/cli.ts",
+        "src/codex/shared.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/codex/index.ts",
+        "src/server/orchestrator/planning.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 39,
+      "file": "src/agents/ImplementationAgentDefinition.ts",
+      "name": "ImplementationAgentDefinition.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/agents/ImplementationAgentDefinition.ts",
+      "directory": "src/agents",
+      "negativeImports": 1,
+      "negativeExports": 3,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinition.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/agents/role-catalog.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 40,
+      "file": "src/agents/PmAgentDefinition.ts",
+      "name": "PmAgentDefinition.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/agents/PmAgentDefinition.ts",
+      "directory": "src/agents",
+      "negativeImports": 1,
+      "negativeExports": 3,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinition.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/agents/role-catalog.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 41,
+      "file": "src/agents/ReviewAgentDefinition.ts",
+      "name": "ReviewAgentDefinition.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/agents/ReviewAgentDefinition.ts",
+      "directory": "src/agents",
+      "negativeImports": 1,
+      "negativeExports": 3,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/agents/AgentDefinition.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/AgentDefinitionRegistry.ts",
+        "src/agents/role-catalog.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 42,
+      "file": "src/sync/derived-pr.ts",
+      "name": "derived-pr.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/derived-pr.ts",
+      "directory": "src/sync",
+      "negativeImports": 0,
+      "negativeExports": 3,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/sync/derived-state.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 43,
+      "file": "src/sync/github.ts",
+      "name": "github.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/sync/github.ts",
+      "directory": "src/sync",
+      "negativeImports": 0,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/sync/constants.ts",
+        "src/sync/git-shared.ts",
+        "src/sync/lanes.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 44,
+      "file": "src/codex/worker.ts",
+      "name": "worker.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/codex/worker.ts",
+      "directory": "src/codex",
+      "negativeImports": 2,
+      "negativeExports": 3,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/codex/cli.ts",
+        "src/codex/shared.ts"
+      ],
+      "negativeExportFiles": [
+        "src/agents/role-catalog.ts",
+        "src/codex/index.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 45,
+      "file": "src/codex/cli.ts",
+      "name": "cli.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/codex/cli.ts",
+      "directory": "src/codex",
+      "negativeImports": 1,
+      "negativeExports": 2,
+      "balance": 0,
+      "negativeImportFiles": [
+        "src/codex/shared.ts"
+      ],
+      "negativeExportFiles": [
+        "src/codex/planning.ts",
+        "src/codex/worker.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 46,
+      "file": "src/codex/shared.ts",
+      "name": "shared.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/codex/shared.ts",
+      "directory": "src/codex",
+      "negativeImports": 0,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/codex/cli.ts",
+        "src/codex/planning.ts",
+        "src/codex/worker.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    },
+    {
+      "depth": 47,
+      "file": "src/agents/AgentDefinition.ts",
+      "name": "AgentDefinition.ts",
+      "path": "/Users/bytedance/Documents/GitHub/autonomy-v2/src/agents/AgentDefinition.ts",
+      "directory": "src/agents",
+      "negativeImports": 0,
+      "negativeExports": 4,
+      "balance": 0,
+      "negativeImportFiles": [],
+      "negativeExportFiles": [
+        "src/agents/ImplementationAgentDefinition.ts",
+        "src/agents/PmAgentDefinition.ts",
+        "src/agents/ReviewAgentDefinition.ts",
+        "src/types.ts"
+      ],
+      "balanceFiles": []
+    }
+  ]
+}
