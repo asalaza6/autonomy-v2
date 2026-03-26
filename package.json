@@ -33,7 +33,7 @@
     "check:lines": "node scripts/check-line-count.js",
     "clean": "rm -rf dist",
     "test": "npm run build && node --test dist/tests/**/*.test.js",
-    "smoke": "npm run build && node --test dist/tests/smoke/package-smoke.test.js",
+    "smoke": "npm run build && node --test dist/tests/smoke/*.test.js",
     "lint": "eslint src bin tests",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",
