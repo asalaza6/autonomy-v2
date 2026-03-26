@@ -138,6 +138,19 @@ async function buildExportMap(tsconfigPath) {
   const result = new Map();
 
   for (const sourceFile of project.getSourceFiles()) {
+    const imports = new Set();
+    sourceFile.getImportDeclarations().forEach((importDeclaration) => {
+      const importedSourceFile = importDeclaration.getModuleSpecifierSourceFile();
+      if (!importedSourceFile) {
+        return;
+      }
+
+      const importedPath = importedSourceFile.getFilePath();
+      if (importedPath !== sourceFile.getFilePath()) {
+        imports.add(importedPath);
+      }
+    });
+
     const exportedDeclarations = sourceFile.getExportedDeclarations();
 
     exportedDeclarations.forEach((declarations, name) => {
@@ -148,6 +161,7 @@ async function buildExportMap(tsconfigPath) {
           name,
           exportedFrom: sourceFile.getFilePath(),
           importedBy: new Set(),
+          imports: new Set(imports),
         });
       }
 
@@ -187,6 +201,7 @@ async function loadExportMap(inputPath) {
       name,
       exportedFrom: value.exportedFrom,
       importedBy: Array.from(new Set(value.importedBy ?? [])).sort(),
+      imports: Array.from(new Set(value.imports ?? [])).sort(),
     }))
     .sort(compareEntries);
 }
@@ -616,10 +631,20 @@ function buildMermaidTree(context, selectedFileId = null) {
 function buildTreeGridData(context) {
   const graph = buildFileDependencyGraph(context);
   const incomingCounts = new Map();
+  const importsByFile = new Map();
 
   for (const fileId of graph.fileById.keys()) {
     incomingCounts.set(fileId, 0);
   }
+
+  context.entries.forEach((entry) => {
+    const filePath = entry.exportedFrom;
+    const importedFiles = importsByFile.get(filePath) ?? new Set();
+    (entry.imports ?? []).forEach((importedPath) => {
+      importedFiles.add(importedPath);
+    });
+    importsByFile.set(filePath, importedFiles);
+  });
 
   graph.edges.forEach(({ target }) => {
     incomingCounts.set(target, (incomingCounts.get(target) ?? 0) + 1);
@@ -632,6 +657,7 @@ function buildTreeGridData(context) {
       label: path.basename(filePath),
       relative: relativeLabel(context.relativeTo, filePath),
       directory: relativeDirLabel(context.relativeTo, filePath),
+      imports: Array.from(importsByFile.get(filePath) ?? []).sort(),
     })),
     edges: graph.edges,
     roots: Array.from(incomingCounts.entries())
@@ -747,11 +773,13 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
       }
 
       return {
+        id: fileId,
         depth: levelByFile.get(fileId) ?? 0,
         file: file.relative,
         name: file.label,
         path: file.path,
         directory: file.directory,
+        imports: Array.from(new Set(file.imports ?? [])).sort(),
         negativeImports: 0,
         negativeExports: 0,
         balance: 0,
@@ -762,39 +790,36 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
     })
     .filter(Boolean);
 
-  const rowById = new Map(
-    Array.from(visibleFiles)
-      .map((fileId, index) => [fileId, rows[index]])
-      .filter(([, row]) => row)
-  );
+  const rowById = new Map(rows.filter(Boolean).map((row) => [row.id, row]));
 
-  filteredEdges.forEach(({ source, target }) => {
-    const sourceRow = rowById.get(source);
-    const targetRow = rowById.get(target);
-    if (!sourceRow || !targetRow) {
+  rows.forEach((row) => {
+    const sourceRow = rowById.get(row.id);
+    if (!sourceRow) {
       return;
     }
 
-    if (targetRow.depth > sourceRow.depth) {
-      sourceRow.negativeImports += 1;
-      targetRow.negativeExports += 1;
-      sourceRow.negativeImportFiles.push(targetRow.file);
-      targetRow.negativeExportFiles.push(sourceRow.file);
-    } else if (targetRow.depth < sourceRow.depth) {
-      sourceRow.negativeExports += 1;
-      targetRow.negativeImports += 1;
-      sourceRow.negativeExportFiles.push(targetRow.file);
-      targetRow.negativeImportFiles.push(sourceRow.file);
-    } else {
-      sourceRow.balance += 1;
-      targetRow.balance += 1;
-      sourceRow.balanceFiles.push(targetRow.file);
-      targetRow.balanceFiles.push(sourceRow.file);
-    }
+    (sourceRow.imports ?? []).forEach((importedPath) => {
+      const targetRow = rows.find((candidate) => candidate.path === importedPath);
+      if (!targetRow) {
+        return;
+      }
+
+      if (targetRow.depth > sourceRow.depth) {
+        sourceRow.negativeImports += 1;
+        sourceRow.negativeImportFiles.push(targetRow.file);
+      } else if (targetRow.depth < sourceRow.depth) {
+        sourceRow.negativeExports += 1;
+        sourceRow.negativeExportFiles.push(targetRow.file);
+      } else {
+        sourceRow.balance += 1;
+        sourceRow.balanceFiles.push(targetRow.file);
+      }
+    });
   });
 
   const sortedRows = rows
     .map((row) => ({
+      id: row.id,
       depth: row.depth,
       file: row.file,
       name: row.name,
@@ -1675,45 +1700,39 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
               if (!filePath) {
                 return null;
               }
+              const fileEntry = fileById.get(fileId);
               return {
                 id: fileId,
                 path: filePath,
                 label: getFileName(filePath),
                 depth: levelByFile.get(fileId) ?? 0,
+                imports: Array.from(new Set(fileEntry?.imports ?? [])).sort(),
               };
             })
             .filter(Boolean);
 
           const fileRowById = new Map(fileRows.map((row) => [row.id, row]));
-          filteredEdges.forEach(({ source, target }) => {
-            const sourceRow = fileRowById.get(source);
-            const targetRow = fileRowById.get(target);
-            if (!sourceRow || !targetRow) {
-              return;
-            }
+          fileRows.forEach((sourceRow) => {
+            (sourceRow.imports ?? []).forEach((importedPath) => {
+              const targetRow = fileRows.find((candidate) => candidate.path === importedPath);
+              if (!targetRow) {
+                return;
+              }
 
-            if (targetRow.depth > sourceRow.depth) {
-              sourceRow.negativeImports = (sourceRow.negativeImports ?? 0) + 1;
-              targetRow.negativeExports = (targetRow.negativeExports ?? 0) + 1;
-              sourceRow.negativeImportFiles = sourceRow.negativeImportFiles ?? [];
-              targetRow.negativeExportFiles = targetRow.negativeExportFiles ?? [];
-              sourceRow.negativeImportFiles.push(targetRow.path);
-              targetRow.negativeExportFiles.push(sourceRow.path);
-            } else if (targetRow.depth < sourceRow.depth) {
-              sourceRow.negativeExports = (sourceRow.negativeExports ?? 0) + 1;
-              targetRow.negativeImports = (targetRow.negativeImports ?? 0) + 1;
-              sourceRow.negativeExportFiles = sourceRow.negativeExportFiles ?? [];
-              targetRow.negativeImportFiles = targetRow.negativeImportFiles ?? [];
-              sourceRow.negativeExportFiles.push(targetRow.path);
-              targetRow.negativeImportFiles.push(sourceRow.path);
-            } else {
-              sourceRow.balance = (sourceRow.balance ?? 0) + 1;
-              targetRow.balance = (targetRow.balance ?? 0) + 1;
-              sourceRow.balanceFiles = sourceRow.balanceFiles ?? [];
-              targetRow.balanceFiles = targetRow.balanceFiles ?? [];
-              sourceRow.balanceFiles.push(targetRow.path);
-              targetRow.balanceFiles.push(sourceRow.path);
-            }
+              if (targetRow.depth > sourceRow.depth) {
+                sourceRow.negativeImports = (sourceRow.negativeImports ?? 0) + 1;
+                sourceRow.negativeImportFiles = sourceRow.negativeImportFiles ?? [];
+                sourceRow.negativeImportFiles.push(targetRow.path);
+              } else if (targetRow.depth < sourceRow.depth) {
+                sourceRow.negativeExports = (sourceRow.negativeExports ?? 0) + 1;
+                sourceRow.negativeExportFiles = sourceRow.negativeExportFiles ?? [];
+                sourceRow.negativeExportFiles.push(targetRow.path);
+              } else {
+                sourceRow.balance = (sourceRow.balance ?? 0) + 1;
+                sourceRow.balanceFiles = sourceRow.balanceFiles ?? [];
+                sourceRow.balanceFiles.push(targetRow.path);
+              }
+            });
           });
 
           fileRows.forEach((row) => {
@@ -1902,9 +1921,9 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
             '<div class="analytics-grid" role="table" aria-label="Files ordered by depth">',
             headerButton("depth", "D", "Depth of the file in the current tree. Lower numbers are closer to the root."),
             headerButton("file", "File", "The file name for each visible node in the tree."),
-            headerButton("negativeImports", "NI", "Negative imports. Counts imports that point to files below this file's depth."),
-            headerButton("negativeExports", "NE", "Negative exports. Counts links from this file to files above its depth."),
-            headerButton("balance", "B", "Balanced links. Counts relationships to files at the same depth."),
+            headerButton("negativeImports", "NI", "Negative imports. Counts imports from files at a higher depth number."),
+            headerButton("negativeExports", "NE", "Negative exports. Counts imports from files at a lower depth number."),
+            headerButton("balance", "B", "Balanced links. Counts imports from files at the same depth."),
             rowsHtml,
             "</div>",
           ].join("");
