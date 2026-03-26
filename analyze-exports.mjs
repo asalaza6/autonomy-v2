@@ -728,6 +728,10 @@ function buildHtml(entries, options) {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Export Import Graph</title>
     <style>
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+
       :root {
         color-scheme: light;
         font-family: "SF Mono", "Menlo", monospace;
@@ -737,15 +741,16 @@ function buildHtml(entries, options) {
 
       body {
         margin: 0;
-        padding: 24px;
+        padding: clamp(12px, 2vw, 24px);
         font-family: "Inter", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
         background:
           radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 30%),
           linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
+        overflow-x: hidden;
       }
 
       main {
-        width: min(1500px, calc(100vw - 32px));
+        width: min(1500px, 100%);
         margin: 0 auto;
       }
 
@@ -764,14 +769,25 @@ function buildHtml(entries, options) {
         background: white;
         box-shadow: 0 16px 48px rgba(15, 23, 42, 0.08);
         width: 100%;
-        overflow: visible;
+        overflow: hidden;
+      }
+
+      .graph-stage {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+
+      .graph-shell.tree-mode .graph-stage {
+        grid-template-columns: minmax(0, 1fr) 360px;
       }
 
       .graph-toolbar {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
-        align-items: center;
+        align-items: flex-start;
         margin-bottom: 12px;
       }
 
@@ -793,9 +809,12 @@ function buildHtml(entries, options) {
         margin-left: auto;
         color: #475569;
         font-size: 12px;
+        align-self: center;
       }
 
       .graph-frame {
+        width: 100%;
+        max-width: 100%;
         overflow-x: auto;
         overflow-y: auto;
         white-space: nowrap;
@@ -804,35 +823,167 @@ function buildHtml(entries, options) {
         max-height: calc(100vh - 240px);
         border: 1px dashed #cbd5e1;
         border-radius: 12px;
+        overscroll-behavior-x: contain;
+      }
+
+      .analytics-panel {
+        border: 1px solid #cbd5e1;
+        border-radius: 14px;
+        background: #f8fafc;
+        padding: 12px;
+        max-height: calc(100vh - 240px);
+        overflow: auto;
+      }
+
+      .analytics-panel h2 {
+        margin: 0 0 10px 0;
+        font-size: 13px;
+        line-height: 1.2;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #334155;
+      }
+
+      .analytics-summary {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+
+      .analytics-chip {
+        border: 1px solid #cbd5e1;
+        background: white;
+        border-radius: 999px;
+        padding: 4px 8px;
+        font-size: 12px;
+        color: #475569;
+      }
+
+      .analytics-grid {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) 72px 72px 56px;
+        gap: 4px 6px;
+        align-items: center;
+      }
+
+      .analytics-head {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #cbd5e1;
+        margin-bottom: 2px;
+      }
+
+      .analytics-sort {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        padding: 0 0 8px 0;
+        text-align: left;
+        cursor: pointer;
+        position: relative;
+      }
+
+      .analytics-sort .analytics-tooltip {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 8px);
+        z-index: 20;
+        display: none;
+        min-width: 180px;
+        max-width: 260px;
+        padding: 10px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: 500;
+        white-space: normal;
+      }
+
+      .analytics-sort .analytics-tooltip strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #334155;
+      }
+
+      .analytics-sort:hover,
+      .analytics-sort:focus-visible {
+        color: #334155;
+      }
+
+      .analytics-sort:hover .analytics-tooltip,
+      .analytics-sort:focus-visible .analytics-tooltip {
+        display: block;
+      }
+
+      .analytics-row {
+        display: contents;
+      }
+
+      .analytics-cell {
+        font-size: 11px;
+        line-height: 1.15;
+        min-width: 0;
+      }
+
+      .analytics-depth {
+        color: #0f172a;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .analytics-number {
+        color: #0f172a;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      .analytics-file {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #0f172a;
+        padding-right: 8px;
       }
 
       .mermaid-container {
-        width: max-content;
+        width: 100%;
+        max-width: 100%;
         overflow: visible;
-        padding: 8px 0 8px 4px;
+        padding: 4px 0 4px 2px;
         min-width: 100%;
       }
 
       .mermaid-content {
         transform-origin: top left;
         display: inline-block;
-        width: max-content;
-        min-width: max-content;
+        width: auto;
+        min-width: 100%;
         transition: transform 120ms ease;
         overflow: visible;
       }
 
       .mermaid {
-        display: inline-block;
-        width: max-content;
-        max-width: none !important;
+        display: block;
+        width: auto;
+        max-width: 100% !important;
         overflow: visible;
       }
 
       .mermaid svg {
         display: block;
-        // width: auto !important;
-        max-width: none !important;
+        width: auto !important;
+        max-width: 100% !important;
         height: auto;
       }
 
@@ -848,6 +999,7 @@ function buildHtml(entries, options) {
         display: flex;
         align-items: center;
         gap: 8px;
+        flex-wrap: wrap;
         white-space: nowrap;
       }
 
@@ -874,6 +1026,52 @@ function buildHtml(entries, options) {
         clip: rect(0, 0, 0, 0);
         white-space: nowrap;
         border: 0;
+      }
+
+      @media (max-width: 720px) {
+        body {
+          padding: 12px;
+        }
+
+        .graph-shell {
+          padding: 12px;
+          border-radius: 14px;
+        }
+
+        .graph-stage {
+          grid-template-columns: 1fr;
+        }
+
+        .graph-frame {
+          min-height: 440px;
+          max-height: calc(100vh - 220px);
+        }
+
+        .analytics-panel {
+          max-height: 360px;
+        }
+
+        .graph-toolbar {
+          gap: 6px;
+        }
+
+        .graph-toolbar button {
+          padding: 6px 10px;
+        }
+
+        .graph-toolbar span {
+          width: 100%;
+          margin-left: 0;
+          text-align: right;
+        }
+
+        .root-controls {
+          margin-bottom: 8px;
+        }
+
+        .root-strip {
+          white-space: normal;
+        }
       }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
@@ -904,8 +1102,9 @@ function buildHtml(entries, options) {
         const zoomFit = document.getElementById("zoomFit");
         const rootControls = document.getElementById("rootControls");
         const rootButtons = document.getElementById("rootButtons");
+        const analyticsPanel = document.getElementById("analyticsPanel");
         const minScale = 0.08;
-        const maxScale = 3;
+        const maxScale = Number.POSITIVE_INFINITY;
         const stepScale = 0.1;
         const isTreeMode = ${useTree ? "true" : "false"};
         const treePayload = ${treePayloadJson};
@@ -913,6 +1112,7 @@ function buildHtml(entries, options) {
         let activeRoot = "${initialRootId}";
         let currentScale = 1;
         let isAutoFit = false;
+        let analyticsSort = { key: "depth", direction: "asc" };
         const mermaidDefinition = ${mermaidDefinition};
         const fileById = treePayload
           ? new Map(treePayload.files.map((entry) => [entry.id, entry]))
@@ -927,10 +1127,14 @@ function buildHtml(entries, options) {
           if (!svg) {
             return 0;
           }
+          const renderedWidth = svg.getBoundingClientRect().width || svg.clientWidth || 0;
+          if (renderedWidth > 0) {
+            return renderedWidth;
+          }
           if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) {
             return svg.viewBox.baseVal.width;
           }
-          return svg.getBoundingClientRect().width || svg.clientWidth || 0;
+          return 0;
         }
 
         function getDiagramHeight() {
@@ -957,6 +1161,70 @@ function buildHtml(entries, options) {
             : labelValue;
         }
 
+        function centerGraphView() {
+          if (!graphFrame) {
+            return;
+          }
+
+          requestAnimationFrame(() => {
+            const maxScrollLeft = Math.max(0, graphFrame.scrollWidth - graphFrame.clientWidth);
+            const maxScrollTop = Math.max(0, graphFrame.scrollHeight - graphFrame.clientHeight);
+
+            graphFrame.scrollLeft = maxScrollLeft / 2;
+            graphFrame.scrollTop = 0;
+          });
+        }
+
+        function getRenderedNode(nodeId) {
+          if (!nodeId || !mermaidDiagram) {
+            return null;
+          }
+
+          const selectors = [
+            "#" + nodeId,
+            '[data-id="' + nodeId + '"]',
+            '[id="' + nodeId + '"]',
+          ];
+
+          for (const selector of selectors) {
+            const node = mermaidDiagram.querySelector(selector);
+            if (node) {
+              return node;
+            }
+          }
+
+          return null;
+        }
+
+        function centerRootNode(rootId) {
+          if (!graphFrame) {
+            return;
+          }
+
+          if (!rootId || rootId === "all") {
+            centerGraphView();
+            return;
+          }
+
+          requestAnimationFrame(() => {
+            const node = getRenderedNode(rootId);
+            if (!node) {
+              centerGraphView();
+              return;
+            }
+
+            const frameRect = graphFrame.getBoundingClientRect();
+            const nodeRect = node.getBoundingClientRect();
+            const frameCenterX = frameRect.left + frameRect.width / 2;
+            const nodeCenterX = nodeRect.left + nodeRect.width / 2;
+            const scale = currentScale || 1;
+            const scrollDeltaX = (nodeCenterX - frameCenterX) / scale;
+
+            graphFrame.scrollLeft = Math.max(0, graphFrame.scrollLeft + scrollDeltaX);
+            graphFrame.scrollTop = 0;
+          });
+        }
+
         function fitToWidth() {
           const diagramWidth = getDiagramWidth();
           if (!diagramWidth || !graphFrame) {
@@ -965,6 +1233,7 @@ function buildHtml(entries, options) {
           const frameWidth = graphFrame.clientWidth - 24;
           const nextScale = Math.min(1, frameWidth / diagramWidth);
           renderZoom(nextScale, "Fit");
+          centerRootNode(activeRoot);
           isAutoFit = true;
         }
 
@@ -1009,9 +1278,38 @@ function buildHtml(entries, options) {
           return entry ? entry.path : fileId;
         }
 
-        function buildTreeMermaid(rootFileId) {
+        function getFileName(filePath) {
+          const normalizedPath = String(filePath || "").replaceAll(String.fromCharCode(92), "/");
+          const segments = normalizedPath.split("/");
+          return segments[segments.length - 1] || normalizedPath;
+        }
+
+        function compareAnalyticsRows(left, right) {
+          const key = analyticsSort.key;
+          const direction = analyticsSort.direction === "desc" ? -1 : 1;
+          let comparison = 0;
+
+          if (key === "file") {
+            comparison =
+              left.label.localeCompare(right.label) ||
+              left.path.localeCompare(right.path) ||
+              left.id.localeCompare(right.id);
+          } else {
+            comparison = (left[key] ?? 0) - (right[key] ?? 0);
+            if (comparison === 0 && key !== "depth") {
+              comparison = left.depth - right.depth;
+            }
+            if (comparison === 0) {
+              comparison = left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
+            }
+          }
+
+          return comparison * direction;
+        }
+
+        function buildTreeViewState(rootFileId) {
           if (!treePayload) {
-            return "";
+            return null;
           }
 
           const levelByFile = new Map();
@@ -1116,6 +1414,72 @@ function buildHtml(entries, options) {
             levels.get(level).push(filePath);
           }
 
+          const fileRows = Array.from(visibleFiles)
+            .map((fileId) => {
+              const filePath = getFilePath(fileId);
+              if (!filePath) {
+                return null;
+              }
+              return {
+                id: fileId,
+                path: filePath,
+                label: getFileName(filePath),
+                depth: levelByFile.get(fileId) ?? 0,
+              };
+            })
+            .filter(Boolean);
+
+          const fileRowById = new Map(fileRows.map((row) => [row.id, row]));
+          filteredEdges.forEach(({ source, target }) => {
+            const sourceRow = fileRowById.get(source);
+            const targetRow = fileRowById.get(target);
+            if (!sourceRow || !targetRow) {
+              return;
+            }
+
+            if (targetRow.depth > sourceRow.depth) {
+              sourceRow.negativeImports = (sourceRow.negativeImports ?? 0) + 1;
+              targetRow.negativeExports = (targetRow.negativeExports ?? 0) + 1;
+            } else if (targetRow.depth < sourceRow.depth) {
+              sourceRow.negativeExports = (sourceRow.negativeExports ?? 0) + 1;
+              targetRow.negativeImports = (targetRow.negativeImports ?? 0) + 1;
+            } else {
+              sourceRow.balance = (sourceRow.balance ?? 0) + 1;
+              targetRow.balance = (targetRow.balance ?? 0) + 1;
+            }
+          });
+
+          fileRows.forEach((row) => {
+            row.negativeImports = row.negativeImports ?? 0;
+            row.negativeExports = row.negativeExports ?? 0;
+            row.balance = row.balance ?? 0;
+          });
+
+          fileRows.sort(compareAnalyticsRows);
+
+          const maxDepth = fileRows.reduce((max, entry) => Math.max(max, entry.depth), 0);
+
+          return {
+            levelByFile,
+            visibleFiles,
+            filteredEdges,
+            visiblePaths,
+            fileLookup,
+            levels,
+            fileRows,
+            maxDepth,
+          };
+        }
+
+        function buildTreeMermaid(rootFileId) {
+          const state = buildTreeViewState(rootFileId);
+          if (!state) {
+            return "";
+          }
+
+          const { levelByFile, visibleFiles, filteredEdges, visiblePaths, fileLookup, levels } =
+            state;
+
           const lines = [
             "%% " + visiblePaths.length + " files, " + treePayload.files.length + " total files, " + filteredEdges.length + " edges",
             "flowchart TD",
@@ -1136,7 +1500,7 @@ function buildHtml(entries, options) {
               if (!fileEntry) {
                 return;
               }
-              const fileName = filePath.split("/").pop();
+              const fileName = getFileName(filePath);
               lines.push(fileEntry.id + "[\\\"" + escapeMermaidLabel(fileName) + "\\\"]");
             });
 
@@ -1162,6 +1526,102 @@ function buildHtml(entries, options) {
           }
 
           return lines.join(String.fromCharCode(10));
+        }
+
+        function renderTreeAnalytics(rootFileId) {
+          if (!analyticsPanel || !treePayload) {
+            return;
+          }
+
+          const state = buildTreeViewState(rootFileId);
+          if (!state) {
+            analyticsPanel.innerHTML = "";
+            return;
+          }
+
+          const { fileRows, maxDepth, filteredEdges } = state;
+          function formatCount(value) {
+            return String(value ?? 0);
+          }
+
+          const rowsHtml = fileRows
+            .map((row) => {
+              return (
+                '<div class="analytics-cell analytics-depth">' + row.depth + "</div>" +
+                '<div class="analytics-cell analytics-file" title="' +
+                escapeMermaidLabel(row.path) +
+                '">' +
+                escapeMermaidLabel(row.label) +
+                "</div>" +
+                '<div class="analytics-cell analytics-number">' + formatCount(row.negativeImports) + "</div>" +
+                '<div class="analytics-cell analytics-number">' + formatCount(row.negativeExports) + "</div>" +
+                '<div class="analytics-cell analytics-number">' + formatCount(row.balance) + "</div>"
+              );
+            })
+            .join("");
+
+          function headerLabel(key, label) {
+            const isActive = analyticsSort.key === key;
+            const arrow = isActive ? analyticsSort.direction === "asc" ? " ↑" : " ↓" : "";
+            return label + arrow;
+          }
+
+          function headerButton(key, label, explanation) {
+            const titleName = label;
+            const tooltip =
+              '<span class="analytics-tooltip"><strong>' +
+              titleName +
+              "</strong>" +
+              escapeMermaidLabel(explanation) +
+              "</span>";
+            return (
+              '<button type="button" class="analytics-head analytics-sort" data-sort="' +
+              key +
+              '" aria-label="' +
+              escapeMermaidLabel(titleName) +
+              ': ' +
+              escapeMermaidLabel(explanation) +
+              '">' +
+              headerLabel(key, label) +
+              tooltip +
+              "</button>"
+            );
+          }
+
+          analyticsPanel.innerHTML = [
+            "<h2>Depth Analytics</h2>",
+            '<div class="analytics-summary">',
+            '<span class="analytics-chip">' + fileRows.length + " files</span>",
+            '<span class="analytics-chip">' + filteredEdges.length + " edges</span>",
+            '<span class="analytics-chip">Max depth ' + maxDepth + "</span>",
+            "</div>",
+            '<div class="analytics-grid" role="table" aria-label="Files ordered by depth">',
+            headerButton("depth", "D", "Depth of the file in the current tree. Lower numbers are closer to the root."),
+            headerButton("file", "File", "The file name for each visible node in the tree."),
+            headerButton("negativeImports", "NI", "Negative imports. Counts imports that point to files below this file's depth."),
+            headerButton("negativeExports", "NE", "Negative exports. Counts links from this file to files above its depth."),
+            headerButton("balance", "B", "Balanced links. Counts relationships to files at the same depth."),
+            rowsHtml,
+            "</div>",
+          ].join("");
+
+          analyticsPanel.querySelectorAll("[data-sort]").forEach((button) => {
+            button.addEventListener("click", () => {
+              const nextKey = button.dataset.sort;
+              if (!nextKey) {
+                return;
+              }
+
+              if (analyticsSort.key === nextKey) {
+                analyticsSort.direction = analyticsSort.direction === "asc" ? "desc" : "asc";
+              } else {
+                analyticsSort.key = nextKey;
+                analyticsSort.direction = nextKey === "file" ? "asc" : "desc";
+              }
+
+              renderTreeAnalytics(rootFileId);
+            });
+          });
         }
 
         function hydrateRootButtons() {
@@ -1212,14 +1672,15 @@ function buildHtml(entries, options) {
           setActiveRoot(rootId);
           isAutoFit = false;
           await renderMermaid(diagramText);
+          renderTreeAnalytics(rootId);
         }
 
         async function renderMermaid(definition) {
           mermaidDiagram.textContent = definition;
-          mermaidDiagram.style.display = "inline-block";
-          mermaidDiagram.style.width = "max-content";
-          mermaidContent.style.width = "max-content";
-          mermaidContent.style.minWidth = "max-content";
+          mermaidDiagram.style.display = "block";
+          mermaidDiagram.style.width = "auto";
+          mermaidContent.style.width = "auto";
+          mermaidContent.style.minWidth = "100%";
           mermaidDiagram.removeAttribute("data-processed");
           try {
             await mermaid.run({ nodes: [mermaidDiagram] });
@@ -1244,24 +1705,9 @@ function buildHtml(entries, options) {
               "</pre>";
             return;
           }
-          const svg = mermaidDiagram.querySelector("svg");
-          if (svg) {
-            let svgWidth = 0;
-            try {
-              const bbox = svg.getBBox?.();
-              svgWidth = bbox?.width || 0;
-            } catch {
-              svgWidth = 0;
-            }
-            if (!svgWidth) {
-              svgWidth = getDiagramWidth();
-            }
-            if (svgWidth > 0) {
-              mermaidContent.style.width = Math.ceil(svgWidth) + "px";
-            }
-          }
           requestAnimationFrame(() => {
             renderZoom(currentScale);
+            centerRootNode(activeRoot);
           });
         }
 
@@ -1284,6 +1730,22 @@ function buildHtml(entries, options) {
           fitToWidth();
         });
 
+        graphFrame.addEventListener(
+          "wheel",
+          (event) => {
+            if (!event.ctrlKey) {
+              return;
+            }
+
+            event.preventDefault();
+            isAutoFit = false;
+
+            const pinchFactor = Math.exp(-event.deltaY * 0.0015);
+            renderZoom(currentScale * pinchFactor);
+          },
+          { passive: false }
+        );
+
         window.addEventListener("resize", () => {
           if (isAutoFit) {
             fitToWidth();
@@ -1296,7 +1758,10 @@ function buildHtml(entries, options) {
           const initialDefinition = rootCache.get("${initialRootId}") ?? buildTreeMermaid("${initialRootId}");
           rootCache.set("${initialRootId}", initialDefinition);
           mermaidDiagram.textContent = initialDefinition;
-          renderMermaid(initialDefinition);
+          renderMermaid(initialDefinition).then(() => {
+            fitToWidth();
+          });
+          renderTreeAnalytics("${initialRootId}");
           return;
         }
 
@@ -1314,7 +1779,7 @@ function buildHtml(entries, options) {
   <body>
     <main>
       <div class="meta">${entries.length} exports, ${importerCount} importers, ${edgeCount} edges</div>
-      <div class="graph-shell">
+      <div class="graph-shell${useTree ? " tree-mode" : ""}">
         <div class="graph-toolbar">
 ${useTree ? `
           <div id="rootControls" class="root-controls">
@@ -1328,12 +1793,16 @@ ${useTree ? `
           <span id="zoomLevel">100%</span>
           <span class="sr-only" aria-live="polite" id="zoomStatus"></span>
         </div>
-        <div id="graphFrame" class="graph-frame">
-          <div class="mermaid-container">
-            <div id="mermaidContent" class="mermaid-content">
-              <div id="mermaidDiagram" class="mermaid"></div>
+        <div class="graph-stage">
+          <div id="graphFrame" class="graph-frame">
+            <div class="mermaid-container">
+              <div id="mermaidContent" class="mermaid-content">
+                <div id="mermaidDiagram" class="mermaid"></div>
+              </div>
             </div>
           </div>
+${useTree ? `
+          <aside id="analyticsPanel" class="analytics-panel" aria-label="Depth analytics"></aside>` : ""}
         </div>
       </div>
     </main>
@@ -1390,13 +1859,20 @@ function relativeDirLabel(basePath, targetPath) {
 
 function buildMermaidInit() {
   return {
+    htmlLabels: true,
     flowchart: {
       defaultRenderer: "elk",
-      useMaxWidth: false,
-      htmlLabels: true,
-      nodeSpacing: 40,
-      rankSpacing: 140,
-      curve: "monotoneY",
+      useMaxWidth: true,
+      nodeSpacing: 12,
+      rankSpacing: 28,
+      diagramPadding: 4,
+      curve: "step",
+    },
+    elk: {
+      "elk.algorithm": "layered",
+      "elk.direction": "DOWN",
+      "elk.layered.spacing.nodeNodeBetweenLayers": 28,
+      "elk.spacing.nodeNode": 12,
     },
   };
 }
