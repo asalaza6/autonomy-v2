@@ -780,6 +780,8 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
         path: file.path,
         directory: file.directory,
         imports: Array.from(new Set(file.imports ?? [])).sort(),
+        importPaths: [],
+        exportPaths: [],
         negativeImports: 0,
         negativeExports: 0,
         balance: 0,
@@ -804,12 +806,15 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
         return;
       }
 
+      sourceRow.importPaths.push(targetRow.path);
+      targetRow.exportPaths.push(sourceRow.path);
+
       if (targetRow.depth > sourceRow.depth) {
         sourceRow.negativeImports += 1;
         sourceRow.negativeImportFiles.push(targetRow.file);
       } else if (targetRow.depth < sourceRow.depth) {
-        sourceRow.negativeExports += 1;
-        sourceRow.negativeExportFiles.push(targetRow.file);
+        targetRow.negativeExports += 1;
+        targetRow.negativeExportFiles.push(sourceRow.file);
       } else {
         sourceRow.balance += 1;
         sourceRow.balanceFiles.push(targetRow.file);
@@ -825,6 +830,8 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
       name: row.name,
       path: row.path,
       directory: row.directory,
+      importPaths: Array.from(new Set(row.importPaths)).sort(),
+      exportPaths: Array.from(new Set(row.exportPaths)).sort(),
       negativeImports: row.negativeImports,
       negativeExports: row.negativeExports,
       balance: row.balance,
@@ -1213,11 +1220,66 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
       }
 
       .analytics-file {
+        position: relative;
+        overflow: visible;
+        color: #0f172a;
+        padding-right: 8px;
+      }
+
+      .analytics-file-label {
+        display: block;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      .analytics-file .analytics-tooltip {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 8px);
+        z-index: 20;
+        display: none;
+        min-width: 320px;
+        max-width: 520px;
+        padding: 10px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        background: #ffffff;
         color: #0f172a;
-        padding-right: 8px;
+        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: 500;
+        white-space: normal;
+      }
+
+      .analytics-file:hover .analytics-tooltip,
+      .analytics-file:focus-within .analytics-tooltip {
+        display: block;
+      }
+
+      .analytics-tooltip-section + .analytics-tooltip-section {
+        margin-top: 10px;
+      }
+
+      .analytics-tooltip-label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #334155;
+      }
+
+      .analytics-tooltip-path {
+        display: inline-block;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+
+      .analytics-tooltip-depth {
+        color: #64748b;
+        font-variant-numeric: tabular-nums;
       }
 
       .mermaid-container {
@@ -1707,6 +1769,8 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
                 label: getFileName(filePath),
                 depth: levelByFile.get(fileId) ?? 0,
                 imports: Array.from(new Set(fileEntry?.imports ?? [])).sort(),
+                importPaths: [],
+                exportPaths: [],
               };
             })
             .filter(Boolean);
@@ -1719,14 +1783,17 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
                 return;
               }
 
+              sourceRow.importPaths.push(targetRow.path);
+              targetRow.exportPaths.push(sourceRow.path);
+
               if (targetRow.depth > sourceRow.depth) {
                 sourceRow.negativeImports = (sourceRow.negativeImports ?? 0) + 1;
                 sourceRow.negativeImportFiles = sourceRow.negativeImportFiles ?? [];
                 sourceRow.negativeImportFiles.push(targetRow.path);
               } else if (targetRow.depth < sourceRow.depth) {
-                sourceRow.negativeExports = (sourceRow.negativeExports ?? 0) + 1;
-                sourceRow.negativeExportFiles = sourceRow.negativeExportFiles ?? [];
-                sourceRow.negativeExportFiles.push(targetRow.path);
+                targetRow.negativeExports = (targetRow.negativeExports ?? 0) + 1;
+                targetRow.negativeExportFiles = targetRow.negativeExportFiles ?? [];
+                targetRow.negativeExportFiles.push(sourceRow.path);
               } else {
                 sourceRow.balance = (sourceRow.balance ?? 0) + 1;
                 sourceRow.balanceFiles = sourceRow.balanceFiles ?? [];
@@ -1739,6 +1806,8 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
             row.negativeImports = row.negativeImports ?? 0;
             row.negativeExports = row.negativeExports ?? 0;
             row.balance = row.balance ?? 0;
+            row.importPaths = Array.from(new Set(row.importPaths ?? [])).sort();
+            row.exportPaths = Array.from(new Set(row.exportPaths ?? [])).sort();
             row.negativeImportFiles = row.negativeImportFiles ?? [];
             row.negativeExportFiles = row.negativeExportFiles ?? [];
             row.balanceFiles = row.balanceFiles ?? [];
@@ -1846,6 +1915,53 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
             return '<span class="analytics-tooltip">' + formatTooltipList(files) + "</span>";
           }
 
+          function formatPopoverList(files) {
+            const entries = (files ?? [])
+              .map((filePath) => {
+                const entry = fileLookup.get(filePath);
+                if (!entry) {
+                  return null;
+                }
+                return { path: filePath, depth: entry.depth ?? 0 };
+              })
+              .filter(Boolean)
+              .sort((left, right) => left.depth - right.depth || left.path.localeCompare(right.path));
+
+            if (entries.length === 0) {
+              return "<div>None</div>";
+            }
+
+            return (
+              "<ul>" +
+              entries
+                .map(
+                  (entry) =>
+                    "<li><span class='analytics-tooltip-path'>" +
+                    escapeMermaidLabel(entry.path) +
+                    "</span> <span class='analytics-tooltip-depth'>(D" +
+                    String(entry.depth) +
+                    ")</span></li>"
+                )
+                .join("") +
+              "</ul>"
+            );
+          }
+
+          function buildFilePopover(row) {
+            return (
+              '<span class="analytics-tooltip">' +
+              '<div class="analytics-tooltip-section">' +
+              '<strong class="analytics-tooltip-label">Imports</strong>' +
+              formatPopoverList(row.importPaths) +
+              "</div>" +
+              '<div class="analytics-tooltip-section">' +
+              '<strong class="analytics-tooltip-label">Exports</strong>' +
+              formatPopoverList(row.exportPaths) +
+              "</div>" +
+              "</span>"
+            );
+          }
+
           const rowsHtml = fileRows
             .map((row) => {
               return (
@@ -1853,7 +1969,10 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
                 '<div class="analytics-cell analytics-file" title="' +
                 escapeMermaidLabel(row.path) +
                 '">' +
+                '<span class="analytics-file-label">' +
                 escapeMermaidLabel(row.label) +
+                "</span>" +
+                buildFilePopover(row) +
                 "</div>" +
                 '<div class="analytics-cell analytics-number">' +
                 '<span class="analytics-count" title="' +
@@ -1921,8 +2040,8 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
             '<div class="analytics-grid" role="table" aria-label="Files ordered by depth">',
             headerButton("depth", "D", "Depth of the file in the current tree. Lower numbers are closer to the root."),
             headerButton("file", "File", "The file name for each visible node in the tree."),
-            headerButton("negativeImports", "NI", "Negative imports. Counts imports from files at a higher depth number."),
-            headerButton("negativeExports", "NE", "Negative exports. Counts imports from files at a lower depth number."),
+            headerButton("negativeImports", "NI", "Negative imports. Counts this file's imports to files at a higher depth number."),
+            headerButton("negativeExports", "NE", "Negative exports. Counts lower-depth files that import this file from above."),
             headerButton("balance", "B", "Balanced links. Counts imports from files at the same depth."),
             rowsHtml,
             "</div>",
