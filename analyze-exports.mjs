@@ -707,19 +707,21 @@ function buildDot(entries, options) {
   return lines.join("\n");
 }
 
-function buildHtml(entries, options) {
+function buildHtml(entries, options, treePayload = null, treePayloadSource = null) {
   const context = buildGraphContext(entries, options);
   const useTree = Boolean(options.tree);
   const mermaid = useTree ? buildMermaidTree(context) : buildMermaid(entries, options);
   const importerCount = new Set(entries.flatMap((entry) => entry.importedBy)).size;
   const edgeCount = entries.reduce((count, entry) => count + entry.importedBy.length, 0);
-  const treePayload = useTree ? buildTreeGraphPayload(context) : null;
+  const resolvedTreePayload = useTree ? treePayload ?? buildTreeGraphPayload(context) : null;
   const initialRootId =
-    treePayload && treePayload.roots.length > 0 ? treePayload.roots[0] : "all";
+    resolvedTreePayload && resolvedTreePayload.roots.length > 0 ? resolvedTreePayload.roots[0] : "all";
   const mermaidDefinition = JSON.stringify(mermaid);
-  const treePayloadJson = treePayload
-    ? JSON.stringify(treePayload, null, 2)
+  const treePayloadJson = resolvedTreePayload
+    ? JSON.stringify(resolvedTreePayload, null, 2)
     : "null";
+  const treePayloadSourceJson =
+    useTree && treePayloadSource ? JSON.stringify(treePayloadSource) : "null";
 
   return `<!doctype html>
 <html lang="en">
@@ -1148,16 +1150,16 @@ function buildHtml(entries, options) {
         const maxScale = Number.POSITIVE_INFINITY;
         const stepScale = 0.1;
         const isTreeMode = ${useTree ? "true" : "false"};
-        const treePayload = ${treePayloadJson};
+        const treePayloadSource = ${treePayloadSourceJson};
+        const embeddedTreePayload = ${treePayloadJson};
         const rootCache = new Map();
+        let treePayload = null;
+        let fileById = new Map();
         let activeRoot = "${initialRootId}";
         let currentScale = 1;
         let isAutoFit = false;
         let analyticsSort = { key: "depth", direction: "asc" };
         const mermaidDefinition = ${mermaidDefinition};
-        const fileById = treePayload
-          ? new Map(treePayload.files.map((entry) => [entry.id, entry]))
-          : new Map();
 
         function clampScale(value) {
           return Math.min(maxScale, Math.max(minScale, value));
@@ -1276,6 +1278,22 @@ function buildHtml(entries, options) {
           renderZoom(nextScale, "Fit");
           centerRootNode(activeRoot);
           isAutoFit = true;
+        }
+
+        async function loadTreePayload() {
+          if (treePayloadSource) {
+            try {
+              const response = await fetch(treePayloadSource, { cache: "no-store" });
+              if (!response.ok) {
+                throw new Error("HTTP " + response.status);
+              }
+              return await response.json();
+            } catch (error) {
+              console.warn("Falling back to embedded tree payload.", error);
+            }
+          }
+
+          return embeddedTreePayload;
         }
 
         function escapeMermaidLabel(value) {
@@ -1843,15 +1861,24 @@ function buildHtml(entries, options) {
         });
 
         if (isTreeMode) {
-          hydrateRootButtons();
-          setActiveRoot("${initialRootId}");
-          const initialDefinition = rootCache.get("${initialRootId}") ?? buildTreeMermaid("${initialRootId}");
-          rootCache.set("${initialRootId}", initialDefinition);
-          mermaidDiagram.textContent = initialDefinition;
-          renderMermaid(initialDefinition).then(() => {
-            fitToWidth();
+          loadTreePayload().then((payload) => {
+            treePayload = payload;
+            fileById = new Map(treePayload.files.map((entry) => [entry.id, entry]));
+            activeRoot =
+              treePayload.roots.length > 0 ? treePayload.roots[0] : "all";
+
+            hydrateRootButtons();
+            setActiveRoot(activeRoot);
+
+            const initialDefinition =
+              rootCache.get(activeRoot) ?? buildTreeMermaid(activeRoot);
+            rootCache.set(activeRoot, initialDefinition);
+            mermaidDiagram.textContent = initialDefinition;
+            renderMermaid(initialDefinition).then(() => {
+              fitToWidth();
+            });
+            renderTreeAnalytics(activeRoot);
           });
-          renderTreeAnalytics("${initialRootId}");
           return;
         }
 
@@ -1976,6 +2003,18 @@ async function writeOutput(outputPath, contents) {
   await fs.writeFile(outputPath, contents, "utf8");
 }
 
+function getTreePayloadOutputPath(outputPath) {
+  if (!outputPath) {
+    return null;
+  }
+
+  if (/\.html?$/i.test(outputPath)) {
+    return outputPath.replace(/\.html?$/i, ".tree.json");
+  }
+
+  return `${outputPath}.tree.json`;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
 
@@ -1990,6 +2029,14 @@ async function main() {
       : await buildExportMap(options.tsconfig),
     options
   );
+  const treePayload =
+    options.format === "html" && options.tree
+      ? buildTreeGraphPayload(buildGraphContext(entries, options))
+      : null;
+  const treePayloadOutputPath =
+    options.format === "html" && options.tree && options.output
+      ? getTreePayloadOutputPath(options.output)
+      : null;
 
   const output =
     options.format === "json"
@@ -1998,10 +2045,18 @@ async function main() {
         ? buildMermaid(entries, options)
         : options.format === "dot"
           ? buildDot(entries, options)
-          : buildHtml(entries, options);
+          : buildHtml(
+              entries,
+              options,
+              treePayload,
+              treePayloadOutputPath ? path.basename(treePayloadOutputPath) : null
+            );
 
   if (options.output) {
     await writeOutput(options.output, output);
+    if (treePayload && treePayloadOutputPath) {
+      await writeOutput(treePayloadOutputPath, `${JSON.stringify(treePayload, null, 2)}\n`);
+    }
     process.stdout.write(`${options.output}\n`);
     return;
   }
