@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { AnyRecord } from '../types.js';
+import type { AnyRecord } from '../autonomy-types.js';
 import type { AgentExecutionContext } from '../../agents/AgentDefinition.js';
 
 function nowIso() {

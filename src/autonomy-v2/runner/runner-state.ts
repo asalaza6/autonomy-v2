@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import { acquireStateLock } from '../../lock/index.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole } from '../../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../types.js';
-import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './constants.js';
-import { readJson, trimLeadingSeparator, uniqueScopeViolations, uniqueStrings, writeJson } from './shared.js';
+import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../autonomy-types.js';
+import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './runner-constants.js';
+import { readJson, trimLeadingSeparator, uniqueScopeViolations, uniqueStrings, writeJson } from './runner-shared.js';
 
 function loadState(rootDir: string, options: AnyRecord = {}): { config: AutonomyConfig; queues: QueueMap } {
   const repoAutonomyDir = path.join(rootDir, ...AUTONOMY_SEGMENTS);

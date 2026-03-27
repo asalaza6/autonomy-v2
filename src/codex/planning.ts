@@ -1,6 +1,6 @@
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel, isImplementationRole } from '../agents/role-catalog.js';
 import { runCodexStructuredSync } from './cli.js';
-import { normalizeStringList, readOptionalFile } from './shared.js';
+import { normalizeStringList, readOptionalFile } from './codex-shared.js';
 
 function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
   const implementationAgents = (config.agents || []).filter((candidate) => isImplementationRole(candidate.role));

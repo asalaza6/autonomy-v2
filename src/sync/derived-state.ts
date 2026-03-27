@@ -1,6 +1,6 @@
 import { TASK_TYPES } from '../agents/role-catalog.js';
-import type { AnyRecord, TaskRecord } from './types.js';
-import { normalizeStringList, requiresPmPlanning } from './prd.js';
+import type { AnyRecord, TaskRecord } from './sync-types.js';
+import { normalizeStringList, requiresPmPlanning } from './sync-prd.js';
 import {
   buildImportedSpecState,
   buildLaneSourceSummary,

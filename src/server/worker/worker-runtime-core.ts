@@ -1,10 +1,10 @@
-import { extractExecError } from '../orchestrator/git.js';
+import { extractExecError } from '../orchestrator/orchestrator-git.js';
 import { getPaths, resolveRootDir, writeJson } from '../orchestrator/paths.js';
 import { runWorkerOnce } from '../orchestrator/workers.js';
-import { loadRuntime } from '../orchestrator/state.js';
-import { loadAutonomyEnv } from '../../env/index.js';
-import { acquireStateLock } from '../../lock/index.js';
-import type { AnyRecord, CliOptions } from '../types.js';
+import { loadRuntime } from '../orchestrator/orchestrator-state.js';
+import { loadAutonomyEnv } from '../../env/env-main.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
+import type { AnyRecord, CliOptions } from '../server-types.js';
 
 function parseCli(argv: string[]): { command: string; options: CliOptions } {
   const options: CliOptions = {};

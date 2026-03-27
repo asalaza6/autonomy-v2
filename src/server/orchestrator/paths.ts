@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './constants.js';
+import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './orchestrator-constants.js';
 
 function resolveRootDir(rootOption: string) {
   if (!rootOption) {

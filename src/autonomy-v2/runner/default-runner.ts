@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from 'url';
-import { loadAutonomyEnv } from '../../env/index.js';
+import { loadAutonomyEnv } from '../../env/env-main.js';
 import { publishRunnerFailure } from './persistence.js';
-import { requireEnv } from './shared.js';
+import { requireEnv } from './runner-shared.js';
 import { runImplementation as runImplementationFlow } from './task-flow.js';
 import { runReview as runReviewFlow } from './gate-flow.js';
 

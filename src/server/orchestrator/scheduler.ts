@@ -1,9 +1,9 @@
-import { acquireStateLock } from '../../lock/index.js';
-import type { AnyRecord, WorkerRuntime } from '../types.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
+import type { AnyRecord, WorkerRuntime } from '../server-types.js';
 import { syncPrdSpecsFromIntegrationBranch } from '../../sync/syncer.js';
 import { loadQueues } from './queues.js';
-import { findDueAgents, finalizePendingInlineWorkers, refreshRuntime, setWorkerState, spawnWorkerProcess, updateBacklogGrace } from './runtime.js';
-import { loadBranchLocks, loadConfig, loadPrds, loadRuntime, writeRuntime } from './state.js';
+import { findDueAgents, finalizePendingInlineWorkers, refreshRuntime, setWorkerState, spawnWorkerProcess, updateBacklogGrace } from './orchestrator-runtime.js';
+import { loadBranchLocks, loadConfig, loadPrds, loadRuntime, writeRuntime } from './orchestrator-state.js';
 import { runWorkerOnce } from './workers.js';
 
 function emitSchedulerProgress(options, event, payload = {}) {

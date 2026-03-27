@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import type { AnyRecord, CliOptions } from '../types.js';
+import type { AnyRecord, CliOptions } from '../server-types.js';
 
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 

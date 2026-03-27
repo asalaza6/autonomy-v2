@@ -2,11 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES } from '../../agents/role-catalog.js';
-import { evaluateScope } from '../scope/index.js';
-import { createImplementationRunnerExecutionContext } from './agent-context.js';
-import { ensureDir, logRunnerEvent, summarizeText, uniqueStrings, useCodexStub } from './shared.js';
+import { evaluateScope } from '../scope/scope-main.js';
+import { createImplementationRunnerExecutionContext } from './runner-agent-context.js';
+import { ensureDir, logRunnerEvent, summarizeText, uniqueStrings, useCodexStub } from './runner-shared.js';
 import { buildCommitMessage, buildQueueMetadataCommitMessage, finalizeTaskRun, listChangedFiles, markImplementationTaskComplete, readGit, recordImplementationTaskCommitSha, resolveTargetFile, runGit, tryPushBranch } from './workspace.js';
-import { buildTaskLaneKey, getAgentConfig, getCompletedLaneTasks, getLaneTasks, getPrForLane, getTask, isPendingImplementationTask, loadState, recordLaneTaskCompletion } from './state.js';
+import { buildTaskLaneKey, getAgentConfig, getCompletedLaneTasks, getLaneTasks, getPrForLane, getTask, isPendingImplementationTask, loadState, recordLaneTaskCompletion } from './runner-state.js';
 import {
   ensureCheckEnvironment,
   runCheckCommands,

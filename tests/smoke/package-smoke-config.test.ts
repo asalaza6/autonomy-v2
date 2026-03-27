@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
-import { validateAutonomyConfig } from '../../src/config/index.js';
+import { validateAutonomyConfig } from '../../src/config/config-main.js';
 import { shouldForceApproveAfterRepeatedReviews } from '../../src/autonomy-v2/runner/gate-support.js';
 import {
   CLI_BIN,

@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole } from '../../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, BranchLocksState, PullRequestRecord, TaskRecord } from '../types.js';
-import { commitTrackedFilesToIntegrationBranch } from '../../sync/git.js';
+import type { AnyRecord, AutonomyConfig, BranchLocksState, PullRequestRecord, TaskRecord } from '../autonomy-types.js';
+import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
 import { ensureDir, getAgent, getAutonomyPaths, readJson, writeJson } from './shared-core.js';
 import {
   buildReviewFollowupAcceptance,

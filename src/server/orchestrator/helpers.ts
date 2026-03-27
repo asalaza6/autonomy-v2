@@ -1,6 +1,6 @@
 import path from 'path';
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
-import { IMPLEMENTATION_DUE_STATUSES } from './constants.js';
+import { IMPLEMENTATION_DUE_STATUSES } from './orchestrator-constants.js';
 
 function getAgent(config, agentId) {
   const agent = (config.agents || []).find((candidate) => candidate.id === agentId);

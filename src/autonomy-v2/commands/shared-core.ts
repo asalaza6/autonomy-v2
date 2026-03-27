@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { DEFAULT_SYNC_STATE } from '../../sync/constants.js';
-import type { AnyRecord, AutonomyConfig } from '../types.js';
+import { DEFAULT_SYNC_STATE } from '../../sync/sync-constants.js';
+import type { AnyRecord, AutonomyConfig } from '../autonomy-types.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);

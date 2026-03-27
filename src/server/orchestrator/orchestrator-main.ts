@@ -1,12 +1,12 @@
 import {
   extractExecError as extractExecErrorFromGit,
-} from './git.js';
+} from './orchestrator-git.js';
 import {
   getPaths as getPathsFromPaths,
   resolveRootDir as resolveRootDirFromPaths,
   writeJson as writeJsonFromPaths,
 } from './paths.js';
-import { loadRuntime as loadRuntimeFromState } from './state.js';
+import { loadRuntime as loadRuntimeFromState } from './orchestrator-state.js';
 import { runSchedulerTick as runSchedulerTickFromScheduler } from './scheduler.js';
 import { runWorkerOnce as runWorkerOnceFromWorkers } from './workers.js';
 

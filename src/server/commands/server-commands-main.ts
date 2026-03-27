@@ -3,9 +3,9 @@
 import { fileURLToPath } from 'url';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { runSchedulerTick } from '../orchestrator/scheduler.js';
-import { loadAutonomyEnv } from '../../env/index.js';
-import { acquireServerLock } from '../../lock/index.js';
-import type { CliOptions } from '../types.js';
+import { loadAutonomyEnv } from '../../env/env-main.js';
+import { acquireServerLock } from '../../lock/lock-main.js';
+import type { CliOptions } from '../server-types.js';
 import { logTickResult } from './tick-log.js';
 import { formatServerEventLine, buildTraceOptions } from './trace.js';
 import { attachWorkerOutput } from './worker-streams.js';

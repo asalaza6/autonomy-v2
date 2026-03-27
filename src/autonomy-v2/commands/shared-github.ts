@@ -2,7 +2,7 @@ import https from 'https';
 import path from 'path';
 import fs from 'fs';
 import { execFileSync } from 'child_process';
-import type { AnyRecord } from '../types.js';
+import type { AnyRecord } from '../autonomy-types.js';
 import { buildMergeCommitTitle, ensureDir, slugify } from './shared-core.js';
 import { extractExecError, resolveBaseRef, runGitQuiet, runGitRead, runGitWorktreeAdd } from './shared-repo.js';
 

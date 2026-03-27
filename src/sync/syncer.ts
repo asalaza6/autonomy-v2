@@ -1,19 +1,19 @@
 import path from 'path';
-import { acquireStateLock } from '../lock/index.js';
-import { validateAutonomyConfig } from '../config/index.js';
+import { acquireStateLock } from '../lock/lock-main.js';
+import { validateAutonomyConfig } from '../config/config-main.js';
 import {
   DEFAULT_SYNC_STATE,
   PRD_ARCHIVE_DIR,
   PRD_QUEUE_DIR,
   PRD_SPECS_DIR,
-} from './constants.js';
+} from './sync-constants.js';
 import { emitSyncProgress, getSyncPaths, readJson, writeJson } from './core.js';
-import type { AnyRecord, AutonomyConfig } from './types.js';
+import type { AnyRecord, AutonomyConfig } from './sync-types.js';
 import { buildDerivedImportedRuntimeState, isImportedPrdRecord } from './derived-state.js';
 import { buildTrackedImplementationTaskIndex, readTrackedImplementationQueuesFromRef, readTrackedReviewerTasksFromRef, resolveRemoteLaneStates } from './lanes.js';
 import { buildImportedSpecState } from './lanes.js';
-import { buildPrdSpecRelativePath, parsePrdSpec } from './prd.js';
-import { fetchIntegrationBranch } from './git.js';
+import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
+import { fetchIntegrationBranch } from './sync-git.js';
 import { listTreeFiles, readGit, readTreeFile } from './git-shared.js';
 
 function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: string, options: AnyRecord = {}) {

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import type { AnyRecord } from './types.js';
-import { DEFAULT_SYNC_STATE, GIT_NETWORK_TIMEOUT_MS, PRD_ARCHIVE_DIR, PRD_QUEUE_DIR, PRD_SPECS_DIR, PRD_STATE_DIR } from './constants.js';
+import type { AnyRecord } from './sync-types.js';
+import { DEFAULT_SYNC_STATE, GIT_NETWORK_TIMEOUT_MS, PRD_ARCHIVE_DIR, PRD_QUEUE_DIR, PRD_SPECS_DIR, PRD_STATE_DIR } from './sync-constants.js';
 import { emitSyncProgress, ensureDir, getSyncPaths, readJson } from './core.js';
 import {
   configureGitIdentity,
@@ -27,7 +27,7 @@ import {
   parsePrdSpec,
   parsePrdState,
   sanitizeFileSegment,
-} from './prd.js';
+} from './sync-prd.js';
 
 function hasPrdSpecInIntegrationBranch(rootDir, integrationBranch, prdId) {
   const fetchResult = fetchIntegrationBranch(rootDir, integrationBranch);

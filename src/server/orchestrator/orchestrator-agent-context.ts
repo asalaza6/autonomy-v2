@@ -1,16 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import type { AgentConfig, AutonomyConfig, AnyRecord, BranchLocksState, QueueMap, QueueState, RuntimeState, TaskRecord, TrackedPrdRecord } from '../types.js';
+import type { AgentConfig, AutonomyConfig, AnyRecord, BranchLocksState, QueueMap, QueueState, RuntimeState, TaskRecord, TrackedPrdRecord } from '../server-types.js';
 import type { AgentExecutionContext } from '../../agents/AgentDefinition.js';
-import { acquireStateLock } from '../../lock/index.js';
-import { CLI_PATH, DEFAULT_RUNNER_PATH } from './constants.js';
-import { executeRunnerCommand } from './git.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
+import { CLI_PATH, DEFAULT_RUNNER_PATH } from './orchestrator-constants.js';
+import { executeRunnerCommand } from './orchestrator-git.js';
 import { buildTaskLaneKey, buildTaskQueueState, getAgent, implementationTaskNeedsDispatch, listPrds, listTasks, selectImplementationTask } from './helpers.js';
 import { getRunnerErrorReportPath, readJson, writeJson } from './paths.js';
-import { loadBranchLocks, loadPrds } from './state.js';
+import { loadBranchLocks, loadPrds } from './orchestrator-state.js';
 import { loadQueues, resolveImplementationQueueContext, writeQueueAndAggregate } from './queues.js';
-import { commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, commitTrackedPrdStateToIntegrationBranch, readTrackedPrdStateMap } from '../../sync/git.js';
+import { commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, commitTrackedPrdStateToIntegrationBranch, readTrackedPrdStateMap } from '../../sync/sync-git.js';
 
 function nowIso() {
   return new Date().toISOString();

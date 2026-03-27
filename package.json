@@ -25,7 +25,7 @@
   },
   "exports": {
     ".": "./dist/src/autonomy-v2/index.js",
-    "./server": "./dist/src/server/index.js",
+    "./server": "./dist/src/server/server-main.js",
     "./package.json": "./package.json"
   },
   "scripts": {

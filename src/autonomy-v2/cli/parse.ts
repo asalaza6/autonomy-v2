@@ -1,6 +1,6 @@
 import path from 'path';
 import { AGENT_ROLES, buildRoleEventName } from '../../agents/role-catalog.js';
-import type { CliOptions } from '../types.js';
+import type { CliOptions } from '../autonomy-types.js';
 
 function parseCli(argv: string[]): { command: string; options: CliOptions } {
   const options: CliOptions = {};

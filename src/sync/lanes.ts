@@ -2,12 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { resolveGithubAuthToken } from './github.js';
 import { isImplementationRole, isReviewRole } from '../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, PullRequestRecord, QueueMap, TaskRecord } from './types.js';
-import { GIT_NETWORK_TIMEOUT_MS } from './constants.js';
+import type { AnyRecord, AutonomyConfig, PullRequestRecord, QueueMap, TaskRecord } from './sync-types.js';
+import { GIT_NETWORK_TIMEOUT_MS } from './sync-constants.js';
 import { emitSyncProgress, readJson } from './core.js';
 import { compareBranchToBase, getPullRequest, listPullRequestsByHead, resolveGithubRepo } from './github.js';
 import { gitAuthArgs, gitRefExists, readGit, readJsonFromGitRef, runGit } from './git-shared.js';
-import { slugify } from './prd.js';
+import { slugify } from './sync-prd.js';
 
 function readTrackedImplementationQueuesFromRef(rootDir: string, config: AutonomyConfig, ref: string): QueueMap {
   return (config.agents || []).reduce((queues, agent) => {

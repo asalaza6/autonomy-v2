@@ -1,5 +1,5 @@
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel } from '../agents/role-catalog.js';
-import type { PullRequestRecord, TaskRecord } from './types.js';
+import type { PullRequestRecord, TaskRecord } from './sync-types.js';
 
 function buildStablePullRequestId(laneKey) {
   return `pr-${String(laneKey || 'lane').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;

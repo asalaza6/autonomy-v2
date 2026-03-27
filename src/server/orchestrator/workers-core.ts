@@ -1,10 +1,10 @@
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES } from '../../agents/role-catalog.js';
-import { planPrdTasksWithCodex } from '../../codex/index.js';
-import { extractExecError } from './git.js';
-import { createWorkerAgentExecutionContext } from './agent-context.js';
+import { planPrdTasksWithCodex } from '../../codex/codex-main.js';
+import { extractExecError } from './orchestrator-git.js';
+import { createWorkerAgentExecutionContext } from './orchestrator-agent-context.js';
 import { getAgent } from './helpers.js';
-import { appendAgentLog, loadConfig } from './state.js';
+import { appendAgentLog, loadConfig } from './orchestrator-state.js';
 
 function runWorkerOnce(rootDir, agentId) {
   const { config, sprint } = loadConfig(rootDir);

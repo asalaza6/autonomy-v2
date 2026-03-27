@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { validateAutonomyConfig } from '../../config/index.js';
-import { collectAgentScaffoldEntries, getTemplateContent, pruneStaleAgentScaffold, resolveTemplateTargetPath, validateImplementationChecks, } from '../scaffold/index.js';
+import { validateAutonomyConfig } from '../../config/config-main.js';
+import { collectAgentScaffoldEntries, getTemplateContent, pruneStaleAgentScaffold, resolveTemplateTargetPath, validateImplementationChecks, } from '../scaffold/scaffold-main.js';
 import { BASE_TEMPLATE_FILES, GENERATED_TEMPLATE_FILES, TEMPLATE_ROOT, ensureDir, getAgentLogPath, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
 import { resolveTaskQueuePath } from './shared-queues.js';
 

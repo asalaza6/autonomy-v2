@@ -1,4 +1,4 @@
-import type { AnyRecord } from '../types.js';
+import type { AnyRecord } from '../autonomy-types.js';
 
 function normalizeRepoPath(filePath) {
   return String(filePath || '').replace(/\\/g, '/').replace(/^\.\//, '');

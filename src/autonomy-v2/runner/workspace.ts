@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { acquireStateLock } from '../../lock/index.js';
-import { resolveGithubAuthToken } from '../../github/index.js';
-import type { AutonomyConfig } from '../types.js';
-import { CLI_PATH, RUNTIME_SEGMENTS } from './constants.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
+import { resolveGithubAuthToken } from '../../github/github-main.js';
+import type { AutonomyConfig } from '../autonomy-types.js';
+import { CLI_PATH, RUNTIME_SEGMENTS } from './runner-constants.js';
 import {
   buildTaskLaneKey,
   buildTaskQueueState,
@@ -12,8 +12,8 @@ import {
   getImplementationTaskState,
   getReviewTask,
   loadState,
-} from './state.js';
-import { ensureDir, extractExecError, readJson, sleepMs, slugify, writeJson } from './shared.js';
+} from './runner-state.js';
+import { ensureDir, extractExecError, readJson, sleepMs, slugify, writeJson } from './runner-shared.js';
 
 function resolveTargetFile(worktreePath, task, agent) {
   const includePath = ((agent && agent.include) || [])[0];

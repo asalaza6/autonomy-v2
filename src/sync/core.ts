@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import type { AnyRecord } from './types.js';
-import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './constants.js';
+import type { AnyRecord } from './sync-types.js';
+import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './sync-constants.js';
 
 function emitSyncProgress(options: AnyRecord, event: string, payload: AnyRecord = {}) {
   if (!options || typeof options.onProgress !== 'function') {

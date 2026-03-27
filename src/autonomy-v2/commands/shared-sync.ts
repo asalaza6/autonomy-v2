@@ -1,6 +1,6 @@
 import { syncPrdSpecsFromIntegrationBranch } from '../../sync/syncer.js';
-import { validateAutonomyConfig } from '../../config/index.js';
-import type { AnyRecord, AutonomyConfig } from '../types.js';
+import { validateAutonomyConfig } from '../../config/config-main.js';
+import type { AnyRecord, AutonomyConfig } from '../autonomy-types.js';
 import { getAutonomyPaths, readJson } from './shared-core.js';
 
 function syncIntegrationSpecs(rootDir: string, options: AnyRecord = {}) {

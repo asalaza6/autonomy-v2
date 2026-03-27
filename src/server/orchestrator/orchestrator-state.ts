@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { validateAutonomyConfig } from '../../config/index.js';
-import { listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/git.js';
-import type { AnyRecord, AutonomyConfig, RuntimeState, TrackedPrdRecord } from '../types.js';
+import { validateAutonomyConfig } from '../../config/config-main.js';
+import { listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
+import type { AnyRecord, AutonomyConfig, RuntimeState, TrackedPrdRecord } from '../server-types.js';
 import { getAgent, listTasks } from './helpers.js';
 import { ensureDir, getAgentLogPath, getPaths, readJson, writeJson } from './paths.js';
 import { loadQueues } from './queues.js';

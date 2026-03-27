@@ -1,6 +1,6 @@
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel } from '../agents/role-catalog.js';
 import { runCodexExec, runCodexStructured } from './cli.js';
-import { readOptionalFile } from './shared.js';
+import { readOptionalFile } from './codex-shared.js';
 
 async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branch, worktreePath }) {
   const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);

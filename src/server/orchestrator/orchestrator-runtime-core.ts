@@ -15,13 +15,13 @@ import type {
   RuntimeState,
   TrackedPrdRecord,
   WorkerRuntime,
-} from '../types.js';
-import { acquireStateLock } from '../../lock/index.js';
-import { createScheduleAgentExecutionContext } from './agent-context.js';
-import { BACKLOG_GRACE_MS, WORKER_PATH } from './constants.js';
+} from '../server-types.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
+import { createScheduleAgentExecutionContext } from './orchestrator-agent-context.js';
+import { BACKLOG_GRACE_MS, WORKER_PATH } from './orchestrator-constants.js';
 import { getAgent, implementationTaskNeedsDispatch, listPrds, listTasks } from './helpers.js';
 import { resolveImplementationQueueContext, writeQueueAndAggregate } from './queues.js';
-import { loadRuntime, writeRuntime } from './state.js';
+import { loadRuntime, writeRuntime } from './orchestrator-state.js';
 
 function isProcessAlive(pid) {
   if (!pid) {

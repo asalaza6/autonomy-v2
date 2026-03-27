@@ -1,1 +1,1 @@
-export * from '../github/index.js';
+export * from '../github/github-main.js';

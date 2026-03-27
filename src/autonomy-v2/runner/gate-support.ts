@@ -6,10 +6,10 @@ import {
   getRoleAgentLabel,
   getRoleLabel,
 } from '../../agents/role-catalog.js';
-import { hasGithubAuth, resolveGithubAuthToken } from '../../github/index.js';
+import { hasGithubAuth, resolveGithubAuthToken } from '../../github/github-main.js';
 import { resolveGithubRepo, postIssueComment } from './net.js';
-import { REVIEW_AUTO_APPROVAL_THRESHOLD } from './constants.js';
-import { extractExecError, normalizeNonEmptyString, uniqueStrings } from './shared.js';
+import { REVIEW_AUTO_APPROVAL_THRESHOLD } from './runner-constants.js';
+import { extractExecError, normalizeNonEmptyString, uniqueStrings } from './runner-shared.js';
 
 function runCheckCommands(worktreePath, commands) {
   return uniqueStrings(commands).map((command) => {

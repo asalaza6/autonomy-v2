@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { execFileSync } from 'child_process';
-import { resolveGithubAuthToken } from '../github/index.js';
-import type { AnyRecord } from './types.js';
+import { resolveGithubAuthToken } from '../github/github-main.js';
+import type { AnyRecord } from './sync-types.js';
 
 function gitHasStagedChanges(cwd) {
   try {

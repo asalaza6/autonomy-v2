@@ -1,6 +1,6 @@
 import path from 'path';
-import type { AnyRecord, PrdSpecPayload, PrdStateRecord } from './types.js';
-import { AUTONOMY_SEGMENTS, PRD_STATE_DIR } from './constants.js';
+import type { AnyRecord, PrdSpecPayload, PrdStateRecord } from './sync-types.js';
+import { AUTONOMY_SEGMENTS, PRD_STATE_DIR } from './sync-constants.js';
 
 function normalizeStringList(value) {
   if (!Array.isArray(value)) {

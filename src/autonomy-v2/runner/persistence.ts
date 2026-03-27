@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { AGENT_ROLES, RUNNER_TYPES, buildRoleEventName, getRunnerTypeForRole } from '../../agents/role-catalog.js';
-import type { AnyRecord } from '../types.js';
-import { RUNTIME_SEGMENTS } from './constants.js';
-import { ensureDir, logRunnerErrorEvent, normalizeNonEmptyString, trimForErrorReport } from './shared.js';
+import type { AnyRecord } from '../autonomy-types.js';
+import { RUNTIME_SEGMENTS } from './runner-constants.js';
+import { ensureDir, logRunnerErrorEvent, normalizeNonEmptyString, trimForErrorReport } from './runner-shared.js';
 
 function appendRunnerLog(rootDir, agentId, event, payload) {
   const logPath = path.join(rootDir, ...RUNTIME_SEGMENTS, 'agents', agentId, 'log.md');

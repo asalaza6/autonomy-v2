@@ -1,14 +1,11 @@
 #!/usr/bin/env node
 
-import { main as runtimeMain } from './runtime.js';
 import { fileURLToPath } from 'url';
+import { main as runtimeMain } from './worker-runtime-core.js';
 
-async function main(argv = process.argv.slice(2)) {
+async function main(argv: string[] = process.argv.slice(2)) {
   return runtimeMain(argv);
 }
-
-
-export { main };
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
@@ -16,3 +13,5 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     process.exit(1);
   });
 }
+
+export { main };

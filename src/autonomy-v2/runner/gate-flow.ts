@@ -2,18 +2,18 @@ import { execFileSync } from 'node:child_process';
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES, buildRoleEventName } from '../../agents/role-catalog.js';
 import { appendRunnerLog } from './persistence.js';
-import { logRunnerEvent, normalizeNonEmptyString, summarizeText, useCodexStub } from './shared.js';
+import { logRunnerEvent, normalizeNonEmptyString, summarizeText, useCodexStub } from './runner-shared.js';
 import {
   ensureCheckEnvironment,
   getPrCommitCount,
   publishMergeFollowupCommentIfNeeded,
   runCheckCommands,
 } from './gate-support.js';
-import { CLI_PATH } from './constants.js';
+import { CLI_PATH } from './runner-constants.js';
 import { postIssueComment, resolveGithubRepo } from './net.js';
-import { evaluateScope } from '../scope/index.js';
-import { createReviewRunnerExecutionContext } from './agent-context.js';
-import { getAgentConfig, getPr, getReviewTask, loadState, persistReviewerTaskState } from './state.js';
+import { evaluateScope } from '../scope/scope-main.js';
+import { createReviewRunnerExecutionContext } from './runner-agent-context.js';
+import { getAgentConfig, getPr, getReviewTask, loadState, persistReviewerTaskState } from './runner-state.js';
 import { ensureReviewContext, listBranchCommits, listReviewDiffFiles, tryMergeWithRetry } from './workspace.js';
 import { crossLayerRunnerDependencies } from './runner-dependencies.js';
 

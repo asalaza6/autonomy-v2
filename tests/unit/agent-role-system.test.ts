@@ -5,8 +5,8 @@ import path from 'path';
 
 import { getAgentDefinition, listAgentDefinitions, } from '../../src/agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES, listAgentRoleIds, } from '../../src/agents/role-catalog.js';
-import { validateImplementationChecks } from '../../src/autonomy-v2/scaffold/index.js';
-import { validateAutonomyConfig } from '../../src/config/index.js';
+import { validateImplementationChecks } from '../../src/autonomy-v2/scaffold/scaffold-main.js';
+import { validateAutonomyConfig } from '../../src/config/config-main.js';
 
 import { fileURLToPath } from 'url';
 

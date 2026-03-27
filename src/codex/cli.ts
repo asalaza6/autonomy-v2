@@ -8,7 +8,7 @@ import {
   extractExecError,
   extractSpawnSyncError,
   logCodexFailure,
-} from './shared.js';
+} from './codex-shared.js';
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
 

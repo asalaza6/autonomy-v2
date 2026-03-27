@@ -1,19 +1,19 @@
-import { loadAutonomyEnv } from '../../env/index.js';
-import { withStateLock } from '../../lock/index.js';
+import { loadAutonomyEnv } from '../../env/env-main.js';
+import { withStateLock } from '../../lock/lock-main.js';
 import { AGENT_ROLES, buildRoleEventName } from '../../agents/role-catalog.js';
 import { printHelp } from '../cli/help.js';
 import { isMutatingCommand, parseCli, resolveRootDir } from '../cli/parse.js';
 import { run as initRun } from './init.js';
 import { run as statusRun } from './status.js';
 import { run as taskRun } from './task.js';
-import { run as prdRun } from './prd.js';
+import { run as prdRun } from './prd-command.js';
 import { run as worktreeRun } from './worktree.js';
 import { run as scopeRun } from './scope.js';
 import { run as prRun } from './pr.js';
 import { run as gateRun } from './gate.js';
 import { run as mergeRun } from './merge.js';
-import { run as runtimeRun } from './runtime.js';
-import type { CliOptions } from '../types.js';
+import { run as runtimeRun } from './runtime-command.js';
+import type { CliOptions } from '../autonomy-types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
 
