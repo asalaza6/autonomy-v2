@@ -457,33 +457,33 @@ function buildFileDependencyGraph(context) {
   };
 }
 
-function buildMermaidTree(context, selectedFileId = null) {
-  const mermaidInit = buildMermaidInit();
-  const { sortedFiles, fileNodeIds, fileById, dependenciesByImporter, edges } =
-    buildFileDependencyGraph(context);
-  const levelByFile = new Map();
-  const incomingCounts = new Map();
-
-  const allFileIds = new Set(fileNodeIds.values());
+function buildVisibleTreeGraph(files, edges, rootIds, rootFileId = null) {
+  const fileById = new Map(files.map((entry) => [entry.id, entry]));
+  const allFileIds = new Set(fileById.keys());
+  const selectedRootId =
+    rootFileId === "all"
+      ? "all"
+      : rootFileId && allFileIds.has(rootFileId)
+        ? rootFileId
+        : rootIds[0] ?? "all";
   const visibleFiles = new Set();
 
-  if (selectedFileId && allFileIds.has(selectedFileId)) {
-    const queue = [selectedFileId];
+  if (selectedRootId !== "all") {
+    const queue = [selectedRootId];
     while (queue.length > 0) {
       const sourceId = queue.shift();
 
-      if (visibleFiles.has(sourceId)) {
+      if (!sourceId || visibleFiles.has(sourceId)) {
         continue;
       }
 
       visibleFiles.add(sourceId);
 
-      const targets = dependenciesByImporter.get(sourceId) ?? new Set();
-      for (const targetId of targets) {
-        if (!visibleFiles.has(targetId)) {
-          queue.push(targetId);
+      edges.forEach(({ source, target }) => {
+        if (source === sourceId && allFileIds.has(target) && !visibleFiles.has(target)) {
+          queue.push(target);
         }
-      }
+      });
     }
   } else {
     for (const fileId of allFileIds) {
@@ -495,20 +495,131 @@ function buildMermaidTree(context, selectedFileId = null) {
     ({ source, target }) => visibleFiles.has(source) && visibleFiles.has(target)
   );
 
+  return {
+    selectedRootId,
+    fileById,
+    visibleFiles,
+    filteredEdges,
+  };
+}
+
+function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
+  const outgoingByFile = new Map();
   visibleFiles.forEach((fileId) => {
-    incomingCounts.set(fileId, 0);
+    outgoingByFile.set(fileId, []);
   });
 
-  filteredEdges.forEach(({ target }) => {
-    incomingCounts.set(target, (incomingCounts.get(target) ?? 0) + 1);
+  filteredEdges.forEach(({ source, target }) => {
+    const outgoing = outgoingByFile.get(source);
+    if (!outgoing) {
+      return;
+    }
+    outgoing.push(target);
   });
 
-  let frontier = Array.from(visibleFiles)
-    .filter((fileId) => (incomingCounts.get(fileId) ?? 0) === 0)
-    .sort();
+  outgoingByFile.forEach((targets) => {
+    targets.sort();
+  });
 
-  frontier.forEach((fileId) => {
-    levelByFile.set(fileId, 0);
+  const indexByFile = new Map();
+  const lowLinkByFile = new Map();
+  const componentByFile = new Map();
+  const stack = [];
+  const stackMembers = new Set();
+  const components = [];
+  let currentIndex = 0;
+
+  function strongConnect(fileId) {
+    indexByFile.set(fileId, currentIndex);
+    lowLinkByFile.set(fileId, currentIndex);
+    currentIndex += 1;
+    stack.push(fileId);
+    stackMembers.add(fileId);
+
+    (outgoingByFile.get(fileId) ?? []).forEach((targetId) => {
+      if (!indexByFile.has(targetId)) {
+        strongConnect(targetId);
+        lowLinkByFile.set(
+          fileId,
+          Math.min(lowLinkByFile.get(fileId) ?? 0, lowLinkByFile.get(targetId) ?? 0)
+        );
+        return;
+      }
+
+      if (stackMembers.has(targetId)) {
+        lowLinkByFile.set(
+          fileId,
+          Math.min(lowLinkByFile.get(fileId) ?? 0, indexByFile.get(targetId) ?? 0)
+        );
+      }
+    });
+
+    if (lowLinkByFile.get(fileId) !== indexByFile.get(fileId)) {
+      return;
+    }
+
+    const componentId = components.length;
+    const members = [];
+
+    while (stack.length > 0) {
+      const member = stack.pop();
+      if (!member) {
+        break;
+      }
+      stackMembers.delete(member);
+      componentByFile.set(member, componentId);
+      members.push(member);
+      if (member === fileId) {
+        break;
+      }
+    }
+
+    components.push(members.sort());
+  }
+
+  Array.from(visibleFiles)
+    .sort()
+    .forEach((fileId) => {
+      if (!indexByFile.has(fileId)) {
+        strongConnect(fileId);
+      }
+    });
+
+  const outgoingByComponent = new Map();
+  const incomingCounts = new Map();
+  components.forEach((_, componentId) => {
+    outgoingByComponent.set(componentId, new Set());
+    incomingCounts.set(componentId, 0);
+  });
+
+  filteredEdges.forEach(({ source, target }) => {
+    const sourceComponent = componentByFile.get(source);
+    const targetComponent = componentByFile.get(target);
+    if (
+      sourceComponent === undefined ||
+      targetComponent === undefined ||
+      sourceComponent === targetComponent
+    ) {
+      return;
+    }
+
+    const targets = outgoingByComponent.get(sourceComponent);
+    if (!targets || targets.has(targetComponent)) {
+      return;
+    }
+
+    targets.add(targetComponent);
+    incomingCounts.set(targetComponent, (incomingCounts.get(targetComponent) ?? 0) + 1);
+  });
+
+  const levelByComponent = new Map();
+  let frontier = Array.from(incomingCounts.entries())
+    .filter(([, incoming]) => incoming === 0)
+    .map(([componentId]) => componentId)
+    .sort((left, right) => left - right);
+
+  frontier.forEach((componentId) => {
+    levelByComponent.set(componentId, 0);
   });
 
   const remainingIncoming = new Map(incomingCounts);
@@ -516,53 +627,65 @@ function buildMermaidTree(context, selectedFileId = null) {
   while (frontier.length > 0) {
     const nextFrontier = [];
 
-    frontier.forEach((sourceId) => {
-      const sourceLevel = levelByFile.get(sourceId);
+    frontier.forEach((sourceComponent) => {
+      const sourceLevel = levelByComponent.get(sourceComponent);
       if (sourceLevel === undefined) {
         return;
       }
 
-      const targets = dependenciesByImporter.get(sourceId);
-      if (!targets) {
-        return;
-      }
+      Array.from(outgoingByComponent.get(sourceComponent) ?? [])
+        .sort((left, right) => left - right)
+        .forEach((targetComponent) => {
+          const nextLevel = sourceLevel + 1;
+          const existing = levelByComponent.get(targetComponent);
+          if (existing === undefined || nextLevel > existing) {
+            levelByComponent.set(targetComponent, nextLevel);
+          }
 
-      for (const targetId of targets) {
-        if (!visibleFiles.has(targetId)) {
-          continue;
-        }
-
-        const nextLevel = sourceLevel + 1;
-        const existing = levelByFile.get(targetId);
-        if (existing === undefined || nextLevel > existing) {
-          levelByFile.set(targetId, nextLevel);
-        }
-
-        remainingIncoming.set(
-          targetId,
-          Math.max(0, (remainingIncoming.get(targetId) ?? 0) - 1)
-        );
-        if (remainingIncoming.get(targetId) === 0) {
-          nextFrontier.push(targetId);
-        }
-      }
+          const updated = Math.max(0, (remainingIncoming.get(targetComponent) ?? 0) - 1);
+          remainingIncoming.set(targetComponent, updated);
+          if (updated === 0) {
+            nextFrontier.push(targetComponent);
+          }
+        });
     });
 
-    frontier = [...new Set(nextFrontier)].sort();
+    frontier = [...new Set(nextFrontier)].sort((left, right) => left - right);
   }
 
-  const unresolved = Array.from(visibleFiles).filter((fileId) => !levelByFile.has(fileId));
-  if (unresolved.length > 0) {
-    let fallbackLevel = 0;
-    if (levelByFile.size > 0) {
-      fallbackLevel = Math.max(...Array.from(levelByFile.values())) + 1;
+  const levelByFile = new Map();
+  componentByFile.forEach((componentId, fileId) => {
+    const level = levelByComponent.get(componentId);
+    if (level === undefined) {
+      throw new Error(`Missing component level for ${fileId}.`);
     }
+    levelByFile.set(fileId, level);
+  });
 
-    unresolved.forEach((fileId) => {
-      levelByFile.set(fileId, fallbackLevel);
-      fallbackLevel += 1;
-    });
-  }
+  return levelByFile;
+}
+
+function buildMermaidTree(context, selectedFileId = null) {
+  const mermaidInit = buildMermaidInit();
+  const { fileNodeIds, fileById, edges } =
+    buildFileDependencyGraph(context);
+  const { filteredEdges, levelByFile, visibleFiles } = (() => {
+    const visibleGraph = buildVisibleTreeGraph(
+      Array.from(fileNodeIds.entries()).map(([filePath, fileId]) => ({
+        id: fileId,
+        path: filePath,
+      })),
+      edges,
+      context.roots ?? [],
+      selectedFileId
+    );
+
+    return {
+      filteredEdges: visibleGraph.filteredEdges,
+      levelByFile: buildCondensedDepthLevels(visibleGraph.visibleFiles, visibleGraph.filteredEdges),
+      visibleFiles: visibleGraph.visibleFiles,
+    };
+  })();
 
   const visibleFilePaths = Array.from(visibleFiles)
     .map((fileId) => fileById.get(fileId))
@@ -616,7 +739,7 @@ function buildMermaidTree(context, selectedFileId = null) {
   });
 
   visibleFiles.forEach((fileId) => {
-    if (levelByFile.get(fileId) === 0) {
+    if ((levelByFile.get(fileId) ?? 0) === 0) {
       lines.push(`class ${fileId} fileRoot;`);
       return;
     }
@@ -681,98 +804,13 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
     return null;
   }
 
-  const fileById = new Map(treePayload.files.map((entry) => [entry.id, entry]));
-  const allFileIds = new Set(fileById.keys());
-  const selectedRootId =
-    rootFileId && rootFileId !== "all" && allFileIds.has(rootFileId)
-      ? rootFileId
-      : treePayload.roots[0] ?? "all";
-  const visibleFiles = new Set();
-
-  if (selectedRootId !== "all") {
-    const queue = [selectedRootId];
-    while (queue.length > 0) {
-      const source = queue.shift();
-      if (visibleFiles.has(source)) {
-        continue;
-      }
-
-      visibleFiles.add(source);
-      treePayload.edges.forEach(({ source: edgeSource, target }) => {
-        if (edgeSource === source && allFileIds.has(target) && !visibleFiles.has(target)) {
-          queue.push(target);
-        }
-      });
-    }
-  } else {
-    allFileIds.forEach((fileId) => {
-      visibleFiles.add(fileId);
-    });
-  }
-
-  const filteredEdges = treePayload.edges.filter(
-    ({ source, target }) => visibleFiles.has(source) && visibleFiles.has(target)
+  const { fileById, filteredEdges, selectedRootId, visibleFiles } = buildVisibleTreeGraph(
+    treePayload.files,
+    treePayload.edges,
+    treePayload.roots,
+    rootFileId
   );
-
-  const incomingCounts = new Map();
-  visibleFiles.forEach((fileId) => {
-    incomingCounts.set(fileId, 0);
-  });
-  filteredEdges.forEach(({ target }) => {
-    incomingCounts.set(target, (incomingCounts.get(target) ?? 0) + 1);
-  });
-
-  const levelByFile = new Map();
-  let frontier = Array.from(visibleFiles)
-    .filter((fileId) => (incomingCounts.get(fileId) ?? 0) === 0)
-    .sort();
-  frontier.forEach((fileId) => {
-    levelByFile.set(fileId, 0);
-  });
-
-  const remainingIncoming = new Map(incomingCounts);
-
-  while (frontier.length > 0) {
-    const nextFrontier = [];
-    frontier.forEach((source) => {
-      const sourceLevel = levelByFile.get(source);
-      if (sourceLevel === undefined) {
-        return;
-      }
-
-      treePayload.edges.forEach(({ source: edgeSource, target }) => {
-        if (edgeSource !== source || !visibleFiles.has(target)) {
-          return;
-        }
-
-        const nextLevel = sourceLevel + 1;
-        const existing = levelByFile.get(target);
-        if (existing === undefined || nextLevel > existing) {
-          levelByFile.set(target, nextLevel);
-        }
-
-        const updated = Math.max(0, (remainingIncoming.get(target) ?? 0) - 1);
-        remainingIncoming.set(target, updated);
-        if (updated === 0) {
-          nextFrontier.push(target);
-        }
-      });
-    });
-    frontier = [...new Set(nextFrontier)].sort();
-  }
-
-  const unresolved = Array.from(visibleFiles).filter((fileId) => !levelByFile.has(fileId));
-  if (unresolved.length > 0) {
-    let fallbackLevel = 0;
-    if (levelByFile.size > 0) {
-      fallbackLevel = Math.max(...Array.from(levelByFile.values())) + 1;
-    }
-
-    unresolved.forEach((fileId) => {
-      levelByFile.set(fileId, fallbackLevel);
-      fallbackLevel += 1;
-    });
-  }
+  const levelByFile = buildCondensedDepthLevels(visibleFiles, filteredEdges);
 
   const rows = Array.from(visibleFiles)
     .map((fileId) => {

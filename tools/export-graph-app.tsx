@@ -57,6 +57,7 @@ type TreeRow = {
 };
 
 type TreeViewState = {
+  selectedRootId: string;
   levelByFile: Map<string, number>;
   visibleFiles: Set<string>;
   filteredEdges: TreeEdge[];
@@ -67,9 +68,23 @@ type TreeViewState = {
   maxDepth: number;
 };
 
+type TreeDepthState = {
+  selectedRootId: string;
+  fileById: Map<string, TreeFile>;
+  visibleFiles: Set<string>;
+  filteredEdges: TreeEdge[];
+  levelByFile: Map<string, number>;
+};
+
 declare global {
   interface Window {
     __EXPORT_GRAPH_DATA__?: GraphPayload;
+    __EXPORT_GRAPH_DEBUG__?: {
+      activeRoot: string;
+      sort: SortState;
+      treeState: TreeViewState | null;
+      buildTreeDepthState: typeof buildTreeDepthState;
+    };
     mermaid?: {
       initialize: (config: Record<string, unknown>) => void;
       run: (options: { nodes: Element[] }) => Promise<void>;
@@ -588,18 +603,25 @@ function compareAnalyticsRows(left: TreeRow, right: TreeRow, sort: SortState): n
   return comparison * direction;
 }
 
-function buildTreeViewState(treeGridData: TreeGridData, rootFileId: string, sort: SortState): TreeViewState {
-  const levelByFile = new Map<string, number>();
+function buildVisibleTreeGraph(treeGridData: TreeGridData, rootFileId = "all") {
+  const fileById = new Map(treeGridData.files.map((entry) => [entry.id, entry]));
+  const allFileIds = new Set(fileById.keys());
+  const selectedRootId =
+    rootFileId === "all"
+      ? "all"
+      : rootFileId && allFileIds.has(rootFileId)
+        ? rootFileId
+        : treeGridData.roots[0] ?? "all";
   const visibleFiles = new Set<string>();
-  const allFileIds = new Set(treeGridData.files.map((entry) => entry.id));
 
-  if (rootFileId && rootFileId !== "all" && allFileIds.has(rootFileId)) {
-    const queue = [rootFileId];
+  if (selectedRootId !== "all") {
+    const queue = [selectedRootId];
     while (queue.length > 0) {
       const source = queue.shift();
       if (!source || visibleFiles.has(source)) {
         continue;
       }
+
       visibleFiles.add(source);
       treeGridData.edges.forEach(({ source: edgeSource, target }) => {
         if (edgeSource === source && allFileIds.has(target) && !visibleFiles.has(target)) {
@@ -616,75 +638,207 @@ function buildTreeViewState(treeGridData: TreeGridData, rootFileId: string, sort
   const filteredEdges = treeGridData.edges.filter(
     ({ source, target }) => visibleFiles.has(source) && visibleFiles.has(target)
   );
-  const incomingCounts = new Map<string, number>();
+
+  return {
+    selectedRootId,
+    fileById,
+    visibleFiles,
+    filteredEdges,
+  };
+}
+
+function buildCondensedDepthLevels(visibleFiles: Set<string>, filteredEdges: TreeEdge[]) {
+  const outgoingByFile = new Map<string, string[]>();
   visibleFiles.forEach((fileId) => {
-    incomingCounts.set(fileId, 0);
+    outgoingByFile.set(fileId, []);
   });
 
-  filteredEdges.forEach(({ target }) => {
-    incomingCounts.set(target, (incomingCounts.get(target) ?? 0) + 1);
+  filteredEdges.forEach(({ source, target }) => {
+    const outgoing = outgoingByFile.get(source);
+    if (!outgoing) {
+      return;
+    }
+    outgoing.push(target);
   });
 
-  let frontier = Array.from(visibleFiles)
-    .filter((fileId) => (incomingCounts.get(fileId) ?? 0) === 0)
-    .sort();
-  frontier.forEach((fileId) => {
-    levelByFile.set(fileId, 0);
+  outgoingByFile.forEach((targets) => {
+    targets.sort();
+  });
+
+  const indexByFile = new Map<string, number>();
+  const lowLinkByFile = new Map<string, number>();
+  const componentByFile = new Map<string, number>();
+  const stack: string[] = [];
+  const stackMembers = new Set<string>();
+  const components: string[][] = [];
+  let currentIndex = 0;
+
+  function strongConnect(fileId: string) {
+    indexByFile.set(fileId, currentIndex);
+    lowLinkByFile.set(fileId, currentIndex);
+    currentIndex += 1;
+    stack.push(fileId);
+    stackMembers.add(fileId);
+
+    (outgoingByFile.get(fileId) ?? []).forEach((targetId) => {
+      if (!indexByFile.has(targetId)) {
+        strongConnect(targetId);
+        lowLinkByFile.set(
+          fileId,
+          Math.min(lowLinkByFile.get(fileId) ?? 0, lowLinkByFile.get(targetId) ?? 0)
+        );
+        return;
+      }
+
+      if (stackMembers.has(targetId)) {
+        lowLinkByFile.set(
+          fileId,
+          Math.min(lowLinkByFile.get(fileId) ?? 0, indexByFile.get(targetId) ?? 0)
+        );
+      }
+    });
+
+    if (lowLinkByFile.get(fileId) !== indexByFile.get(fileId)) {
+      return;
+    }
+
+    const componentId = components.length;
+    const members: string[] = [];
+
+    while (stack.length > 0) {
+      const member = stack.pop();
+      if (!member) {
+        break;
+      }
+      stackMembers.delete(member);
+      componentByFile.set(member, componentId);
+      members.push(member);
+      if (member === fileId) {
+        break;
+      }
+    }
+
+    components.push(members.sort());
+  }
+
+  Array.from(visibleFiles)
+    .sort()
+    .forEach((fileId) => {
+      if (!indexByFile.has(fileId)) {
+        strongConnect(fileId);
+      }
+    });
+
+  const outgoingByComponent = new Map<number, Set<number>>();
+  const incomingCounts = new Map<number, number>();
+  components.forEach((_, componentId) => {
+    outgoingByComponent.set(componentId, new Set());
+    incomingCounts.set(componentId, 0);
+  });
+
+  filteredEdges.forEach(({ source, target }) => {
+    const sourceComponent = componentByFile.get(source);
+    const targetComponent = componentByFile.get(target);
+    if (
+      sourceComponent === undefined ||
+      targetComponent === undefined ||
+      sourceComponent === targetComponent
+    ) {
+      return;
+    }
+
+    const targets = outgoingByComponent.get(sourceComponent);
+    if (!targets || targets.has(targetComponent)) {
+      return;
+    }
+
+    targets.add(targetComponent);
+    incomingCounts.set(targetComponent, (incomingCounts.get(targetComponent) ?? 0) + 1);
+  });
+
+  const levelByComponent = new Map<number, number>();
+  let frontier = Array.from(incomingCounts.entries())
+    .filter(([, incoming]) => incoming === 0)
+    .map(([componentId]) => componentId)
+    .sort((left, right) => left - right);
+
+  frontier.forEach((componentId) => {
+    levelByComponent.set(componentId, 0);
   });
 
   const remainingIncoming = new Map(incomingCounts);
 
   while (frontier.length > 0) {
-    const nextFrontier: string[] = [];
-    frontier.forEach((source) => {
-      const sourceLevel = levelByFile.get(source);
+    const nextFrontier: number[] = [];
+    frontier.forEach((sourceComponent) => {
+      const sourceLevel = levelByComponent.get(sourceComponent);
       if (sourceLevel === undefined) {
         return;
       }
 
-      treeGridData.edges.forEach(({ source: edgeSource, target }) => {
-        if (edgeSource !== source || !visibleFiles.has(target)) {
-          return;
-        }
+      Array.from(outgoingByComponent.get(sourceComponent) ?? [])
+        .sort((left, right) => left - right)
+        .forEach((targetComponent) => {
+          const nextLevel = sourceLevel + 1;
+          const existing = levelByComponent.get(targetComponent);
+          if (existing === undefined || nextLevel > existing) {
+            levelByComponent.set(targetComponent, nextLevel);
+          }
 
-        const nextLevel = sourceLevel + 1;
-        const existing = levelByFile.get(target);
-        if (existing === undefined || nextLevel > existing) {
-          levelByFile.set(target, nextLevel);
-        }
-
-        const updated = Math.max(0, (remainingIncoming.get(target) ?? 0) - 1);
-        remainingIncoming.set(target, updated);
-        if (updated === 0) {
-          nextFrontier.push(target);
-        }
-      });
+          const updated = Math.max(0, (remainingIncoming.get(targetComponent) ?? 0) - 1);
+          remainingIncoming.set(targetComponent, updated);
+          if (updated === 0) {
+            nextFrontier.push(targetComponent);
+          }
+        });
     });
-    frontier = [...new Set(nextFrontier)].sort();
+
+    frontier = [...new Set(nextFrontier)].sort((left, right) => left - right);
   }
 
-  const unresolved = Array.from(visibleFiles).filter((fileId) => !levelByFile.has(fileId));
-  if (unresolved.length > 0) {
-    let fallbackLevel = 0;
-    if (levelByFile.size > 0) {
-      fallbackLevel = Math.max(...Array.from(levelByFile.values())) + 1;
+  const levelByFile = new Map<string, number>();
+  componentByFile.forEach((componentId, fileId) => {
+    const level = levelByComponent.get(componentId);
+    if (level === undefined) {
+      throw new Error(`Missing component level for ${fileId}.`);
     }
+    levelByFile.set(fileId, level);
+  });
 
-    unresolved.forEach((fileId) => {
-      levelByFile.set(fileId, fallbackLevel);
-      fallbackLevel += 1;
-    });
-  }
+  return levelByFile;
+}
+
+function buildTreeDepthState(treeGridData: TreeGridData, rootFileId = "all"): TreeDepthState {
+  const { selectedRootId, fileById, filteredEdges, visibleFiles } = buildVisibleTreeGraph(
+    treeGridData,
+    rootFileId
+  );
+  const levelByFile = buildCondensedDepthLevels(visibleFiles, filteredEdges);
+
+  return {
+    selectedRootId,
+    fileById,
+    visibleFiles,
+    filteredEdges,
+    levelByFile,
+  };
+}
+
+function buildTreeViewState(treeGridData: TreeGridData, rootFileId: string, sort: SortState): TreeViewState {
+  const { selectedRootId, fileById, filteredEdges, levelByFile, visibleFiles } = buildTreeDepthState(
+    treeGridData,
+    rootFileId
+  );
 
   const visiblePaths = Array.from(visibleFiles)
-    .map((fileId) => treeGridData.files.find((entry) => entry.id === fileId)?.path ?? null)
+    .map((fileId) => fileById.get(fileId)?.path ?? null)
     .filter((value): value is string => Boolean(value))
     .sort();
 
   const fileLookup = new Map(treeGridData.files.map((entry) => [entry.path, entry]));
   const levels = new Map<number, string[]>();
   for (const [fileId, level] of levelByFile.entries()) {
-    const file = treeGridData.files.find((entry) => entry.id === fileId);
+    const file = fileById.get(fileId);
     if (!file) {
       continue;
     }
@@ -695,7 +849,7 @@ function buildTreeViewState(treeGridData: TreeGridData, rootFileId: string, sort
 
   const fileRows = Array.from(visibleFiles)
     .map((fileId) => {
-      const file = treeGridData.files.find((entry) => entry.id === fileId);
+      const file = fileById.get(fileId);
       if (!file) {
         return null;
       }
@@ -760,6 +914,7 @@ function buildTreeViewState(treeGridData: TreeGridData, rootFileId: string, sort
   fileRows.sort((left, right) => compareAnalyticsRows(left, right, sort));
 
   return {
+    selectedRootId,
     levelByFile,
     visibleFiles,
     filteredEdges,
@@ -1101,6 +1256,19 @@ function App({ payload }: { payload: GraphPayload }) {
 
   const zoomLabel = `${Math.round(currentScale * 100)}%`;
   const rowsByPath = new Map((treeState?.fileRows ?? []).map((row) => [row.path, row]));
+
+  useEffect(() => {
+    window.__EXPORT_GRAPH_DEBUG__ = {
+      activeRoot,
+      sort,
+      treeState,
+      buildTreeDepthState,
+    };
+
+    return () => {
+      delete window.__EXPORT_GRAPH_DEBUG__;
+    };
+  }, [activeRoot, sort, treeState]);
 
   return (
     <>

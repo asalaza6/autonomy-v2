@@ -60,6 +60,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^17.4.0",
+    "madge": "^8.0.0",
     "preact": "^10.27.2",
     "typescript": "^5.9.3"
   },
