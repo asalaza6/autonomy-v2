@@ -4,7 +4,8 @@ import { buildLaneSourceSummary, buildTaskLaneKey, collectTaskScopeViolations, f
 import { buildPersonaPrBody, buildPersonaPrTitle, buildPullRequestLabels } from './shared-core.js';
 import { buildStablePullRequestId } from './shared-repo.js';
 import { listCompletedLaneTasks, listImplementationLaneTasks, listLaneTasks } from './shared-lanes.js';
-import { loadAllState, queueReviewerTask } from './shared-prds.js';
+import { loadAllState } from './shared-prds.js';
+import { queueReviewerTask } from './shared-worktrees.js';
 import { resolvePrRecordTask } from './shared-lanes.js';
 import { writeTaskQueues } from './shared-queues.js';
 import {

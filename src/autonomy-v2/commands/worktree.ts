@@ -1,7 +1,8 @@
 import { TASK_TYPES, isImplementationRole } from '../../agents/role-catalog.js';
 import { appendAgentLog, ensureInitialized, getAgent, printOutput, requireOption, writeJson, getAutonomyPaths } from './shared-core.js';
 import { loadAllState } from './shared-prds.js';
-import { prepareTaskWorktree, resolveTaskForWorktreePreparation } from './shared-lanes.js';
+import { resolveTaskForWorktreePreparation } from './shared-lanes.js';
+import { prepareTaskWorktree } from './shared-worktrees.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);

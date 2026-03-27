@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { countBy, ensureInitialized, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
+import { countBy, ensureInitialized, formatCountSummary, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
 import { buildAgentStatusSummaries, formatAgentStatusLine } from './shared-agent-status.js';
 import { buildPullRequestStatusSummaries, formatPullRequestStatusLine } from './shared-pr-status.js';
 import { getTaskQueue, listTasks } from './shared-queues.js';

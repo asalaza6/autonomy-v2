@@ -6,26 +6,24 @@ import {
   isReviewRole,
 } from '../../agents/role-catalog.js';
 import { type AnyRecord, type BranchLocksState, type QueueMap, type QueueState, type RuntimeState, type TaskRecord } from '../types.js';
+import { execFileSync } from 'child_process';
+import { acquireStateLock } from '../../lock/index.js';
 import {
-  execFileSync,
   getRunnerErrorReportPath,
   readJson,
   writeJson,
 } from './paths.js';
 import {
-  acquireStateLock,
   appendAgentLog,
   loadBranchLocks,
   loadConfig,
   loadPrds,
-  loadQueues,
   loadRuntime,
-  resolveImplementationQueueContext,
-  writeQueueAndAggregate,
 } from './state.js';
 import { buildTaskQueueState, getAgent, listTasks, selectImplementationTask } from './helpers.js';
 import { CLI_PATH, DEFAULT_RUNNER_PATH } from './constants.js';
 import { extractExecError, executeRunnerCommand, hasStagedGitChanges, runGit } from './git.js';
+import { loadQueues, resolveImplementationQueueContext, writeQueueAndAggregate } from './queues.js';
 import { runPmWorker } from './planning.js';
 
 function claimQueuedReviewTask(rootDir, config, agentId) {

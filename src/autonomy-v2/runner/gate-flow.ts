@@ -4,8 +4,6 @@ import { logRunnerEvent, normalizeNonEmptyString, summarizeText } from './shared
 import {
   buildScopeSafeApprovalSummary,
   ensureCheckEnvironment,
-  ensureReviewContext,
-  evaluateScope,
   isScopeOnlyReviewFeedback,
   publishMergeFollowupCommentIfNeeded,
   runCheckCommands,
@@ -15,8 +13,9 @@ import {
 } from './gate-support.js';
 import { CLI_PATH } from './constants.js';
 import { postIssueComment, resolveGithubRepo } from './net.js';
+import { evaluateScope } from '../scope/index.js';
 import { getAgentConfig, getPr, getReviewTask, loadState, persistReviewerTaskState } from './state.js';
-import { listBranchCommits, listReviewDiffFiles, tryMergeWithRetry } from './workspace.js';
+import { ensureReviewContext, listBranchCommits, listReviewDiffFiles, tryMergeWithRetry } from './workspace.js';
 import { crossLayerRunnerDependencies } from './runner-dependencies.js';
 
 const runnerDependencies = {

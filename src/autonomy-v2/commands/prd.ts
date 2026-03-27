@@ -1,5 +1,6 @@
 import { appendAgentLog, ensureInitialized, getAutonomyPaths, getAgent, getListOption, getStringOption, printOutput, readJson, requireOption, } from './shared-core.js';
-import { archiveCompletedPrdSpecs, buildTrackedImplementationQueueUpdates, loadAllState, loadTrackedPrds, sanitizePlannedTaskSpecs, } from './shared-prds.js';
+import { archiveCompletedPrdSpecs, loadAllState, loadTrackedPrds, } from './shared-prds.js';
+import { buildTrackedImplementationQueueUpdates, sanitizePlannedTaskSpecs, } from './shared-queues.js';
 import { syncIntegrationSpecs } from './shared-sync.js';
 import {
   AGENT_ROLES,

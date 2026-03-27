@@ -2,7 +2,7 @@ import {
   isImplementationRole,
   resolveGithubAuthToken,
 } from './command-dependencies.js';
-import { appendAgentLog, buildMergeCommitTitle, getAgent, getAutonomyPaths, printOutput, requireOption, ensureInitialized, writeJson, } from './shared-core.js';
+import { appendAgentLog, buildMergeCommitTitle, getAgent, getAutonomyPaths, getPr, printOutput, requireOption, ensureInitialized, writeJson, } from './shared-core.js';
 import { archiveCompletedPrdSpecs, loadAllState, loadTrackedPrds } from './shared-prds.js';
 import { evaluateMerge } from './shared-repo.js';
 import { appendTrackedBranchFollowupTask, buildLaneConflictTaskId, enqueueLaneFollowupTask, getReviewerTask } from './shared-worktrees.js';

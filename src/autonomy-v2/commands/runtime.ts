@@ -1,8 +1,8 @@
 import fs from 'fs';
-import { countBy, ensureInitialized, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
+import { countBy, ensureInitialized, formatCountSummary, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
 import { buildAgentStatusSummaries, formatAgentStatusLine } from './shared-agent-status.js';
 import { buildPullRequestStatusSummaries, formatPullRequestStatusLine } from './shared-pr-status.js';
-import { loadTrackedPrds } from './shared-prds.js';
+import { loadAllState, loadTrackedPrds } from './shared-prds.js';
 import { getTaskQueue, listTasks } from './shared-queues.js';
 
 function run(rootDir, options) {
