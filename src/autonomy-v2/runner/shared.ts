@@ -130,6 +130,10 @@ function sleepMs(durationMs) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs);
 }
 
+function useCodexStub() {
+  return process.env.AUTONOMY_CODEX_STUB === '1';
+}
+
 
 export { ensureDir };
 export { extractExecError };
@@ -145,4 +149,5 @@ export { trimForErrorReport };
 export { trimLeadingSeparator };
 export { uniqueScopeViolations };
 export { uniqueStrings };
+export { useCodexStub };
 export { writeJson };

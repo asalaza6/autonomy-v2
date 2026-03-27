@@ -35,6 +35,7 @@
     "exports:mermaid": "node analyze-exports.mjs --format mermaid --layout TD --output docs/export-graph.mmd && open docs/export-graph.mmd",
     "exports:html": "node analyze-exports.mjs --format html --tree --layout TD --output docs/export-graph.html && open docs/export-graph.html",
     "exports:svg": "node analyze-exports.mjs --format dot --output /tmp/export-graph.dot && dot -Tsvg /tmp/export-graph.dot -o docs/export-graph.svg && open docs/export-graph.svg",
+    "nomenclature": "node scripts/check-nomenclature.js",
     "test": "npm run build && node --test dist/tests/**/*.test.js",
     "smoke": "npm run build && node --test dist/tests/smoke/*.test.js",
     "lint": "eslint src bin tests",

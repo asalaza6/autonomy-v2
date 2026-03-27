@@ -1,10 +1,10 @@
 import { execFileSync, spawn } from 'node:child_process';
+import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import {
   AGENT_ROLES,
   TASK_TYPES,
   getRoleLabel,
   isImplementationRole,
-  isPmRole,
   isReviewRole,
 } from '../../agents/role-catalog.js';
 import type {
@@ -17,6 +17,7 @@ import type {
   WorkerRuntime,
 } from '../types.js';
 import { acquireStateLock } from '../../lock/index.js';
+import { createScheduleAgentExecutionContext } from './agent-context.js';
 import { BACKLOG_GRACE_MS, WORKER_PATH } from './constants.js';
 import { getAgent, implementationTaskNeedsDispatch, listPrds, listTasks } from './helpers.js';
 import { resolveImplementationQueueContext, writeQueueAndAggregate } from './queues.js';
@@ -95,43 +96,42 @@ function workerIsRunning(runtime, agentId) {
 function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap, branchLocks: BranchLocksState, prds: { prds: TrackedPrdRecord[] }, runtime: RuntimeState, options: AnyRecord = {}) {
   const due = [];
   const knownPrds = listPrds(prds);
-  const hasQueuedPrd = knownPrds.some((prd) => prd.status === 'queued');
   const hasPlanningPrd = knownPrds.some((prd) => prd.status === 'planning');
-  const hasActivePrd = knownPrds.some((prd) => prd.status === 'planning' || prd.status === 'planned');
 
   (config.agents || []).forEach((agent) => {
     if (workerIsRunning(runtime, agent.id)) {
       return;
     }
-    if (isPmRole(agent.role)) {
-      if (hasQueuedPrd && !hasActivePrd) {
-        due.push({ agentId: agent.id, reason: 'queued_prd' });
-      }
+    const definition = getAgentDefinition(agent);
+    const context = createScheduleAgentExecutionContext(rootDir, config, agent, {
+      queues,
+      branchLocks,
+      prds,
+      runtime,
+    }, {
+      suppressNonPmDispatch: options.suppressNonPmDispatch === true,
+      hasPlanningPrd,
+    });
+    if (!definition.canRun(context)) {
       return;
     }
-    if (hasPlanningPrd || options.suppressNonPmDispatch === true) {
-      return;
-    }
-
-    const queue = queues[agent.id];
-    if (!queue) {
-      return;
-    }
-    if (isReviewRole(agent.role)) {
-      if (listTasks(queue).some((task) => task.status === 'queued')) {
-        due.push({ agentId: agent.id, reason: `${TASK_TYPES.REVIEW}_queue` });
-      }
-      return;
-    }
-    if (isImplementationRole(agent.role)) {
-      const queueContext = resolveImplementationQueueContext(rootDir, config, branchLocks, agent, queue);
-      if (listTasks(queueContext.queue).some((task) => implementationTaskNeedsDispatch(task))) {
-        due.push({ agentId: agent.id, reason: 'queued_task' });
-      }
-    }
+    due.push({ agentId: agent.id, reason: getDueReason(agent.role) });
   });
 
   return due;
+}
+
+function getDueReason(role) {
+  if (role === AGENT_ROLES.PM) {
+    return 'queued_prd';
+  }
+  if (role === AGENT_ROLES.REVIEW) {
+    return `${TASK_TYPES.REVIEW}_queue`;
+  }
+  if (role === AGENT_ROLES.IMPLEMENTATION) {
+    return 'queued_task';
+  }
+  return 'scheduled';
 }
 
 function setWorkerState(runtime: RuntimeState, agentId: string, patch: AnyRecord) {

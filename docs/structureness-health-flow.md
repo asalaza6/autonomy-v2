@@ -195,10 +195,6 @@ A file depends on another file several layers away instead of a nearby layer. In
 
 Files are part of circular dependencies where one module eventually depends back on itself through other modules. In general, this means those files are tangled and harder to separate safely.
 
-`overloaded depth bands`
-
-Too many files sit at the same abstraction level. In general, this means one layer is carrying too much responsibility.
-
 `bridge-module behavior`
 
 A module connects many parts of the system that would otherwise be more separate. In general, this means the file is acting like a traffic hub or glue layer.
@@ -214,10 +210,6 @@ One file has a very large number of dependency connections. In general, this mea
 `directory smearing`
 
 Files in the same directory live across very different architecture levels. In general, this means the directory mixes responsibilities instead of representing one coherent layer.
-
-`root fanout imbalance`
-
-Some top-level entrypoints spread into much more of the graph than others. In general, this means top-level responsibilities are unevenly distributed.
 
 `too many roots for the scope size`
 

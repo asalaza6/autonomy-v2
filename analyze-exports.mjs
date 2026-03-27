@@ -17,6 +17,7 @@ function parseArgs(argv) {
   const options = {
     format: "json",
     healthOutput: "text",
+    scoreOnly: false,
     tsconfig: DEFAULT_TSCONFIG,
     input: null,
     output: null,
@@ -61,6 +62,11 @@ function parseArgs(argv) {
 
     if (arg === "--health-output") {
       options.healthOutput = requireValue(argv, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--score-only") {
+      options.scoreOnly = true;
       continue;
     }
 
@@ -162,6 +168,7 @@ Options:
   --input <file>                    Read an existing JSON export map instead of ts-morph
   --output <file>                   Write output to a file instead of stdout
   --health-output <text|json>       Health report encoding. Default: text
+  --score-only                      In health mode, print only score/pass-fail output
   --root <fileId|all>               Scope tree/health analysis to one root. Default: all
   --threshold <0-100>               Optional health score threshold for pass/fail messaging
   --top <n>                         Number of offenders/SCCs/directories to print. Default: 10
@@ -1235,10 +1242,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     },
   };
 
-  const overloadRatio = ratio(
-    metrics.depthBalance.overloadedDepths.length,
-    Math.max(1, metrics.depthBalance.activeDepthCount)
-  );
   const rootShare = ratio(metrics.rootClarity.rootCount, Math.max(1, visibleFileEntries.length));
   const bridgeSuspectRatio = ratio(
     metrics.hubPressure.bridgeSuspectCount,
@@ -1269,15 +1272,10 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       metrics.cycleBurden.largestSccRatio * 100 * 0.8
   );
   const depthBalanceScore = clampMetricScore(
-    100 -
-      Math.max(0, metrics.depthBalance.dominantDepthShare - 0.25) * 100 * 1.2 -
-      overloadRatio * 100 * 0.8 -
-      (metrics.depthBalance.activeDepthCount <= 2 && visibleFileEntries.length > 4 ? 20 : 0)
+    100
   );
   const rootClarityScore = clampMetricScore(
-    100 -
-      rootShare * 100 * 0.7 -
-      (1 - metrics.rootClarity.topRootFanoutRatio) * 100 * 0.15
+    100 - rootShare * 100 * 0.7
   );
   const hubPressureScore = clampMetricScore(
     100 - bridgeSuspectRatio * 100 * 0.8 - maxDegreeRatio * 100 * 0.5
@@ -1357,26 +1355,7 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       label: "Depth balance",
       weight: 0.15,
       score: depthBalanceScore,
-      causes: [
-        {
-          key: "dominantDepth",
-          label: "depth concentration",
-          rawLoss: Math.max(0, metrics.depthBalance.dominantDepthShare - 0.25) * 100 * 1.2,
-          signal: `depth ${metrics.depthBalance.widestDepth.depth} holds ${formatPercent(metrics.depthBalance.dominantDepthShare)} of files`,
-        },
-        {
-          key: "overloadedDepths",
-          label: "overloaded depth bands",
-          rawLoss: overloadRatio * 100 * 0.8,
-          signal: `${metrics.depthBalance.overloadedDepths.length} overloaded depths across ${metrics.depthBalance.activeDepthCount} active depths`,
-        },
-        {
-          key: "shallowDepthRange",
-          label: "too few active depth bands",
-          rawLoss: metrics.depthBalance.activeDepthCount <= 2 && visibleFileEntries.length > 4 ? 20 : 0,
-          signal: `${metrics.depthBalance.activeDepthCount} active depths`,
-        },
-      ],
+      causes: [],
     },
     {
       key: "rootClarity",
@@ -1389,12 +1368,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
           label: "too many roots for the scope size",
           rawLoss: rootShare * 100 * 0.7,
           signal: `${metrics.rootClarity.rootCount} roots across ${visibleFileEntries.length} files`,
-        },
-        {
-          key: "rootFanoutBalance",
-          label: "root fanout imbalance",
-          rawLoss: (1 - metrics.rootClarity.topRootFanoutRatio) * 100 * 0.15,
-          signal: `top root fanout ratio ${formatPercent(metrics.rootClarity.topRootFanoutRatio)}`,
         },
       ],
     },
@@ -1506,13 +1479,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
   if (metrics.layerFlow.skipRatio > 0.15) {
     penalties.push(
       `${formatPercent(metrics.layerFlow.skipRatio)} of imports skip one or more depth bands.`
-    );
-  }
-  if (metrics.depthBalance.dominantDepthShare > 0.4) {
-    penalties.push(
-      `Depth ${metrics.depthBalance.widestDepth.depth} holds ${formatPercent(
-        metrics.depthBalance.dominantDepthShare
-      )} of analyzed files.`
     );
   }
   if (metrics.directoryCoherence.smearedDirectoryCount > 0) {
@@ -1688,13 +1654,33 @@ function formatHealthReportText(report) {
     `- Cycle burden: ${report.metrics.cycleBurden.filesInCycles} files in cycles, largest SCC ${report.metrics.cycleBurden.largestSccSize}`
   );
   lines.push(
-    `- Root clarity: top root fanout ratio ${formatPercent(report.metrics.rootClarity.topRootFanoutRatio)}`
+    `- Root clarity: ${report.metrics.rootClarity.rootCount} roots`
   );
   lines.push(
     `- Hub pressure: ${report.metrics.hubPressure.bridgeSuspectCount} bridge suspects`
   );
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatHealthScoreOnlyText(report) {
+  const rootLabel = report.scope.root?.relative ?? "all";
+  const lines = [`Structureness Health (${rootLabel})`, `Score: ${report.score.value}/100`];
+  if (report.score.message) {
+    lines.push(report.score.message);
+  } else {
+    lines.push(`PASS: ${report.score.passed === true ? "true" : "n/a"}`);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+function buildHealthScoreOnlyJson(report) {
+  return {
+    score: report.score.value,
+    threshold: report.score.threshold,
+    passed: report.score.passed,
+    message: report.score.message,
+  };
 }
 
 function buildMermaidTree(context, selectedFileId = null) {
@@ -2264,9 +2250,13 @@ async function main() {
           : options.format === "dot"
             ? buildDot(entries, options)
             : options.format === "health"
-              ? options.healthOutput === "json"
-                ? `${JSON.stringify(healthReport, null, 2)}\n`
-                : formatHealthReportText(healthReport)
+              ? options.scoreOnly
+                ? options.healthOutput === "json"
+                  ? `${JSON.stringify(buildHealthScoreOnlyJson(healthReport), null, 2)}\n`
+                  : formatHealthScoreOnlyText(healthReport)
+                : options.healthOutput === "json"
+                  ? `${JSON.stringify(healthReport, null, 2)}\n`
+                  : formatHealthReportText(healthReport)
               : await buildHtml(
                   entries,
                   options,
@@ -2309,6 +2299,7 @@ if (isDirectExecution) {
 }
 
 export {
+  buildHealthScoreOnlyJson,
   buildCondensedGraph,
   buildCondensedDepthLevels,
   buildExportMap,
@@ -2319,6 +2310,7 @@ export {
   buildVisibleTreeGraph,
   filterEntries,
   formatHealthReportText,
+  formatHealthScoreOnlyText,
   loadExportMap,
   main,
 };

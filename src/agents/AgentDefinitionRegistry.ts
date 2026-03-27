@@ -1,13 +1,18 @@
+import { AgentDefinition } from './AgentDefinition.js';
 import { PmAgentDefinition } from './PmAgentDefinition.js';
 import { ImplementationAgentDefinition } from './ImplementationAgentDefinition.js';
 import { ReviewAgentDefinition } from './ReviewAgentDefinition.js';
 import { listAgentRoleIds, normalizeAgentRole, } from './role-catalog.js';
 import type { AnyRecord, AgentConfig } from '../types.js';
 
-const definitions = new Map<string, InstanceType<typeof PmAgentDefinition> | InstanceType<typeof ImplementationAgentDefinition> | InstanceType<typeof ReviewAgentDefinition>>([
-  [new PmAgentDefinition().roleId, new PmAgentDefinition()],
-  [new ImplementationAgentDefinition().roleId, new ImplementationAgentDefinition()],
-  [new ReviewAgentDefinition().roleId, new ReviewAgentDefinition()],
+const pmDefinition = new PmAgentDefinition();
+const implementationDefinition = new ImplementationAgentDefinition();
+const reviewDefinition = new ReviewAgentDefinition();
+
+const definitions = new Map<string, AgentDefinition>([
+  [pmDefinition.roleId, pmDefinition],
+  [implementationDefinition.roleId, implementationDefinition],
+  [reviewDefinition.roleId, reviewDefinition],
 ]);
 
 function getAgentDefinition(roleOrAgent: string | AgentConfig | AnyRecord) {

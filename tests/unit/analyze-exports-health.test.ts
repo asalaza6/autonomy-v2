@@ -155,7 +155,7 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
 
   assert.equal(output, [
     'Structureness Health (all)',
-    'Score: 61.25/100',
+    'Score: 65.75/100',
     '4 files, 4 graph edges, 4 import edges',
     '1 SCCs, max depth 2, 1 roots',
     '',
@@ -165,13 +165,11 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
     '',
     'Penalties',
     '- 50.0% of files sit inside SCCs.',
-    '- Depth 1 holds 50.0% of analyzed files.',
     '',
     'Score Drag',
-    '- Total points lost vs 100: 38.75',
+    '- Total points lost vs 100: 34.25',
     '- files in cycles: -15 points (Cycle burden; 2 files, ratio 50.0%)',
     '- largest SCC size: -10 points (Cycle burden; largest SCC 2, ratio 50.0%)',
-    '- depth concentration: -4.5 points (Depth balance; depth 1 holds 50.0% of files)',
     '- high max module degree: -3.75 points (Hub pressure; max total degree 3)',
     '- same-level imports: -3.75 points (Layer flow; 2 edges, ratio 50.0%)',
     '- too many roots for the scope size: -1.75 points (Root clarity; 1 roots across 4 files)',
@@ -196,7 +194,7 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
     'Metric Summary',
     '- Layer flow: 0 wrong-way, 0 skips, 2 same-level',
     '- Cycle burden: 2 files in cycles, largest SCC 2',
-    '- Root clarity: top root fanout ratio 100.0%',
+    '- Root clarity: 1 roots',
     '- Hub pressure: 0 bridge suspects',
   ].join('\n'));
 });
@@ -217,8 +215,47 @@ test('health threshold emits an explicit fail message when the score misses the 
     '3',
   ]);
 
-  assert.match(output, /Score: 61.25\/100/);
-  assert.match(output, /FAIL: score 61.25 is below threshold 80\./);
+  assert.match(output, /Score: 65.75\/100/);
+  assert.match(output, /FAIL: score 65.75 is below threshold 80\./);
+});
+
+test('health score-only text output prints only score and status', () => {
+  const output = runAnalyzer([
+    '--input',
+    path.join(FIXTURE_ROOT, 'export-map-cyclic.json'),
+    '--format',
+    'health',
+    '--threshold',
+    '80',
+    '--score-only',
+  ]);
+
+  assert.equal(output, [
+    'Structureness Health (all)',
+    'Score: 65.75/100',
+    'FAIL: score 65.75 is below threshold 80.',
+  ].join('\n'));
+});
+
+test('health score-only json output prints only score fields', () => {
+  const output = JSON.parse(runAnalyzer([
+    '--input',
+    path.join(FIXTURE_ROOT, 'export-map-cyclic.json'),
+    '--format',
+    'health',
+    '--health-output',
+    'json',
+    '--threshold',
+    '80',
+    '--score-only',
+  ]));
+
+  assert.deepEqual(output, {
+    score: 65.75,
+    threshold: 80,
+    passed: false,
+    message: 'FAIL: score 65.75 is below threshold 80.',
+  });
 });
 
 test('health json output matches the report shape', () => {
@@ -237,16 +274,17 @@ test('health json output matches the report shape', () => {
   const report = JSON.parse(output);
 
   assert.equal(report.scope.fileCount, 4);
-  assert.equal(report.score.value, 61.25);
+  assert.equal(report.score.value, 65.75);
   assert.equal(report.score.threshold, null);
   assert.equal(report.score.passed, null);
   assert.equal(report.score.message, null);
-  assert.equal(report.score.drag.totalPointsLost, 38.75);
+  assert.equal(report.score.drag.totalPointsLost, 34.25);
   assert.equal(report.score.drag.byComponent[0].key, 'cycleBurden');
   assert.equal(report.score.drag.byComponent[0].pointsLost, 25);
   assert.equal(report.score.drag.byCause[0].key, 'cycleBurden.filesInCycles');
   assert.equal(report.score.drag.byCause[0].pointsLost, 15);
   assert.equal(report.score.components.layerFlow, 87.5);
+  assert.equal(report.score.components.depthBalance, 100);
   assert.ok(report.metrics.layerFlow);
   assert.ok(report.metrics.cycleBurden);
   assert.ok(Array.isArray(report.findings.strengths));
