@@ -29,11 +29,11 @@ test('role catalog is the only runtime source file containing raw role keywords'
   assert.deepEqual(offenders, []);
 });
 
-test('public entrypoints are folder index files and src root has no top-level files', () => {
+test('public entrypoints stay explicit and src root has no extra top-level files', () => {
   const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'));
   assert.equal(packageJson.main, './dist/src/autonomy-v2/index.js');
   assert.equal(packageJson.exports['.'], './dist/src/autonomy-v2/index.js');
-  assert.equal(packageJson.exports['./server'], './dist/src/server/index.js');
+  assert.equal(packageJson.exports['./server'], './dist/src/server/server-main.js');
   assert.equal(packageJson.exports['./worker'], undefined);
   assert.equal(packageJson.bin['autonomy-v2-worker'], undefined);
 

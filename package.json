@@ -41,6 +41,8 @@
     "lint": "eslint src bin tests",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",
+    "knip": "npx -y knip",
+    "madge": "npx -y madge --extensions ts src",
     "circular": "npx -y madge --circular --extensions ts src",
     "release:patch": "npm run smoke && npm version patch && npm publish --access public",
     "release:minor": "npm run smoke && npm version minor && npm publish --access public",
