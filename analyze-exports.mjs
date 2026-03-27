@@ -21,6 +21,7 @@ function parseArgs(argv) {
     input: null,
     output: null,
     root: "all",
+    threshold: null,
     relativeTo: process.cwd(),
     minImporters: 0,
     includeOrphans: true,
@@ -65,6 +66,11 @@ function parseArgs(argv) {
 
     if (arg === "--root") {
       options.root = requireValue(argv, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--threshold") {
+      options.threshold = Number.parseFloat(requireValue(argv, ++index, arg));
       continue;
     }
 
@@ -114,6 +120,13 @@ function parseArgs(argv) {
     throw new Error("--top must be a positive integer");
   }
 
+  if (
+    options.threshold !== null &&
+    (!Number.isFinite(options.threshold) || options.threshold < 0 || options.threshold > 100)
+  ) {
+    throw new Error("--threshold must be a number between 0 and 100");
+  }
+
   if (!["json", "mermaid", "dot", "html", "health"].includes(options.format)) {
     throw new Error(`Unsupported format: ${options.format}`);
   }
@@ -150,6 +163,7 @@ Options:
   --output <file>                   Write output to a file instead of stdout
   --health-output <text|json>       Health report encoding. Default: text
   --root <fileId|all>               Scope tree/health analysis to one root. Default: all
+  --threshold <0-100>               Optional health score threshold for pass/fail messaging
   --top <n>                         Number of offenders/SCCs/directories to print. Default: 10
   --tsconfig <file>                 tsconfig to analyze when --input is not used
   --relative-to <dir>               Base directory for graph labels. Default: cwd
@@ -164,7 +178,7 @@ Examples:
   node analyze-exports.mjs --format json > export-map.json
   node analyze-exports.mjs --input export-map.json --format mermaid --output docs/export-graph.mmd
   node analyze-exports.mjs --format html --focus role-catalog --min-importers 2 --output /tmp/export-graph.html
-  node analyze-exports.mjs --format health --health-output text --top 10
+  node analyze-exports.mjs --format health --health-output text --top 10 --threshold 80
 `);
 }
 
@@ -811,6 +825,10 @@ function roundMetric(value, digits = 4) {
   return Number(value.toFixed(digits));
 }
 
+function clampMetricScore(value) {
+  return roundMetric(Math.max(0, Math.min(100, value)), 2);
+}
+
 function formatPercent(value, digits = 1) {
   return `${(value * 100).toFixed(digits)}%`;
 }
@@ -848,6 +866,7 @@ function buildStructuralHealthReport(treePayload, options = {}) {
 
   const rootFileId = options.rootFileId ?? "all";
   const top = Number.isInteger(options.top) && options.top > 0 ? options.top : 10;
+  const threshold = Number.isFinite(options.threshold) ? options.threshold : null;
   const { fileById, filteredEdges, selectedRootId, visibleFiles } = buildVisibleTreeGraph(
     treePayload.files,
     treePayload.edges,
@@ -1216,6 +1235,76 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     },
   };
 
+  const overloadRatio = ratio(
+    metrics.depthBalance.overloadedDepths.length,
+    Math.max(1, metrics.depthBalance.activeDepthCount)
+  );
+  const rootShare = ratio(metrics.rootClarity.rootCount, Math.max(1, visibleFileEntries.length));
+  const bridgeSuspectRatio = ratio(
+    metrics.hubPressure.bridgeSuspectCount,
+    Math.max(1, visibleFileEntries.length)
+  );
+  const maxDegreeRatio = ratio(
+    metrics.hubPressure.maxTotalDegree,
+    Math.max(1, visibleFileEntries.length)
+  );
+  const smearedDirectoryRatio = ratio(
+    metrics.directoryCoherence.smearedDirectoryCount,
+    Math.max(1, metrics.directoryCoherence.directoryCount)
+  );
+  const averageDirectorySpreadRatio = ratio(
+    metrics.directoryCoherence.averageDepthSpread,
+    Math.max(1, metrics.depthBalance.maxDepth)
+  );
+
+  const layerFlowScore = clampMetricScore(
+    100 -
+      metrics.layerFlow.wrongWayRatio * 100 * 1.2 -
+      metrics.layerFlow.skipRatio * 100 * 0.6 -
+      metrics.layerFlow.sameLevelRatio * 100 * 0.25
+  );
+  const cycleBurdenScore = clampMetricScore(
+    100 -
+      metrics.cycleBurden.filesInCyclesRatio * 100 * 1.2 -
+      metrics.cycleBurden.largestSccRatio * 100 * 0.8
+  );
+  const depthBalanceScore = clampMetricScore(
+    100 -
+      Math.max(0, metrics.depthBalance.dominantDepthShare - 0.25) * 100 * 1.2 -
+      overloadRatio * 100 * 0.8 -
+      (metrics.depthBalance.activeDepthCount <= 2 && visibleFileEntries.length > 4 ? 20 : 0)
+  );
+  const rootClarityScore = clampMetricScore(
+    100 -
+      rootShare * 100 * 0.7 -
+      (1 - metrics.rootClarity.topRootFanoutRatio) * 100 * 0.15
+  );
+  const hubPressureScore = clampMetricScore(
+    100 - bridgeSuspectRatio * 100 * 0.8 - maxDegreeRatio * 100 * 0.5
+  );
+  const directoryCoherenceScore = clampMetricScore(
+    100 -
+      smearedDirectoryRatio * 100 * 0.6 -
+      averageDirectorySpreadRatio * 100 * 0.3 -
+      metrics.directoryCoherence.crossDirectoryWrongWayRatio * 100 * 0.5
+  );
+
+  const weightedScore = clampMetricScore(
+    layerFlowScore * 0.3 +
+      cycleBurdenScore * 0.25 +
+      depthBalanceScore * 0.15 +
+      rootClarityScore * 0.1 +
+      hubPressureScore * 0.1 +
+      directoryCoherenceScore * 0.1
+  );
+  const thresholdPassed = threshold === null ? null : weightedScore >= threshold;
+  const thresholdMessage =
+    threshold === null
+      ? null
+      : thresholdPassed
+        ? `SUCCESS: score ${weightedScore} meets threshold ${threshold}.`
+        : `FAIL: score ${weightedScore} is below threshold ${threshold}.`;
+
   const strengths = [];
   if (metrics.cycleBurden.filesInCyclesRatio === 0) {
     strengths.push("No cyclic file clusters detected in the analyzed scope.");
@@ -1287,6 +1376,28 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       edgeCount: filteredEdges.length,
       importEdgeCount: visibleImportEdges.length,
     },
+    score: {
+      value: weightedScore,
+      threshold,
+      passed: thresholdPassed,
+      message: thresholdMessage,
+      components: {
+        layerFlow: layerFlowScore,
+        cycleBurden: cycleBurdenScore,
+        depthBalance: depthBalanceScore,
+        rootClarity: rootClarityScore,
+        hubPressure: hubPressureScore,
+        directoryCoherence: directoryCoherenceScore,
+      },
+      weights: {
+        layerFlow: 0.3,
+        cycleBurden: 0.25,
+        depthBalance: 0.15,
+        rootClarity: 0.1,
+        hubPressure: 0.1,
+        directoryCoherence: 0.1,
+      },
+    },
     metrics,
     findings: {
       strengths,
@@ -1306,6 +1417,10 @@ function formatHealthReportText(report) {
   const rootLabel = report.scope.root?.relative ?? "all";
 
   lines.push(`Structureness Health (${rootLabel})`);
+  lines.push(`Score: ${report.score.value}/100`);
+  if (report.score.message) {
+    lines.push(report.score.message);
+  }
   lines.push(
     `${report.scope.fileCount} files, ${report.scope.edgeCount} graph edges, ${report.scope.importEdgeCount} import edges`
   );
@@ -1938,6 +2053,7 @@ async function main() {
     treeGridData && options.format === "health"
       ? buildStructuralHealthReport(treeGridData, {
           rootFileId: options.root,
+          threshold: options.threshold,
           top: options.top,
         })
       : null;

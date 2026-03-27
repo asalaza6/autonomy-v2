@@ -155,6 +155,7 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
 
   assert.equal(output, [
     'Structureness Health (all)',
+    'Score: 61.25/100',
     '4 files, 4 graph edges, 4 import edges',
     '1 SCCs, max depth 2, 1 roots',
     '',
@@ -191,6 +192,26 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
   ].join('\n'));
 });
 
+test('health threshold emits an explicit fail message when the score misses the target', () => {
+  const output = runAnalyzer([
+    '--input',
+    path.join(FIXTURE_ROOT, 'export-map-cyclic.json'),
+    '--format',
+    'health',
+    '--health-output',
+    'text',
+    '--relative-to',
+    '/repo',
+    '--threshold',
+    '80',
+    '--top',
+    '3',
+  ]);
+
+  assert.match(output, /Score: 61.25\/100/);
+  assert.match(output, /FAIL: score 61.25 is below threshold 80\./);
+});
+
 test('health json output matches the report shape', () => {
   const output = runAnalyzer([
     '--input',
@@ -207,6 +228,11 @@ test('health json output matches the report shape', () => {
   const report = JSON.parse(output);
 
   assert.equal(report.scope.fileCount, 4);
+  assert.equal(report.score.value, 61.25);
+  assert.equal(report.score.threshold, null);
+  assert.equal(report.score.passed, null);
+  assert.equal(report.score.message, null);
+  assert.equal(report.score.components.layerFlow, 87.5);
   assert.ok(report.metrics.layerFlow);
   assert.ok(report.metrics.cycleBurden);
   assert.ok(Array.isArray(report.findings.strengths));
