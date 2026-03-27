@@ -1302,8 +1302,179 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     threshold === null
       ? null
       : thresholdPassed
-        ? `SUCCESS: score ${weightedScore} meets threshold ${threshold}.`
-        : `FAIL: score ${weightedScore} is below threshold ${threshold}.`;
+      ? `SUCCESS: score ${weightedScore} meets threshold ${threshold}.`
+      : `FAIL: score ${weightedScore} is below threshold ${threshold}.`;
+
+  const componentDefinitions = [
+    {
+      key: "layerFlow",
+      label: "Layer flow",
+      weight: 0.3,
+      score: layerFlowScore,
+      causes: [
+        {
+          key: "wrongWayImports",
+          label: "wrong-way imports",
+          rawLoss: metrics.layerFlow.wrongWayRatio * 100 * 1.2,
+          signal: `${metrics.layerFlow.wrongWayEdges} edges, ratio ${formatPercent(metrics.layerFlow.wrongWayRatio)}`,
+        },
+        {
+          key: "skipImports",
+          label: "layer-skipping imports",
+          rawLoss: metrics.layerFlow.skipRatio * 100 * 0.6,
+          signal: `${metrics.layerFlow.skipEdges} edges, ratio ${formatPercent(metrics.layerFlow.skipRatio)}`,
+        },
+        {
+          key: "sameLevelImports",
+          label: "same-level imports",
+          rawLoss: metrics.layerFlow.sameLevelRatio * 100 * 0.25,
+          signal: `${metrics.layerFlow.sameLevelEdges} edges, ratio ${formatPercent(metrics.layerFlow.sameLevelRatio)}`,
+        },
+      ],
+    },
+    {
+      key: "cycleBurden",
+      label: "Cycle burden",
+      weight: 0.25,
+      score: cycleBurdenScore,
+      causes: [
+        {
+          key: "filesInCycles",
+          label: "files in cycles",
+          rawLoss: metrics.cycleBurden.filesInCyclesRatio * 100 * 1.2,
+          signal: `${metrics.cycleBurden.filesInCycles} files, ratio ${formatPercent(metrics.cycleBurden.filesInCyclesRatio)}`,
+        },
+        {
+          key: "largestScc",
+          label: "largest SCC size",
+          rawLoss: metrics.cycleBurden.largestSccRatio * 100 * 0.8,
+          signal: `largest SCC ${metrics.cycleBurden.largestSccSize}, ratio ${formatPercent(metrics.cycleBurden.largestSccRatio)}`,
+        },
+      ],
+    },
+    {
+      key: "depthBalance",
+      label: "Depth balance",
+      weight: 0.15,
+      score: depthBalanceScore,
+      causes: [
+        {
+          key: "dominantDepth",
+          label: "depth concentration",
+          rawLoss: Math.max(0, metrics.depthBalance.dominantDepthShare - 0.25) * 100 * 1.2,
+          signal: `depth ${metrics.depthBalance.widestDepth.depth} holds ${formatPercent(metrics.depthBalance.dominantDepthShare)} of files`,
+        },
+        {
+          key: "overloadedDepths",
+          label: "overloaded depth bands",
+          rawLoss: overloadRatio * 100 * 0.8,
+          signal: `${metrics.depthBalance.overloadedDepths.length} overloaded depths across ${metrics.depthBalance.activeDepthCount} active depths`,
+        },
+        {
+          key: "shallowDepthRange",
+          label: "too few active depth bands",
+          rawLoss: metrics.depthBalance.activeDepthCount <= 2 && visibleFileEntries.length > 4 ? 20 : 0,
+          signal: `${metrics.depthBalance.activeDepthCount} active depths`,
+        },
+      ],
+    },
+    {
+      key: "rootClarity",
+      label: "Root clarity",
+      weight: 0.1,
+      score: rootClarityScore,
+      causes: [
+        {
+          key: "rootCount",
+          label: "too many roots for the scope size",
+          rawLoss: rootShare * 100 * 0.7,
+          signal: `${metrics.rootClarity.rootCount} roots across ${visibleFileEntries.length} files`,
+        },
+        {
+          key: "rootFanoutBalance",
+          label: "root fanout imbalance",
+          rawLoss: (1 - metrics.rootClarity.topRootFanoutRatio) * 100 * 0.15,
+          signal: `top root fanout ratio ${formatPercent(metrics.rootClarity.topRootFanoutRatio)}`,
+        },
+      ],
+    },
+    {
+      key: "hubPressure",
+      label: "Hub pressure",
+      weight: 0.1,
+      score: hubPressureScore,
+      causes: [
+        {
+          key: "bridgeSuspects",
+          label: "bridge-module behavior",
+          rawLoss: bridgeSuspectRatio * 100 * 0.8,
+          signal: `${metrics.hubPressure.bridgeSuspectCount} bridge suspects`,
+        },
+        {
+          key: "maxDegree",
+          label: "high max module degree",
+          rawLoss: maxDegreeRatio * 100 * 0.5,
+          signal: `max total degree ${metrics.hubPressure.maxTotalDegree}`,
+        },
+      ],
+    },
+    {
+      key: "directoryCoherence",
+      label: "Directory coherence",
+      weight: 0.1,
+      score: directoryCoherenceScore,
+      causes: [
+        {
+          key: "smearedDirectories",
+          label: "directory smearing",
+          rawLoss: smearedDirectoryRatio * 100 * 0.6,
+          signal: `${metrics.directoryCoherence.smearedDirectoryCount} smeared directories`,
+        },
+        {
+          key: "averageSpread",
+          label: "average directory depth spread",
+          rawLoss: averageDirectorySpreadRatio * 100 * 0.3,
+          signal: `average spread ${metrics.directoryCoherence.averageDepthSpread}`,
+        },
+        {
+          key: "crossDirectoryWrongWay",
+          label: "cross-directory wrong-way imports",
+          rawLoss: metrics.directoryCoherence.crossDirectoryWrongWayRatio * 100 * 0.5,
+          signal: `ratio ${formatPercent(metrics.directoryCoherence.crossDirectoryWrongWayRatio)}`,
+        },
+      ],
+    },
+  ];
+
+  const scoreDragByComponent = [];
+  const scoreDragByCause = [];
+  componentDefinitions.forEach((component) => {
+    const componentPointsLost = roundMetric((100 - component.score) * component.weight);
+    const activeCauses = component.causes.filter((entry) => entry.rawLoss > 0);
+    const rawLossTotal = activeCauses.reduce((sum, entry) => sum + entry.rawLoss, 0);
+    scoreDragByComponent.push({
+      key: component.key,
+      label: component.label,
+      score: component.score,
+      weight: component.weight,
+      pointsLost: componentPointsLost,
+    });
+    activeCauses.forEach((cause) => {
+      const scaledPointsLost =
+        rawLossTotal === 0 ? 0 : componentPointsLost * (cause.rawLoss / rawLossTotal);
+      scoreDragByCause.push({
+        key: `${component.key}.${cause.key}`,
+        component: component.key,
+        componentLabel: component.label,
+        label: cause.label,
+        pointsLost: roundMetric(scaledPointsLost),
+        signal: cause.signal,
+      });
+    });
+  });
+  scoreDragByComponent.sort((left, right) => right.pointsLost - left.pointsLost || left.label.localeCompare(right.label));
+  scoreDragByCause.sort((left, right) => right.pointsLost - left.pointsLost || left.label.localeCompare(right.label));
+  const totalPointsLost = roundMetric(100 - weightedScore);
 
   const strengths = [];
   if (metrics.cycleBurden.filesInCyclesRatio === 0) {
@@ -1381,6 +1552,11 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       threshold,
       passed: thresholdPassed,
       message: thresholdMessage,
+      drag: {
+        totalPointsLost,
+        byComponent: scoreDragByComponent,
+        byCause: scoreDragByCause,
+      },
       components: {
         layerFlow: layerFlowScore,
         cycleBurden: cycleBurdenScore,
@@ -1445,6 +1621,19 @@ function formatHealthReportText(report) {
   } else {
     report.findings.penalties.forEach((entry) => {
       lines.push(`- ${entry}`);
+    });
+  }
+
+  lines.push("");
+  lines.push("Score Drag");
+  lines.push(`- Total points lost vs 100: ${report.score.drag.totalPointsLost}`);
+  if (report.score.drag.byCause.length === 0) {
+    lines.push("- No active deductions.");
+  } else {
+    report.score.drag.byCause.forEach((entry) => {
+      lines.push(
+        `- ${entry.label}: -${entry.pointsLost} points (${entry.componentLabel}; ${entry.signal})`
+      );
     });
   }
 

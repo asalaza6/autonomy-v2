@@ -167,6 +167,15 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
     '- 50.0% of files sit inside SCCs.',
     '- Depth 1 holds 50.0% of analyzed files.',
     '',
+    'Score Drag',
+    '- Total points lost vs 100: 38.75',
+    '- files in cycles: -15 points (Cycle burden; 2 files, ratio 50.0%)',
+    '- largest SCC size: -10 points (Cycle burden; largest SCC 2, ratio 50.0%)',
+    '- depth concentration: -4.5 points (Depth balance; depth 1 holds 50.0% of files)',
+    '- high max module degree: -3.75 points (Hub pressure; max total degree 3)',
+    '- same-level imports: -3.75 points (Layer flow; 2 edges, ratio 50.0%)',
+    '- too many roots for the scope size: -1.75 points (Root clarity; 1 roots across 4 files)',
+    '',
     'Top Offenders',
     '- src/domain/a.ts (D1, severity 3.5): cycle cluster of 2 files',
     '- src/domain/b.ts (D1, severity 3.5): cycle cluster of 2 files',
@@ -232,6 +241,11 @@ test('health json output matches the report shape', () => {
   assert.equal(report.score.threshold, null);
   assert.equal(report.score.passed, null);
   assert.equal(report.score.message, null);
+  assert.equal(report.score.drag.totalPointsLost, 38.75);
+  assert.equal(report.score.drag.byComponent[0].key, 'cycleBurden');
+  assert.equal(report.score.drag.byComponent[0].pointsLost, 25);
+  assert.equal(report.score.drag.byCause[0].key, 'cycleBurden.filesInCycles');
+  assert.equal(report.score.drag.byCause[0].pointsLost, 15);
   assert.equal(report.score.components.layerFlow, 87.5);
   assert.ok(report.metrics.layerFlow);
   assert.ok(report.metrics.cycleBurden);
