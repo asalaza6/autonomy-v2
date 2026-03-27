@@ -1,0 +1,77 @@
+{
+  "files": [
+    {
+      "id": "node_1",
+      "path": "/repo/src/app/main.ts",
+      "label": "main.ts",
+      "relative": "src/app/main.ts",
+      "directory": "src/app",
+      "imports": [
+        "/repo/src/feature/hub.ts"
+      ]
+    },
+    {
+      "id": "node_2",
+      "path": "/repo/src/cli/main.ts",
+      "label": "main.ts",
+      "relative": "src/cli/main.ts",
+      "directory": "src/cli",
+      "imports": [
+        "/repo/src/feature/hub.ts"
+      ]
+    },
+    {
+      "id": "node_3",
+      "path": "/repo/src/feature/hub.ts",
+      "label": "hub.ts",
+      "relative": "src/feature/hub.ts",
+      "directory": "src/feature",
+      "imports": [
+        "/repo/src/domain/service.ts",
+        "/repo/src/infra/cache.ts",
+        "/repo/src/shared/types.ts"
+      ]
+    },
+    {
+      "id": "node_4",
+      "path": "/repo/src/domain/service.ts",
+      "label": "service.ts",
+      "relative": "src/domain/service.ts",
+      "directory": "src/domain",
+      "imports": [
+        "/repo/src/shared/types.ts"
+      ]
+    },
+    {
+      "id": "node_5",
+      "path": "/repo/src/infra/cache.ts",
+      "label": "cache.ts",
+      "relative": "src/infra/cache.ts",
+      "directory": "src/infra",
+      "imports": [
+        "/repo/src/shared/types.ts"
+      ]
+    },
+    {
+      "id": "node_6",
+      "path": "/repo/src/shared/types.ts",
+      "label": "types.ts",
+      "relative": "src/shared/types.ts",
+      "directory": "src/shared",
+      "imports": []
+    }
+  ],
+  "edges": [
+    { "source": "node_1", "target": "node_3" },
+    { "source": "node_2", "target": "node_3" },
+    { "source": "node_3", "target": "node_4" },
+    { "source": "node_3", "target": "node_5" },
+    { "source": "node_3", "target": "node_6" },
+    { "source": "node_4", "target": "node_6" },
+    { "source": "node_5", "target": "node_6" }
+  ],
+  "roots": [
+    "node_1",
+    "node_2"
+  ]
+}

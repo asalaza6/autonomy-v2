@@ -16,14 +16,17 @@ let exportGraphFrontendBundlePromise = null;
 function parseArgs(argv) {
   const options = {
     format: "json",
+    healthOutput: "text",
     tsconfig: DEFAULT_TSCONFIG,
     input: null,
     output: null,
+    root: "all",
     relativeTo: process.cwd(),
     minImporters: 0,
     includeOrphans: true,
     focus: null,
     layout: "LR",
+    top: 10,
     tree: false,
   };
 
@@ -52,6 +55,21 @@ function parseArgs(argv) {
 
     if (arg === "--output") {
       options.output = requireValue(argv, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--health-output") {
+      options.healthOutput = requireValue(argv, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--root") {
+      options.root = requireValue(argv, ++index, arg);
+      continue;
+    }
+
+    if (arg === "--top") {
+      options.top = Number.parseInt(requireValue(argv, ++index, arg), 10);
       continue;
     }
 
@@ -92,8 +110,16 @@ function parseArgs(argv) {
     throw new Error("--min-importers must be a non-negative integer");
   }
 
-  if (!["json", "mermaid", "dot", "html"].includes(options.format)) {
+  if (!Number.isInteger(options.top) || options.top <= 0) {
+    throw new Error("--top must be a positive integer");
+  }
+
+  if (!["json", "mermaid", "dot", "html", "health"].includes(options.format)) {
     throw new Error(`Unsupported format: ${options.format}`);
+  }
+
+  if (!["text", "json"].includes(options.healthOutput)) {
+    throw new Error(`Unsupported health output format: ${options.healthOutput}`);
   }
 
   if (!["LR", "RL", "TD", "BT"].includes(options.layout)) {
@@ -119,9 +145,12 @@ function printHelp() {
 Build an export/import map from ts-morph, or render a saved JSON map as a graph.
 
 Options:
-  --format <json|mermaid|dot|html>  Output format. Default: json
+  --format <json|mermaid|dot|html|health>  Output format. Default: json
   --input <file>                    Read an existing JSON export map instead of ts-morph
   --output <file>                   Write output to a file instead of stdout
+  --health-output <text|json>       Health report encoding. Default: text
+  --root <fileId|all>               Scope tree/health analysis to one root. Default: all
+  --top <n>                         Number of offenders/SCCs/directories to print. Default: 10
   --tsconfig <file>                 tsconfig to analyze when --input is not used
   --relative-to <dir>               Base directory for graph labels. Default: cwd
   --focus <text>                    Keep only exports matching the symbol or path substring
@@ -135,6 +164,7 @@ Examples:
   node analyze-exports.mjs --format json > export-map.json
   node analyze-exports.mjs --input export-map.json --format mermaid --output docs/export-graph.mmd
   node analyze-exports.mjs --format html --focus role-catalog --min-importers 2 --output /tmp/export-graph.html
+  node analyze-exports.mjs --format health --health-output text --top 10
 `);
 }
 
@@ -321,7 +351,7 @@ function buildGraphContext(entries, options) {
 function buildMermaid(entries, options) {
   const context = buildGraphContext(entries, options);
   if (options.tree) {
-    return buildMermaidTree(context, options);
+    return buildMermaidTree(context, options.root === "all" ? null : options.root);
   }
 
   const lines = [
@@ -503,7 +533,7 @@ function buildVisibleTreeGraph(files, edges, rootIds, rootFileId = null) {
   };
 }
 
-function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
+function buildCondensedGraph(visibleFiles, filteredEdges) {
   const outgoingByFile = new Map();
   visibleFiles.forEach((fileId) => {
     outgoingByFile.set(fileId, []);
@@ -526,7 +556,7 @@ function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
   const componentByFile = new Map();
   const stack = [];
   const stackMembers = new Set();
-  const components = [];
+  const componentMembers = [];
   let currentIndex = 0;
 
   function strongConnect(fileId) {
@@ -558,7 +588,7 @@ function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
       return;
     }
 
-    const componentId = components.length;
+    const componentId = componentMembers.length;
     const members = [];
 
     while (stack.length > 0) {
@@ -574,7 +604,7 @@ function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
       }
     }
 
-    components.push(members.sort());
+    componentMembers.push(members.sort());
   }
 
   Array.from(visibleFiles)
@@ -587,7 +617,7 @@ function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
 
   const outgoingByComponent = new Map();
   const incomingCounts = new Map();
-  components.forEach((_, componentId) => {
+  componentMembers.forEach((_, componentId) => {
     outgoingByComponent.set(componentId, new Set());
     incomingCounts.set(componentId, 0);
   });
@@ -662,13 +692,722 @@ function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
     levelByFile.set(fileId, level);
   });
 
-  return levelByFile;
+  const internalEdgeCounts = new Map();
+  const entryEdgeCounts = new Map();
+  const exitEdgeCounts = new Map();
+  componentMembers.forEach((_, componentId) => {
+    internalEdgeCounts.set(componentId, 0);
+    entryEdgeCounts.set(componentId, 0);
+    exitEdgeCounts.set(componentId, 0);
+  });
+
+  filteredEdges.forEach(({ source, target }) => {
+    const sourceComponent = componentByFile.get(source);
+    const targetComponent = componentByFile.get(target);
+    if (sourceComponent === undefined || targetComponent === undefined) {
+      return;
+    }
+
+    if (sourceComponent === targetComponent) {
+      internalEdgeCounts.set(
+        sourceComponent,
+        (internalEdgeCounts.get(sourceComponent) ?? 0) + 1
+      );
+      return;
+    }
+
+    exitEdgeCounts.set(
+      sourceComponent,
+      (exitEdgeCounts.get(sourceComponent) ?? 0) + 1
+    );
+    entryEdgeCounts.set(
+      targetComponent,
+      (entryEdgeCounts.get(targetComponent) ?? 0) + 1
+    );
+  });
+
+  const components = componentMembers.map((members, componentId) => {
+    const size = members.length;
+    const internalEdges = internalEdgeCounts.get(componentId) ?? 0;
+    const possibleInternalEdges = size > 1 ? size * (size - 1) : 1;
+    return {
+      id: componentId,
+      members,
+      size,
+      internalEdges,
+      internalDensity: possibleInternalEdges > 0 ? internalEdges / possibleInternalEdges : 0,
+      entryEdges: entryEdgeCounts.get(componentId) ?? 0,
+      exitEdges: exitEdgeCounts.get(componentId) ?? 0,
+      depth: levelByComponent.get(componentId) ?? 0,
+    };
+  });
+
+  return {
+    components,
+    componentByFile,
+    outgoingByComponent,
+    levelByComponent,
+    levelByFile,
+  };
+}
+
+function buildCondensedDepthLevels(visibleFiles, filteredEdges) {
+  return buildCondensedGraph(visibleFiles, filteredEdges).levelByFile;
+}
+
+function buildVisibleImportEdges(treePayload, visibleFiles) {
+  const pathToFileId = new Map(treePayload.files.map((entry) => [entry.path, entry.id]));
+  const edgeSet = new Set();
+
+  treePayload.files.forEach((file) => {
+    if (!visibleFiles.has(file.id)) {
+      return;
+    }
+
+    Array.from(new Set(file.imports ?? [])).forEach((importedPath) => {
+      const targetId = pathToFileId.get(importedPath);
+      if (!targetId || !visibleFiles.has(targetId) || targetId === file.id) {
+        return;
+      }
+      edgeSet.add(`${file.id}=>${targetId}`);
+    });
+  });
+
+  return Array.from(edgeSet)
+    .sort()
+    .map((edgeId) => {
+      const [source, target] = edgeId.split("=>");
+      return { source, target };
+    });
+}
+
+function mean(values) {
+  if (values.length === 0) {
+    return 0;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function median(values) {
+  if (values.length === 0) {
+    return 0;
+  }
+  const sorted = values.slice().sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+  return sorted[middle];
+}
+
+function ratio(count, total) {
+  if (!total) {
+    return 0;
+  }
+  return count / total;
+}
+
+function roundMetric(value, digits = 4) {
+  return Number(value.toFixed(digits));
+}
+
+function formatPercent(value, digits = 1) {
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+function compareHealthOffenders(left, right) {
+  return (
+    right.severity - left.severity ||
+    right.metrics.wrongWayOutgoing - left.metrics.wrongWayOutgoing ||
+    right.metrics.totalDegree - left.metrics.totalDegree ||
+    left.path.localeCompare(right.path)
+  );
+}
+
+function compareHealthDirectories(left, right) {
+  return (
+    right.depthSpread - left.depthSpread ||
+    right.crossDirectoryWrongWayRatio - left.crossDirectoryWrongWayRatio ||
+    right.fileCount - left.fileCount ||
+    left.directory.localeCompare(right.directory)
+  );
+}
+
+function compareHealthSccs(left, right) {
+  return (
+    right.size - left.size ||
+    right.internalDensity - left.internalDensity ||
+    left.members[0].localeCompare(right.members[0])
+  );
+}
+
+function buildStructuralHealthReport(treePayload, options = {}) {
+  if (!treePayload) {
+    throw new Error("Tree payload is required for health analysis.");
+  }
+
+  const rootFileId = options.rootFileId ?? "all";
+  const top = Number.isInteger(options.top) && options.top > 0 ? options.top : 10;
+  const { fileById, filteredEdges, selectedRootId, visibleFiles } = buildVisibleTreeGraph(
+    treePayload.files,
+    treePayload.edges,
+    treePayload.roots,
+    rootFileId
+  );
+  const condensed = buildCondensedGraph(visibleFiles, filteredEdges);
+  const visibleImportEdges = buildVisibleImportEdges(treePayload, visibleFiles);
+  const visibleFileEntries = Array.from(visibleFiles)
+    .map((fileId) => fileById.get(fileId))
+    .filter(Boolean);
+  const fileStats = new Map();
+  const directoryStats = new Map();
+  const componentSizeByFile = new Map();
+  condensed.components.forEach((component) => {
+    component.members.forEach((fileId) => {
+      componentSizeByFile.set(fileId, component.size);
+    });
+  });
+
+  visibleFileEntries.forEach((file) => {
+    const depth = condensed.levelByFile.get(file.id) ?? 0;
+    fileStats.set(file.id, {
+      id: file.id,
+      path: file.path,
+      file: file.relative,
+      directory: file.directory,
+      depth,
+      inDegree: 0,
+      outDegree: 0,
+      totalDegree: 0,
+      wrongWayOutgoing: 0,
+      wrongWayIncoming: 0,
+      wrongWaySeverity: 0,
+      skipOutgoing: 0,
+      skipSeverity: 0,
+      sameLevelEdges: 0,
+      neighborDepths: new Set(),
+      neighborDirectories: new Set(),
+      cycleSize: componentSizeByFile.get(file.id) ?? 1,
+      foundationalPurityViolations: 0,
+    });
+  });
+
+  const repoMetrics = {
+    wrongWayEdges: 0,
+    wrongWaySeverity: 0,
+    skipEdges: 0,
+    skipSeverity: 0,
+    sameLevelEdges: 0,
+    idealEdges: 0,
+  };
+
+  visibleImportEdges.forEach(({ source, target }) => {
+    const sourceStats = fileStats.get(source);
+    const targetStats = fileStats.get(target);
+    if (!sourceStats || !targetStats) {
+      return;
+    }
+
+    sourceStats.outDegree += 1;
+    targetStats.inDegree += 1;
+    sourceStats.neighborDepths.add(targetStats.depth);
+    targetStats.neighborDepths.add(sourceStats.depth);
+    sourceStats.neighborDirectories.add(targetStats.directory);
+    targetStats.neighborDirectories.add(sourceStats.directory);
+
+    const delta = targetStats.depth - sourceStats.depth;
+    if (delta < 0) {
+      const severity = Math.abs(delta);
+      repoMetrics.wrongWayEdges += 1;
+      repoMetrics.wrongWaySeverity += severity;
+      sourceStats.wrongWayOutgoing += 1;
+      sourceStats.wrongWaySeverity += severity;
+      targetStats.wrongWayIncoming += 1;
+    } else if (delta === 0) {
+      repoMetrics.sameLevelEdges += 1;
+      sourceStats.sameLevelEdges += 1;
+    } else if (delta === 1) {
+      repoMetrics.idealEdges += 1;
+    } else {
+      const severity = delta - 1;
+      repoMetrics.skipEdges += 1;
+      repoMetrics.skipSeverity += severity;
+      sourceStats.skipOutgoing += 1;
+      sourceStats.skipSeverity += severity;
+    }
+  });
+
+  fileStats.forEach((entry) => {
+    entry.totalDegree = entry.inDegree + entry.outDegree;
+    const depthNeighbors = Array.from(entry.neighborDepths);
+    const neighborDepthSpan =
+      depthNeighbors.length > 0
+        ? Math.max(...depthNeighbors) - Math.min(...depthNeighbors)
+        : 0;
+    const bridgeSuspicion =
+      entry.totalDegree >= 4 && neighborDepthSpan >= 2 && entry.neighborDirectories.size >= 3;
+    entry.bridgeSuspicion = bridgeSuspicion;
+    entry.bridgeSpan = neighborDepthSpan;
+    entry.neighborDirectoryCount = entry.neighborDirectories.size;
+
+    const foundationalHint = /(^|\/)(shared|types|constants|core|util|utils)(\/|\.|$)/i.test(
+      entry.file
+    );
+    if (foundationalHint) {
+      entry.foundationalPurityViolations = entry.wrongWayOutgoing;
+    }
+
+    entry.severity =
+      entry.wrongWayOutgoing * 4 +
+      entry.wrongWayIncoming * 2 +
+      entry.skipSeverity * 2 +
+      entry.sameLevelEdges * 0.5 +
+      Math.max(0, entry.totalDegree - 3) * 0.5 +
+      (entry.cycleSize > 1 ? entry.cycleSize * 1.5 : 0) +
+      (entry.bridgeSuspicion ? 4 + entry.bridgeSpan + entry.neighborDirectoryCount * 0.5 : 0) +
+      entry.foundationalPurityViolations * 2;
+
+    const directoryEntry =
+      directoryStats.get(entry.directory) ??
+      {
+        directory: entry.directory,
+        fileCount: 0,
+        depths: [],
+        crossDirectoryEdges: 0,
+        crossDirectoryWrongWayEdges: 0,
+        sameLevelEdges: 0,
+      };
+    directoryEntry.fileCount += 1;
+    directoryEntry.depths.push(entry.depth);
+    directoryStats.set(entry.directory, directoryEntry);
+  });
+
+  visibleImportEdges.forEach(({ source, target }) => {
+    const sourceStats = fileStats.get(source);
+    const targetStats = fileStats.get(target);
+    if (!sourceStats || !targetStats || sourceStats.directory === targetStats.directory) {
+      return;
+    }
+
+    const directoryEntry = directoryStats.get(sourceStats.directory);
+    if (!directoryEntry) {
+      return;
+    }
+
+    directoryEntry.crossDirectoryEdges += 1;
+    const delta = targetStats.depth - sourceStats.depth;
+    if (delta < 0) {
+      directoryEntry.crossDirectoryWrongWayEdges += 1;
+    } else if (delta === 0) {
+      directoryEntry.sameLevelEdges += 1;
+    }
+  });
+
+  const depthCounts = new Map();
+  visibleFileEntries.forEach((file) => {
+    const depth = condensed.levelByFile.get(file.id) ?? 0;
+    depthCounts.set(depth, (depthCounts.get(depth) ?? 0) + 1);
+  });
+  const depthHistogram = Array.from(depthCounts.entries())
+    .sort((left, right) => left[0] - right[0])
+    .map(([depth, files]) => ({ depth, files }));
+  const maxDepth = depthHistogram.reduce((max, entry) => Math.max(max, entry.depth), 0);
+  const widestDepth = depthHistogram.reduce(
+    (best, entry) => (entry.files > best.files ? entry : best),
+    { depth: 0, files: 0 }
+  );
+  const averageDepthWidth = mean(depthHistogram.map((entry) => entry.files));
+  const overloadedDepths = depthHistogram
+    .filter((entry) => entry.files >= averageDepthWidth * 1.5 && entry.files >= averageDepthWidth + 1)
+    .map((entry) => entry.depth);
+  const dominantDepthShare = ratio(widestDepth.files, visibleFileEntries.length);
+  const flatnessRatio = ratio(depthHistogram.length, visibleFileEntries.length);
+
+  const cyclicComponents = condensed.components.filter((component) => component.size > 1);
+  const filesInCycles = cyclicComponents.reduce((sum, component) => sum + component.size, 0);
+  const largestSccSize = cyclicComponents.reduce(
+    (max, component) => Math.max(max, component.size),
+    0
+  );
+
+  const visibleRootIds =
+    selectedRootId === "all"
+      ? treePayload.roots.filter((rootId) => visibleFiles.has(rootId))
+      : treePayload.roots.filter((rootId) => visibleFiles.has(rootId) && rootId === selectedRootId);
+  const outgoingByComponent = condensed.outgoingByComponent;
+  const rootFanout = visibleRootIds.map((rootId) => {
+    const rootComponentId = condensed.componentByFile.get(rootId);
+    const rootFile = fileById.get(rootId);
+    return {
+      id: rootId,
+      file: rootFile?.relative ?? rootId,
+      immediateFanout:
+        rootComponentId === undefined ? 0 : (outgoingByComponent.get(rootComponentId)?.size ?? 0),
+    };
+  });
+  const totalRootFanout = rootFanout.reduce((sum, entry) => sum + entry.immediateFanout, 0);
+  const topRootFanout = rootFanout.reduce(
+    (max, entry) => Math.max(max, entry.immediateFanout),
+    0
+  );
+
+  const topHubs = Array.from(fileStats.values())
+    .slice()
+    .sort((left, right) => right.totalDegree - left.totalDegree || left.path.localeCompare(right.path))
+    .slice(0, top)
+    .map((entry) => ({
+      path: entry.path,
+      file: entry.file,
+      totalDegree: entry.totalDegree,
+      inDegree: entry.inDegree,
+      outDegree: entry.outDegree,
+    }));
+
+  const directorySummaries = Array.from(directoryStats.values())
+    .map((entry) => {
+      const minDepth = Math.min(...entry.depths);
+      const maxDirectoryDepth = Math.max(...entry.depths);
+      return {
+        directory: entry.directory,
+        fileCount: entry.fileCount,
+        minDepth,
+        medianDepth: median(entry.depths),
+        maxDepth: maxDirectoryDepth,
+        depthSpread: maxDirectoryDepth - minDepth,
+        crossDirectoryEdges: entry.crossDirectoryEdges,
+        crossDirectoryWrongWayEdges: entry.crossDirectoryWrongWayEdges,
+        crossDirectoryWrongWayRatio: ratio(
+          entry.crossDirectoryWrongWayEdges,
+          entry.crossDirectoryEdges
+        ),
+      };
+    })
+    .sort(compareHealthDirectories);
+
+  const directorySmearCount = directorySummaries.filter((entry) => entry.depthSpread >= 3).length;
+  const averageDirectoryDepthSpread = mean(
+    directorySummaries.map((entry) => entry.depthSpread)
+  );
+
+  const topOffenders = Array.from(fileStats.values())
+    .filter((entry) => entry.severity > 0)
+    .map((entry) => {
+      const reasons = [];
+      if (entry.cycleSize > 1) {
+        reasons.push(`cycle cluster of ${entry.cycleSize} files`);
+      }
+      if (entry.wrongWayOutgoing > 0) {
+        reasons.push(`${entry.wrongWayOutgoing} wrong-way imports`);
+      }
+      if (entry.skipOutgoing > 0) {
+        reasons.push(`${entry.skipOutgoing} layer-skipping imports`);
+      }
+      if (entry.bridgeSuspicion) {
+        reasons.push(`bridges ${entry.neighborDirectoryCount} directories across ${entry.bridgeSpan} depth bands`);
+      }
+      if (entry.foundationalPurityViolations > 0) {
+        reasons.push("foundational purity violation");
+      }
+      if (entry.sameLevelEdges > 2) {
+        reasons.push(`${entry.sameLevelEdges} same-level imports`);
+      }
+
+      return {
+        path: entry.path,
+        file: entry.file,
+        directory: entry.directory,
+        depth: entry.depth,
+        severity: roundMetric(entry.severity, 2),
+        reasons,
+        metrics: {
+          wrongWayOutgoing: entry.wrongWayOutgoing,
+          wrongWayIncoming: entry.wrongWayIncoming,
+          skipOutgoing: entry.skipOutgoing,
+          sameLevelEdges: entry.sameLevelEdges,
+          totalDegree: entry.totalDegree,
+          cycleSize: entry.cycleSize,
+          bridgeSuspicion: entry.bridgeSuspicion,
+          neighborDirectoryCount: entry.neighborDirectoryCount,
+          bridgeSpan: entry.bridgeSpan,
+        },
+      };
+    })
+    .sort(compareHealthOffenders)
+    .slice(0, top);
+
+  const topSccs = cyclicComponents
+    .map((component) => ({
+      id: component.id,
+      size: component.size,
+      depth: component.depth,
+      internalEdges: component.internalEdges,
+      internalDensity: roundMetric(component.internalDensity),
+      entryEdges: component.entryEdges,
+      exitEdges: component.exitEdges,
+      members: component.members
+        .map((fileId) => fileById.get(fileId)?.relative ?? fileId)
+        .sort(),
+    }))
+    .sort(compareHealthSccs)
+    .slice(0, top);
+
+  const metrics = {
+    layerFlow: {
+      totalEdges: visibleImportEdges.length,
+      wrongWayEdges: repoMetrics.wrongWayEdges,
+      wrongWayRatio: roundMetric(ratio(repoMetrics.wrongWayEdges, visibleImportEdges.length)),
+      wrongWaySeverityTotal: repoMetrics.wrongWaySeverity,
+      wrongWaySeverityAverage: roundMetric(
+        ratio(repoMetrics.wrongWaySeverity, repoMetrics.wrongWayEdges)
+      ),
+      skipEdges: repoMetrics.skipEdges,
+      skipRatio: roundMetric(ratio(repoMetrics.skipEdges, visibleImportEdges.length)),
+      skipSeverityTotal: repoMetrics.skipSeverity,
+      skipSeverityAverage: roundMetric(ratio(repoMetrics.skipSeverity, repoMetrics.skipEdges)),
+      sameLevelEdges: repoMetrics.sameLevelEdges,
+      sameLevelRatio: roundMetric(ratio(repoMetrics.sameLevelEdges, visibleImportEdges.length)),
+      idealEdges: repoMetrics.idealEdges,
+      idealRatio: roundMetric(ratio(repoMetrics.idealEdges, visibleImportEdges.length)),
+    },
+    cycleBurden: {
+      componentCount: condensed.components.length,
+      cyclicComponentCount: cyclicComponents.length,
+      filesInCycles,
+      filesInCyclesRatio: roundMetric(ratio(filesInCycles, visibleFileEntries.length)),
+      largestSccSize,
+      largestSccRatio: roundMetric(ratio(largestSccSize, visibleFileEntries.length)),
+    },
+    depthBalance: {
+      maxDepth,
+      activeDepthCount: depthHistogram.length,
+      widestDepth,
+      averageDepthWidth: roundMetric(averageDepthWidth),
+      dominantDepthShare: roundMetric(dominantDepthShare),
+      flatnessRatio: roundMetric(flatnessRatio),
+      overloadedDepths,
+    },
+    rootClarity: {
+      rootCount: visibleRootIds.length,
+      rootFanout,
+      topRootFanout,
+      topRootFanoutRatio: roundMetric(ratio(topRootFanout, totalRootFanout)),
+      totalRootFanout,
+    },
+    hubPressure: {
+      maxInDegree: topHubs[0]?.inDegree ?? 0,
+      maxOutDegree: topHubs[0]?.outDegree ?? 0,
+      maxTotalDegree: topHubs[0]?.totalDegree ?? 0,
+      bridgeSuspectCount: Array.from(fileStats.values()).filter((entry) => entry.bridgeSuspicion).length,
+    },
+    directoryCoherence: {
+      directoryCount: directorySummaries.length,
+      averageDepthSpread: roundMetric(averageDirectoryDepthSpread),
+      smearedDirectoryCount: directorySmearCount,
+      crossDirectoryWrongWayRatio: roundMetric(
+        ratio(
+          directorySummaries.reduce((sum, entry) => sum + entry.crossDirectoryWrongWayEdges, 0),
+          directorySummaries.reduce((sum, entry) => sum + entry.crossDirectoryEdges, 0)
+        )
+      ),
+    },
+    sameLevelCoherence: {
+      sameLevelEdges: repoMetrics.sameLevelEdges,
+      sameLevelRatio: roundMetric(ratio(repoMetrics.sameLevelEdges, visibleImportEdges.length)),
+    },
+  };
+
+  const strengths = [];
+  if (metrics.cycleBurden.filesInCyclesRatio === 0) {
+    strengths.push("No cyclic file clusters detected in the analyzed scope.");
+  } else if (metrics.cycleBurden.filesInCyclesRatio <= 0.1) {
+    strengths.push("Cycle burden is contained to a small portion of the graph.");
+  }
+  if (metrics.layerFlow.wrongWayRatio <= 0.05) {
+    strengths.push("Layer direction is mostly consistent across imports.");
+  }
+  if (metrics.depthBalance.activeDepthCount >= 4 && metrics.depthBalance.dominantDepthShare <= 0.35) {
+    strengths.push("Depth bands are spread out enough to keep the map readable.");
+  }
+  if (metrics.directoryCoherence.smearedDirectoryCount === 0) {
+    strengths.push("Directories stay within tight depth bands.");
+  }
+
+  const penalties = [];
+  if (metrics.cycleBurden.filesInCyclesRatio > 0.15) {
+    penalties.push(
+      `${formatPercent(metrics.cycleBurden.filesInCyclesRatio)} of files sit inside SCCs.`
+    );
+  }
+  if (metrics.layerFlow.wrongWayEdges > 0) {
+    penalties.push(
+      `${metrics.layerFlow.wrongWayEdges} imports climb back toward shallower layers.`
+    );
+  }
+  if (metrics.layerFlow.skipRatio > 0.15) {
+    penalties.push(
+      `${formatPercent(metrics.layerFlow.skipRatio)} of imports skip one or more depth bands.`
+    );
+  }
+  if (metrics.depthBalance.dominantDepthShare > 0.4) {
+    penalties.push(
+      `Depth ${metrics.depthBalance.widestDepth.depth} holds ${formatPercent(
+        metrics.depthBalance.dominantDepthShare
+      )} of analyzed files.`
+    );
+  }
+  if (metrics.directoryCoherence.smearedDirectoryCount > 0) {
+    penalties.push(
+      `${metrics.directoryCoherence.smearedDirectoryCount} directories smear across 3+ depth bands.`
+    );
+  }
+  if (
+    Array.from(fileStats.values()).some((entry) => entry.foundationalPurityViolations > 0)
+  ) {
+    penalties.push("Foundational-looking modules depend on shallower orchestration layers.");
+  }
+
+  return {
+    scope: {
+      rootId: selectedRootId === "all" ? null : selectedRootId,
+      root:
+        selectedRootId === "all"
+          ? null
+          : (() => {
+              const rootFile = fileById.get(selectedRootId);
+              return rootFile
+                ? {
+                    id: rootFile.id,
+                    path: rootFile.path,
+                    relative: rootFile.relative,
+                    name: rootFile.label,
+                  }
+                : null;
+            })(),
+      fileCount: visibleFileEntries.length,
+      edgeCount: filteredEdges.length,
+      importEdgeCount: visibleImportEdges.length,
+    },
+    metrics,
+    findings: {
+      strengths,
+      penalties,
+    },
+    topOffenders,
+    topDirectories: directorySummaries.slice(0, top),
+    topSccs,
+    histograms: {
+      depth: depthHistogram,
+    },
+  };
+}
+
+function formatHealthReportText(report) {
+  const lines = [];
+  const rootLabel = report.scope.root?.relative ?? "all";
+
+  lines.push(`Structureness Health (${rootLabel})`);
+  lines.push(
+    `${report.scope.fileCount} files, ${report.scope.edgeCount} graph edges, ${report.scope.importEdgeCount} import edges`
+  );
+  lines.push(
+    `${report.metrics.cycleBurden.cyclicComponentCount} SCCs, max depth ${report.metrics.depthBalance.maxDepth}, ${report.metrics.rootClarity.rootCount} roots`
+  );
+
+  lines.push("");
+  lines.push("Strengths");
+  if (report.findings.strengths.length === 0) {
+    lines.push("- None yet.");
+  } else {
+    report.findings.strengths.forEach((entry) => {
+      lines.push(`- ${entry}`);
+    });
+  }
+
+  lines.push("");
+  lines.push("Penalties");
+  if (report.findings.penalties.length === 0) {
+    lines.push("- None.");
+  } else {
+    report.findings.penalties.forEach((entry) => {
+      lines.push(`- ${entry}`);
+    });
+  }
+
+  lines.push("");
+  lines.push("Top Offenders");
+  if (report.topOffenders.length === 0) {
+    lines.push("- None.");
+  } else {
+    report.topOffenders.forEach((entry) => {
+      lines.push(
+        `- ${entry.file} (D${entry.depth}, severity ${entry.severity}): ${entry.reasons.join("; ")}`
+      );
+    });
+  }
+
+  lines.push("");
+  lines.push("Top SCCs");
+  if (report.topSccs.length === 0) {
+    lines.push("- None.");
+  } else {
+    report.topSccs.forEach((entry) => {
+      lines.push(
+        `- size ${entry.size}, depth ${entry.depth}, density ${entry.internalDensity}: ${entry.members.join(", ")}`
+      );
+    });
+  }
+
+  lines.push("");
+  lines.push("Depth Histogram");
+  report.histograms.depth.forEach((entry) => {
+    lines.push(`- D${entry.depth}: ${entry.files}`);
+  });
+
+  lines.push("");
+  lines.push("Directory Depth Summary");
+  if (report.topDirectories.length === 0) {
+    lines.push("- None.");
+  } else {
+    report.topDirectories.forEach((entry) => {
+      lines.push(
+        `- ${entry.directory}: ${entry.fileCount} files, depth ${entry.minDepth}-${entry.maxDepth}, median ${entry.medianDepth}, spread ${entry.depthSpread}, cross-dir wrong-way ${formatPercent(entry.crossDirectoryWrongWayRatio)}`
+      );
+    });
+  }
+
+  lines.push("");
+  lines.push("Metric Summary");
+  lines.push(
+    `- Layer flow: ${report.metrics.layerFlow.wrongWayEdges} wrong-way, ${report.metrics.layerFlow.skipEdges} skips, ${report.metrics.layerFlow.sameLevelEdges} same-level`
+  );
+  lines.push(
+    `- Cycle burden: ${report.metrics.cycleBurden.filesInCycles} files in cycles, largest SCC ${report.metrics.cycleBurden.largestSccSize}`
+  );
+  lines.push(
+    `- Root clarity: top root fanout ratio ${formatPercent(report.metrics.rootClarity.topRootFanoutRatio)}`
+  );
+  lines.push(
+    `- Hub pressure: ${report.metrics.hubPressure.bridgeSuspectCount} bridge suspects`
+  );
+
+  return `${lines.join("\n")}\n`;
 }
 
 function buildMermaidTree(context, selectedFileId = null) {
   const mermaidInit = buildMermaidInit();
   const { fileNodeIds, fileById, edges } =
     buildFileDependencyGraph(context);
+  const incomingCounts = new Map();
+  for (const fileId of fileById.keys()) {
+    incomingCounts.set(fileId, 0);
+  }
+  edges.forEach(({ target }) => {
+    incomingCounts.set(target, (incomingCounts.get(target) ?? 0) + 1);
+  });
+  const roots = Array.from(incomingCounts.entries())
+    .filter(([, incoming]) => incoming === 0)
+    .map(([fileId]) => fileId)
+    .sort();
   const { filteredEdges, levelByFile, visibleFiles } = (() => {
     const visibleGraph = buildVisibleTreeGraph(
       Array.from(fileNodeIds.entries()).map(([filePath, fileId]) => ({
@@ -676,7 +1415,7 @@ function buildMermaidTree(context, selectedFileId = null) {
         path: filePath,
       })),
       edges,
-      context.roots ?? [],
+      roots,
       selectedFileId
     );
 
@@ -1186,13 +1925,21 @@ async function main() {
       : await buildExportMap(options.tsconfig),
     options
   );
+  const graphContext = buildGraphContext(entries, options);
   const treeGridData =
-    options.format === "html" && options.tree
-      ? buildTreeGridData(buildGraphContext(entries, options))
+    options.format === "health" || (options.format === "html" && options.tree)
+      ? buildTreeGridData(graphContext)
       : null;
   const gridExport =
     treeGridData && options.format === "html" && options.tree
       ? buildReadableGridExport(treeGridData)
+      : null;
+  const healthReport =
+    treeGridData && options.format === "health"
+      ? buildStructuralHealthReport(treeGridData, {
+          rootFileId: options.root,
+          top: options.top,
+        })
       : null;
   const treeGridDataOutputPath =
     options.format === "html" && options.tree && options.output
@@ -1211,12 +1958,16 @@ async function main() {
         ? buildMermaid(entries, options)
           : options.format === "dot"
             ? buildDot(entries, options)
-          : await buildHtml(
-              entries,
-              options,
-              treeGridData,
-              htmlAssetPaths?.scriptRelativePath ?? null
-            );
+            : options.format === "health"
+              ? options.healthOutput === "json"
+                ? `${JSON.stringify(healthReport, null, 2)}\n`
+                : formatHealthReportText(healthReport)
+              : await buildHtml(
+                  entries,
+                  options,
+                  treeGridData,
+                  htmlAssetPaths?.scriptRelativePath ?? null
+                );
 
   if (options.output) {
     if (options.format === "html" && htmlAssetPaths) {
@@ -1245,4 +1996,24 @@ async function main() {
   }
 }
 
-await main();
+const isDirectExecution =
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectExecution) {
+  await main();
+}
+
+export {
+  buildCondensedGraph,
+  buildCondensedDepthLevels,
+  buildExportMap,
+  buildGraphContext,
+  buildStructuralHealthReport,
+  buildTreeGridData,
+  buildVisibleImportEdges,
+  buildVisibleTreeGraph,
+  filterEntries,
+  formatHealthReportText,
+  loadExportMap,
+  main,
+};
