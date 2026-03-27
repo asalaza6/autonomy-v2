@@ -1,3 +1,54 @@
+import fs from 'fs';
+import path from 'path';
+import { evaluateScope } from '../scope/index.js';
+import { ensureDir, logRunnerEvent, summarizeText, uniqueStrings } from './shared.js';
+import { buildCommitMessage, buildQueueMetadataCommitMessage, finalizeTaskRun, listChangedFiles, markImplementationTaskComplete, readGit, recordImplementationTaskCommitSha, resolveTargetFile, runGit, tryPushBranch } from './workspace.js';
+import { buildTaskLaneKey, getAgentConfig, getCompletedLaneTasks, getLaneTasks, getPrForLane, getTask, isPendingImplementationTask, loadState, recordLaneTaskCompletion } from './state.js';
+import {
+  ensureCheckEnvironment,
+  resolveCheckCommands,
+  runCheckCommands,
+  getPrCommitCount,
+} from './gate-support.js';
+import { appendRunnerLog } from './persistence.js';
+import { crossLayerRunnerDependencies } from './runner-dependencies.js';
+
+const runnerDependencies = {
+  ...crossLayerRunnerDependencies,
+  appendRunnerLog,
+  buildCommitMessage,
+  buildQueueMetadataCommitMessage,
+  buildTaskLaneKey,
+  ensureCheckEnvironment,
+  ensureDir,
+  evaluateScope,
+  finalizeTaskRun,
+  fs,
+  getAgentConfig,
+  getCompletedLaneTasks,
+  getLaneTasks,
+  getPrCommitCount,
+  getPrForLane,
+  getTask,
+  isPendingImplementationTask,
+  listChangedFiles,
+  loadState,
+  logRunnerEvent,
+  markImplementationTaskComplete,
+  path,
+  readGit,
+  recordImplementationTaskCommitSha,
+  recordLaneTaskCompletion,
+  resolveCheckCommands,
+  resolveTargetFile,
+  runCheckCommands,
+  runGit,
+  summarizeText,
+  tryPushBranch,
+  uniqueStrings,
+  useCodexStub,
+};
+
 async function runImplementationFlow(params, deps) {
   const { rootDir, agentId, taskId, branch, worktreePath } = params;
   const {
@@ -113,8 +164,8 @@ async function runImplementationFlow(params, deps) {
         taskId: task.id,
         violations: scopeResult.violations,
       });
-    }
   }
+}
 
   const checkResults = runCheckCommands(worktreePath, checkCommands);
   const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
@@ -377,6 +428,14 @@ function runImplementationStubFlow(params, deps) {
   });
 }
 
+function useCodexStub() {
+  return process.env.AUTONOMY_CODEX_STUB === '1';
+}
 
+function runImplementation(params) {
+  return runImplementationFlow(params, runnerDependencies);
+}
+
+
+export { runImplementation };
 export { runImplementationFlow };
-

@@ -1,9 +1,14 @@
 import path from 'path';
 import { acquireStateLock } from '../lock/index.js';
 import { validateAutonomyConfig } from '../config/index.js';
-import type { AnyRecord, AutonomyConfig } from '../types.js';
-import { DEFAULT_SYNC_STATE, PRD_ARCHIVE_DIR, PRD_QUEUE_DIR, PRD_SPECS_DIR } from './constants.js';
+import {
+  DEFAULT_SYNC_STATE,
+  PRD_ARCHIVE_DIR,
+  PRD_QUEUE_DIR,
+  PRD_SPECS_DIR,
+} from './constants.js';
 import { emitSyncProgress, getSyncPaths, readJson, writeJson } from './core.js';
+import type { AnyRecord, AutonomyConfig } from './types.js';
 import { buildDerivedImportedRuntimeState, isImportedPrdRecord } from './derived-state.js';
 import { buildTrackedImplementationTaskIndex, readTrackedImplementationQueuesFromRef, readTrackedReviewerTasksFromRef, resolveRemoteLaneStates } from './lanes.js';
 import { buildImportedSpecState } from './lanes.js';

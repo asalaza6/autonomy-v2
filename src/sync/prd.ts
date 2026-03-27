@@ -1,5 +1,5 @@
 import path from 'path';
-import type { AnyRecord, PrdSpecPayload, PrdStateRecord } from '../types.js';
+import type { AnyRecord, PrdSpecPayload, PrdStateRecord } from './types.js';
 import { AUTONOMY_SEGMENTS, PRD_STATE_DIR } from './constants.js';
 
 function normalizeStringList(value) {

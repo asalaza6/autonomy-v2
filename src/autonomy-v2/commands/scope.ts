@@ -1,4 +1,7 @@
-import { collectFilesForValidation, ensureInitialized, evaluateScope, getAgent, getTask, loadAllState, printOutput, requireOption, } from './shared.js';
+import { ensureInitialized, getAgent, printOutput, requireOption } from './shared-core.js';
+import { collectFilesForValidation, evaluateScope } from './shared-scope.js';
+import { loadAllState } from './shared-prds.js';
+import { getTask } from './shared-queues.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);

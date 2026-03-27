@@ -1,5 +1,19 @@
-import { TASK_TYPES, buildRoleEventName, AGENT_ROLES, isImplementationRole, } from '../../agents/role-catalog.js';
-import { addIssueLabels, appendAgentLog, buildLaneSourceSummary, buildPersonaPrBody, buildPersonaPrTitle, buildPullRequestLabels, buildStablePullRequestId, buildTaskLaneKey, collectTaskScopeViolations, createOrFindPullRequest, ensureInitialized, findPullRequestByLane, getAgent, getAutonomyPaths, getListOption, getStringOption, listCompletedLaneTasks, listImplementationLaneTasks, listLaneTasks, loadAllState, printOutput, queueReviewerTask, requireOption, resolveGithubAuthToken, resolveGithubRepo, resolvePrRecordTask, uniqueScopeViolations, uniqueStrings, writeJson, writeTaskQueues, } from './shared.js';
+import { appendAgentLog, ensureInitialized, getAgent, getAutonomyPaths, getListOption, getStringOption, printOutput, requireOption, writeJson, } from './shared-core.js';
+import { addIssueLabels, createOrFindPullRequest, resolveGithubRepo } from './shared-github.js';
+import { buildLaneSourceSummary, buildTaskLaneKey, collectTaskScopeViolations, findPullRequestByLane, uniqueScopeViolations, uniqueStrings } from './shared-repo.js';
+import { buildPersonaPrBody, buildPersonaPrTitle, buildPullRequestLabels } from './shared-core.js';
+import { buildStablePullRequestId } from './shared-repo.js';
+import { listCompletedLaneTasks, listImplementationLaneTasks, listLaneTasks } from './shared-lanes.js';
+import { loadAllState, queueReviewerTask } from './shared-prds.js';
+import { resolvePrRecordTask } from './shared-lanes.js';
+import { writeTaskQueues } from './shared-queues.js';
+import {
+  AGENT_ROLES,
+  TASK_TYPES,
+  buildRoleEventName,
+  isImplementationRole,
+  resolveGithubAuthToken,
+} from './command-dependencies.js';
 
 async function run(rootDir, options) {
   ensureInitialized(rootDir);

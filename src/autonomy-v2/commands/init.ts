@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/index.js';
 import { collectAgentScaffoldEntries, getTemplateContent, pruneStaleAgentScaffold, resolveTemplateTargetPath, validateImplementationChecks, } from '../scaffold/index.js';
-import { BASE_TEMPLATE_FILES, GENERATED_TEMPLATE_FILES, TEMPLATE_ROOT, ensureDir, getAgentLogPath, getAutonomyPaths, printOutput, readJson, resolveTaskQueuePath, } from './shared.js';
+import { BASE_TEMPLATE_FILES, GENERATED_TEMPLATE_FILES, TEMPLATE_ROOT, ensureDir, getAgentLogPath, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
+import { resolveTaskQueuePath } from './shared-queues.js';
 
 function run(rootDir, options) {
   const bootstrapRootFiles = new Set(['.env.autonomy', '.gitignore']);

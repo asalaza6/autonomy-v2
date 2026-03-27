@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { AGENT_ROLES, TASK_TYPES, getRoleAgentLabel, getRoleLabel, isPmRole, isReviewRole } from '../../agents/role-catalog.js';
-import type { AnyRecord } from '../../types.js';
+import type { AnyRecord } from '../types.js';
 import { getTaskQueue, readImplementationQueueSnapshot, filterCompletedImplementationQueueTasks, getImplementationTaskState, isTerminalTaskStatus } from './shared-queues.js';
 import { resolveImplementationBranchRef } from './shared-lanes.js';
 import { buildTaskLaneKey, buildWorktreePath } from './shared-repo.js';

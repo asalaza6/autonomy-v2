@@ -13,7 +13,7 @@ import { run as prRun } from './pr.js';
 import { run as gateRun } from './gate.js';
 import { run as mergeRun } from './merge.js';
 import { run as runtimeRun } from './runtime.js';
-import type { CliOptions } from '../../types.js';
+import type { CliOptions } from '../types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
 

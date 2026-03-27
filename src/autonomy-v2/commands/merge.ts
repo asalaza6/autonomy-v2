@@ -1,5 +1,14 @@
-import { isImplementationRole } from '../../agents/role-catalog.js';
-import { appendAgentLog, appendTrackedBranchFollowupTask, archiveCompletedPrdSpecs, buildLaneConflictTaskId, buildMergeCommitTitle, ensureInitialized, enqueueLaneFollowupTask, evaluateMerge, findTask, getAgent, getAutonomyPaths, getImplementationTaskState, getPr, getReviewerTask, isTerminalTaskStatus, listImplementationLaneTasks, listLaneTasks, loadAllState, loadTrackedPrds, mergePullRequest, performLocalMerge, printOutput, requireOption, resolveGithubAuthToken, resolveGithubRepo, writeJson, writeTaskQueues, } from './shared.js';
+import {
+  isImplementationRole,
+  resolveGithubAuthToken,
+} from './command-dependencies.js';
+import { appendAgentLog, buildMergeCommitTitle, getAgent, getAutonomyPaths, printOutput, requireOption, ensureInitialized, writeJson, } from './shared-core.js';
+import { archiveCompletedPrdSpecs, loadAllState, loadTrackedPrds } from './shared-prds.js';
+import { evaluateMerge } from './shared-repo.js';
+import { appendTrackedBranchFollowupTask, buildLaneConflictTaskId, enqueueLaneFollowupTask, getReviewerTask } from './shared-worktrees.js';
+import { findTask, getImplementationTaskState, isTerminalTaskStatus, writeTaskQueues } from './shared-queues.js';
+import { listImplementationLaneTasks, listLaneTasks } from './shared-lanes.js';
+import { mergePullRequest, performLocalMerge, resolveGithubRepo } from './shared-github.js';
 
 async function run(rootDir, options) {
   ensureInitialized(rootDir);

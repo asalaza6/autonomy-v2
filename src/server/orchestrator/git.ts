@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import type { AnyRecord, AutonomyConfig } from '../../types.js';
+import type { AnyRecord, AutonomyConfig } from '../types.js';
 import { readJson } from './paths.js';
 import { buildTaskQueueState, getAgent, normalizeNonEmptyString } from './helpers.js';
 

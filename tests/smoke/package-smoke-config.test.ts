@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import path from 'path';
 import { validateAutonomyConfig } from '../../src/config/index.js';
-import { shouldForceApproveAfterRepeatedReviews } from '../../src/autonomy-v2/runner/default-runner.js';
+import { shouldForceApproveAfterRepeatedReviews } from '../../src/autonomy-v2/runner/gate-support.js';
 import {
   CLI_BIN,
   createFixtureRepo,

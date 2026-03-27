@@ -1,3 +1,55 @@
+import { execFileSync } from 'node:child_process';
+import { appendRunnerLog } from './persistence.js';
+import { logRunnerEvent, normalizeNonEmptyString, summarizeText } from './shared.js';
+import {
+  buildScopeSafeApprovalSummary,
+  ensureCheckEnvironment,
+  ensureReviewContext,
+  evaluateScope,
+  isScopeOnlyReviewFeedback,
+  publishMergeFollowupCommentIfNeeded,
+  runCheckCommands,
+  shouldForceApproveAfterRepeatedReviews,
+  shouldRetryApprovedPrMerge,
+  getPrCommitCount,
+} from './gate-support.js';
+import { CLI_PATH } from './constants.js';
+import { postIssueComment, resolveGithubRepo } from './net.js';
+import { getAgentConfig, getPr, getReviewTask, loadState, persistReviewerTaskState } from './state.js';
+import { listBranchCommits, listReviewDiffFiles, tryMergeWithRetry } from './workspace.js';
+import { crossLayerRunnerDependencies } from './runner-dependencies.js';
+
+const runnerDependencies = {
+  ...crossLayerRunnerDependencies,
+  appendRunnerLog,
+  buildScopeSafeApprovalSummary,
+  ensureCheckEnvironment,
+  ensureReviewContext,
+  evaluateScope,
+  execFileSync,
+  getAgentConfig,
+  getPr,
+  getPrCommitCount,
+  getReviewTask,
+  isScopeOnlyReviewFeedback,
+  listBranchCommits,
+  listReviewDiffFiles,
+  loadState,
+  logRunnerEvent,
+  normalizeNonEmptyString,
+  persistReviewerTaskState,
+  postIssueComment,
+  publishMergeFollowupCommentIfNeeded,
+  resolveGithubRepo,
+  runCheckCommands,
+  shouldForceApproveAfterRepeatedReviews,
+  shouldRetryApprovedPrMerge,
+  summarizeText,
+  tryMergeWithRetry,
+  useCodexStub,
+  CLI_PATH,
+};
+
 async function runReviewFlow(params, deps) {
   const { rootDir, agentId, reviewTaskId, prId, sourceAgentId } = params;
   const {
@@ -342,6 +394,14 @@ function runReviewStubFlow(params, deps) {
   });
 }
 
+function useCodexStub() {
+  return process.env.AUTONOMY_CODEX_STUB === '1';
+}
 
+function runReview(params) {
+  return runReviewFlow(params, runnerDependencies);
+}
+
+
+export { runReview };
 export { runReviewFlow };
-

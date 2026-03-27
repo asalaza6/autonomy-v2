@@ -1,11 +1,11 @@
 import path from 'path';
-import { acquireStateLock } from '../../lock/index.js';
 import { planPrdTasksWithCodex } from '../../codex/index.js';
+import { acquireStateLock } from '../../lock/index.js';
 import { isImplementationRole, TASK_TYPES } from '../../agents/role-catalog.js';
-import { commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, commitTrackedPrdStateToIntegrationBranch, readTrackedPrdStateMap } from '../../sync/index.js';
+import { commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, commitTrackedPrdStateToIntegrationBranch, readTrackedPrdStateMap } from '../../sync/git.js';
 import { extractExecError } from './git.js';
 import { buildTaskQueueState, getAgent, listPrds, listTasks } from './helpers.js';
-import { loadPrds, appendAgentLog } from './state.js';
+import { appendAgentLog, loadPrds } from './state.js';
 import { loadQueues } from './queues.js';
 
 function useCodexStub() {

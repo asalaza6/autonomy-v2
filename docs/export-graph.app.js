@@ -1224,8 +1224,10 @@
     const mermaidDiagramRef = A2(null);
     const scaleRef = A2(1);
     const autoFitRef = A2(false);
+    const copyStatusTimeoutRef = A2(null);
     const [mermaidApi, setMermaidApi] = d2(null);
     const [mermaidError, setMermaidError] = d2(null);
+    const [copyStatus, setCopyStatus] = d2("Copy flowchart");
     const [currentScale, setCurrentScale] = d2(1);
     const [activeRoot, setActiveRoot] = d2(
       payload2.useTree && payload2.treeGridData?.roots.length ? payload2.treeGridData.roots[0] : "all"
@@ -1352,6 +1354,42 @@
       }
       centerRootNode(activeRoot);
     }
+    function setCopyStatusMessage(message) {
+      setCopyStatus(message);
+      if (copyStatusTimeoutRef.current) {
+        clearTimeout(copyStatusTimeoutRef.current);
+      }
+      copyStatusTimeoutRef.current = window.setTimeout(() => {
+        setCopyStatus("Copy flowchart");
+      }, 1600);
+    }
+    async function copyDiagramText() {
+      const text = diagramDefinition;
+      const fallbackCopy = () => {
+        const input = document.createElement("textarea");
+        input.value = text;
+        input.setAttribute("readonly", "");
+        input.style.position = "fixed";
+        input.style.left = "-9999px";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.focus();
+        input.select();
+        const didCopy = document.execCommand("copy");
+        document.body.removeChild(input);
+        return didCopy;
+      };
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopyStatusMessage("Copied");
+          return;
+        } catch {
+        }
+      }
+      const copied = fallbackCopy();
+      setCopyStatusMessage(copied ? "Copied" : "Copy failed");
+    }
     y2(() => {
       if (!mermaidApi || !mermaidDiagramRef.current) {
         return;
@@ -1421,6 +1459,9 @@
         buildTreeDepthState
       };
       return () => {
+        if (copyStatusTimeoutRef.current) {
+          clearTimeout(copyStatusTimeoutRef.current);
+        }
         delete window.__EXPORT_GRAPH_DEBUG__;
       };
     }, [activeRoot, sort, treeState]);
@@ -1471,6 +1512,17 @@
               })
             ] }) }) : null,
             /* @__PURE__ */ u3("div", { class: "toolbar-row", children: [
+              /* @__PURE__ */ u3(
+                "button",
+                {
+                  id: "copyDiagram",
+                  type: "button",
+                  onClick: () => {
+                    void copyDiagramText();
+                  },
+                  children: copyStatus
+                }
+              ),
               /* @__PURE__ */ u3(
                 "button",
                 {

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from 'url';
-import { resolveRootDir, runSchedulerTick } from '../orchestrator/index.js';
+import { resolveRootDir } from '../orchestrator/paths.js';
+import { runSchedulerTick } from '../orchestrator/scheduler.js';
 import { loadAutonomyEnv } from '../../env/index.js';
 import { acquireServerLock } from '../../lock/index.js';
-import type { CliOptions } from '../../types.js';
+import type { CliOptions } from '../types.js';
 import { logTickResult } from './tick-log.js';
 import { formatServerEventLine, buildTraceOptions } from './trace.js';
 import { attachWorkerOutput } from './worker-streams.js';

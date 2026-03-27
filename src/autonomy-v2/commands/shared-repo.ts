@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel } from '../../agents/role-catalog.js';
-import type { AnyRecord } from '../../types.js';
+import type { AnyRecord } from '../types.js';
 import { slugify } from './shared-core.js';
 
 function buildReviewFollowupAcceptance(pr, description, existingAcceptance = []) {

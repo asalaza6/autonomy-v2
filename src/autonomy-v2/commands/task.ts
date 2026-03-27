@@ -1,5 +1,8 @@
 import { AGENT_ROLES, TASK_TYPES, getRoleAgentLabel, getRoleLabel, isImplementationRole, } from '../../agents/role-catalog.js';
-import { appendAgentLog, buildTaskLaneKey, commitTrackedImplementationQueue, ensureInitialized, getAgent, getImplementationTaskState, getListOption, getStringOption, getTask, getTaskQueue, listTasks, loadAllState, printOutput, requireOption, resolveImplementationBranchRef, writeTaskQueues, } from './shared.js';
+import { appendAgentLog, ensureInitialized, getAgent, getListOption, getStringOption, printOutput, requireOption, } from './shared-core.js';
+import { buildTaskLaneKey, getImplementationTaskState, getTask, getTaskQueue, listTasks } from './shared-repo.js';
+import { commitTrackedImplementationQueue, resolveImplementationBranchRef, writeTaskQueues } from './shared-queues.js';
+import { loadAllState } from './shared-prds.js';
 
 function run(rootDir, options, command) {
   if (command === 'task:add') {

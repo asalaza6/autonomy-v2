@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { AGENT_ROLES, buildRoleEventName, getRoleLabel } from '../../agents/role-catalog.js';
-import type { AnyRecord, TraceContext } from '../../types.js';
+import type { AnyRecord, TraceContext } from '../types.js';
 import {
   appendTraceLine,
   ensureDir,

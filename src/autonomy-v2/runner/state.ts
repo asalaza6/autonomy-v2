@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { acquireStateLock } from '../../lock/index.js';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole } from '../../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../../types.js';
+import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../types.js';
 import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './constants.js';
 import { readJson, trimLeadingSeparator, uniqueScopeViolations, uniqueStrings, writeJson } from './shared.js';
 

@@ -1,6 +1,6 @@
 import path from 'path';
 import { execFileSync } from 'child_process';
-import type { AnyRecord } from '../../types.js';
+import type { AnyRecord } from '../types.js';
 import { getListOption } from './shared-core.js';
 
 function collectFilesForValidation(rootDir, options) {

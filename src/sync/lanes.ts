@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { resolveGithubAuthToken } from '../github/index.js';
+import { resolveGithubAuthToken } from './github.js';
 import { isImplementationRole, isReviewRole } from '../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, PullRequestRecord, QueueMap, TaskRecord } from '../types.js';
+import type { AnyRecord, AutonomyConfig, PullRequestRecord, QueueMap, TaskRecord } from './types.js';
 import { GIT_NETWORK_TIMEOUT_MS } from './constants.js';
 import { emitSyncProgress, readJson } from './core.js';
 import { compareBranchToBase, getPullRequest, listPullRequestsByHead, resolveGithubRepo } from './github.js';

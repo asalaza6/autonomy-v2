@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { validateAutonomyConfig } from '../config/index.js';
-import type { AnyRecord, AutonomyConfig } from '../types.js';
+import type { AnyRecord } from './types.js';
 import { DEFAULT_SYNC_STATE, GIT_NETWORK_TIMEOUT_MS, PRD_ARCHIVE_DIR, PRD_QUEUE_DIR, PRD_SPECS_DIR, PRD_STATE_DIR } from './constants.js';
 import { emitSyncProgress, ensureDir, getSyncPaths, readJson } from './core.js';
 import {

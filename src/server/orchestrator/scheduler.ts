@@ -1,6 +1,6 @@
 import { acquireStateLock } from '../../lock/index.js';
-import type { AnyRecord, WorkerRuntime } from '../../types.js';
-import { syncPrdSpecsFromIntegrationBranch } from '../../sync/index.js';
+import type { AnyRecord, WorkerRuntime } from '../types.js';
+import { syncPrdSpecsFromIntegrationBranch } from '../../sync/syncer.js';
 import { loadQueues } from './queues.js';
 import { findDueAgents, finalizePendingInlineWorkers, refreshRuntime, setWorkerState, spawnWorkerProcess, updateBacklogGrace } from './runtime.js';
 import { loadBranchLocks, loadConfig, loadPrds, loadRuntime, writeRuntime } from './state.js';

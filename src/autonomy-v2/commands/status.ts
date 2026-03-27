@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import { buildAgentStatusSummaries, buildPullRequestStatusSummaries, countBy, ensureInitialized, formatAgentStatusLine, formatCountSummary, formatPullRequestStatusLine, getAutonomyPaths, getTaskQueue, listTasks, loadAllState, loadTrackedPrds, printOutput, readJson, syncIntegrationSpecs, } from './shared.js';
+import { countBy, ensureInitialized, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
+import { buildAgentStatusSummaries, formatAgentStatusLine } from './shared-agent-status.js';
+import { buildPullRequestStatusSummaries, formatPullRequestStatusLine } from './shared-pr-status.js';
+import { getTaskQueue, listTasks } from './shared-queues.js';
+import { loadAllState, loadTrackedPrds } from './shared-prds.js';
+import { syncIntegrationSpecs } from './shared-sync.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);

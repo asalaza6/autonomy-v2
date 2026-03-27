@@ -1024,9 +1024,11 @@ function App({ payload }: { payload: GraphPayload }) {
   const mermaidDiagramRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(1);
   const autoFitRef = useRef(false);
+  const copyStatusTimeoutRef = useRef<number | null>(null);
 
   const [mermaidApi, setMermaidApi] = useState<Window["mermaid"] | null>(null);
   const [mermaidError, setMermaidError] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState("Copy flowchart");
   const [currentScale, setCurrentScale] = useState(1);
   const [activeRoot, setActiveRoot] = useState(
     payload.useTree && payload.treeGridData?.roots.length ? payload.treeGridData.roots[0] : "all"
@@ -1182,6 +1184,47 @@ function App({ payload }: { payload: GraphPayload }) {
     centerRootNode(activeRoot);
   }
 
+  function setCopyStatusMessage(message: string) {
+    setCopyStatus(message);
+    if (copyStatusTimeoutRef.current) {
+      clearTimeout(copyStatusTimeoutRef.current);
+    }
+    copyStatusTimeoutRef.current = window.setTimeout(() => {
+      setCopyStatus("Copy flowchart");
+    }, 1600);
+  }
+
+  async function copyDiagramText() {
+    const text = diagramDefinition;
+
+    const fallbackCopy = () => {
+      const input = document.createElement("textarea");
+      input.value = text;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.focus();
+      input.select();
+      const didCopy = document.execCommand("copy");
+      document.body.removeChild(input);
+      return didCopy;
+    };
+
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopyStatusMessage("Copied");
+        return;
+      } catch {
+      }
+    }
+
+    const copied = fallbackCopy();
+    setCopyStatusMessage(copied ? "Copied" : "Copy failed");
+  }
+
   useEffect(() => {
     if (!mermaidApi || !mermaidDiagramRef.current) {
       return;
@@ -1266,6 +1309,9 @@ function App({ payload }: { payload: GraphPayload }) {
     };
 
     return () => {
+      if (copyStatusTimeoutRef.current) {
+        clearTimeout(copyStatusTimeoutRef.current);
+      }
       delete window.__EXPORT_GRAPH_DEBUG__;
     };
   }, [activeRoot, sort, treeState]);
@@ -1315,6 +1361,15 @@ function App({ payload }: { payload: GraphPayload }) {
               </div>
             ) : null}
             <div class="toolbar-row">
+              <button
+                id="copyDiagram"
+                type="button"
+                onClick={() => {
+                  void copyDiagramText();
+                }}
+              >
+                {copyStatus}
+              </button>
               <button
                 id="zoomFit"
                 type="button"

@@ -1,5 +1,19 @@
-import { AGENT_ROLES, buildRoleEventName, getRoleLabel, isImplementationRole, isReviewRole, } from '../../agents/role-catalog.js';
-import { addIssueComment, appendAgentLog, appendTrackedBranchFollowupTask, buildLaneFollowupTaskId, buildSignedReviewSummary, ensureInitialized, ensureReviewerTask, enqueueLaneFollowupTask, findTask, getAgent, getAutonomyPaths, getPr, getStringOption, isSelfPullRequestReviewError, loadAllState, normalizeReviewDecision, printOutput, publishReview, requireOption, resolveGithubAuthToken, resolveGithubRepo, uniqueStrings, writeJson, writeTaskQueues, } from './shared.js';
+import {
+  AGENT_ROLES,
+  buildRoleEventName,
+  getRoleLabel,
+  isImplementationRole,
+  isReviewRole,
+  resolveGithubAuthToken,
+} from './command-dependencies.js';
+import { appendAgentLog, ensureInitialized, getAgent, getAutonomyPaths, getPr, getStringOption, loadAllState, printOutput, requireOption, writeJson, writeTaskQueues, } from './shared-core.js';
+import { buildSignedReviewSummary } from './shared-core.js';
+import { addIssueComment, isSelfPullRequestReviewError, publishReview, resolveGithubRepo } from './shared-github.js';
+import { buildLaneFollowupTaskId } from './shared-worktrees.js';
+import { appendTrackedBranchFollowupTask, ensureReviewerTask, enqueueLaneFollowupTask } from './shared-worktrees.js';
+import { findTask } from './shared-queues.js';
+import { normalizeReviewDecision } from './shared-repo.js';
+import { uniqueStrings } from './shared-repo.js';
 
 async function run(rootDir, options) {
   ensureInitialized(rootDir);

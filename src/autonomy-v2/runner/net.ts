@@ -1,6 +1,6 @@
 import path from 'path';
 import { execFileSync } from 'child_process';
-import type { AnyRecord, HttpResponse } from '../../types.js';
+import type { AnyRecord, HttpResponse } from '../types.js';
 
 import { fileURLToPath } from 'url';
 

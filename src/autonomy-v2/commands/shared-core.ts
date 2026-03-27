@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { validateAutonomyConfig } from '../../config/index.js';
-import { DEFAULT_SYNC_STATE, syncPrdSpecsFromIntegrationBranch } from '../../sync/index.js';
-import type { AnyRecord, AutonomyConfig } from '../../types.js';
+import { DEFAULT_SYNC_STATE } from '../../sync/constants.js';
+import type { AnyRecord, AutonomyConfig } from '../types.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -317,16 +316,6 @@ function ensureInitialized(rootDir) {
     throw new Error(`Autonomy v2 is not initialized under ${paths.repoAutonomyDir}. Run "autonomy-v2 init".`);
   }
 }
-
-function syncIntegrationSpecs(rootDir: string, options: AnyRecord = {}) {
-  if (options.sync !== true) {
-    return null;
-  }
-  const paths = getAutonomyPaths(rootDir);
-  const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
-  return syncPrdSpecsFromIntegrationBranch(rootDir, config.integrationBranch);
-}
-
 export {
   BASE_TEMPLATE_FILES,
   DEFAULT_AUTONOMY_SEGMENTS,
@@ -354,6 +343,5 @@ export {
   readJson,
   requireOption,
   slugify,
-  syncIntegrationSpecs,
   writeJson,
 };

@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/index.js';
-import { buildPrdStateRelativePath, commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/index.js';
-import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, PrdSpecPayload, QueueMap, TrackedPrdRecord } from '../../types.js';
+import { buildPrdStateRelativePath } from '../../sync/prd.js';
+import { commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/git.js';
+import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, PrdSpecPayload, QueueMap, TrackedPrdRecord } from '../types.js';
 import { getAutonomyPaths, readJson } from './shared-core.js';
 import { isTerminalTaskStatus, listTasks, readTaskQueues } from './shared-queues.js';
 

@@ -1,5 +1,16 @@
-import { AGENT_ROLES, getRoleLabel } from '../../agents/role-catalog.js';
-import { archiveCompletedPrdSpecs, appendAgentLog, buildPrdSpecPayload, buildTrackedImplementationQueueUpdates, commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, ensureInitialized, getAgent, getAutonomyPaths, getListOption, getStringOption, hasActivePrdSpecInIntegrationBranch, hasPrdSpecInIntegrationBranch, loadAllState, loadTrackedPrds, printOutput, readJson, requireOption, sanitizePlannedTaskSpecs, syncIntegrationSpecs, validateAutonomyConfig, } from './shared.js';
+import { appendAgentLog, ensureInitialized, getAutonomyPaths, getAgent, getListOption, getStringOption, printOutput, readJson, requireOption, } from './shared-core.js';
+import { archiveCompletedPrdSpecs, buildTrackedImplementationQueueUpdates, loadAllState, loadTrackedPrds, sanitizePlannedTaskSpecs, } from './shared-prds.js';
+import { syncIntegrationSpecs } from './shared-sync.js';
+import {
+  AGENT_ROLES,
+  buildPrdSpecPayload,
+  commitPrdSpecToIntegrationBranch,
+  commitTrackedFilesToIntegrationBranch,
+  getRoleLabel,
+  hasActivePrdSpecInIntegrationBranch,
+  hasPrdSpecInIntegrationBranch,
+  validateAutonomyConfig,
+} from './command-dependencies.js';
 
 function run(rootDir, options, command) {
   if (command === 'prd:add') {

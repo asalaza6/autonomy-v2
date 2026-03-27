@@ -1,8 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
+import {
+  AGENT_ROLES,
+  getRoleAgentLabel,
+  getRoleLabel,
+} from '../../agents/role-catalog.js';
 import { hasGithubAuth, resolveGithubAuthToken } from '../../github/index.js';
-import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel } from '../../agents/role-catalog.js';
 import { resolveGithubRepo, postIssueComment } from './net.js';
 import { REVIEW_AUTO_APPROVAL_THRESHOLD } from './constants.js';
 import { extractExecError, normalizeNonEmptyString, uniqueStrings } from './shared.js';

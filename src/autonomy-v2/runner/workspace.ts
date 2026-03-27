@@ -3,7 +3,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 import { acquireStateLock } from '../../lock/index.js';
 import { resolveGithubAuthToken } from '../../github/index.js';
-import type { AutonomyConfig } from '../../types.js';
+import type { AutonomyConfig } from '../types.js';
 import { CLI_PATH, RUNTIME_SEGMENTS } from './constants.js';
 import {
   buildTaskLaneKey,

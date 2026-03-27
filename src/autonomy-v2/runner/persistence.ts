@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { AGENT_ROLES, RUNNER_TYPES, buildRoleEventName, getRunnerTypeForRole } from '../../agents/role-catalog.js';
-import type { AnyRecord } from '../../types.js';
+import type { AnyRecord } from '../types.js';
 import { RUNTIME_SEGMENTS } from './constants.js';
 import { ensureDir, logRunnerErrorEvent, normalizeNonEmptyString, trimForErrorReport } from './shared.js';
 
