@@ -1,9 +1,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import { Project } from "ts-morph";
 
 const DEFAULT_TSCONFIG = "tsconfig.json";
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const EXPORT_GRAPH_FRONTEND_ENTRY = path.join(
+  SCRIPT_DIR,
+  "tools",
+  "export-graph-app.tsx"
+);
+let exportGraphFrontendBundlePromise = null;
 
 function parseArgs(argv) {
   const options = {
@@ -188,6 +196,7 @@ async function buildExportMap(tsconfigPath) {
       name: entry.name,
       exportedFrom: entry.exportedFrom,
       importedBy: Array.from(entry.importedBy).sort(),
+      imports: Array.from(entry.imports).sort(),
     }))
     .sort(compareEntries);
 }
@@ -809,12 +818,17 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
       sourceRow.importPaths.push(targetRow.path);
       targetRow.exportPaths.push(sourceRow.path);
 
-      if (targetRow.depth > sourceRow.depth) {
+      const currentDepth = sourceRow.depth ?? 0;
+      const importDepth = targetRow.depth ?? 0;
+      const exportDepth = sourceRow.depth ?? 0;
+      const exportedCurrentDepth = targetRow.depth ?? 0;
+
+      if (importDepth < currentDepth) {
         sourceRow.negativeImports += 1;
-        sourceRow.negativeImportFiles.push(targetRow.file);
-      } else if (targetRow.depth < sourceRow.depth) {
+        sourceRow.negativeImportFiles.push(`(${importDepth}<${currentDepth}) ${targetRow.file}`);
+      } else if (exportDepth > exportedCurrentDepth) {
         targetRow.negativeExports += 1;
-        targetRow.negativeExportFiles.push(sourceRow.file);
+        targetRow.negativeExportFiles.push(`(${exportDepth}>${exportedCurrentDepth}) ${sourceRow.file}`);
       } else {
         sourceRow.balance += 1;
         sourceRow.balanceFiles.push(targetRow.file);
@@ -935,21 +949,23 @@ function buildDot(entries, options) {
   return lines.join("\n");
 }
 
-function buildHtml(entries, options, treeGridData = null, treeGridDataSource = null) {
+async function buildHtml(entries, options, treeGridData = null, frontendScriptPath = null) {
   const context = buildGraphContext(entries, options);
   const useTree = Boolean(options.tree);
   const mermaid = useTree ? buildMermaidTree(context) : buildMermaid(entries, options);
   const importerCount = new Set(entries.flatMap((entry) => entry.importedBy)).size;
   const edgeCount = entries.reduce((count, entry) => count + entry.importedBy.length, 0);
-  const resolvedTreeGridData = useTree ? treeGridData ?? buildTreeGridData(context) : null;
-  const initialRootId =
-    resolvedTreeGridData && resolvedTreeGridData.roots.length > 0 ? resolvedTreeGridData.roots[0] : "all";
-  const mermaidDefinition = JSON.stringify(mermaid);
-  const treeGridDataJson = resolvedTreeGridData
-    ? JSON.stringify(resolvedTreeGridData, null, 2)
-    : "null";
-  const treeGridDataSourceJson =
-    useTree && treeGridDataSource ? JSON.stringify(treeGridDataSource) : "null";
+  const payload = {
+    useTree,
+    mermaidDefinition: mermaid,
+    mermaidInit: buildMermaidInit(),
+    stats: {
+      exports: entries.length,
+      importers: importerCount,
+      edges: edgeCount,
+    },
+    treeGridData: useTree ? treeGridData ?? buildTreeGridData(context) : null,
+  };
 
   return `<!doctype html>
 <html lang="en">
@@ -957,1306 +973,15 @@ function buildHtml(entries, options, treeGridData = null, treeGridDataSource = n
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Export Import Graph</title>
-    <style>
-      *, *::before, *::after {
-        box-sizing: border-box;
-      }
-
-      :root {
-        color-scheme: light;
-        font-family: "SF Mono", "Menlo", monospace;
-        background: #f8fafc;
-        color: #0f172a;
-      }
-
-      body {
-        margin: 0;
-        padding: clamp(12px, 2vw, 24px);
-        font-family: "Inter", "SF Pro Display", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-        background:
-          radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 30%),
-          linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
-        overflow-x: hidden;
-      }
-
-      main {
-        width: min(1500px, 100%);
-        margin: 0 auto;
-      }
-
-      .meta {
-        margin-bottom: 16px;
-        padding: 12px 14px;
-        border: 1px solid #cbd5e1;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.8);
-      }
-
-      .graph-shell {
-        padding: 16px;
-        border: 1px solid #cbd5e1;
-        border-radius: 16px;
-        background: white;
-        box-shadow: 0 16px 48px rgba(15, 23, 42, 0.08);
-        width: 100%;
-        overflow: hidden;
-      }
-
-      .graph-stage {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: 16px;
-        align-items: start;
-      }
-
-      .graph-shell.tree-mode .graph-stage {
-        grid-template-columns: minmax(0, 1fr) 360px;
-      }
-
-      .graph-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: flex-start;
-        margin-bottom: 12px;
-      }
-
-      .graph-toolbar button {
-        font: inherit;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        background: #fff;
-        color: #0f172a;
-        padding: 6px 12px;
-        cursor: pointer;
-      }
-
-      .graph-toolbar button:hover {
-        background: #f8fafc;
-      }
-
-      .graph-toolbar span {
-        margin-left: auto;
-        color: #475569;
-        font-size: 12px;
-        align-self: center;
-      }
-
-      .graph-frame {
-        width: 100%;
-        max-width: 100%;
-        overflow-x: auto;
-        overflow-y: auto;
-        white-space: nowrap;
-        scrollbar-width: thin;
-        min-height: 520px;
-        max-height: calc(100vh - 240px);
-        border: 1px dashed #cbd5e1;
-        border-radius: 12px;
-        overscroll-behavior-x: contain;
-      }
-
-      .analytics-panel {
-        border: 1px solid #cbd5e1;
-        border-radius: 14px;
-        background: #f8fafc;
-        padding: 12px;
-        max-height: calc(100vh - 240px);
-        overflow: auto;
-      }
-
-      .analytics-panel h2 {
-        margin: 0 0 10px 0;
-        font-size: 13px;
-        line-height: 1.2;
-        letter-spacing: 0.02em;
-        text-transform: uppercase;
-        color: #334155;
-      }
-
-      .analytics-summary {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-      }
-
-      .analytics-chip {
-        border: 1px solid #cbd5e1;
-        background: white;
-        border-radius: 999px;
-        padding: 4px 8px;
-        font-size: 12px;
-        color: #475569;
-      }
-
-      .analytics-grid {
-        display: grid;
-        grid-template-columns: 42px minmax(0, 1fr) 72px 72px 56px;
-        gap: 4px 6px;
-        align-items: center;
-      }
-
-      .analytics-head {
-        font-size: 11px;
-        font-weight: 700;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        padding-bottom: 6px;
-        border-bottom: 1px solid #cbd5e1;
-        margin-bottom: 2px;
-      }
-
-      .analytics-sort {
-        appearance: none;
-        border: 0;
-        background: transparent;
-        padding: 0 0 8px 0;
-        text-align: left;
-        cursor: pointer;
-        position: relative;
-      }
-
-      .analytics-sort .analytics-tooltip {
-        position: absolute;
-        left: 0;
-        top: calc(100% + 8px);
-        z-index: 20;
-        display: none;
-        min-width: 180px;
-        max-width: 260px;
-        padding: 10px 12px;
-        border: 1px solid #cbd5e1;
-        border-radius: 12px;
-        background: #ffffff;
-        color: #0f172a;
-        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
-        text-transform: none;
-        letter-spacing: normal;
-        font-weight: 500;
-        white-space: normal;
-      }
-
-      .analytics-sort .analytics-tooltip strong {
-        display: block;
-        margin-bottom: 4px;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: #334155;
-      }
-
-      .analytics-sort:hover,
-      .analytics-sort:focus-visible {
-        color: #334155;
-      }
-
-      .analytics-sort:hover .analytics-tooltip,
-      .analytics-sort:focus-visible .analytics-tooltip {
-        display: block;
-      }
-
-      .analytics-tooltip ul {
-        margin: 8px 0 0 0;
-        padding: 0 0 0 16px;
-      }
-
-      .analytics-tooltip li {
-        margin: 0 0 2px 0;
-      }
-
-      .analytics-row {
-        display: contents;
-      }
-
-      .analytics-cell {
-        font-size: 11px;
-        line-height: 1.15;
-        min-width: 0;
-      }
-
-      .analytics-depth {
-        color: #0f172a;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .analytics-number {
-        color: #0f172a;
-        font-variant-numeric: tabular-nums;
-        text-align: left;
-        padding-left: 2px;
-        position: relative;
-      }
-
-      .analytics-count {
-        display: inline-block;
-        min-width: 1ch;
-      }
-
-      .analytics-number .analytics-tooltip {
-        position: absolute;
-        left: 0;
-        top: calc(100% + 8px);
-        z-index: 20;
-        display: none;
-        min-width: 180px;
-        max-width: 260px;
-        padding: 10px 12px;
-        border: 1px solid #cbd5e1;
-        border-radius: 12px;
-        background: #ffffff;
-        color: #0f172a;
-        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
-        text-transform: none;
-        letter-spacing: normal;
-        font-weight: 500;
-        white-space: normal;
-      }
-
-      .analytics-number:hover .analytics-tooltip,
-      .analytics-number:focus-within .analytics-tooltip {
-        display: block;
-      }
-
-      .analytics-file {
-        position: relative;
-        overflow: visible;
-        color: #0f172a;
-        padding-right: 8px;
-      }
-
-      .analytics-file-label {
-        display: block;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .analytics-file .analytics-tooltip {
-        position: absolute;
-        left: 0;
-        top: calc(100% + 8px);
-        z-index: 20;
-        display: none;
-        min-width: 320px;
-        max-width: 520px;
-        padding: 10px 12px;
-        border: 1px solid #cbd5e1;
-        border-radius: 12px;
-        background: #ffffff;
-        color: #0f172a;
-        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
-        text-transform: none;
-        letter-spacing: normal;
-        font-weight: 500;
-        white-space: normal;
-      }
-
-      .analytics-file:hover .analytics-tooltip,
-      .analytics-file:focus-within .analytics-tooltip {
-        display: block;
-      }
-
-      .analytics-tooltip-section + .analytics-tooltip-section {
-        margin-top: 10px;
-      }
-
-      .analytics-tooltip-label {
-        display: block;
-        margin-bottom: 4px;
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: #334155;
-      }
-
-      .analytics-tooltip-path {
-        display: inline-block;
-        max-width: 100%;
-        overflow-wrap: anywhere;
-      }
-
-      .analytics-tooltip-depth {
-        color: #64748b;
-        font-variant-numeric: tabular-nums;
-      }
-
-      .mermaid-container {
-        width: 100%;
-        max-width: 100%;
-        overflow: visible;
-        padding: 4px 0 4px 2px;
-        min-width: 100%;
-      }
-
-      .mermaid-content {
-        transform-origin: top left;
-        display: inline-block;
-        width: auto;
-        min-width: 100%;
-        transition: transform 120ms ease;
-        overflow: visible;
-      }
-
-      .mermaid {
-        display: block;
-        width: auto;
-        max-width: 100% !important;
-        overflow: visible;
-      }
-
-      .mermaid svg {
-        display: block;
-        width: auto !important;
-        max-width: 100% !important;
-        height: auto;
-      }
-
-      .root-controls {
-        width: 100%;
-        overflow-x: auto;
-        overflow-y: hidden;
-        margin-bottom: 12px;
-        padding-bottom: 4px;
-      }
-
-      .root-strip {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        white-space: nowrap;
-      }
-
-      .root-button {
-        border: 1px solid #94a3b8;
-        border-radius: 10px;
-        padding: 6px 12px;
-        background: #fff;
-        cursor: pointer;
-      }
-
-      .root-button.active {
-        background: #e2e8f0;
-        border-color: #334155;
-      }
-
-      .sr-only {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-
-      @media (max-width: 720px) {
-        body {
-          padding: 12px;
-        }
-
-        .graph-shell {
-          padding: 12px;
-          border-radius: 14px;
-        }
-
-        .graph-stage {
-          grid-template-columns: 1fr;
-        }
-
-        .graph-frame {
-          min-height: 440px;
-          max-height: calc(100vh - 220px);
-        }
-
-        .analytics-panel {
-          max-height: 360px;
-        }
-
-        .graph-toolbar {
-          gap: 6px;
-        }
-
-        .graph-toolbar button {
-          padding: 6px 10px;
-        }
-
-        .graph-toolbar span {
-          width: 100%;
-          margin-left: 0;
-          text-align: right;
-        }
-
-        .root-controls {
-          margin-bottom: 8px;
-        }
-
-        .root-strip {
-          white-space: normal;
-        }
-      }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-    <script>
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "neutral",
-        maxEdges: 5000,
-        maxTextSize: 1000000,
-        ...${JSON.stringify(buildMermaidInit())},
-      });
-
-      document.addEventListener("DOMContentLoaded", () => {
-        if (!window.mermaid) {
-          const mermaidDiagram = document.getElementById("mermaidDiagram");
-          mermaidDiagram.textContent =
-            "Mermaid failed to load. Check network access or open this file in a browser with internet access.";
-          return;
-        }
-
-        const graphFrame = document.getElementById("graphFrame");
-        const mermaidContent = document.getElementById("mermaidContent");
-        const mermaidDiagram = document.getElementById("mermaidDiagram");
-        const zoomLevel = document.getElementById("zoomLevel");
-        const zoomIn = document.getElementById("zoomIn");
-        const zoomOut = document.getElementById("zoomOut");
-        const zoomReset = document.getElementById("zoomReset");
-        const zoomFit = document.getElementById("zoomFit");
-        const rootControls = document.getElementById("rootControls");
-        const rootButtons = document.getElementById("rootButtons");
-        const analyticsPanel = document.getElementById("analyticsPanel");
-        const minScale = 0.08;
-        const maxScale = Number.POSITIVE_INFINITY;
-        const stepScale = 0.1;
-        const isTreeMode = ${useTree ? "true" : "false"};
-        const treeGridDataSource = ${treeGridDataSourceJson};
-        const embeddedTreeGridData = ${treeGridDataJson};
-        const rootCache = new Map();
-        let treeGridData = null;
-        let fileById = new Map();
-        let activeRoot = "${initialRootId}";
-        let currentScale = 1;
-        let isAutoFit = false;
-        let analyticsSort = { key: "depth", direction: "asc" };
-        const mermaidDefinition = ${mermaidDefinition};
-
-        function clampScale(value) {
-          return Math.min(maxScale, Math.max(minScale, value));
-        }
-
-        function getDiagramWidth() {
-          const svg = mermaidDiagram.querySelector("svg");
-          if (!svg) {
-            return 0;
-          }
-          const renderedWidth = svg.getBoundingClientRect().width || svg.clientWidth || 0;
-          if (renderedWidth > 0) {
-            return renderedWidth;
-          }
-          if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.width) {
-            return svg.viewBox.baseVal.width;
-          }
-          return 0;
-        }
-
-        function getDiagramHeight() {
-          const svg = mermaidDiagram.querySelector("svg");
-          if (!svg) {
-            return 0;
-          }
-          if (svg.viewBox && svg.viewBox.baseVal && svg.viewBox.baseVal.height) {
-            return svg.viewBox.baseVal.height;
-          }
-          return svg.getBoundingClientRect().height || svg.clientHeight || 0;
-        }
-
-        function renderZoom(level, labelValue = null) {
-          const scale = clampScale(level);
-          currentScale = scale;
-          mermaidContent.style.transform = "scale(" + scale + ")";
-          const height = getDiagramHeight();
-          if (height > 0) {
-            mermaidContent.style.minHeight = Math.ceil(height * scale) + "px";
-          }
-          zoomLevel.textContent = labelValue === null
-            ? Math.round(scale * 100) + "%"
-            : labelValue;
-        }
-
-        function centerGraphView() {
-          if (!graphFrame) {
-            return;
-          }
-
-          requestAnimationFrame(() => {
-            const maxScrollLeft = Math.max(0, graphFrame.scrollWidth - graphFrame.clientWidth);
-            const maxScrollTop = Math.max(0, graphFrame.scrollHeight - graphFrame.clientHeight);
-
-            graphFrame.scrollLeft = maxScrollLeft / 2;
-            graphFrame.scrollTop = 0;
-          });
-        }
-
-        function getRenderedNode(nodeId) {
-          if (!nodeId || !mermaidDiagram) {
-            return null;
-          }
-
-          const selectors = [
-            "#" + nodeId,
-            '[data-id="' + nodeId + '"]',
-            '[id="' + nodeId + '"]',
-          ];
-
-          for (const selector of selectors) {
-            const node = mermaidDiagram.querySelector(selector);
-            if (node) {
-              return node;
-            }
-          }
-
-          return null;
-        }
-
-        function centerRootNode(rootId) {
-          if (!graphFrame) {
-            return;
-          }
-
-          if (!rootId || rootId === "all") {
-            centerGraphView();
-            return;
-          }
-
-          requestAnimationFrame(() => {
-            const node = getRenderedNode(rootId);
-            if (!node) {
-              centerGraphView();
-              return;
-            }
-
-            const frameRect = graphFrame.getBoundingClientRect();
-            const nodeRect = node.getBoundingClientRect();
-            const frameCenterX = frameRect.left + frameRect.width / 2;
-            const nodeCenterX = nodeRect.left + nodeRect.width / 2;
-            const scale = currentScale || 1;
-            const scrollDeltaX = (nodeCenterX - frameCenterX) / scale;
-
-            graphFrame.scrollLeft = Math.max(0, graphFrame.scrollLeft + scrollDeltaX);
-            graphFrame.scrollTop = 0;
-          });
-        }
-
-        function fitToWidth() {
-          const diagramWidth = getDiagramWidth();
-          if (!diagramWidth || !graphFrame) {
-            return;
-          }
-          const frameWidth = graphFrame.clientWidth - 24;
-          const nextScale = Math.min(1, frameWidth / diagramWidth);
-          renderZoom(nextScale, "Fit");
-          centerRootNode(activeRoot);
-          isAutoFit = true;
-        }
-
-        async function loadTreeGridData() {
-          if (treeGridDataSource) {
-            try {
-              const response = await fetch(treeGridDataSource, { cache: "no-store" });
-              if (!response.ok) {
-                throw new Error("HTTP " + response.status);
-              }
-              return await response.json();
-            } catch (error) {
-              console.warn("Falling back to embedded grid data.", error);
-            }
-          }
-
-          return embeddedTreeGridData;
-        }
-
-        function escapeMermaidLabel(value) {
-          return String(value || "")
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;");
-        }
-
-        function sanitizeId(value) {
-          return String(value || "").replaceAll(/[^a-zA-Z0-9_]/g, "_");
-        }
-
-        function relativeDirLabel(filePath) {
-          const normalizedPath = String(filePath || "").replaceAll(String.fromCharCode(92), "/");
-          const segments = normalizedPath.split("/");
-          return segments.slice(0, -1).join("/") || ".";
-        }
-
-        function groupFilesByDirectory(filePaths) {
-          const groups = new Map();
-          filePaths.forEach((filePath) => {
-            const directory = relativeDirLabel(filePath);
-            const existing = groups.get(directory) ?? [];
-            existing.push(filePath);
-            groups.set(directory, existing);
-          });
-          return new Map(
-            Array.from(groups.entries())
-              .sort(([left], [right]) => left.localeCompare(right))
-              .map(([directory, files]) => [directory, files.sort()])
-          );
-        }
-
-        function getFilePath(fileId) {
-          if (!treeGridData) {
-            return fileId;
-          }
-          const entry = fileById.get(fileId);
-          return entry ? entry.path : fileId;
-        }
-
-        function getFileName(filePath) {
-          const normalizedPath = String(filePath || "").replaceAll(String.fromCharCode(92), "/");
-          const segments = normalizedPath.split("/");
-          return segments[segments.length - 1] || normalizedPath;
-        }
-
-        function compareAnalyticsRows(left, right) {
-          const key = analyticsSort.key;
-          const direction = analyticsSort.direction === "desc" ? -1 : 1;
-          let comparison = 0;
-
-          if (key === "file") {
-            comparison =
-              left.label.localeCompare(right.label) ||
-              left.path.localeCompare(right.path) ||
-              left.id.localeCompare(right.id);
-          } else {
-            comparison = (left[key] ?? 0) - (right[key] ?? 0);
-            if (comparison === 0 && key !== "depth") {
-              comparison = left.depth - right.depth;
-            }
-            if (comparison === 0) {
-              comparison = left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
-            }
-          }
-
-          return comparison * direction;
-        }
-
-        function buildTreeViewState(rootFileId) {
-          if (!treeGridData) {
-            return null;
-          }
-
-          const levelByFile = new Map();
-          const visibleFiles = new Set();
-          const allFileIds = new Set(treeGridData.files.map((entry) => entry.id));
-
-          if (rootFileId && rootFileId !== "all" && allFileIds.has(rootFileId)) {
-            const queue = [rootFileId];
-            while (queue.length > 0) {
-              const source = queue.shift();
-              if (visibleFiles.has(source)) {
-                continue;
-              }
-              visibleFiles.add(source);
-              treeGridData.edges.forEach(({ source: edgeSource, target }) => {
-                if (edgeSource === source && allFileIds.has(target) && !visibleFiles.has(target)) {
-                  queue.push(target);
-                }
-              });
-            }
-          } else {
-            allFileIds.forEach((fileId) => {
-              visibleFiles.add(fileId);
-            });
-          }
-
-          const filteredEdges = treeGridData.edges.filter(
-            ({ source, target }) => visibleFiles.has(source) && visibleFiles.has(target)
-          );
-          const incomingCounts = new Map();
-          visibleFiles.forEach((fileId) => {
-            incomingCounts.set(fileId, 0);
-          });
-
-          filteredEdges.forEach(({ target }) => {
-            incomingCounts.set(target, (incomingCounts.get(target) ?? 0) + 1);
-          });
-
-          let frontier = Array.from(visibleFiles)
-            .filter((fileId) => (incomingCounts.get(fileId) ?? 0) === 0)
-            .sort();
-          frontier.forEach((fileId) => {
-            levelByFile.set(fileId, 0);
-          });
-
-          const remainingIncoming = new Map(incomingCounts);
-
-          while (frontier.length > 0) {
-            const nextFrontier = [];
-            frontier.forEach((source) => {
-              const sourceLevel = levelByFile.get(source);
-              if (sourceLevel === undefined) {
-                return;
-              }
-              treeGridData.edges.forEach(({ source: edgeSource, target }) => {
-                if (edgeSource !== source || !visibleFiles.has(target)) {
-                  return;
-                }
-
-                const nextLevel = sourceLevel + 1;
-                const existing = levelByFile.get(target);
-                if (existing === undefined || nextLevel > existing) {
-                  levelByFile.set(target, nextLevel);
-                }
-                const updated = Math.max(0, (remainingIncoming.get(target) ?? 0) - 1);
-                remainingIncoming.set(target, updated);
-                if (updated === 0) {
-                  nextFrontier.push(target);
-                }
-              });
-            });
-            frontier = [...new Set(nextFrontier)].sort();
-          }
-
-          const unresolved = Array.from(visibleFiles).filter((fileId) => !levelByFile.has(fileId));
-          if (unresolved.length > 0) {
-            let fallbackLevel = 0;
-            if (levelByFile.size > 0) {
-              fallbackLevel = Math.max(...Array.from(levelByFile.values())) + 1;
-            }
-            unresolved.forEach((fileId) => {
-              levelByFile.set(fileId, fallbackLevel);
-              fallbackLevel += 1;
-            });
-          }
-
-          const visiblePaths = Array.from(visibleFiles)
-            .map(getFilePath)
-            .filter(Boolean)
-            .sort();
-
-          const fileLookup = new Map(treeGridData.files.map((entry) => [entry.path, entry]));
-          const levels = new Map();
-          for (const [fileId, level] of levelByFile.entries()) {
-            if (!levels.has(level)) {
-              levels.set(level, []);
-            }
-            const filePath = getFilePath(fileId);
-            if (!filePath) {
-              continue;
-            }
-            levels.get(level).push(filePath);
-          }
-
-          const fileRows = Array.from(visibleFiles)
-            .map((fileId) => {
-              const filePath = getFilePath(fileId);
-              if (!filePath) {
-                return null;
-              }
-              const fileEntry = fileById.get(fileId);
-              return {
-                id: fileId,
-                path: filePath,
-                label: getFileName(filePath),
-                depth: levelByFile.get(fileId) ?? 0,
-                imports: Array.from(new Set(fileEntry?.imports ?? [])).sort(),
-                importPaths: [],
-                exportPaths: [],
-              };
-            })
-            .filter(Boolean);
-
-          const fileRowById = new Map(fileRows.map((row) => [row.id, row]));
-          fileRows.forEach((sourceRow) => {
-            (sourceRow.imports ?? []).forEach((importedPath) => {
-              const targetRow = fileRows.find((candidate) => candidate.path === importedPath);
-              if (!targetRow) {
-                return;
-              }
-
-              sourceRow.importPaths.push(targetRow.path);
-              targetRow.exportPaths.push(sourceRow.path);
-
-              if (targetRow.depth > sourceRow.depth) {
-                sourceRow.negativeImports = (sourceRow.negativeImports ?? 0) + 1;
-                sourceRow.negativeImportFiles = sourceRow.negativeImportFiles ?? [];
-                sourceRow.negativeImportFiles.push(targetRow.path);
-              } else if (targetRow.depth < sourceRow.depth) {
-                targetRow.negativeExports = (targetRow.negativeExports ?? 0) + 1;
-                targetRow.negativeExportFiles = targetRow.negativeExportFiles ?? [];
-                targetRow.negativeExportFiles.push(sourceRow.path);
-              } else {
-                sourceRow.balance = (sourceRow.balance ?? 0) + 1;
-                sourceRow.balanceFiles = sourceRow.balanceFiles ?? [];
-                sourceRow.balanceFiles.push(targetRow.path);
-              }
-            });
-          });
-
-          fileRows.forEach((row) => {
-            row.negativeImports = row.negativeImports ?? 0;
-            row.negativeExports = row.negativeExports ?? 0;
-            row.balance = row.balance ?? 0;
-            row.importPaths = Array.from(new Set(row.importPaths ?? [])).sort();
-            row.exportPaths = Array.from(new Set(row.exportPaths ?? [])).sort();
-            row.negativeImportFiles = row.negativeImportFiles ?? [];
-            row.negativeExportFiles = row.negativeExportFiles ?? [];
-            row.balanceFiles = row.balanceFiles ?? [];
-          });
-
-          fileRows.sort(compareAnalyticsRows);
-
-          const maxDepth = fileRows.reduce((max, entry) => Math.max(max, entry.depth), 0);
-
-          return {
-            levelByFile,
-            visibleFiles,
-            filteredEdges,
-            visiblePaths,
-            fileLookup,
-            levels,
-            fileRows,
-            maxDepth,
-          };
-        }
-
-        function buildTreeMermaid(rootFileId) {
-          const state = buildTreeViewState(rootFileId);
-          if (!state) {
-            return "";
-          }
-
-          const { levelByFile, visibleFiles, filteredEdges, visiblePaths, fileLookup, levels } =
-            state;
-
-          const lines = [
-            "%% " + visiblePaths.length + " files, " + treeGridData.files.length + " total files, " + filteredEdges.length + " edges",
-            "flowchart TD",
-            "direction TB",
-            "classDef fileNode fill:#e2e8f0,stroke:#334155,stroke-width:1px,color:#0f172a;",
-            "classDef fileRoot fill:#f8fafc,stroke:#0f172a,stroke-width:1px,color:#0f172a,stroke-dasharray: 3 3;",
-          ];
-
-          const sortedLevels = Array.from(levels.keys()).sort((left, right) => left - right);
-          sortedLevels.forEach((level) => {
-            const levelId = "file_level_" + level;
-            lines.push("subgraph " + levelId + "[\\\"Depth " + level + "\\\"]");
-            lines.push("direction TB");
-
-            const filesInLevel = levels.get(level) ?? [];
-            filesInLevel.sort().forEach((filePath) => {
-              const fileEntry = fileLookup.get(filePath);
-              if (!fileEntry) {
-                return;
-              }
-              const fileName = getFileName(filePath);
-              lines.push(fileEntry.id + "[\\\"" + escapeMermaidLabel(fileName) + "\\\"]");
-            });
-
-            lines.push("end");
-          });
-
-          for (const fileId of visibleFiles) {
-            if (levelByFile.get(fileId) === 0) {
-              lines.push("class " + fileId + " fileRoot;");
-            } else {
-              lines.push("class " + fileId + " fileNode;");
-            }
-          }
-
-          const sortedEdgeIds = new Set(
-            filteredEdges.map(({ source, target }) => source + "=>" + target)
-          );
-          for (const edgeId of Array.from(sortedEdgeIds).sort()) {
-            const [source, target] = edgeId.split("=>");
-            if (source && target) {
-              lines.push(source + " --> " + target);
-            }
-          }
-
-          return lines.join(String.fromCharCode(10));
-        }
-
-        function renderTreeAnalytics(rootFileId) {
-          if (!analyticsPanel || !treeGridData) {
-            return;
-          }
-
-          const state = buildTreeViewState(rootFileId);
-          if (!state) {
-            analyticsPanel.innerHTML = "";
-            return;
-          }
-
-          const { fileRows, maxDepth, filteredEdges } = state;
-          function formatCount(value) {
-            return String(value ?? 0);
-          }
-
-          function formatTooltipList(files) {
-            const uniqueFiles = [...new Set((files ?? []).filter(Boolean))].sort();
-            if (uniqueFiles.length === 0) {
-              return "<div>None</div>";
-            }
-
-            return "<ul>" + uniqueFiles.map((filePath) => "<li>" + escapeMermaidLabel(getFileName(filePath)) + "</li>").join("") + "</ul>";
-          }
-
-          function buildTooltip(files) {
-            return '<span class="analytics-tooltip">' + formatTooltipList(files) + "</span>";
-          }
-
-          function formatPopoverList(files) {
-            const entries = (files ?? [])
-              .map((filePath) => {
-                const entry = fileLookup.get(filePath);
-                if (!entry) {
-                  return null;
-                }
-                return { path: filePath, depth: entry.depth ?? 0 };
-              })
-              .filter(Boolean)
-              .sort((left, right) => left.depth - right.depth || left.path.localeCompare(right.path));
-
-            if (entries.length === 0) {
-              return "<div>None</div>";
-            }
-
-            return (
-              "<ul>" +
-              entries
-                .map(
-                  (entry) =>
-                    "<li><span class='analytics-tooltip-path'>" +
-                    escapeMermaidLabel(entry.path) +
-                    "</span> <span class='analytics-tooltip-depth'>(D" +
-                    String(entry.depth) +
-                    ")</span></li>"
-                )
-                .join("") +
-              "</ul>"
-            );
-          }
-
-          function buildFilePopover(row) {
-            return (
-              '<span class="analytics-tooltip">' +
-              '<div class="analytics-tooltip-section">' +
-              '<strong class="analytics-tooltip-label">Imports</strong>' +
-              formatPopoverList(row.importPaths) +
-              "</div>" +
-              '<div class="analytics-tooltip-section">' +
-              '<strong class="analytics-tooltip-label">Exports</strong>' +
-              formatPopoverList(row.exportPaths) +
-              "</div>" +
-              "</span>"
-            );
-          }
-
-          const rowsHtml = fileRows
-            .map((row) => {
-              return (
-                '<div class="analytics-cell analytics-depth">' + row.depth + "</div>" +
-                '<div class="analytics-cell analytics-file" title="' +
-                escapeMermaidLabel(row.path) +
-                '">' +
-                '<span class="analytics-file-label">' +
-                escapeMermaidLabel(row.label) +
-                "</span>" +
-                buildFilePopover(row) +
-                "</div>" +
-                '<div class="analytics-cell analytics-number">' +
-                '<span class="analytics-count" title="' +
-                escapeMermaidLabel(getFileName(row.path)) +
-                '">' +
-                formatCount(row.negativeImports) +
-                "</span>" +
-                buildTooltip(row.negativeImportFiles) +
-                "</div>" +
-                '<div class="analytics-cell analytics-number">' +
-                '<span class="analytics-count" title="' +
-                escapeMermaidLabel(getFileName(row.path)) +
-                '">' +
-                formatCount(row.negativeExports) +
-                "</span>" +
-                buildTooltip(row.negativeExportFiles) +
-                "</div>" +
-                '<div class="analytics-cell analytics-number">' +
-                '<span class="analytics-count" title="' +
-                escapeMermaidLabel(getFileName(row.path)) +
-                '">' +
-                formatCount(row.balance) +
-                "</span>" +
-                buildTooltip(row.balanceFiles) +
-                "</div>"
-              );
-            })
-            .join("");
-
-          function headerLabel(key, label) {
-            const isActive = analyticsSort.key === key;
-            const arrow = isActive ? analyticsSort.direction === "asc" ? " ↑" : " ↓" : "";
-            return label + arrow;
-          }
-
-          function headerButton(key, label, explanation) {
-            const titleName = label;
-            const tooltip =
-              '<span class="analytics-tooltip"><strong>' +
-              titleName +
-              "</strong>" +
-              escapeMermaidLabel(explanation) +
-              "</span>";
-            return (
-              '<button type="button" class="analytics-head analytics-sort" data-sort="' +
-              key +
-              '" aria-label="' +
-              escapeMermaidLabel(titleName) +
-              ': ' +
-              escapeMermaidLabel(explanation) +
-              '">' +
-              headerLabel(key, label) +
-              tooltip +
-              "</button>"
-            );
-          }
-
-          analyticsPanel.innerHTML = [
-            "<h2>Depth Analytics</h2>",
-            '<div class="analytics-summary">',
-            '<span class="analytics-chip">' + fileRows.length + " files</span>",
-            '<span class="analytics-chip">' + filteredEdges.length + " edges</span>",
-            '<span class="analytics-chip">Max depth ' + maxDepth + "</span>",
-            "</div>",
-            '<div class="analytics-grid" role="table" aria-label="Files ordered by depth">',
-            headerButton("depth", "D", "Depth of the file in the current tree. Lower numbers are closer to the root."),
-            headerButton("file", "File", "The file name for each visible node in the tree."),
-            headerButton("negativeImports", "NI", "Negative imports. Counts this file's imports to files at a higher depth number."),
-            headerButton("negativeExports", "NE", "Negative exports. Counts lower-depth files that import this file from above."),
-            headerButton("balance", "B", "Balanced links. Counts imports from files at the same depth."),
-            rowsHtml,
-            "</div>",
-          ].join("");
-
-          analyticsPanel.querySelectorAll("[data-sort]").forEach((button) => {
-            button.addEventListener("click", () => {
-              const nextKey = button.dataset.sort;
-              if (!nextKey) {
-                return;
-              }
-
-              if (analyticsSort.key === nextKey) {
-                analyticsSort.direction = analyticsSort.direction === "asc" ? "desc" : "asc";
-              } else {
-                analyticsSort.key = nextKey;
-                analyticsSort.direction = nextKey === "file" ? "asc" : "desc";
-              }
-
-              renderTreeAnalytics(rootFileId);
-            });
-          });
-        }
-
-        function hydrateRootButtons() {
-          if (!isTreeMode || !rootControls || !rootButtons || !treeGridData) {
-            return;
-          }
-          const allButton = document.createElement("button");
-          allButton.type = "button";
-          allButton.className = "root-button";
-          allButton.textContent = "All Files";
-          allButton.dataset.root = "all";
-          allButton.addEventListener("click", () => switchRoot("all"));
-          rootButtons.appendChild(allButton);
-
-          if (treeGridData.roots.length === 0) {
-            return;
-          }
-          treeGridData.roots.forEach((rootId) => {
-            const file = treeGridData.files.find((entry) => entry.id === rootId);
-            if (!file) {
-              return;
-            }
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "root-button";
-            button.textContent = file.label;
-            button.dataset.root = rootId;
-            button.addEventListener("click", () => switchRoot(rootId));
-            rootButtons.appendChild(button);
-          });
-        }
-
-        function setActiveRoot(rootId) {
-          if (!rootButtons) {
-            return;
-          }
-          Array.from(rootButtons.querySelectorAll("button")).forEach((button) => {
-            const isSelected = button.dataset.root === rootId;
-            button.classList.toggle("active", isSelected);
-          });
-        }
-
-        async function switchRoot(rootId) {
-          activeRoot = rootId;
-          const cached = rootCache.get(rootId);
-          const diagramText = cached ?? buildTreeMermaid(rootId);
-          rootCache.set(rootId, diagramText);
-          setActiveRoot(rootId);
-          isAutoFit = false;
-          await renderMermaid(diagramText);
-          renderTreeAnalytics(rootId);
-        }
-
-        async function renderMermaid(definition) {
-          mermaidDiagram.textContent = definition;
-          mermaidDiagram.style.display = "block";
-          mermaidDiagram.style.width = "auto";
-          mermaidContent.style.width = "auto";
-          mermaidContent.style.minWidth = "100%";
-          mermaidDiagram.removeAttribute("data-processed");
-          try {
-            await mermaid.run({ nodes: [mermaidDiagram] });
-          } catch (error) {
-            const message = error?.message || String(error);
-            if (String(message).includes("Syntax error in text")) {
-              console.error("Mermaid syntax error in text", {
-                root: activeRoot,
-                snippet: definition.slice(0, 400),
-                message,
-              });
-            } else {
-              console.error("Mermaid render error", {
-                root: activeRoot,
-                message,
-              });
-            }
-            mermaidDiagram.innerHTML =
-              '<pre style="padding:12px; color:#b91c1c; white-space:pre-wrap;">' +
-              "Mermaid render error: " +
-              escapeMermaidLabel(message) +
-              "</pre>";
-            return;
-          }
-          requestAnimationFrame(() => {
-            renderZoom(currentScale);
-            centerRootNode(activeRoot);
-          });
-        }
-
-        zoomIn.addEventListener("click", () => {
-          isAutoFit = false;
-          renderZoom(currentScale + stepScale);
-        });
-
-        zoomOut.addEventListener("click", () => {
-          isAutoFit = false;
-          renderZoom(currentScale - stepScale);
-        });
-
-        zoomReset.addEventListener("click", () => {
-          isAutoFit = false;
-          renderZoom(1);
-        });
-
-        zoomFit.addEventListener("click", () => {
-          fitToWidth();
-        });
-
-        graphFrame.addEventListener(
-          "wheel",
-          (event) => {
-            if (!event.ctrlKey) {
-              return;
-            }
-
-            event.preventDefault();
-            isAutoFit = false;
-
-            const pinchFactor = Math.exp(-event.deltaY * 0.0015);
-            renderZoom(currentScale * pinchFactor);
-          },
-          { passive: false }
-        );
-
-        window.addEventListener("resize", () => {
-          if (isAutoFit) {
-            fitToWidth();
-          }
-        });
-
-        if (isTreeMode) {
-          loadTreeGridData().then((payload) => {
-            treeGridData = payload;
-            fileById = new Map(treeGridData.files.map((entry) => [entry.id, entry]));
-            activeRoot =
-              treeGridData.roots.length > 0 ? treeGridData.roots[0] : "all";
-
-            hydrateRootButtons();
-            setActiveRoot(activeRoot);
-
-            const initialDefinition =
-              rootCache.get(activeRoot) ?? buildTreeMermaid(activeRoot);
-            rootCache.set(activeRoot, initialDefinition);
-            mermaidDiagram.textContent = initialDefinition;
-            renderMermaid(initialDefinition).then(() => {
-              fitToWidth();
-            });
-            renderTreeAnalytics(activeRoot);
-          });
-          return;
-        }
-
-        mermaidDiagram.textContent = mermaidDefinition;
-        mermaid.run({
-          nodes: [mermaidDiagram],
-        }).then(() => {
-          requestAnimationFrame(() => {
-            renderZoom(currentScale);
-          });
-        });
-      });
-    </script>
   </head>
   <body>
-    <main>
-      <div class="meta">${entries.length} exports, ${importerCount} importers, ${edgeCount} edges</div>
-      <div class="graph-shell${useTree ? " tree-mode" : ""}">
-        <div class="graph-toolbar">
-${useTree ? `
-          <div id="rootControls" class="root-controls">
-            <div id="rootButtons" class="root-strip">
-            </div>
-          </div>` : ""}
-          <button id="zoomFit" type="button">Fit width</button>
-          <button id="zoomOut" type="button">−</button>
-          <button id="zoomIn" type="button">＋</button>
-          <button id="zoomReset" type="button">100%</button>
-          <span id="zoomLevel">100%</span>
-          <span class="sr-only" aria-live="polite" id="zoomStatus"></span>
-        </div>
-        <div class="graph-stage">
-          <div id="graphFrame" class="graph-frame">
-            <div class="mermaid-container">
-              <div id="mermaidContent" class="mermaid-content">
-                <div id="mermaidDiagram" class="mermaid"></div>
-              </div>
-            </div>
-          </div>
-${useTree ? `
-          <aside id="analyticsPanel" class="analytics-panel" aria-label="Depth analytics"></aside>` : ""}
-        </div>
-      </div>
-    </main>
+    <div id="app"></div>
+    <script>window.__EXPORT_GRAPH_DATA__ = ${escapeScriptJson(JSON.stringify(payload))};</script>
+    ${
+      frontendScriptPath
+        ? `<script src="${escapeHtml(frontendScriptPath)}"></script>`
+        : `<script>${(await getExportGraphFrontendBundle()).js}</script>`
+    }
   </body>
 </html>`;
 }
@@ -2278,6 +1003,10 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function escapeScriptJson(value) {
+  return value.replaceAll("</script>", "<\\/script>").replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
 }
 
 function relativeLabel(basePath, targetPath) {
@@ -2337,6 +1066,62 @@ async function writeOutput(outputPath, contents) {
   await fs.writeFile(outputPath, contents, "utf8");
 }
 
+async function getExportGraphFrontendBundle() {
+  if (!exportGraphFrontendBundlePromise) {
+    exportGraphFrontendBundlePromise = (async () => {
+      let esbuild;
+      try {
+        esbuild = await import("esbuild");
+      } catch (error) {
+        throw new Error(
+          "Missing dev dependency 'esbuild'. Run npm install before using --format html."
+        );
+      }
+
+      const result = await esbuild.build({
+        entryPoints: [EXPORT_GRAPH_FRONTEND_ENTRY],
+        outfile: "export-graph-app.js",
+        bundle: true,
+        write: false,
+        platform: "browser",
+        format: "iife",
+        target: ["es2020"],
+        jsx: "automatic",
+        jsxImportSource: "preact",
+        sourcemap: "external",
+        sourcesContent: true,
+      });
+      const outputFiles = result.outputFiles ?? [];
+      const jsFile = outputFiles.find((file) => file.path.endsWith(".js"));
+      const mapFile = outputFiles.find((file) => file.path.endsWith(".js.map"));
+      if (!jsFile) {
+        throw new Error("esbuild did not produce a frontend bundle.");
+      }
+      return {
+        js: jsFile.text,
+        map: mapFile?.text ?? null,
+      };
+    })();
+  }
+
+  return exportGraphFrontendBundlePromise;
+}
+
+function getHtmlAssetPaths(outputPath) {
+  if (!outputPath) {
+    return null;
+  }
+
+  const directory = path.dirname(outputPath);
+  const baseName = path.basename(outputPath, path.extname(outputPath));
+  const scriptFileName = `${baseName}.app.js`;
+  return {
+    scriptAbsolutePath: path.join(directory, scriptFileName),
+    scriptRelativePath: `./${scriptFileName}`,
+    mapAbsolutePath: path.join(directory, `${scriptFileName}.map`),
+  };
+}
+
 function getTreeGridDataOutputPath(outputPath) {
   if (!outputPath) {
     return null;
@@ -2376,6 +1161,11 @@ async function main() {
       ? getTreeGridDataOutputPath(options.output)
       : null;
 
+  const htmlAssetPaths =
+    options.format === "html" && options.output
+      ? getHtmlAssetPaths(options.output)
+      : null;
+
   const output =
     options.format === "json"
       ? buildJson(entries)
@@ -2383,14 +1173,25 @@ async function main() {
         ? buildMermaid(entries, options)
           : options.format === "dot"
             ? buildDot(entries, options)
-          : buildHtml(
+          : await buildHtml(
               entries,
               options,
               treeGridData,
-              null
+              htmlAssetPaths?.scriptRelativePath ?? null
             );
 
   if (options.output) {
+    if (options.format === "html" && htmlAssetPaths) {
+      const frontendBundle = await getExportGraphFrontendBundle();
+      let scriptContents = frontendBundle.js;
+      if (frontendBundle.map) {
+        scriptContents = `${scriptContents}\n//# sourceMappingURL=${path.basename(
+          htmlAssetPaths.mapAbsolutePath
+        )}\n`;
+        await writeOutput(htmlAssetPaths.mapAbsolutePath, frontendBundle.map);
+      }
+      await writeOutput(htmlAssetPaths.scriptAbsolutePath, scriptContents);
+    }
     await writeOutput(options.output, output);
     if (gridExport && treeGridDataOutputPath) {
       await writeOutput(treeGridDataOutputPath, `${JSON.stringify(gridExport, null, 2)}\n`);
