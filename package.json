@@ -2,7 +2,7 @@
   "name": "@asalaza6/autonomy-v2",
   "version": "1.4.15",
   "description": "Autonomy v2 orchestration package.",
-  "type": "commonjs",
+  "type": "module",
   "private": false,
   "author": "Autonomy V2",
   "license": "UNLICENSED",
@@ -17,23 +17,33 @@
     "autonomy",
     "agent-system"
   ],
-  "main": "src/autonomy-v2.js",
+  "main": "./dist/src/autonomy-v2/index.js",
   "bin": {
-    "autonomy-v2": "bin/autonomy-v2",
-    "autonomy-v2-server": "bin/autonomy-v2-server",
-    "autonomy-v2-worker": "bin/autonomy-v2-worker",
-    "autonomy-v2-smoke": "bin/autonomy-v2-smoke"
+    "autonomy-v2": "dist/bin/autonomy-v2.js",
+    "autonomy-v2-server": "dist/bin/autonomy-v2-server.js",
+    "autonomy-v2-smoke": "dist/bin/autonomy-v2-smoke.js"
   },
   "exports": {
-    ".": "./src/autonomy-v2.js",
-    "./server": "./src/autonomy-v2-server.js",
-    "./worker": "./src/autonomy-v2-worker.js",
-    "./default-runner": "./src/autonomy-v2-default-runner.js",
+    ".": "./dist/src/autonomy-v2/index.js",
+    "./server": "./dist/src/server/server-main.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "smoke": "node --test package-smoke.test.js",
-    "typecheck": "node --check src/autonomy-v2-config.js src/autonomy-v2-codex.js src/autonomy-v2-dev-sync.js src/autonomy-v2-env.js src/autonomy-v2-github.js src/autonomy-v2-lock.js src/autonomy-v2-server.js src/autonomy-v2-default-runner.js src/autonomy-v2-worker.js bin/autonomy-v2 bin/autonomy-v2-server bin/autonomy-v2-smoke bin/autonomy-v2-worker",
+    "build": "tsc",
+    "check:lines": "node scripts/check-line-count.js",
+    "clean": "rm -rf dist",
+    "exports:mermaid": "node analyze-exports.mjs --format mermaid --layout TD --output docs/export-graph.mmd && open docs/export-graph.mmd",
+    "exports:html": "node analyze-exports.mjs --format html --tree --layout TD --output docs/export-graph.html && open docs/export-graph.html",
+    "exports:svg": "node analyze-exports.mjs --format dot --output /tmp/export-graph.dot && dot -Tsvg /tmp/export-graph.dot -o docs/export-graph.svg && open docs/export-graph.svg",
+    "nomenclature": "node scripts/check-nomenclature.js",
+    "test": "npm run build && node --test dist/tests/**/*.test.js",
+    "smoke": "npm run build && node --test dist/tests/smoke/*.test.js",
+    "lint": "eslint src bin tests",
+    "lint:fix": "npm run lint -- --fix",
+    "typecheck": "tsc --noEmit",
+    "knip": "npx -y knip",
+    "madge": "npx -y madge --extensions ts src",
+    "circular": "npx -y madge --circular --extensions ts src",
     "release:patch": "npm run smoke && npm version patch && npm publish --access public",
     "release:minor": "npm run smoke && npm version minor && npm publish --access public",
     "release:major": "npm run smoke && npm version major && npm publish --access public",
@@ -41,9 +51,22 @@
   },
   "files": [
     "README.md",
-    "bin",
-    "src",
+    "dist",
     "templates",
-    "package-smoke.test.js"
-  ]
+    "docs"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "@typescript-eslint/eslint-plugin": "^8.37.0",
+    "@typescript-eslint/parser": "^8.37.0",
+    "esbuild": "^0.25.11",
+    "eslint": "^9.39.4",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^17.4.0",
+    "preact": "^10.29.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "ts-morph": "^27.0.2"
+  }
 }

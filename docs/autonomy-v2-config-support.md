@@ -34,7 +34,6 @@ By default it writes:
 - `prompts/autonomous/v2/agents/*`
 - `prompts/autonomous/v2/queues/*`
 - `prompts/autonomous/v2/state/*`
-- `scripts/autonomy-v2-default-runner.js`
 
 Existing config files are preserved. Generated agent scaffolding is recreated from the active config, and `--force` prunes stale generated agent files when the roster changes.
 
@@ -61,13 +60,13 @@ The default integration and production branches are:
 - integration: `dev`
 - production: `main`
 
-## How Runner Commands Work
+## How Runner Execution Works
 
-The repo-local config keeps the current runner command shape:
+Implementation and review execution always uses the fixed packaged runner:
 
-- `node scripts/autonomy-v2-default-runner.js`
+- `node <package-root>/src/autonomy-v2/runner/default-runner.js`
 
-That wrapper resolves the packaged default runner when the package is installed, and falls back to the package source copy when needed.
+Runner execution behavior is not configurable through `agents.json`.
 
 ## Validation Rules
 
@@ -79,7 +78,6 @@ The current validator checks for:
 - unsupported agent roles
 - missing `systemPrompt`
 - missing `gitIdentity`
-- missing `runnerCommand` for non-PM agents
 - invalid `schemaVersion` values when present
 - invalid `taskQueue` values when present
 - `mergeActors` entries that do not map to a known agent
@@ -94,7 +92,6 @@ To adapt autonomy v2 in a new repo:
 4. Add or remove agent objects in `agents.json` as needed.
 5. Update lane scopes, checks, and git identities for the repo’s actual code layout.
 6. Re-run `autonomy-v2 init --force` to materialize any new agents and prune removed generated scaffolding.
-7. Keep the runtime wrapper script if the repo wants the same runner command shape.
 
 ### Agent Config Shape
 
@@ -105,7 +102,7 @@ The active config supports any number of agents. Common fields are:
 - `schemaVersion` if you need to record a config format revision
 - `systemPrompt`
 - `gitIdentity`
-- `runnerCommand` for non-PM agents
+- runner execution is fixed at runtime
 - `include`
 - `checks`
 - `taskQueue` when you want to override the default queue location; otherwise the runtime uses the standard queue path for that agent id

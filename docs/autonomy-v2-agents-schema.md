@@ -54,7 +54,6 @@ Each agent must be an object with the fields below.
   "personaName": "aquarium-agent",
   "role": "implementation",
   "systemPrompt": "prompts/autonomous/v2/agents/aquarium-agent/system.md",
-  "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
   "taskQueue": "prompts/autonomous/v2/queues/aquarium-agent.json",
   "gitIdentity": {
     "name": "automation-bot[bot]",
@@ -74,7 +73,6 @@ Each agent must be an object with the fields below.
 | `role` | string | Yes | Must be one of: `pm`, `implementation`, `review` |
 | `systemPrompt` | string | Yes | Path (relative recommended) to prompt markdown used by Codex planning/review prompts |
 | `gitIdentity` | object | Yes | Must include non-empty `name` and `email` |
-| `runnerCommand` | string[] | Required for `implementation` and `review` | Array of command tokens, non-empty |
 | `taskQueue` | string | No | Path to that agent queue file |
 | `personaName` | string | No | Human-readable label, forwarded to PM planning context |
 | `include` | string[] | No | Scope allowlist for this agent (globs). Used for PM validation + scope checks |
@@ -85,9 +83,8 @@ Each agent must be an object with the fields below.
 
 ### Additional notes on validation
 - `id` must be unique across all agents.
-- `runnerCommand` is not required for `pm` roles.
 - `taskQueue` paths may point into repo paths or runtime-managed queue paths.
-- Unknown keys on agent objects are currently preserved and passed through as-is.
+- Unknown keys on agent objects are preserved as-is.
 
 ### Queue path behavior
 - Implementation queues are read from tracked refs and committed back to the integration branch.
@@ -99,14 +96,13 @@ Each agent must be an object with the fields below.
 - `pm`:
   - Decomposes PRDs into tasks.
   - Uses `systemPrompt`, `gitIdentity`, optional `taskQueue`.
-  - `runnerCommand` is ignored for `pm`.
 - `implementation`:
-  - Uses `runnerCommand` to run work for queue tasks.
+  - Uses the fixed packaged default runner at `src/autonomy-v2/runner/default-runner.js`.
   - Must have non-empty `checks` at runtime.
   - `include` and `exclude` are used for scope enforcement.
 - `review`:
-  - Uses `runnerCommand` to evaluate review tasks and optionally merge.
-  - Uses `systemPrompt`, `gitIdentity`, and `runnerCommand`.
+  - Uses the fixed packaged default runner at `src/autonomy-v2/runner/default-runner.js` to evaluate reviews and optionally merge.
+  - Uses `systemPrompt` and `gitIdentity`.
   - `checks` are not required by validator.
 
 ## 5) Paths and defaults used during bootstrap
@@ -158,7 +154,6 @@ During `autonomy-v2 init`, generated defaults are written for:
       "id": "aquarium-agent",
       "role": "implementation",
       "systemPrompt": "prompts/autonomous/v2/agents/aquarium-agent/system.md",
-      "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
       "taskQueue": "prompts/autonomous/v2/queues/aquarium-agent.json",
       "gitIdentity": {
         "name": "aquarium-bot[bot]",
@@ -171,7 +166,6 @@ During `autonomy-v2 init`, generated defaults are written for:
       "id": "reviewer",
       "role": "review",
       "systemPrompt": "prompts/autonomous/v2/agents/reviewer/system.md",
-      "runnerCommand": ["node", "scripts/autonomy-v2-default-runner.js"],
       "taskQueue": "prompts/autonomous/v2/queues/reviewer.json",
       "gitIdentity": {
         "name": "reviewer-bot[bot]",
@@ -187,13 +181,12 @@ During `autonomy-v2 init`, generated defaults are written for:
 - Duplicate `id` entries inside `agents`.
 - Unsupported `role` value.
 - Missing `id`, `role`, `systemPrompt`, or `gitIdentity.name`/`gitIdentity.email`.
-- Non-`implementation`/`review` agents with `runnerCommand` missing (PM does not require it; non-PM does).
 - `mergeActors` entries that do not match a configured `id`.
 - Implementation agents with missing/empty `checks` (accepted in config validation but enforced by runtime checks).
 - `schemaVersion` not a positive integer when provided.
 
 ## 8) Related implementation
-- Config loading/validation: [src/autonomy-v2-config.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2-config.js)
-- Orchestration and role dispatch: [src/autonomy-v2-orchestrator.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2-orchestrator.js)
-- Runner behavior: [src/autonomy-v2-default-runner.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2-default-runner.js)
+- Config loading/validation: [src/config/index.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/config/index.js)
+- Orchestration and role dispatch: [src/server/orchestrator/index.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/index.js)
+- Runner behavior: [src/autonomy-v2/runner/default-runner.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/runner/default-runner.js)
 - Planner / Codex constraints: [src/autonomy-v2-codex.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2-codex.js)

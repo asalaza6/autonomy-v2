@@ -1,0 +1,50 @@
+{
+  "files": [
+    {
+      "id": "node_1",
+      "path": "/repo/src/app/index.ts",
+      "label": "index.ts",
+      "relative": "src/app/index.ts",
+      "directory": "src/app",
+      "imports": [
+        "/repo/src/service/service.ts"
+      ]
+    },
+    {
+      "id": "node_2",
+      "path": "/repo/src/service/service.ts",
+      "label": "service.ts",
+      "relative": "src/service/service.ts",
+      "directory": "src/service",
+      "imports": [
+        "/repo/src/domain/model.ts"
+      ]
+    },
+    {
+      "id": "node_3",
+      "path": "/repo/src/domain/model.ts",
+      "label": "model.ts",
+      "relative": "src/domain/model.ts",
+      "directory": "src/domain",
+      "imports": [
+        "/repo/src/shared/types.ts"
+      ]
+    },
+    {
+      "id": "node_4",
+      "path": "/repo/src/shared/types.ts",
+      "label": "types.ts",
+      "relative": "src/shared/types.ts",
+      "directory": "src/shared",
+      "imports": []
+    }
+  ],
+  "edges": [
+    { "source": "node_1", "target": "node_2" },
+    { "source": "node_2", "target": "node_3" },
+    { "source": "node_3", "target": "node_4" }
+  ],
+  "roots": [
+    "node_1"
+  ]
+}

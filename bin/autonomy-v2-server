@@ -1,8 +1,0 @@
-#!/usr/bin/env node
-
-const server = require('../src/autonomy-v2-server');
-
-Promise.resolve(server.main(process.argv.slice(2))).catch((error) => {
-  console.error(`ERROR: ${error.message}`);
-  process.exit(1);
-});

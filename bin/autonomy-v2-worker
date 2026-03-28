@@ -1,8 +1,0 @@
-#!/usr/bin/env node
-
-const worker = require('../src/autonomy-v2-worker');
-
-Promise.resolve(worker.main(process.argv.slice(2))).catch((error) => {
-  console.error(`ERROR: ${error.message}`);
-  process.exit(1);
-});

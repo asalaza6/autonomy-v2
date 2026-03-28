@@ -1,0 +1,57 @@
+{
+  "files": [
+    {
+      "id": "node_1",
+      "path": "/repo/src/app/index.ts",
+      "label": "index.ts",
+      "relative": "src/app/index.ts",
+      "directory": "src/app",
+      "imports": [
+        "/repo/src/cluster/a.ts",
+        "/repo/src/cluster/b.ts",
+        "/repo/src/cluster/c.ts"
+      ]
+    },
+    {
+      "id": "node_2",
+      "path": "/repo/src/cluster/a.ts",
+      "label": "a.ts",
+      "relative": "src/cluster/a.ts",
+      "directory": "src/cluster",
+      "imports": [
+        "/repo/src/cluster/b.ts"
+      ]
+    },
+    {
+      "id": "node_3",
+      "path": "/repo/src/cluster/b.ts",
+      "label": "b.ts",
+      "relative": "src/cluster/b.ts",
+      "directory": "src/cluster",
+      "imports": [
+        "/repo/src/cluster/c.ts"
+      ]
+    },
+    {
+      "id": "node_4",
+      "path": "/repo/src/cluster/c.ts",
+      "label": "c.ts",
+      "relative": "src/cluster/c.ts",
+      "directory": "src/cluster",
+      "imports": [
+        "/repo/src/cluster/a.ts"
+      ]
+    }
+  ],
+  "edges": [
+    { "source": "node_1", "target": "node_2" },
+    { "source": "node_1", "target": "node_3" },
+    { "source": "node_1", "target": "node_4" },
+    { "source": "node_2", "target": "node_3" },
+    { "source": "node_3", "target": "node_4" },
+    { "source": "node_4", "target": "node_2" }
+  ],
+  "roots": [
+    "node_1"
+  ]
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+docs/export-graph.html
+docs/export-graph.mmd
+docs/export-graph.svg
+docs/export-graph.tree.json
+docs/export-graph.grid.json
+docs/export-graph.app.js.map
+docs/export-graph.app.js
