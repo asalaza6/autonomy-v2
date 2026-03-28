@@ -7,13 +7,13 @@
     "src/server/worker/worker-main.ts",
     "bin/autonomy-v2-server.ts",
     "bin/autonomy-v2-smoke.ts",
-    "bin/autonomy-v2.ts"
+    "bin/autonomy-v2.ts",
+    "tools/export-graph-app.tsx"
   ],
   "ignoreFiles": [
     ".tmp-*.mjs",
     "tmp-*.mjs",
     "docs/export-graph.app.js",
-    "tools/export-graph-app.tsx",
     "src/autonomy-v2/commands/command-shared.ts",
     "src/autonomy-v2/runner/runner-main.ts",
     "src/server/orchestrator/orchestrator-main.ts",
