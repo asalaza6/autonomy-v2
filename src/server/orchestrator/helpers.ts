@@ -132,14 +132,14 @@ export {
   buildTaskQueueState,
   buildWorktreePath,
   compareImplementationTaskPriority,
-  comparePrdBacklogOrder,
+  
   getAgent,
-  getImplementationTaskState,
+  
   implementationTaskNeedsDispatch,
   isPendingImplementationTask,
   listPrds,
   listTasks,
   normalizeNonEmptyString,
   selectImplementationTask,
-  slugify,
+  
 };

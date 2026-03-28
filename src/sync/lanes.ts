@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { resolveGithubAuthToken } from './github.js';
 import { isImplementationRole, isReviewRole } from '../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, PullRequestRecord, QueueMap, TaskRecord } from './sync-types.js';
+import type { AnyRecord, AutonomyConfig, QueueMap, TaskRecord } from './sync-types.js';
 import { GIT_NETWORK_TIMEOUT_MS } from './sync-constants.js';
 import { emitSyncProgress, readJson } from './core.js';
 import { compareBranchToBase, getPullRequest, listPullRequestsByHead, resolveGithubRepo } from './github.js';
@@ -347,7 +347,7 @@ function buildSourceMetadata(remoteSpec, fetchedRef, integrationBranch) {
 
 export {
   buildImportedSpecState,
-  buildLaneBranchName,
+  
   buildLaneSourceSummary,
   buildLaneWorktreePath,
   buildSourceMetadata,

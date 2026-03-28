@@ -2,14 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole } from '../../agents/role-catalog.js';
 import type { AnyRecord, AutonomyConfig, BranchLocksState, PullRequestRecord, TaskRecord } from '../autonomy-types.js';
-import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
 import { ensureDir, getAgent, getAutonomyPaths, readJson, writeJson } from './shared-core.js';
 import {
   buildReviewFollowupAcceptance,
   buildTaskBranchName,
   buildTaskLaneKey,
   buildWorktreePath,
-  findBranchLockByLane,
   hasStagedGitChanges,
   isGitWorktree,
   resolveBaseRef,
@@ -22,15 +20,11 @@ import {
   findTask,
   getImplementationTaskState,
   getTaskQueue,
-  isTerminalTaskStatus,
-  readImplementationQueueSnapshot,
 } from './shared-queues.js';
 import {
   buildImplementationLaneSeedTask,
   findCompletedTask,
-  listCompletedLaneTasks,
   listImplementationLaneTasks,
-  listLaneTasks,
   resolveImplementationBranchRef,
 } from './shared-lanes.js';
 
@@ -350,7 +344,7 @@ export {
   appendTrackedBranchFollowupTask,
   buildLaneConflictTaskId,
   buildLaneFollowupTaskId,
-  ensureImplementationLaneWorktree,
+  
   ensureReviewerTask,
   enqueueLaneFollowupTask,
   getReviewerTask,

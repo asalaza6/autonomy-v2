@@ -75,14 +75,15 @@ function buildRoleEventName(value, suffix) {
 
 
 export { AGENT_ROLES };
-export { RUNNER_TYPES };
+
 
 export { TASK_TYPES };
 export { buildRoleEventName };
 
-export { getRunnerTypeForRole };
+
 export { getRoleAgentLabel };
 export { getRoleLabel };
+export { getRunnerTypeForRole };
 
 export { isAgentRole };
 export { isImplementationRole };

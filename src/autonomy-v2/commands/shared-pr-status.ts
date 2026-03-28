@@ -1,6 +1,5 @@
 import { AGENT_ROLES, TASK_TYPES, getRoleAgentLabel, getRoleLabel } from '../../agents/role-catalog.js';
 import { normalizeLaneKey } from './shared-core.js';
-import { buildTaskLaneKey } from './shared-repo.js';
 import { isTerminalTaskStatus, getImplementationTaskState } from './shared-queues.js';
 
 function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks }) {

@@ -187,9 +187,9 @@ export {
   buildPrdSpecRelativePath,
   buildPrdStatePayload,
   buildPrdStateRelativePath,
-  isProcessAcceptance,
+  
   normalizeStringList,
-  normalizeTaskSpecs,
+  
   parsePrdSpec,
   parsePrdState,
   requiresPmPlanning,

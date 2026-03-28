@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel } from '../../agents/role-catalog.js';
+import { AGENT_ROLES, getRoleLabel } from '../../agents/role-catalog.js';
 import type { AnyRecord } from '../autonomy-types.js';
 import { slugify } from './shared-core.js';
 

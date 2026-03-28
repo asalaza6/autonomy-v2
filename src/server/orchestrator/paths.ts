@@ -80,6 +80,6 @@ export {
   readJson,
   resolveRootDir,
   resolveRuntimeManagedPath,
-  trimLeadingSeparator,
+  
   writeJson,
 };

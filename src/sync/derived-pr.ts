@@ -290,8 +290,8 @@ export {
   buildStablePullRequestId,
   countCompletedLaneTasks,
   countCompletedTaskIds,
-  isPendingRuntimeTask,
-  reviewedCommitCountIsStale,
+  
+  
   sortDerivedTasks,
   uniqueStrings,
 };

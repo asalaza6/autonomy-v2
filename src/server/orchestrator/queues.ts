@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
-import { isImplementationRole, isReviewRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
+import { isReviewRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
 import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
 import type { AnyRecord, AutonomyConfig, QueueMap, QueueState } from '../server-types.js';
 import { gitRefExists, readImplementationQueueSnapshot, readJsonFromGitRef, resolveTrackedQueueRef } from './orchestrator-git.js';
@@ -174,9 +174,9 @@ function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, 
 }
 
 export {
-  findBranchLockByLane,
+  
   loadQueues,
   resolveImplementationQueueContext,
-  resolveQueuePath,
+  
   writeQueueAndAggregate,
 };

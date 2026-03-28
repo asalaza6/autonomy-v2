@@ -15,12 +15,12 @@ export {
   buildRoleEventName,
   getRoleAgentLabel,
   getRoleLabel,
-  hasGithubAuth,
   isImplementationRole,
   isPmRole,
   isReviewRole,
-  resolveGithubAuthToken,
   usesTrackedQueueForRole,
+  hasGithubAuth,
+  resolveGithubAuthToken,
   validateAutonomyConfig,
 };
 export {

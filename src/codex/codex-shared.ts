@@ -152,7 +152,7 @@ export {
   extractSpawnSyncError,
   buildSpawnExitMessage,
   logCodexFailure,
-  normalizeNonEmptyString,
+  
   normalizeStringList,
   readOptionalFile,
 };

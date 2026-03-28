@@ -9,7 +9,7 @@ import {
 import { hasGithubAuth, resolveGithubAuthToken } from '../../github/github-main.js';
 import { resolveGithubRepo, postIssueComment } from './net.js';
 import { REVIEW_AUTO_APPROVAL_THRESHOLD } from './runner-constants.js';
-import { extractExecError, normalizeNonEmptyString, uniqueStrings } from './runner-shared.js';
+import { normalizeNonEmptyString, uniqueStrings } from './runner-shared.js';
 
 function runCheckCommands(worktreePath, commands) {
   return uniqueStrings(commands).map((command) => {
@@ -194,11 +194,10 @@ function buildMergeFollowupComment(mergeMessage) {
 export {
   buildScopeSafeApprovalSummary,
   ensureCheckEnvironment,
-  getPrCommitCount,
   isScopeOnlyReviewFeedback,
   publishMergeFollowupCommentIfNeeded,
   resolveCheckCommands,
   runCheckCommands,
-  shouldForceApproveAfterRepeatedReviews,
   shouldRetryApprovedPrMerge,
+  shouldForceApproveAfterRepeatedReviews,
 };

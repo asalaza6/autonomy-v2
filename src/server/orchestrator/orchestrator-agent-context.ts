@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import type { AgentConfig, AutonomyConfig, AnyRecord, BranchLocksState, QueueMap, QueueState, RuntimeState, TaskRecord, TrackedPrdRecord } from '../server-types.js';
+import type { AgentConfig, AutonomyConfig, AnyRecord, BranchLocksState, QueueMap, RuntimeState, TaskRecord, TrackedPrdRecord } from '../server-types.js';
 import type { AgentExecutionContext } from '../../agents/AgentDefinition.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import { CLI_PATH, DEFAULT_RUNNER_PATH } from './orchestrator-constants.js';

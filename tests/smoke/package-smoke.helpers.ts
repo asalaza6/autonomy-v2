@@ -99,7 +99,7 @@ export {
   getAutonomyPathsForTest,
   git,
   initAutonomyRepo,
-  PROJECT_ROOT,
+  
   readGitJson,
   runNode,
   runTick,

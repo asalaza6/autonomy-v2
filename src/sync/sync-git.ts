@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import type { AnyRecord } from './sync-types.js';
-import { DEFAULT_SYNC_STATE, GIT_NETWORK_TIMEOUT_MS, PRD_ARCHIVE_DIR, PRD_QUEUE_DIR, PRD_SPECS_DIR, PRD_STATE_DIR } from './sync-constants.js';
-import { emitSyncProgress, ensureDir, getSyncPaths, readJson } from './core.js';
+import { GIT_NETWORK_TIMEOUT_MS, PRD_ARCHIVE_DIR, PRD_QUEUE_DIR, PRD_SPECS_DIR, PRD_STATE_DIR } from './sync-constants.js';
+import { emitSyncProgress, ensureDir, getSyncPaths } from './core.js';
 import {
   configureGitIdentity,
   extractExecError,
@@ -26,7 +26,6 @@ import {
   buildPrdStateRelativePath,
   parsePrdSpec,
   parsePrdState,
-  sanitizeFileSegment,
 } from './sync-prd.js';
 
 function hasPrdSpecInIntegrationBranch(rootDir, integrationBranch, prdId) {
@@ -417,15 +416,15 @@ function commitTrackedPrdStateToIntegrationBranch(rootDir, integrationBranch, pr
 }
 
 export {
-  alignLocalIntegrationBranch,
+  
   commitPrdSpecToIntegrationBranch,
   commitTrackedFilesToIntegrationBranch,
   commitTrackedPrdStateToIntegrationBranch,
-  ensureControlWorktree,
+  
   fetchIntegrationBranch,
   hasActivePrdSpecInIntegrationBranch,
   hasPrdSpecInIntegrationBranch,
   listTrackedPrdSpecs,
   readTrackedPrdStateMap,
-  resolveTrackedRef,
+  
 };

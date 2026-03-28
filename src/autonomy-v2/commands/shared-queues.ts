@@ -1,9 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
-import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
 import { TASK_TYPES, isImplementationRole, isReviewRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
-import type { AnyRecord, AutonomyConfig, BranchLocksState, QueueMap, QueueState, TaskRecord } from '../autonomy-types.js';
+import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../autonomy-types.js';
 import {
   DEFAULT_AUTONOMY_SEGMENTS,
   DEFAULT_RUNTIME_SEGMENTS,
@@ -329,7 +328,7 @@ function isTerminalTaskStatus(status) {
 }
 
 export {
-  buildFallbackAcceptance,
+  
   buildTaskQueueState,
   buildTrackedImplementationQueueUpdates,
   commitTrackedImplementationQueue,
@@ -340,10 +339,10 @@ export {
   getTaskQueue,
   isTerminalTaskStatus,
   listTasks,
-  normalizeTaskStringList,
+  
   readImplementationQueueSnapshot,
   readTaskQueues,
-  resolveRuntimeManagedPath,
+  
   resolveTaskQueuePath,
   sanitizePlannedTaskSpecs,
   writeTaskQueues,

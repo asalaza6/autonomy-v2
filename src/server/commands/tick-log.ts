@@ -37,4 +37,4 @@ function logTickResultWithWriter(result, writeLine = console.log, timestampFacto
   return emitted;
 }
 
-export { logTickResult, logTickResultWithWriter };
+export { logTickResult,  };

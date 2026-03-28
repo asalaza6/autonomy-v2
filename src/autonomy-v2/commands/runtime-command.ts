@@ -3,7 +3,6 @@ import { countBy, ensureInitialized, formatCountSummary, getAutonomyPaths, print
 import { buildAgentStatusSummaries, formatAgentStatusLine } from './shared-agent-status.js';
 import { buildPullRequestStatusSummaries, formatPullRequestStatusLine } from './shared-pr-status.js';
 import { loadAllState, loadTrackedPrds } from './shared-prds.js';
-import { getTaskQueue, listTasks } from './shared-queues.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);

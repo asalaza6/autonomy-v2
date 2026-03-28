@@ -1,7 +1,6 @@
 import fs from 'fs';
 import type { AnyRecord, AutonomyConfig, BranchLocksState, QueueMap, TaskRecord } from '../autonomy-types.js';
-import { buildTaskQueueState, readImplementationQueueSnapshot } from './shared-queues.js';
-import { getAgent } from './shared-core.js';
+import { readImplementationQueueSnapshot } from './shared-queues.js';
 import {
   buildTaskBranchName,
   buildTaskLaneKey,
@@ -194,8 +193,8 @@ function listCompletedLaneTasks(branchLocksState, agentId, laneKey) {
 export {
   buildImplementationLaneSeedTask,
   findCompletedTask,
-  findImplementationTaskInBranchQueues,
-  findLatestCompletedLaneTask,
+  
+  
   listCompletedLaneTasks,
   listImplementationLaneTasks,
   listLaneTasks,

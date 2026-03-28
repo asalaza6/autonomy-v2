@@ -198,7 +198,7 @@ export {
   gitWorkingTreeClean,
   isGitWorktree,
   listTreeFiles,
-  pruneStaleWorktrees,
+  
   readGit,
   readJsonFromGitRef,
   readTreeFile,

@@ -14,7 +14,6 @@ import type {
   QueueMap,
   RuntimeState,
   TrackedPrdRecord,
-  WorkerRuntime,
 } from '../server-types.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import { createScheduleAgentExecutionContext } from './orchestrator-agent-context.js';

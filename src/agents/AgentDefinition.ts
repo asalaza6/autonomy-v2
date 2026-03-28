@@ -325,13 +325,13 @@ class AgentDefinition {
 
 export { AgentDefinition };
 export type {
-  AgentDefinitionHelpers,
+  
   AgentExecutionContext,
-  AgentExecutionPhase,
-  ClaimedPrdWork,
+  
+  
   ClaimedReviewWork,
   ClaimedTaskWork,
   ClaimedWork,
   ExecutionResult,
-  FinalizeResult,
+  
 };
