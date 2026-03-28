@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { acquireStateLock } from '../../lock/lock-main.js';
-import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole } from '../../agents/role-catalog.js';
+import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole } from '../../agents/role-catalog.js';
 import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../autonomy-types.js';
+import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
 import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './runner-constants.js';
 import { readJson, trimLeadingSeparator, uniqueScopeViolations, uniqueStrings, writeJson } from './runner-shared.js';
 
@@ -21,9 +23,12 @@ function loadState(rootDir: string, options: AnyRecord = {}): { config: Autonomy
       : path.isAbsolute(relativePath)
         ? relativePath
         : resolveRuntimeManagedPath(rootDir, relativePath);
-    queues[agent.id] = fs.existsSync(queuePath)
+    const fallbackValue = fs.existsSync(queuePath)
       ? readJson(queuePath)
       : buildTaskQueueState(agent, []);
+    queues[agent.id] = isReviewRole(agent.role)
+      ? readJsonFromGitRef(rootDir, resolveTrackedQueueRef(rootDir, config.integrationBranch), relativePath, fallbackValue)
+      : fallbackValue;
   });
   return { config, queues };
 }
@@ -107,6 +112,47 @@ function getReviewTask(queues: QueueMap, reviewTaskId: string): TaskRecord {
     }
   }
   throw new Error(`Unknown ${getRoleLabel(AGENT_ROLES.REVIEW)} task "${reviewTaskId}".`);
+}
+
+function gitRefExists(rootDir, ref) {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', ref], {
+      cwd: rootDir,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function resolveTrackedQueueRef(rootDir, integrationBranch) {
+  const remoteRef = `origin/${integrationBranch}`;
+  if (gitRefExists(rootDir, remoteRef)) {
+    return remoteRef;
+  }
+  if (gitRefExists(rootDir, integrationBranch)) {
+    return integrationBranch;
+  }
+  return null;
+}
+
+function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
+  if (!ref || path.isAbsolute(relativePath)) {
+    return fallbackValue;
+  }
+  try {
+    return JSON.parse(execFileSync('git', [
+      'show',
+      `${ref}:${relativePath.replace(/\\/g, '/')}`,
+    ], {
+      cwd: rootDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }));
+  } catch (_) {
+    return fallbackValue;
+  }
 }
 
 function resolveRuntimeManagedPath(rootDir, relativePath) {
@@ -218,6 +264,16 @@ function persistReviewerTaskState(rootDir: string, config: AutonomyConfig, revie
 function writeQueuesState(rootDir: string, config: AutonomyConfig, queues: QueueMap) {
   (config.agents || []).forEach((agent) => {
     if (isImplementationRole(agent.role)) {
+      return;
+    }
+    if (isReviewRole(agent.role)) {
+      commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, [{
+        relativePath: agent.taskQueue,
+        content: queues[agent.id],
+      }], {
+        commitMessage: `autonomy(queue): update ${agent.id}`,
+        gitIdentity: agent.gitIdentity,
+      });
       return;
     }
     const relativePath = agent.taskQueue;
