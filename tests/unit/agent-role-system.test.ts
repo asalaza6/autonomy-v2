@@ -6,7 +6,13 @@ import path from 'path';
 import { getAgentDefinition, listAgentDefinitions, } from '../../src/agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES, listAgentRoleIds, } from '../../src/agents/role-catalog.js';
 import { validateImplementationChecks } from '../../src/autonomy-v2/scaffold/scaffold-main.js';
+import { CLI_PATH as RUNNER_CLI_PATH } from '../../src/autonomy-v2/runner/runner-constants.js';
 import { validateAutonomyConfig } from '../../src/config/config-main.js';
+import {
+  CLI_PATH as ORCHESTRATOR_CLI_PATH,
+  DEFAULT_RUNNER_PATH,
+  WORKER_PATH,
+} from '../../src/server/orchestrator/orchestrator-constants.js';
 
 import { fileURLToPath } from 'url';
 
@@ -63,6 +69,20 @@ test('public entrypoints stay explicit and src root has no extra top-level files
     'server',
     'sync',
   ]);
+});
+
+test('internal worker entry path resolves to a built runtime script', () => {
+  assert.equal(path.basename(WORKER_PATH), 'worker-main.js');
+  assert.equal(fs.existsSync(WORKER_PATH), true);
+});
+
+test('internal CLI and runner entry paths resolve to built runtime scripts', () => {
+  assert.equal(path.basename(ORCHESTRATOR_CLI_PATH), 'index.js');
+  assert.equal(fs.existsSync(ORCHESTRATOR_CLI_PATH), true);
+  assert.equal(path.basename(DEFAULT_RUNNER_PATH), 'default-runner.js');
+  assert.equal(fs.existsSync(DEFAULT_RUNNER_PATH), true);
+  assert.equal(path.basename(RUNNER_CLI_PATH), 'index.js');
+  assert.equal(fs.existsSync(RUNNER_CLI_PATH), true);
 });
 
 test('agent registry exposes one definition for each role', () => {
