@@ -13,6 +13,7 @@ import {
 import {
   gitRefExists,
 } from './shared-repo.js';
+import { commitTrackedFilesToIntegrationBranch } from './command-dependencies.js';
 
 function resolveTaskQueuePath(rootDir, config, agentId) {
   const agent = getAgent(config, agentId);

@@ -332,7 +332,6 @@ export {
   buildQueueMetadataCommitMessage,
   ensureReviewContext,
   finalizeTaskRun,
-  gitRefExists,
   listBranchCommits,
   listChangedFiles,
   listReviewDiffFiles,

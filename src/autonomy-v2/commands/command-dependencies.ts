@@ -1,5 +1,5 @@
-import { AGENT_ROLES, TASK_TYPES, buildRoleEventName, getRoleAgentLabel, getRoleLabel, isImplementationRole, isPmRole, isReviewRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
-import { hasGithubAuth, resolveGithubAuthToken } from '../../github/github-main.js';
+import { AGENT_ROLES, TASK_TYPES, buildRoleEventName, getRoleLabel, isImplementationRole, isReviewRole } from '../../agents/role-catalog.js';
+import { resolveGithubAuthToken } from '../../github/github-main.js';
 import { validateAutonomyConfig } from '../../config/config-main.js';
 import { buildPrdSpecPayload } from '../../sync/sync-prd.js';
 import {
@@ -13,13 +13,9 @@ export {
   AGENT_ROLES,
   TASK_TYPES,
   buildRoleEventName,
-  getRoleAgentLabel,
   getRoleLabel,
   isImplementationRole,
-  isPmRole,
   isReviewRole,
-  usesTrackedQueueForRole,
-  hasGithubAuth,
   resolveGithubAuthToken,
   validateAutonomyConfig,
 };

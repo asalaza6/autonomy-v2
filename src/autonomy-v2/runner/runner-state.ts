@@ -251,6 +251,4 @@ export {
   loadState,
   persistReviewerTaskState,
   recordLaneTaskCompletion,
-  resolveRuntimeManagedPath,
-  writeQueuesState,
 };

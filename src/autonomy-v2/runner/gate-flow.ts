@@ -63,4 +63,4 @@ function runReview(params) {
   return runReviewFlow(params, runnerDependencies);
 }
 
-export { runReview, runReviewFlow };
+export { runReview };

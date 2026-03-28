@@ -192,12 +192,9 @@ function buildMergeFollowupComment(mergeMessage) {
 }
 
 export {
-  buildScopeSafeApprovalSummary,
   ensureCheckEnvironment,
-  isScopeOnlyReviewFeedback,
   publishMergeFollowupCommentIfNeeded,
-  resolveCheckCommands,
   runCheckCommands,
-  shouldRetryApprovedPrMerge,
+  getPrCommitCount,
   shouldForceApproveAfterRepeatedReviews,
 };

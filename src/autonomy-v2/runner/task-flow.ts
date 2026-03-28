@@ -66,4 +66,4 @@ function runImplementation(params) {
   return runImplementationFlow(params, runnerDependencies);
 }
 
-export { runImplementation, runImplementationFlow };
+export { runImplementation };

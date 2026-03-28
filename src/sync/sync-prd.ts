@@ -193,6 +193,5 @@ export {
   parsePrdSpec,
   parsePrdState,
   requiresPmPlanning,
-  sanitizeFileSegment,
   slugify,
 };

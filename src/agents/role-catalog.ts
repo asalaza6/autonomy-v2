@@ -93,3 +93,4 @@ export { listAgentRoleIds };
 export { normalizeAgentRole };
 
 export { usesTrackedQueueForRole };
+export { RUNNER_TYPES };

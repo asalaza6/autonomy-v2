@@ -46,25 +46,6 @@ function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
   }
 }
 
-function runGit(cwd, args) {
-  execFileSync('git', args, {
-    cwd,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-}
-
-function hasStagedGitChanges(cwd) {
-  try {
-    execFileSync('git', ['diff', '--cached', '--quiet'], {
-      cwd,
-      stdio: 'ignore',
-    });
-    return false;
-  } catch (_) {
-    return true;
-  }
-}
-
 function readImplementationQueueFromGitRef(rootDir, config, agentId, ref, fallbackValue = null) {
   if (!ref) {
     return fallbackValue;
@@ -166,9 +147,7 @@ export {
   executeRunnerCommand,
   extractExecError,
   gitRefExists,
-  hasStagedGitChanges,
   readImplementationQueueSnapshot,
   readJsonFromGitRef,
   resolveTrackedQueueRef,
-  runGit,
 };
