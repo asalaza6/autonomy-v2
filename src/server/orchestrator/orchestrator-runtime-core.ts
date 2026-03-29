@@ -42,7 +42,11 @@ function refreshRuntime(rootDir: string, config: AutonomyConfig, queues: QueueMa
   const now = new Date().toISOString();
   const recoveredAgents = new Set<string>();
   Object.values(runtime.workers || {}).forEach((worker) => {
-    if (worker.status !== 'running' || !worker.pid || isProcessAlive(worker.pid)) {
+    if (worker.status !== 'running') {
+      return;
+    }
+    const isInlineWorker = worker.mode === 'inline';
+    if (!isInlineWorker && worker.pid && isProcessAlive(worker.pid)) {
       return;
     }
 
@@ -89,7 +93,13 @@ function refreshRuntime(rootDir: string, config: AutonomyConfig, queues: QueueMa
 
 function workerIsRunning(runtime, agentId) {
   const worker = runtime.workers[agentId];
-  return Boolean(worker && worker.status === 'running' && (!worker.pid || isProcessAlive(worker.pid)));
+  return Boolean(
+    worker &&
+    worker.status === 'running' &&
+    worker.mode !== 'inline' &&
+    worker.pid &&
+    isProcessAlive(worker.pid)
+  );
 }
 
 function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap, branchLocks: BranchLocksState, prds: { prds: TrackedPrdRecord[] }, runtime: RuntimeState, options: AnyRecord = {}) {

@@ -60,8 +60,54 @@ class PmAgentDefinition extends AgentDefinition {
     }
     const knownPrds = this.listPrds(context, context.current && context.current.prds ? context.current.prds : { prds: [] });
     const hasQueuedPrd = knownPrds.some((prd) => prd.status === 'queued');
-    const hasActivePrd = knownPrds.some((prd) => prd.status === 'planning' || prd.status === 'planned');
+    const hasActivePrd = knownPrds.some((prd) => {
+      if (prd.status !== 'planning' && prd.status !== 'planned') {
+        return false;
+      }
+      return this.hasOutstandingPlannedTasks(context, prd);
+    });
     return hasQueuedPrd && !hasActivePrd;
+  }
+
+  private hasOutstandingPlannedTasks(context: AgentExecutionContext, prd: TrackedPrdRecord): boolean {
+    if (prd.status === 'planning') {
+      return true;
+    }
+
+    const taskIds = new Set((prd.plannedTaskIds || []).map((taskId) => String(taskId || '')));
+    if (taskIds.size === 0) {
+      return false;
+    }
+
+    const queues = context.current && context.current.queues ? context.current.queues : {};
+    const branchLocks = context.current && context.current.branchLocks ? (context.current.branchLocks as AnyRecord) : {};
+    const completedTaskIds = new Set<string>();
+
+    (branchLocks.locks || []).forEach((lock: AnyRecord) => {
+      const completedTasks = Array.isArray(lock && lock.completedTasks)
+        ? lock.completedTasks
+        : [];
+      completedTasks.forEach((task) => {
+        if (task && typeof task.id === 'string') {
+          completedTaskIds.add(task.id);
+        }
+      });
+    });
+
+    const queueTasks = Object.values(queues).flatMap((queue) => Array.isArray((queue as AnyRecord).tasks)
+      ? (queue as AnyRecord).tasks
+      : []);
+    return queueTasks.some((candidate) => {
+      const taskId = String((candidate as any && (candidate as any).id) || '').trim();
+      if (!taskId || !taskIds.has(taskId)) {
+        return false;
+      }
+      if (completedTaskIds.has(taskId)) {
+        return false;
+      }
+      const state = String((candidate as any && ((candidate as any).state || (candidate as any).status)) || '').trim();
+      return state === 'queued' || state === 'active';
+    });
   }
 
   claimWork(context: AgentExecutionContext): ClaimedWork | null {

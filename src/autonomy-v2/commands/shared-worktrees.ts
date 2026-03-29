@@ -9,6 +9,7 @@ import {
   buildTaskLaneKey,
   buildWorktreePath,
   hasStagedGitChanges,
+  findBranchLockByLane,
   isGitWorktree,
   resolveBaseRef,
   runGit,
@@ -231,7 +232,7 @@ function ensureImplementationLaneWorktree(rootDir: string, state: AnyRecord, pr:
   if (!seedTask) {
     throw new Error(`Unable to resolve lane task state for ${pr.id}.`);
   }
-  const branch = laneContext.branch || resolveImplementationBranchRef(
+  let branch = laneContext.branch || resolveImplementationBranchRef(
     rootDir,
     state.config,
     state.branchLocks,
@@ -240,7 +241,19 @@ function ensureImplementationLaneWorktree(rootDir: string, state: AnyRecord, pr:
     { pr, task: seedTask }
   );
   if (!branch) {
-    throw new Error(`Unable to resolve ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} branch for lane "${laneKey}".`);
+    const fallbackBranch = buildTaskBranchName(state.config, seedTask);
+    const branchLock = findBranchLockByLane(state.branchLocks, pr.agentId, laneKey);
+    if (branchLock) {
+      branchLock.branch = fallbackBranch;
+      branchLock.taskId = branchLock.taskId || seedTask.id || pr.taskId;
+      branchLock.laneKey = branchLock.laneKey || laneKey;
+      branchLock.baseBranch = seedTask.baseBranch || pr.baseBranch || state.config.integrationBranch;
+      branchLock.updatedAt = new Date().toISOString();
+      if (!branchLock.worktreePath) {
+        branchLock.worktreePath = laneContext.worktreePath || buildWorktreePath(rootDir, state.config, seedTask);
+      }
+    }
+    branch = fallbackBranch;
   }
 
   const preparedTask = {

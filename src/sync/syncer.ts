@@ -13,8 +13,41 @@ import { buildDerivedImportedRuntimeState, isImportedPrdRecord } from './derived
 import { buildTrackedImplementationTaskIndex, readTrackedImplementationQueuesFromRef, readTrackedReviewerTasksFromRef, resolveRemoteLaneStates } from './lanes.js';
 import { buildImportedSpecState } from './lanes.js';
 import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
-import { fetchIntegrationBranch } from './sync-git.js';
+import { fetchIntegrationBranch, readTrackedPrdStateMap } from './sync-git.js';
 import { listTreeFiles, readGit, readTreeFile } from './git-shared.js';
+
+function isPrdStateActiveForPromotion(prdState, trackedTasksByPrd) {
+  if (!prdState) {
+    return false;
+  }
+  const status = String(prdState.status || '').trim();
+  if (status === 'planning') {
+    return true;
+  }
+  if (!['planning', 'planned', 'failed'].includes(status)) {
+    return false;
+  }
+  const plannedTaskIds = Array.isArray(prdState.plannedTaskIds)
+    ? prdState.plannedTaskIds
+      .map((value) => String(value || '').trim())
+      .filter(Boolean)
+    : [];
+  if (plannedTaskIds.length === 0) {
+    return false;
+  }
+  const trackedTasks = Array.isArray(trackedTasksByPrd?.get(String(prdState.prdId || '').trim()))
+    ? trackedTasksByPrd.get(String(prdState.prdId || '').trim())
+    : [];
+  const trackedTaskIds = new Set(plannedTaskIds);
+  const relevantTasks = trackedTasks.filter((task) => trackedTaskIds.has(String(task && task.id || '')));
+  if (relevantTasks.length === 0) {
+    return false;
+  }
+  return relevantTasks.some((task) => {
+    const taskState = String(task && (task.state || task.status || '') || '').trim();
+    return !['done', 'merged'].includes(taskState);
+  });
+}
 
 function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: string, options: AnyRecord = {}) {
   const paths = getSyncPaths(rootDir);
@@ -63,21 +96,29 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
   emitSyncProgress(options, 'sync:specs:list:done', { ref, specFiles: allSpecCandidates.length });
 
   const remoteSpecs = [];
-  const seenPrdIds = new Set();
+  const seenPrdIds = new Map<string, { hasQueued: boolean; hasUnqueued: boolean }>();
   for (const candidate of allSpecCandidates) {
     const relativePath = candidate.filePath;
     const blobSha = readGit(rootDir, ['rev-parse', `${ref}:${relativePath}`]);
     try {
       const raw = readTreeFile(rootDir, ref, relativePath);
       const spec = parsePrdSpec(raw, relativePath);
-      if (seenPrdIds.has(spec.id)) {
+      const prdId = String(spec.id);
+      const candidateState = seenPrdIds.get(prdId) || { hasQueued: false, hasUnqueued: false };
+      if (candidate.isQueued) {
+        candidateState.hasQueued = true;
+      } else {
+        candidateState.hasUnqueued = true;
+      }
+      if (seenPrdIds.has(prdId)) {
         result.invalid.push({
           path: relativePath,
-          message: `Duplicate PRD id "${spec.id}"; skipping duplicate spec.`,
+          message: `Duplicate PRD id "${prdId}"; skipping duplicate spec.`,
         });
+        seenPrdIds.set(prdId, candidateState);
         continue;
       }
-      seenPrdIds.add(spec.id);
+      seenPrdIds.set(prdId, candidateState);
       remoteSpecs.push({
         relativePath,
         blobSha,
@@ -104,10 +145,23 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
     const branchLocksState = readJson(paths.branchLocksState, { locks: [] });
     const syncState = readJson(paths.specSyncState, DEFAULT_SYNC_STATE);
     const currentQueueTasks = readTrackedReviewerTasksFromRef(rootDir, config, ref);
-    const hasActivePrd = remoteSpecs.some((remoteSpec) => !remoteSpec.isQueued);
+    const trackedPrdStateMap = readTrackedPrdStateMap(rootDir, config.integrationBranch);
+    const trackedImplementationTasksByPrd = buildTrackedImplementationTaskIndex(
+      readTrackedImplementationQueuesFromRef(rootDir, config, ref)
+    );
+    const hasActivePrd = Array.from(seenPrdIds.entries()).some(([prdId, entry]) => {
+      const isQueuedOnly = entry.hasUnqueued && !entry.hasQueued;
+      if (!isQueuedOnly) {
+        return false;
+      }
+      return isPrdStateActiveForPromotion(trackedPrdStateMap.get(prdId), trackedImplementationTasksByPrd);
+    });
     const importedSpecs = remoteSpecs.filter((remoteSpec) => !remoteSpec.isQueued);
     if (!hasActivePrd) {
-      const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued);
+      const unqueuedPrdIds = new Set(Array.from(seenPrdIds.entries())
+        .filter((entry) => entry[1].hasUnqueued)
+        .map((entry) => entry[0]));
+      const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued && !unqueuedPrdIds.has(remoteSpec.spec.id));
       if (queuedSpecToPromote) {
         queuedSpecToPromote.isQueued = false;
         importedSpecs.push(queuedSpecToPromote);
@@ -119,9 +173,6 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
       }
     }
 
-    const trackedImplementationTasksByPrd = buildTrackedImplementationTaskIndex(
-      readTrackedImplementationQueuesFromRef(rootDir, config, ref)
-    );
     const laneStatesStartedAt = Date.now();
     emitSyncProgress(options, 'sync:lane-states:start', {
       prds: importedSpecs.length,
