@@ -38,9 +38,33 @@ function parseCli(argv: string[]): { command: string; options: CliOptions } {
   };
 }
 
+function printServerHelp(): void {
+  console.log(`
+Autonomy v2 Server CLI
+
+Usage:
+  autonomy-v2-server <command> [options]
+
+Commands:
+  serve              Start the polling scheduler
+  tick               Run a single scheduler tick
+
+Options:
+  --help, -h         Show this help
+  --json              Print JSON output for tick command
+  --inline            Run workers inline for tick command
+  --poll-ms <ms>     Poll interval in milliseconds (serve only, default: 2000)
+  --sync-ms <ms>     Sync interval in milliseconds (serve only, default: 30000)
+`);
+}
+
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   const rootDir = resolveRootDir(String(options.root || ''));
+  if (options.help === true || command === 'help' || command === '-h' || command === '--help') {
+    printServerHelp();
+    return;
+  }
   loadAutonomyEnv(rootDir);
 
   if (command === 'tick') {

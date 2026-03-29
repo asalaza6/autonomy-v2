@@ -207,12 +207,37 @@ function commitTrackedFilesToIntegrationBranch(rootDir: string, integrationBranc
     fs.writeFileSync(absolutePath, entry.content, 'utf8');
   });
 
-  runGit(controlWorktree, ['add', '--all', '--', ...normalizedUpdates.map((entry) => entry.relativePath)]);
+  const pathsToAdd = normalizedUpdates
+    .map((entry) => {
+      if (entry.delete !== true) {
+        return entry.relativePath;
+      }
+      try {
+        const tracked = readGit(controlWorktree, ['ls-files', '--error-unmatch', '--', entry.relativePath]).trim();
+        return tracked.length > 0 ? entry.relativePath : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  if (pathsToAdd.length === 0) {
+    return {
+      integrationBranch,
+      controlWorktree,
+      paths: [],
+      committed: false,
+      pushed: false,
+      commitSha: readGit(controlWorktree, ['rev-parse', 'HEAD']),
+    };
+  }
+
+  runGit(controlWorktree, ['add', '--all', '--', ...pathsToAdd]);
   if (!gitHasStagedChanges(controlWorktree)) {
     return {
       integrationBranch,
       controlWorktree,
-      paths: normalizedUpdates.map((entry) => entry.relativePath),
+      paths: pathsToAdd,
       committed: false,
       pushed: false,
       commitSha: readGit(controlWorktree, ['rev-parse', 'HEAD']),
@@ -241,7 +266,7 @@ function commitTrackedFilesToIntegrationBranch(rootDir: string, integrationBranc
   return {
     integrationBranch,
     controlWorktree,
-    paths: normalizedUpdates.map((entry) => entry.relativePath),
+    paths: pathsToAdd,
     committed: true,
     pushed,
     pushMessage,
