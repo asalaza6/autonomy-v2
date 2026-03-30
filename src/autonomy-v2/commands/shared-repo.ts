@@ -203,6 +203,27 @@ function pruneStaleWorktrees(rootDir) {
 }
 
 function upsertBranchLock(branchLocksState, nextLock) {
+  branchLocksState.locks = (branchLocksState.locks || []).filter((lock) => {
+    if (!lock) {
+      return false;
+    }
+    const sameLane = nextLock.laneKey && lock.laneKey
+      ? lock.laneKey === nextLock.laneKey && lock.agentId === nextLock.agentId
+      : lock.taskId === nextLock.taskId;
+    if (sameLane) {
+      return true;
+    }
+    if (lock.agentId !== nextLock.agentId) {
+      return true;
+    }
+    if (nextLock.branch && lock.branch && lock.branch === nextLock.branch) {
+      return false;
+    }
+    if (nextLock.worktreePath && lock.worktreePath && lock.worktreePath === nextLock.worktreePath) {
+      return false;
+    }
+    return true;
+  });
   const currentIndex = branchLocksState.locks.findIndex((lock) => {
     if (nextLock.laneKey && lock.laneKey) {
       return lock.laneKey === nextLock.laneKey && lock.agentId === nextLock.agentId;

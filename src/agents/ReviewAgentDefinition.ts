@@ -477,6 +477,9 @@ class ReviewAgentDefinition extends AgentDefinition {
     if (this.latestReviewDecision(pr) !== 'approved') {
       return false;
     }
+    if (pr && pr.mergedAt) {
+      return false;
+    }
     if (pr && pr.remote && pr.remote.mergedAt) {
       return false;
     }

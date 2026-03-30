@@ -16,6 +16,40 @@ import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
 import { fetchIntegrationBranch, readTrackedPrdStateMap } from './sync-git.js';
 import { listTreeFiles, readGit, readTreeFile } from './git-shared.js';
 
+function dedupeBranchLocksByOwnership(locks) {
+  const byLane = new Map();
+  (locks || []).forEach((lock) => {
+    if (!lock) {
+      return;
+    }
+    const laneKey = `${lock.agentId || ''}:${lock.laneKey || lock.taskId || ''}`;
+    byLane.set(laneKey, lock);
+  });
+  const deduped = [];
+  const branchOwners = new Map();
+  const worktreeOwners = new Map();
+  Array.from(byLane.values())
+    .sort((left, right) => (Date.parse(right && right.updatedAt || '') || 0) - (Date.parse(left && left.updatedAt || '') || 0))
+    .forEach((lock) => {
+      const branchKey = lock.branch ? `${lock.agentId || ''}:${lock.branch}` : '';
+      const worktreeKey = lock.worktreePath ? `${lock.agentId || ''}:${lock.worktreePath}` : '';
+      if (branchKey && branchOwners.has(branchKey)) {
+        return;
+      }
+      if (worktreeKey && worktreeOwners.has(worktreeKey)) {
+        return;
+      }
+      deduped.push(lock);
+      if (branchKey) {
+        branchOwners.set(branchKey, true);
+      }
+      if (worktreeKey) {
+        worktreeOwners.set(worktreeKey, true);
+      }
+    });
+  return deduped;
+}
+
 function isPrdStateActiveForPromotion(prdState, trackedTasksByPrd) {
   if (!prdState) {
     return false;
@@ -227,7 +261,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
     const nextPrs = (prsState.pullRequests || [])
       .filter((pr) => !isImportedPrdRecord(pr, importedPrdIds) || !derivedPullRequestIds.has(pr.id))
       .concat(derived.pullRequests);
-    const nextBranchLocks = (branchLocksState.locks || [])
+    const nextBranchLocks = dedupeBranchLocksByOwnership((branchLocksState.locks || [])
       .filter((lock) => {
         if (!isImportedPrdRecord(lock, importedPrdIds)) {
           return true;
@@ -235,7 +269,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
         const key = `${lock.agentId}:${lock.laneKey || lock.taskId || ''}`;
         return !derivedBranchLockKeys.has(key);
       })
-      .concat(derived.branchLocks);
+      .concat(derived.branchLocks));
     writeJson(paths.prsState, { pullRequests: nextPrs });
     writeJson(paths.branchLocksState, { locks: nextBranchLocks });
     emitSyncProgress(options, 'sync:state:written', {

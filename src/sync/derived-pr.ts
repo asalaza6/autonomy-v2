@@ -76,6 +76,9 @@ function prIsApprovedAndOpen(pr) {
   if (!pr || String(pr.status || '') !== 'approved') {
     return false;
   }
+  if (pr.mergedAt) {
+    return false;
+  }
   if (pr.remote && pr.remote.mergedAt) {
     return false;
   }
@@ -92,6 +95,9 @@ function approvedPrNeedsReviewerRecovery(pr, existingTask) {
 
 function resolveDerivedPullRequestStatus(existingStatus, laneState, pendingTasks, pendingExtraTaskIds, existingPr, existingReviewerTask) {
   if (laneState && laneState.merged) {
+    return 'merged';
+  }
+  if (existingPr && (existingPr.mergedAt || (existingPr.remote && existingPr.remote.mergedAt))) {
     return 'merged';
   }
   if ((pendingTasks || []).length > 0) {

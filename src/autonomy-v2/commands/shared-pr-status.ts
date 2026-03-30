@@ -52,6 +52,9 @@ function isActivePullRequest(pr) {
   if (String(pr.status || '') === 'merged') {
     return false;
   }
+  if (pr.mergedAt) {
+    return false;
+  }
   if (pr.remote && pr.remote.mergedAt) {
     return false;
   }

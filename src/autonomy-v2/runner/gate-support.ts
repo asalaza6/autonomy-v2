@@ -131,6 +131,9 @@ function shouldRetryApprovedPrMerge(pr, reviewerTask) {
   if (latestReviewDecision(pr) !== 'approved') {
     return false;
   }
+  if (pr && pr.mergedAt) {
+    return false;
+  }
   if (pr && pr.remote && pr.remote.mergedAt) {
     return false;
   }
