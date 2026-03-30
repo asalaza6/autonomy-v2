@@ -281,6 +281,8 @@ class ReviewAgentDefinition extends AgentDefinition {
     const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
     const shouldForceApproveAfterThreeRounds = this.shouldForceApproveAfterRepeatedReviews(pr);
     const scopeConcernOnly = scopeResult.ok && this.isScopeOnlyReviewFeedback(codexReview);
+    const checkExpectationOnly = failedChecks.length === 0
+      && this.isCheckExpectationOnlyReviewFeedback(codexReview, checkResults, pr.checks || []);
     const decision = shouldForceApproveAfterThreeRounds
       ? 'approve'
       : failedChecks.length > 0
@@ -289,12 +291,16 @@ class ReviewAgentDefinition extends AgentDefinition {
           ? 'changes-requested'
           : scopeConcernOnly
             ? 'approve'
+            : checkExpectationOnly
+              ? 'approve'
             : codexReview.decision === 'approved'
               ? 'approve'
               : 'changes-requested';
     const summaryParts = scopeConcernOnly
       ? [this.buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
-      : [codexReview.summary].concat(codexReview.concerns || []);
+      : checkExpectationOnly
+        ? [this.buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
+        : [codexReview.summary].concat(codexReview.concerns || []);
     if (shouldForceApproveAfterThreeRounds) {
       summaryParts.push('Auto-approval threshold reached: 4+ reviewer rounds with passing checks/scope.');
     }
@@ -359,6 +365,7 @@ class ReviewAgentDefinition extends AgentDefinition {
         checkResults,
         decision,
         scopeConcernOnly,
+        checkExpectationOnly,
         summary,
         merged,
         mergeMessage,
@@ -566,6 +573,79 @@ class ReviewAgentDefinition extends AgentDefinition {
       }
     }
     return String(error || 'Command failed without stderr/stdout output.').trim();
+  }
+
+  private isCheckExpectationOnlyReviewFeedback(codexReview: AnyRecord, checkResults: AnyRecord[], configuredChecks: string[]): boolean {
+    if (!codexReview || codexReview.decision !== 'changes_requested') {
+      return false;
+    }
+
+    const texts = [codexReview.summary].concat(codexReview.concerns || [])
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+    if (texts.length === 0) {
+      return false;
+    }
+
+    const normalizedTexts = texts.map((entry) => entry.toLowerCase());
+    const verificationSignals = [
+      /missing required checks?/,
+      /required deterministic verification/,
+      /wrapper only reports/,
+      /wrapper-reported pass/,
+      /deterministic wrapper results/,
+      /deterministic checks are missing/,
+    ];
+    const nonCheckBlockingSignals = [
+      /scope violation/,
+      /out-of-scope/,
+      /regression/,
+      /incorrect/,
+      /bug/,
+      /broken/,
+      /fail(?:s|ed|ing)?\b/,
+      /error/,
+      /unsafe/,
+      /merge conflict/,
+      /documentation issue/,
+    ];
+
+    if (!normalizedTexts.every((entry) => verificationSignals.some((pattern) => pattern.test(entry)))) {
+      return false;
+    }
+    if (normalizedTexts.some((entry) => nonCheckBlockingSignals.some((pattern) => pattern.test(entry)))) {
+      return false;
+    }
+
+    const passedChecks = new Set(
+      (Array.isArray(checkResults) ? checkResults : [])
+        .filter((entry) => entry && entry.status === 'passed')
+        .map((entry) => String(entry.command || '').trim())
+        .filter(Boolean)
+    );
+    const requiredChecks = new Set(
+      (Array.isArray(configuredChecks) ? configuredChecks : [])
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean)
+    );
+    const mentionedCommands = new Set<string>();
+    texts.forEach((entry) => {
+      const literalMatches = entry.match(/`([^`]+)`/g) || [];
+      literalMatches.forEach((match) => {
+        mentionedCommands.add(match.slice(1, -1).trim());
+      });
+      const commandMatches = entry.match(/npm run [a-z0-9:_-]+/gi) || [];
+      commandMatches.forEach((match) => {
+        mentionedCommands.add(match.trim());
+      });
+    });
+
+    const inventedCommands = Array.from(mentionedCommands)
+      .filter((command) => command.startsWith('npm run '))
+      .filter((command) => !requiredChecks.has(command))
+      .filter((command) => !passedChecks.has(command));
+
+    return inventedCommands.length > 0;
   }
 }
 

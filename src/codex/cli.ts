@@ -11,6 +11,7 @@ import {
 } from './codex-shared.js';
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
+const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 10 * 60 * 1000;
 
 async function runCodexStructured({ cwd, prompt, schema, readOnly }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
@@ -51,6 +52,7 @@ async function runCodexExec({ cwd, prompt, readOnly }) {
       cwd,
       input: prompt,
       streamOutput,
+      timeoutMs: resolveCodexExecTimeoutMs(),
     });
   } catch (error) {
     logCodexFailure(error, streamOutput);
@@ -169,7 +171,7 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
   }
 }
 
-function runCodexCommand({ binary, args, cwd, input, streamOutput }) {
+function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0 }) {
   return new Promise<void>((resolve, reject) => {
     const child = spawn(binary, args, {
       cwd,
@@ -178,12 +180,15 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput }) {
     let settled = false;
     let stdoutCapture = '';
     let stderrCapture = '';
+    let killTimer = null;
+    let forcedKillTimer = null;
 
     const fail = (error) => {
       if (settled) {
         return;
       }
       settled = true;
+      clearTimers();
       reject(error);
     };
 
@@ -192,7 +197,19 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput }) {
         return;
       }
       settled = true;
+      clearTimers();
       resolve();
+    };
+
+    const clearTimers = () => {
+      if (killTimer) {
+        clearTimeout(killTimer);
+        killTimer = null;
+      }
+      if (forcedKillTimer) {
+        clearTimeout(forcedKillTimer);
+        forcedKillTimer = null;
+      }
     };
 
     const appendCapture = (current, chunk) => {
@@ -216,6 +233,19 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput }) {
         }
       }
     };
+
+    if (timeoutMs > 0) {
+      killTimer = setTimeout(() => {
+        const error = new Error(`Codex exceeded wall-clock timeout of ${timeoutMs}ms`);
+        error.stdout = stdoutCapture;
+        error.stderr = stderrCapture;
+        child.kill('SIGTERM');
+        forcedKillTimer = setTimeout(() => {
+          child.kill('SIGKILL');
+        }, 1000);
+        fail(error);
+      }, timeoutMs);
+    }
 
     child.stdout.on('data', (chunk) => {
       onData('stdout', chunk);
@@ -241,6 +271,18 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput }) {
 
     child.stdin.end(input, 'utf8');
   });
+}
+
+function resolveCodexExecTimeoutMs() {
+  const raw = String(process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS || '').trim();
+  if (!raw) {
+    return DEFAULT_CODEX_EXEC_TIMEOUT_MS;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_CODEX_EXEC_TIMEOUT_MS;
+  }
+  return parsed;
 }
 
 function shouldStreamCodexOutput() {
