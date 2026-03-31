@@ -128,6 +128,7 @@ export interface PrdStateRecord extends AnyRecord {
 }
 
 export interface TrackedPrdRecord extends PrdSpecPayload {
+  isQueued?: boolean;
   status?: string;
   updatedAt?: string;
   plannedTaskIds?: string[];

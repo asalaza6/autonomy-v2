@@ -104,8 +104,6 @@ function workerIsRunning(runtime, agentId) {
 
 function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap, branchLocks: BranchLocksState, prds: { prds: TrackedPrdRecord[] }, runtime: RuntimeState, options: AnyRecord = {}) {
   const due = [];
-  const knownPrds = listPrds(prds);
-  const hasPlanningPrd = knownPrds.some((prd) => prd.status === 'planning');
 
   (config.agents || []).forEach((agent) => {
     if (workerIsRunning(runtime, agent.id)) {
@@ -119,7 +117,6 @@ function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap
       runtime,
     }, {
       suppressNonPmDispatch: options.suppressNonPmDispatch === true,
-      hasPlanningPrd,
     });
     if (!definition.canRun(context)) {
       return;
@@ -186,7 +183,7 @@ function hasPendingBacklogWork(rootDir, config, queues, branchLocks) {
 }
 
 function updateBacklogGrace(rootDir, config, queues, branchLocks, prds, runtime, options) {
-  const pendingPrdWork = (prds.prds || []).some((prd) => prd.status === 'queued' || prd.status === 'planning');
+  const pendingPrdWork = (prds.prds || []).some((prd) => prd.status === 'queued');
   let suppressNonPmDispatch = false;
   if (options.inline !== true) {
     if (pendingPrdWork) {

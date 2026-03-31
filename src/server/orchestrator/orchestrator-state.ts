@@ -47,6 +47,7 @@ function loadPrds(rootDir: string, config: AutonomyConfig, options: AnyRecord = 
       }
       return {
         ...entry.spec,
+        isQueued: entry.isQueued === true,
         status,
         plannedTaskIds,
         updatedAt: trackedState && trackedState.updatedAt ? trackedState.updatedAt : entry.spec.createdAt,

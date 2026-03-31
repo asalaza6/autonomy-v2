@@ -282,6 +282,21 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
     false
   );
 
+  const blockedTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+  assert.equal(blockedTick.started.some((entry) => entry.agentId === 'pm-agent'), false);
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-002.json'),
+    true
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-002.json'),
+    false
+  );
+
   const controlWorktree = path.join(repoDir, '.autonomy', 'control', 'dev-sync');
   fs.rmSync(
     path.join(controlWorktree, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'prd-queue-promo-001.json'),
@@ -300,6 +315,8 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
     'prompts/autonomous/v2/queues/reviewer.json',
   ]);
   git(controlWorktree, ['commit', '-m', 'archive active prd for promotion test']);
+  const archivedFixtureCommit = git(controlWorktree, ['rev-parse', 'HEAD']);
+  git(repoDir, ['update-ref', 'refs/heads/dev', archivedFixtureCommit]);
 
   const secondTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
     env: {
@@ -307,6 +324,14 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
     },
   }));
   assert.equal(secondTick.started.some((entry) => entry.agentId === 'pm-agent'), true);
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-002.json'),
+    false
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-002.json'),
+    true
+  );
   assert.equal(
     fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-queue-promo-002.json'),
     true

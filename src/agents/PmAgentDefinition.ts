@@ -2,6 +2,12 @@ import { AgentDefinition } from './AgentDefinition.js';
 import { AGENT_ROLES, TASK_TYPES } from './role-catalog.js';
 import type { AgentConfig, AutonomyConfig, TaskRecord, TrackedPrdRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
+import {
+  buildPrdSpecPayload,
+  buildPrdSpecRelativePath,
+  buildPrdStatePayload,
+  buildPrdStateRelativePath,
+} from '../sync/sync-prd.js';
 
 class PmAgentDefinition extends AgentDefinition {
   constructor() {
@@ -59,8 +65,11 @@ class PmAgentDefinition extends AgentDefinition {
       return false;
     }
     const knownPrds = this.listPrds(context, context.current && context.current.prds ? context.current.prds : { prds: [] });
-    const hasQueuedPrd = knownPrds.some((prd) => prd.status === 'queued');
+    const hasQueuedPrd = knownPrds.some((prd) => prd.status === 'queued' && prd.isQueued !== true);
     const hasActivePrd = knownPrds.some((prd) => {
+      if (prd.isQueued === true) {
+        return false;
+      }
       if (prd.status !== 'planning' && prd.status !== 'planned') {
         return false;
       }
@@ -70,10 +79,6 @@ class PmAgentDefinition extends AgentDefinition {
   }
 
   private hasOutstandingPlannedTasks(context: AgentExecutionContext, prd: TrackedPrdRecord): boolean {
-    if (prd.status === 'planning') {
-      return true;
-    }
-
     const taskIds = new Set((prd.plannedTaskIds || []).map((taskId) => String(taskId || '')));
     if (taskIds.size === 0) {
       return false;
@@ -116,23 +121,11 @@ class PmAgentDefinition extends AgentDefinition {
     }
     const prdsState = context.prdStore.loadPrds ? context.prdStore.loadPrds() : { prds: [] };
     const prd = this.listPrds(context, prdsState)
-      .filter((candidate) => candidate.status === 'queued')
+      .filter((candidate) => candidate.status === 'queued' && candidate.isQueued !== true)
       .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')))[0];
     if (!prd) {
       return null;
     }
-    const now = context.clock.now();
-    context.prdStore.commitPrdState?.({
-      prdId: prd.id,
-      status: 'planning',
-      createdAt: now,
-      updatedAt: now,
-    }, {
-      commitMessage: `autonomy(prd-state): planning ${prd.id}`,
-      gitIdentity: context.agent.gitIdentity,
-    });
-    prd.status = 'planning';
-    prd.updatedAt = now;
     return {
       kind: 'prd',
       agentId: context.agent.id,
@@ -151,37 +144,35 @@ class PmAgentDefinition extends AgentDefinition {
     }
     const sprint = context.sprint || {};
     const prd = work.prd;
-    const plannedSpecs = context.codex.useStub && context.codex.useStub()
-      ? this.buildPmStubTaskSpecs(context.config, sprint, prd)
-      : (context.codex.planPrdTasks
-        ? context.codex.planPrdTasks({
-            rootDir: context.rootDir,
-            agent: context.agent,
-            config: context.config,
-            sprint,
-            prd,
-          }).tasks
-        : []);
-    const sanitizedPlannedSpecs = this.sanitizePlannedTaskSpecs(plannedSpecs);
-    if (!Array.isArray(sanitizedPlannedSpecs) || sanitizedPlannedSpecs.length === 0) {
-      throw new Error(`PM planning produced no tasks for PRD "${prd.id}".`);
-    }
-
     const createdTaskIds = [];
+    let sanitizedPlannedSpecs = [];
     try {
-      context.prdStore.commitPrdSpec?.({
-        id: prd.id,
-        title: prd.title,
-        createdAt: prd.createdAt,
-        specification: prd.specification,
-        requirements: prd.requirements,
-      }, {
-        commitMessage: `autonomy(prd): persist plan ${prd.id}`,
-        gitIdentity: context.agent.gitIdentity,
-      });
+      const plannedSpecs = context.codex.useStub && context.codex.useStub()
+        ? this.buildPmStubTaskSpecs(context.config, sprint, prd)
+        : (context.codex.planPrdTasks
+          ? context.codex.planPrdTasks({
+              rootDir: context.rootDir,
+              agent: context.agent,
+              config: context.config,
+              sprint,
+              prd,
+            }).tasks
+          : []);
+      sanitizedPlannedSpecs = this.sanitizePlannedTaskSpecs(plannedSpecs);
+      if (!Array.isArray(sanitizedPlannedSpecs) || sanitizedPlannedSpecs.length === 0) {
+        throw new Error(`PM planning produced no tasks for PRD "${prd.id}".`);
+      }
 
-      const queueUpdates = this.buildTrackedImplementationQueueUpdates(context, sanitizedPlannedSpecs, { prd, sprint });
-      context.prdStore.commitTrackedFiles?.(queueUpdates, {
+      const trackedUpdates = [
+        this.buildTrackedPrdSpecUpdate(prd),
+        ...this.buildTrackedImplementationQueueUpdates(context, sanitizedPlannedSpecs, { prd, sprint }),
+        this.buildTrackedPrdStateUpdate(context, prd.id, {
+          status: 'planned',
+          plannedTaskIds: sanitizedPlannedSpecs.map((spec) => spec.id),
+          lastError: '',
+        }),
+      ];
+      context.prdStore.commitTrackedFiles?.(trackedUpdates, {
         commitMessage: `autonomy(queue): enqueue plan ${prd.id}`,
         gitIdentity: context.agent.gitIdentity,
       });
@@ -204,10 +195,6 @@ class PmAgentDefinition extends AgentDefinition {
       throw error;
     }
 
-    this.finalizePrd(context, prd.id, {
-      status: 'planned',
-      plannedTaskIds: createdTaskIds,
-    });
     context.logger.appendAgentLog?.(context.agent.id, 'prd:planned', {
       input: {
         prdId: prd.id,
@@ -354,24 +341,44 @@ class PmAgentDefinition extends AgentDefinition {
     });
   }
 
-  private finalizePrd(context: AgentExecutionContext, prdId: string, patch: AnyRecord): void {
+  private buildTrackedPrdSpecUpdate(prd: TrackedPrdRecord): AnyRecord {
+    return {
+      relativePath: buildPrdSpecRelativePath(prd.id),
+      content: buildPrdSpecPayload({
+        id: prd.id,
+        title: prd.title,
+        createdAt: prd.createdAt,
+        specification: prd.specification,
+        requirements: prd.requirements,
+      }),
+    };
+  }
+
+  private buildTrackedPrdStateUpdate(context: AgentExecutionContext, prdId: string, patch: AnyRecord): AnyRecord {
     const currentState = context.prdStore.readTrackedPrdStateMap
       ? context.prdStore.readTrackedPrdStateMap().get(prdId) || null
       : null;
     const now = context.clock.now();
     const rawError = patch.error || patch.lastError || '';
-    context.prdStore.commitPrdState?.({
-      prdId,
-      status: patch.status || (currentState && currentState.status) || 'planned',
-      plannedTaskIds: Array.isArray(patch.plannedTaskIds)
-        ? patch.plannedTaskIds
-        : (currentState && currentState.plannedTaskIds) || [],
-      lastError: patch.status === 'failed'
-        ? (typeof rawError === 'string' ? rawError : this.extractErrorMessage(rawError))
-        : '',
-      createdAt: currentState && currentState.createdAt ? currentState.createdAt : now,
-      updatedAt: now,
-    }, {
+    return {
+      relativePath: buildPrdStateRelativePath(prdId),
+      content: buildPrdStatePayload({
+        prdId,
+        status: patch.status || (currentState && currentState.status) || 'planned',
+        plannedTaskIds: Array.isArray(patch.plannedTaskIds)
+          ? patch.plannedTaskIds
+          : (currentState && currentState.plannedTaskIds) || [],
+        lastError: patch.status === 'failed'
+          ? (typeof rawError === 'string' ? rawError : this.extractErrorMessage(rawError))
+          : '',
+        createdAt: currentState && currentState.createdAt ? currentState.createdAt : now,
+        updatedAt: now,
+      }),
+    };
+  }
+
+  private finalizePrd(context: AgentExecutionContext, prdId: string, patch: AnyRecord): void {
+    context.prdStore.commitTrackedFiles?.([this.buildTrackedPrdStateUpdate(context, prdId, patch)], {
       commitMessage: `autonomy(prd-state): ${patch.status || 'update'} ${prdId}`,
       gitIdentity: context.agent.gitIdentity,
     });

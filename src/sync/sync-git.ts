@@ -107,12 +107,12 @@ function updateLocalIntegrationBranchRef(rootDir, integrationBranch, commitSha) 
 
 function commitPrdSpecToIntegrationBranch(rootDir: string, integrationBranch: string, prdSpec: AnyRecord, options: AnyRecord = {}) {
   const normalizedSpec = buildPrdSpecPayload(prdSpec);
-  const paths = getSyncPaths(rootDir);
-  const controlWorktree = ensureControlWorktree(rootDir, integrationBranch, paths.controlWorktree);
-  configureGitIdentity(controlWorktree, options.gitIdentity);
   const relativeSpecPath = buildPrdSpecRelativePath(normalizedSpec.id, {
     queue: Boolean(options.queueSpec),
   });
+  const paths = getSyncPaths(rootDir);
+  const controlWorktree = ensureControlWorktree(rootDir, integrationBranch, paths.controlWorktree);
+  configureGitIdentity(controlWorktree, options.gitIdentity);
   const absoluteSpecPath = path.join(controlWorktree, relativeSpecPath);
   ensureDir(path.dirname(absoluteSpecPath));
   fs.writeFileSync(absoluteSpecPath, `${JSON.stringify(normalizedSpec, null, 2)}\n`, 'utf8');
@@ -192,7 +192,6 @@ function commitTrackedFilesToIntegrationBranch(rootDir: string, integrationBranc
       commitSha: null,
     };
   }
-
   const paths = getSyncPaths(rootDir);
   const controlWorktree = ensureControlWorktree(rootDir, integrationBranch, paths.controlWorktree);
   configureGitIdentity(controlWorktree, options.gitIdentity);

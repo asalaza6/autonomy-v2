@@ -13,7 +13,7 @@ import { buildDerivedImportedRuntimeState, isImportedPrdRecord } from './derived
 import { buildTrackedImplementationTaskIndex, readTrackedImplementationQueuesFromRef, readTrackedReviewerTasksFromRef, resolveRemoteLaneStates } from './lanes.js';
 import { buildImportedSpecState } from './lanes.js';
 import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
-import { fetchIntegrationBranch, readTrackedPrdStateMap } from './sync-git.js';
+import { commitTrackedFilesToIntegrationBranch, fetchIntegrationBranch } from './sync-git.js';
 import { listTreeFiles, readGit, readTreeFile } from './git-shared.js';
 
 function dedupeBranchLocksByOwnership(locks) {
@@ -50,36 +50,22 @@ function dedupeBranchLocksByOwnership(locks) {
   return deduped;
 }
 
-function isPrdStateActiveForPromotion(prdState, trackedTasksByPrd) {
-  if (!prdState) {
-    return false;
+function promoteQueuedPrdSpec(rootDir: string, integrationBranch: string, queuedSpec: AnyRecord) {
+  if (!queuedSpec || !queuedSpec.relativePath || !queuedSpec.spec || !queuedSpec.spec.id) {
+    return null;
   }
-  const status = String(prdState.status || '').trim();
-  if (status === 'planning') {
-    return true;
-  }
-  if (!['planning', 'planned', 'failed'].includes(status)) {
-    return false;
-  }
-  const plannedTaskIds = Array.isArray(prdState.plannedTaskIds)
-    ? prdState.plannedTaskIds
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-    : [];
-  if (plannedTaskIds.length === 0) {
-    return false;
-  }
-  const trackedTasks = Array.isArray(trackedTasksByPrd?.get(String(prdState.prdId || '').trim()))
-    ? trackedTasksByPrd.get(String(prdState.prdId || '').trim())
-    : [];
-  const trackedTaskIds = new Set(plannedTaskIds);
-  const relevantTasks = trackedTasks.filter((task) => trackedTaskIds.has(String(task && task.id || '')));
-  if (relevantTasks.length === 0) {
-    return false;
-  }
-  return relevantTasks.some((task) => {
-    const taskState = String(task && (task.state || task.status || '') || '').trim();
-    return !['done', 'merged'].includes(taskState);
+  const activeRelativePath = buildPrdSpecRelativePath(queuedSpec.spec.id);
+  return commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, [
+    {
+      relativePath: activeRelativePath,
+      content: queuedSpec.spec,
+    },
+    {
+      relativePath: queuedSpec.relativePath,
+      delete: true,
+    },
+  ], {
+    commitMessage: `autonomy(specs): promote queued prd ${queuedSpec.spec.id}`,
   });
 }
 
@@ -130,7 +116,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
   emitSyncProgress(options, 'sync:specs:list:done', { ref, specFiles: allSpecCandidates.length });
 
   const remoteSpecs = [];
-  const seenPrdIds = new Map<string, { hasQueued: boolean; hasUnqueued: boolean }>();
+  const seenPrdIds = new Set<string>();
   for (const candidate of allSpecCandidates) {
     const relativePath = candidate.filePath;
     const blobSha = readGit(rootDir, ['rev-parse', `${ref}:${relativePath}`]);
@@ -138,21 +124,14 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
       const raw = readTreeFile(rootDir, ref, relativePath);
       const spec = parsePrdSpec(raw, relativePath);
       const prdId = String(spec.id);
-      const candidateState = seenPrdIds.get(prdId) || { hasQueued: false, hasUnqueued: false };
-      if (candidate.isQueued) {
-        candidateState.hasQueued = true;
-      } else {
-        candidateState.hasUnqueued = true;
-      }
       if (seenPrdIds.has(prdId)) {
         result.invalid.push({
           path: relativePath,
           message: `Duplicate PRD id "${prdId}"; skipping duplicate spec.`,
         });
-        seenPrdIds.set(prdId, candidateState);
         continue;
       }
-      seenPrdIds.set(prdId, candidateState);
+      seenPrdIds.add(prdId);
       remoteSpecs.push({
         relativePath,
         blobSha,
@@ -171,6 +150,22 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
     invalid: result.invalid.length,
   });
 
+  if (specFiles.length === 0 && options.skipQueuePromotion !== true) {
+    const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued);
+    if (queuedSpecToPromote) {
+      promoteQueuedPrdSpec(rootDir, integrationBranch, queuedSpecToPromote);
+      emitSyncProgress(options, 'sync:specs:queue:promoted', {
+        id: queuedSpecToPromote.spec.id,
+        source: queuedSpecToPromote.relativePath,
+        destination: buildPrdSpecRelativePath(queuedSpecToPromote.spec.id),
+      });
+      return syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, {
+        ...options,
+        skipQueuePromotion: true,
+      });
+    }
+  }
+
   emitSyncProgress(options, 'sync:state-lock:wait', { lock: 'state-lock' });
   const release = acquireStateLock(rootDir);
   try {
@@ -179,33 +174,10 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
     const branchLocksState = readJson(paths.branchLocksState, { locks: [] });
     const syncState = readJson(paths.specSyncState, DEFAULT_SYNC_STATE);
     const currentQueueTasks = readTrackedReviewerTasksFromRef(rootDir, config, ref);
-    const trackedPrdStateMap = readTrackedPrdStateMap(rootDir, config.integrationBranch);
     const trackedImplementationTasksByPrd = buildTrackedImplementationTaskIndex(
       readTrackedImplementationQueuesFromRef(rootDir, config, ref)
     );
-    const hasActivePrd = Array.from(seenPrdIds.entries()).some(([prdId, entry]) => {
-      const isQueuedOnly = entry.hasUnqueued && !entry.hasQueued;
-      if (!isQueuedOnly) {
-        return false;
-      }
-      return isPrdStateActiveForPromotion(trackedPrdStateMap.get(prdId), trackedImplementationTasksByPrd);
-    });
     const importedSpecs = remoteSpecs.filter((remoteSpec) => !remoteSpec.isQueued);
-    if (!hasActivePrd) {
-      const unqueuedPrdIds = new Set(Array.from(seenPrdIds.entries())
-        .filter((entry) => entry[1].hasUnqueued)
-        .map((entry) => entry[0]));
-      const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued && !unqueuedPrdIds.has(remoteSpec.spec.id));
-      if (queuedSpecToPromote) {
-        queuedSpecToPromote.isQueued = false;
-        importedSpecs.push(queuedSpecToPromote);
-        emitSyncProgress(options, 'sync:specs:queue:promoted', {
-          id: queuedSpecToPromote.spec.id,
-          source: queuedSpecToPromote.relativePath,
-          destination: buildPrdSpecRelativePath(queuedSpecToPromote.spec.id),
-        });
-      }
-    }
 
     const laneStatesStartedAt = Date.now();
     emitSyncProgress(options, 'sync:lane-states:start', {

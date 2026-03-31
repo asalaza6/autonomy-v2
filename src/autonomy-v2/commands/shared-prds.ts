@@ -92,6 +92,7 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
       }
       return {
         ...entry.spec,
+        isQueued: entry.isQueued === true,
         status,
         plannedTaskIds: plannedTaskIds.length > 0 ? plannedTaskIds : undefined,
         lastError: trackedState && trackedState.lastError ? trackedState.lastError : undefined,

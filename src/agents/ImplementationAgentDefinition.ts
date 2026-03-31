@@ -85,7 +85,7 @@ class ImplementationAgentDefinition extends AgentDefinition {
     if (context.phase !== 'schedule') {
       return false;
     }
-    if (context.options && (context.options.suppressNonPmDispatch === true || context.options.hasPlanningPrd === true)) {
+    if (context.options && context.options.suppressNonPmDispatch === true) {
       return false;
     }
     const queue = context.current && context.current.queues ? context.current.queues[context.agent.id] : null;
