@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { validateAutonomyConfig } from '../../src/config/config-main.js';
 import { shouldForceApproveAfterRepeatedReviews } from '../../src/autonomy-v2/runner/gate-support.js';
@@ -11,6 +12,103 @@ import {
   runNode,
   SERVER_BIN,
 } from './package-smoke.helpers.js';
+
+test('update installs the latest autonomy-v2 package and refreshes initialized scaffold', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-update-command-');
+  initAutonomyRepo(repoDir);
+
+  const manifestPath = path.join(repoDir, 'package.json');
+  const lockfilePath = path.join(repoDir, 'package-lock.json');
+  fs.writeFileSync(manifestPath, `${JSON.stringify({
+    name: 'autonomy-update-fixture',
+    private: true,
+    devDependencies: {
+      '@asalaza6/autonomy-v2': '1.0.0',
+    },
+  }, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(lockfilePath, `${JSON.stringify({
+    name: 'autonomy-update-fixture',
+    lockfileVersion: 3,
+    packages: {},
+  }, null, 2)}\n`, 'utf8');
+
+  fs.writeFileSync(path.join(repoDir, '.env.autonomy'), 'STALE_AUTONOMY_ENV=1\n', 'utf8');
+
+  const fakeBinDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-fake-npm-'));
+  const fakeNpmPath = path.join(fakeBinDir, 'npm');
+  const packageSourceRoot = path.resolve(path.dirname(CLI_BIN), '..', '..');
+  fs.writeFileSync(fakeNpmPath, `#!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
+
+const packageName = '@asalaza6/autonomy-v2';
+const installVersion = process.env.AUTONOMY_UPDATE_TEST_INSTALLED_VERSION || '9.9.9-test';
+const packageSourceRoot = process.env.AUTONOMY_UPDATE_TEST_PACKAGE_SOURCE;
+const cwd = process.cwd();
+const args = process.argv.slice(2);
+
+if (args[0] !== 'install') {
+  throw new Error('fake npm only supports install');
+}
+
+const manifestPath = path.join(cwd, 'package.json');
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+manifest.devDependencies = manifest.devDependencies || {};
+manifest.devDependencies[packageName] = '^' + installVersion;
+fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\\n', 'utf8');
+
+const lockfilePath = path.join(cwd, 'package-lock.json');
+fs.writeFileSync(lockfilePath, JSON.stringify({
+  name: manifest.name,
+  lockfileVersion: 3,
+  packages: {
+    '': {
+      devDependencies: manifest.devDependencies,
+    },
+    'node_modules/@asalaza6/autonomy-v2': {
+      version: installVersion,
+    },
+  },
+}, null, 2) + '\\n', 'utf8');
+
+const targetRoot = path.join(cwd, 'node_modules', '@asalaza6', 'autonomy-v2');
+fs.rmSync(targetRoot, { recursive: true, force: true });
+fs.mkdirSync(targetRoot, { recursive: true });
+for (const entry of ['dist', 'templates', 'README.md', 'package.json']) {
+  const sourcePath = path.join(packageSourceRoot, entry);
+  const targetPath = path.join(targetRoot, entry);
+  const stat = fs.statSync(sourcePath);
+  if (stat.isDirectory()) {
+    fs.cpSync(sourcePath, targetPath, { recursive: true });
+    continue;
+  }
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(sourcePath, targetPath);
+}
+
+const installedManifestPath = path.join(targetRoot, 'package.json');
+const installedManifest = JSON.parse(fs.readFileSync(installedManifestPath, 'utf8'));
+installedManifest.version = installVersion;
+fs.writeFileSync(installedManifestPath, JSON.stringify(installedManifest, null, 2) + '\\n', 'utf8');
+`, 'utf8');
+  fs.chmodSync(fakeNpmPath, 0o755);
+
+  const output = JSON.parse(runNode(CLI_BIN, ['update', '--root', repoDir, '--json'], {
+    env: {
+      PATH: `${fakeBinDir}:${process.env.PATH || ''}`,
+      AUTONOMY_UPDATE_TEST_PACKAGE_SOURCE: packageSourceRoot,
+      AUTONOMY_UPDATE_TEST_INSTALLED_VERSION: '9.9.9-test',
+    },
+  }));
+
+  assert.equal(output.packageManager, 'npm');
+  assert.equal(output.previousVersion, '1.0.0');
+  assert.equal(output.declaredVersion, '^9.9.9-test');
+  assert.equal(output.installedVersion, '9.9.9-test');
+  assert.equal(output.refreshed, true);
+  assert.equal(output.refresh.skipped, false);
+  assert.match(fs.readFileSync(path.join(repoDir, '.env.autonomy'), 'utf8'), /AUTONOMY_INITIALIZED=1/);
+});
 
 test('task:finish refuses to mutate dev for claimed implementation lanes', () => {
   const repoDir = createFixtureRepo('autonomy-v2-task-finish-guard-');

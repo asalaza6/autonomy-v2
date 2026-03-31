@@ -13,6 +13,7 @@ import { run as prRun } from './pr.js';
 import { run as gateRun } from './gate.js';
 import { run as mergeRun } from './merge.js';
 import { run as runtimeRun } from './runtime-command.js';
+import { run as updateRun } from './update.js';
 import type { CliOptions } from '../autonomy-types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
@@ -32,6 +33,7 @@ const COMMAND_HANDLERS = new Map([
   [REVIEW_RECORD_COMMAND, gateRun],
   ['merge', mergeRun],
   ['runtime:status', runtimeRun],
+  ['update', updateRun],
 ]);
 
 async function main(argv: string[] = process.argv.slice(2)) {

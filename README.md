@@ -43,21 +43,7 @@ npx autonomy-v2 init --root .
 From the target repository root:
 
 ```bash
-# Update to the latest publish version in package.json + lockfile
-npm update @asalaza6/autonomy-v2
-
-# Force-resolve to latest and rebuild lockfile
-npm install -D @asalaza6/autonomy-v2@latest
-
-# Or with other package managers
-pnpm add -D @asalaza6/autonomy-v2@latest
-yarn add -D @asalaza6/autonomy-v2@latest
-```
-
-Then refresh local bootstrap artifacts so updated defaults (including `.gitignore` / `.env.autonomy`) are applied:
-
-```bash
-npx autonomy-v2 init --root . --force
+npx autonomy-v2 update --root .
 ```
 
 If Codex shows `refresh_token_reused` or says your access token could not be refreshed, reset the local session and sign in again:
@@ -78,6 +64,8 @@ Use `--force` to refresh and prune scaffolded artifacts:
 ```bash
 npx autonomy-v2 init --root . --force
 ```
+
+`autonomy-v2 update` detects `npm`, `pnpm`, or `yarn`, updates `@asalaza6/autonomy-v2` to `latest`, and runs `init --force` automatically when the repo is already initialized. Use `--skip-init` if you only want the package dependency update.
 
 From a local monorepo path:
 

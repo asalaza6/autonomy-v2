@@ -22,6 +22,7 @@ Commands:
   ${buildRoleEventName(AGENT_ROLES.REVIEW, 'record')} --pr <pr-id> --reviewer <agent-id> --decision <approve|changes-requested> [--publish]
   merge --pr <pr-id> --actor <agent-id> [--execute]
   runtime:status
+  update [--package-manager <npm|pnpm|yarn>] [--skip-init]
 
 Output:
   Use --json to print structured JSON for any command.
