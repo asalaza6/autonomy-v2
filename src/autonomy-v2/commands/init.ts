@@ -6,7 +6,6 @@ import { BASE_TEMPLATE_FILES, GENERATED_TEMPLATE_FILES, TEMPLATE_ROOT, ensureDir
 import { resolveTaskQueuePath } from './shared-queues.js';
 
 function run(rootDir, options) {
-  const bootstrapRootFiles = new Set(['.env.autonomy', '.gitignore']);
   const created = [];
   const skipped = [];
   const removed = [];
@@ -22,8 +21,10 @@ function run(rootDir, options) {
       getAutonomyPaths,
     });
     ensureDir(path.dirname(targetPath));
-    const preserveIfExists = relativeFile === 'config/agents.json' || relativeFile === 'config/sprint.json';
-    const isBootstrapRootFile = bootstrapRootFiles.has(relativeFile);
+    const preserveIfExists = relativeFile === '.env.autonomy'
+      || relativeFile === 'config/agents.json'
+      || relativeFile === 'config/sprint.json';
+    const isBootstrapRootFile = relativeFile === '.gitignore';
     const shouldSkipExisting = fs.existsSync(targetPath)
       && (preserveIfExists || (!isBootstrapRootFile && options.force !== true));
     if (shouldSkipExisting) {

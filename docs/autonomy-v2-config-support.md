@@ -37,7 +37,7 @@ By default it writes:
 
 Existing config files are preserved. Generated agent scaffolding is recreated from the active config, and `--force` prunes stale generated agent files when the roster changes.
 
-By design, `.gitignore` and `.env.autonomy` are always normalized during init to keep bootstrap files consistent, even if they already exist.
+By design, `.gitignore` is normalized during init to keep bootstrap ignore rules consistent. Existing `.env.autonomy` files are preserved so local secrets and overrides are not replaced.
 
 ## Default Agent Set
 

@@ -107,7 +107,19 @@ fs.writeFileSync(installedManifestPath, JSON.stringify(installedManifest, null, 
   assert.equal(output.installedVersion, '9.9.9-test');
   assert.equal(output.refreshed, true);
   assert.equal(output.refresh.skipped, false);
-  assert.match(fs.readFileSync(path.join(repoDir, '.env.autonomy'), 'utf8'), /AUTONOMY_INITIALIZED=1/);
+  assert.equal(fs.readFileSync(path.join(repoDir, '.env.autonomy'), 'utf8'), 'STALE_AUTONOMY_ENV=1\n');
+});
+
+test('init preserves an existing .env.autonomy file', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-init-preserve-env-');
+  const envPath = path.join(repoDir, '.env.autonomy');
+  fs.writeFileSync(envPath, 'CUSTOM_AUTONOMY_ENV=1\n', 'utf8');
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+  assert.equal(fs.readFileSync(envPath, 'utf8'), 'CUSTOM_AUTONOMY_ENV=1\n');
+
+  runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
+  assert.equal(fs.readFileSync(envPath, 'utf8'), 'CUSTOM_AUTONOMY_ENV=1\n');
 });
 
 test('task:finish refuses to mutate dev for claimed implementation lanes', () => {
