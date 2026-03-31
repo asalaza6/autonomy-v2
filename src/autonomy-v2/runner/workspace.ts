@@ -215,10 +215,26 @@ function syncBaseBranchRef(rootDir, baseBranch) {
   if (!gitRefExists(rootDir, remoteRef)) {
     return;
   }
+  const currentBranch = readGit(rootDir, ['branch', '--show-current']);
+  if (currentBranch === baseBranch) {
+    if (!isTrackedWorktreeClean(rootDir)) {
+      return;
+    }
+    try {
+      runGit(rootDir, ['merge', '--ff-only', `origin/${baseBranch}`]);
+    } catch (_) {
+      // Best-effort only. The review context can still use origin/<baseBranch>.
+    }
+    return;
+  }
   execFileSync('git', ['update-ref', `refs/heads/${baseBranch}`, remoteRef], {
     cwd: rootDir,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+function isTrackedWorktreeClean(rootDir) {
+  return readGit(rootDir, ['status', '--porcelain', '--untracked-files=no']) === '';
 }
 
 function getBranchLock(rootDir, pr) {
