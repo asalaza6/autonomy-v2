@@ -1,6 +1,6 @@
 {
   "name": "@asalaza6/autonomy-v2",
-  "version": "1.4.21",
+  "version": "1.4.22",
   "description": "Autonomy v2 orchestration package.",
   "type": "module",
   "private": false,
