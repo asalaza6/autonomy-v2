@@ -4,7 +4,7 @@ import {
 } from './command-dependencies.js';
 import { appendAgentLog, buildMergeCommitTitle, getAgent, getAutonomyPaths, getPr, printOutput, requireOption, ensureInitialized, writeJson, } from './shared-core.js';
 import { archiveCompletedPrdSpecs, loadAllState, loadTrackedPrds } from './shared-prds.js';
-import { evaluateMerge } from './shared-repo.js';
+import { evaluateMerge, findBranchLockByLane, isGitWorktree, runGit } from './shared-repo.js';
 import { appendTrackedBranchFollowupTask, buildLaneConflictTaskId, enqueueLaneFollowupTask, getReviewerTask } from './shared-worktrees.js';
 import { findTask, getImplementationTaskState, isTerminalTaskStatus, writeTaskQueues } from './shared-queues.js';
 import { listImplementationLaneTasks, listLaneTasks } from './shared-lanes.js';
@@ -186,11 +186,26 @@ async function run(rootDir, options) {
         archivedSpecs: archivedSpecs.map((entry) => entry.id),
       },
     });
+    cleanupMergedLaneWorktree(state, pr);
   }
 
   printOutput(options, evaluation, () => {
     console.log(options.execute === true ? `Merged ${pr.id} into ${pr.baseBranch}` : `Merge check passed for ${pr.id}`);
   });
+}
+
+function cleanupMergedLaneWorktree(state, pr) {
+  const branchLock = findBranchLockByLane(state.branchLocks, pr.agentId, pr.laneKey || pr.taskId);
+  const worktreePath = String(branchLock && branchLock.worktreePath || '').trim();
+  if (!worktreePath || !isGitWorktree(worktreePath)) {
+    return;
+  }
+  try {
+    runGit(worktreePath, ['reset', '--hard', 'HEAD']);
+    runGit(worktreePath, ['clean', '-fd']);
+  } catch (_) {
+    // Best-effort cleanup only.
+  }
 }
 
 

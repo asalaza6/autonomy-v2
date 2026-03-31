@@ -508,6 +508,8 @@ test('reviewer merge archives completed PRDs on dev without leaving staged fragm
   const prsState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
   assert.equal(prsState.pullRequests.length, 1);
   const pr = prsState.pullRequests[0];
+  const branchLocks = JSON.parse(fs.readFileSync(paths.branchLocksState, 'utf8'));
+  const implementationWorktreePath = branchLocks.locks[0].worktreePath;
 
   runNode(CLI_BIN, [
     'review:record',
@@ -550,4 +552,5 @@ test('reviewer merge archives completed PRDs on dev without leaving staged fragm
   assert.equal(postMergePrsState.pullRequests[0].status, 'merged');
 
   assert.equal(git(repoDir, ['status', '--short']), '');
+  assert.equal(git(implementationWorktreePath, ['status', '--short']), '');
 });
