@@ -145,26 +145,38 @@ class PmAgentDefinition extends AgentDefinition {
     const sprint = context.sprint || {};
     const prd = work.prd;
     const createdTaskIds = [];
-    let sanitizedPlannedSpecs = [];
-    try {
-      const plannedSpecs = context.codex.useStub && context.codex.useStub()
-        ? this.buildPmStubTaskSpecs(context.config, sprint, prd)
-        : (context.codex.planPrdTasks
-          ? context.codex.planPrdTasks({
-              rootDir: context.rootDir,
-              agent: context.agent,
-              config: context.config,
-              sprint,
-              prd,
-            }).tasks
-          : []);
-      sanitizedPlannedSpecs = this.sanitizePlannedTaskSpecs(plannedSpecs);
-      if (!Array.isArray(sanitizedPlannedSpecs) || sanitizedPlannedSpecs.length === 0) {
-        throw new Error(`PM planning produced no tasks for PRD "${prd.id}".`);
-      }
+    const plannedSpecs = context.codex.planPrdTasks
+      ? context.codex.planPrdTasks({
+          rootDir: context.rootDir,
+          agent: context.agent,
+          config: context.config,
+          sprint,
+          prd,
+        }).tasks
+      : [];
+    if (!Array.isArray(plannedSpecs) || plannedSpecs.length === 0) {
+      const reason = `PM planning produced no tasks for PRD "${prd.id}".`;
+      context.logger.appendAgentLog?.(context.agent.id, 'prd:retryable', {
+        input: {
+          prdId: prd.id,
+          taskCount: 0,
+        },
+        output: {
+          status: 'retryable',
+          reason,
+        },
+      });
+      return {
+        ok: true,
+        status: 'retryable',
+        reason,
+      };
+    }
+    const sanitizedPlannedSpecs = plannedSpecs;
 
+    try {
       const trackedUpdates = [
-        this.buildTrackedPrdSpecUpdate(prd),
+        this.buildTrackedPrdSpecUpdate(prd, sanitizedPlannedSpecs),
         ...this.buildTrackedImplementationQueueUpdates(context, sanitizedPlannedSpecs, { prd, sprint }),
         this.buildTrackedPrdStateUpdate(context, prd.id, {
           status: 'planned',
@@ -178,21 +190,22 @@ class PmAgentDefinition extends AgentDefinition {
       });
       createdTaskIds.push(...sanitizedPlannedSpecs.map((spec) => spec.id));
     } catch (error) {
-      this.finalizePrd(context, prd.id, {
-        status: 'failed',
-        error: this.extractErrorMessage(error),
-      });
-      context.logger.appendAgentLog?.(context.agent.id, 'prd:failed', {
+      context.logger.appendAgentLog?.(context.agent.id, 'prd:retryable', {
         input: {
           prdId: prd.id,
-          taskCount: Array.isArray(prd.plannedTaskIds) ? prd.plannedTaskIds.length : 0,
+          taskCount: sanitizedPlannedSpecs.length,
         },
         output: {
           createdTaskIds,
-          status: 'failed',
+          status: 'retryable',
+          reason: this.extractErrorMessage(error),
         },
       });
-      throw error;
+      return {
+        ok: true,
+        status: 'retryable',
+        reason: this.extractErrorMessage(error),
+      };
     }
 
     context.logger.appendAgentLog?.(context.agent.id, 'prd:planned', {
@@ -228,49 +241,6 @@ class PmAgentDefinition extends AgentDefinition {
     return value
       .map((entry) => String(entry || '').trim())
       .filter(Boolean);
-  }
-
-  private isProcessAcceptance(value: unknown): boolean {
-    return /(reflog|origin\/|merge-base|created from|branch|commit)/i.test(String(value || ''));
-  }
-
-  private buildFallbackAcceptance(taskId: string): string[] {
-    return [`Task \`${taskId}\` is complete within the assigned agent scope.`];
-  }
-
-  private sanitizePlannedTaskSpecs(taskSpecs: AnyRecord[]): AnyRecord[] {
-    return (Array.isArray(taskSpecs) ? taskSpecs : []).map((task) => {
-      const acceptance = this.normalizeStringList(task && task.acceptance)
-        .filter((entry) => !this.isProcessAcceptance(entry));
-      return {
-        ...task,
-        acceptance: acceptance.length > 0
-          ? acceptance
-          : this.buildFallbackAcceptance(task && task.id),
-      };
-    });
-  }
-
-  private buildPmStubTaskSpecs(config: AutonomyConfig, sprint: AnyRecord, prd: TrackedPrdRecord): AnyRecord[] {
-    const implementationAgents = (config.agents || []).filter((candidate) => candidate.role === AGENT_ROLES.IMPLEMENTATION);
-    const primaryAgent = implementationAgents[0];
-    if (!primaryAgent) {
-      return [];
-    }
-    const taskId = `${prd.id}-${primaryAgent.id}-1`;
-    const acceptance = this.normalizeStringList(prd.requirements);
-    const description = typeof prd.specification === 'string' && prd.specification.trim()
-      ? prd.specification.trim()
-      : acceptance[0] || `Implement ${prd.title || prd.id}.`;
-    return [{
-      id: taskId,
-      title: `Implement ${prd.title || prd.id}`,
-      agentId: primaryAgent.id,
-      description,
-      laneKey: `${prd.id}:${primaryAgent.id}`,
-      sprintId: prd.sprintId || sprint.sprintId || 'shared',
-      acceptance: acceptance.length > 0 ? acceptance : this.buildFallbackAcceptance(taskId),
-    }];
   }
 
   private buildTrackedImplementationQueueUpdates(context: AgentExecutionContext, taskSpecs: AnyRecord[], { prd, sprint }: { prd: TrackedPrdRecord; sprint: AnyRecord; }): AnyRecord[] {
@@ -341,7 +311,7 @@ class PmAgentDefinition extends AgentDefinition {
     });
   }
 
-  private buildTrackedPrdSpecUpdate(prd: TrackedPrdRecord): AnyRecord {
+  private buildTrackedPrdSpecUpdate(prd: TrackedPrdRecord, taskSpecs: AnyRecord[] = []): AnyRecord {
     return {
       relativePath: buildPrdSpecRelativePath(prd.id),
       content: buildPrdSpecPayload({
@@ -350,6 +320,7 @@ class PmAgentDefinition extends AgentDefinition {
         createdAt: prd.createdAt,
         specification: prd.specification,
         requirements: prd.requirements,
+        tasks: taskSpecs,
       }),
     };
   }
@@ -375,13 +346,6 @@ class PmAgentDefinition extends AgentDefinition {
         updatedAt: now,
       }),
     };
-  }
-
-  private finalizePrd(context: AgentExecutionContext, prdId: string, patch: AnyRecord): void {
-    context.prdStore.commitTrackedFiles?.([this.buildTrackedPrdStateUpdate(context, prdId, patch)], {
-      commitMessage: `autonomy(prd-state): ${patch.status || 'update'} ${prdId}`,
-      gitIdentity: context.agent.gitIdentity,
-    });
   }
 
   private extractErrorMessage(error: unknown): string {

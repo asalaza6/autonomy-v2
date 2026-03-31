@@ -1,13 +1,93 @@
+import fs from 'fs';
+import path from 'path';
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel, isImplementationRole } from '../agents/role-catalog.js';
-import { runCodexStructuredSync } from './cli.js';
+import { runCodexExecSync } from './cli.js';
 import { normalizeStringList, readOptionalFile } from './codex-shared.js';
+import { ensureDir } from '../sync/core.js';
+import { buildPrdSpecRelativePath, parsePrdSpec } from '../sync/sync-prd.js';
+import { gitRefExists, isGitWorktree, runGit, runGitWorktreeAdd } from '../sync/git-shared.js';
 
 function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
   const implementationAgents = (config.agents || []).filter((candidate) => isImplementationRole(candidate.role));
   const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);
-  const prompt = [
-    readOptionalFile(rootDir, agent.systemPrompt),
-    `You are planning ${laneLabel} work for an autonomy-first repository.`,
+  const integrationBranch = config.integrationBranch || 'dev';
+  const specRelativePath = buildPrdSpecRelativePath(prd.id, {
+    queue: prd.isQueued === true,
+  });
+  const worktreePath = ensurePlanningWorktree(rootDir, integrationBranch, prd.id);
+  const prompt = buildPlanningPrompt({
+    rootDir,
+    agentSystemPromptPath: agent.systemPrompt,
+    laneLabel,
+    implementationAgents,
+    prd,
+    sprintId: prd.sprintId || sprint.sprintId || 'shared',
+    worktreePath,
+    specRelativePath,
+  });
+
+  let plannedSpec = null;
+  try {
+    runCodexExecSync({
+      cwd: worktreePath,
+      prompt,
+      readOnly: false,
+    });
+    plannedSpec = validatePlannedSpec({
+      worktreePath,
+      specRelativePath,
+      prd,
+      implementationAgents,
+      fallbackSprintId: prd.sprintId || sprint.sprintId || 'shared',
+    });
+  } catch (_) {
+    plannedSpec = null;
+  } finally {
+    cleanupPlanningWorktree(rootDir, worktreePath);
+  }
+
+  const plannedTasks = plannedSpec && Array.isArray(plannedSpec.tasks) && plannedSpec.tasks.length > 0
+    ? plannedSpec.tasks
+    : buildFallbackPlannedTaskSpecs(prd, implementationAgents, prd.sprintId || sprint.sprintId || 'shared');
+
+  let normalizedTasks = [];
+  try {
+    normalizedTasks = validatePlannedTaskSpecs({
+      prd,
+      tasks: plannedTasks,
+      implementationAgents,
+      fallbackSprintId: prd.sprintId || sprint.sprintId || 'shared',
+    });
+  } catch (_) {
+    normalizedTasks = [];
+  }
+
+  return {
+    summary: plannedSpec
+      ? `Planned ${normalizedTasks.length} task(s) for ${prd.id}.`
+      : `Fallback planned ${normalizedTasks.length} task(s) for ${prd.id}.`,
+    tasks: normalizedTasks,
+  };
+}
+
+function buildPlanningPrompt({
+  rootDir,
+  agentSystemPromptPath,
+  laneLabel,
+  implementationAgents,
+  prd,
+  sprintId,
+  worktreePath,
+  specRelativePath,
+}) {
+  return [
+    readOptionalFile(rootDir, agentSystemPromptPath),
+    `You are planning ${laneLabel} work by editing a PRD spec file directly in this worktree.`,
+    '',
+    'No structured response is required.',
+    '',
+    `Worktree path: ${worktreePath}`,
+    `Target file: ${specRelativePath}`,
     '',
     `Available ${laneLabel} lanes:`,
     JSON.stringify(
@@ -29,72 +109,44 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
         specification: prd.specification || '',
         requirements: prd.requirements || [],
         taskHints: prd.tasks || [],
-        sprintId: prd.sprintId || sprint.sprintId || 'shared',
+        sprintId,
       },
       null,
       2
     ),
     '',
     'Rules:',
-    `- Create ${laneLabel} tasks only. Do not create reviewer tasks.`,
-    '- Keep tasks atomic and lane-scoped.',
-    `- Each task must target exactly one ${getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)}.`,
-    '- Scope is defined by the chosen agent include/exclude rules. Do not emit task-level scope fields.',
+    `- Update only \`${specRelativePath}\`. Do not edit queue files, state files, or unrelated repo content.`,
+    '- Preserve the existing PRD id, title, createdAt, specification, and requirements.',
+    '- Add or refine a tasks array in the PRD spec file.',
+    '- Keep tasks atomic, lane-scoped, and assigned to enabled implementation agents only.',
     '- Prefer stable ids of the form "<prd-id>-<lane>-<n>".',
     '- Acceptance criteria must be concrete and testable.',
     '',
-    'Return JSON only.',
+    'Return nothing. The CLI will read the updated file and continue the process.',
   ].filter(Boolean).join('\n');
+}
 
-  const output = runCodexStructuredSync({
-    cwd: rootDir,
-    prompt,
-    readOnly: true,
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['tasks', 'summary'],
-      properties: {
-        summary: {
-          type: 'string',
-        },
-        tasks: {
-          type: 'array',
-          minItems: 1,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['id', 'title', 'agentId', 'description', 'acceptance', 'sprintId'],
-            properties: {
-              id: { type: 'string' },
-              title: { type: 'string' },
-              agentId: { type: 'string' },
-              description: { type: 'string' },
-              acceptance: {
-                type: 'array',
-                minItems: 1,
-                items: { type: 'string' },
-              },
-              sprintId: { type: 'string' },
-            },
-          },
-        },
-      },
-    },
+function validatePlannedSpec({ worktreePath, specRelativePath, prd, implementationAgents, fallbackSprintId }) {
+  const absolutePath = path.join(worktreePath, specRelativePath);
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`Codex did not update ${specRelativePath}.`);
+  }
+  const raw = fs.readFileSync(absolutePath, 'utf8');
+  const parsed = parsePrdSpec(raw, specRelativePath);
+  const tasks = validatePlannedTaskSpecs({
+    prd,
+    tasks: parsed.tasks || [],
+    implementationAgents,
+    fallbackSprintId,
   });
-
   return {
-    summary: String(output.summary || '').trim(),
-    tasks: validatePlannedTasks({
-      prd,
-      tasks: output.tasks || [],
-      implementationAgents,
-      fallbackSprintId: prd.sprintId || sprint.sprintId || 'shared',
-    }),
+    ...parsed,
+    tasks,
   };
 }
 
-function validatePlannedTasks({ prd, tasks, implementationAgents, fallbackSprintId }) {
+function validatePlannedTaskSpecs({ prd, tasks, implementationAgents, fallbackSprintId }) {
   if (!Array.isArray(tasks) || tasks.length === 0) {
     throw new Error(`Codex did not return any ${getRoleLabel(AGENT_ROLES.IMPLEMENTATION)} tasks for PRD "${prd.id}".`);
   }
@@ -134,6 +186,83 @@ function validatePlannedTasks({ prd, tasks, implementationAgents, fallbackSprint
   });
 }
 
+function buildFallbackPlannedTaskSpecs(prd, implementationAgents, sprintId) {
+  const primaryAgent = (implementationAgents || [])[0];
+  if (!primaryAgent) {
+    return [];
+  }
+
+  const taskId = `${prd.id}-${primaryAgent.id}-1`;
+  const acceptance = normalizeStringList(prd.requirements);
+  const description = typeof prd.specification === 'string' && prd.specification.trim()
+    ? prd.specification.trim()
+    : acceptance[0] || `Implement ${prd.title || prd.id}.`;
+
+  return [{
+    id: taskId,
+    title: `Implement ${prd.title || prd.id}`,
+    agentId: primaryAgent.id,
+    description,
+    laneKey: `${prd.id}:${primaryAgent.id}`,
+    sprintId: sprintId || 'shared',
+    acceptance: acceptance.length > 0 ? acceptance : buildFallbackAcceptance(taskId),
+  }];
+}
+
+function buildFallbackAcceptance(taskId) {
+  return [`Task \`${taskId}\` is complete within the assigned agent scope.`];
+}
+
+function ensurePlanningWorktree(rootDir, integrationBranch, prdId) {
+  const baseRef = gitRefExists(rootDir, `origin/${integrationBranch}`)
+    ? `origin/${integrationBranch}`
+    : integrationBranch;
+  const planningRoot = path.join(rootDir, '.autonomy', 'control', 'pm-plan');
+  ensureDir(planningRoot);
+  const worktreePath = path.join(planningRoot, sanitizePathSegment(prdId));
+
+  if (!fs.existsSync(worktreePath)) {
+    runGitWorktreeAdd(rootDir, ['--detach', worktreePath, baseRef], worktreePath);
+    return worktreePath;
+  }
+
+  if (!isGitWorktree(worktreePath)) {
+    throw new Error(`Planning worktree path "${worktreePath}" exists but is not a git worktree.`);
+  }
+
+  runGit(worktreePath, ['reset', '--hard', baseRef]);
+  runGit(worktreePath, ['clean', '-fd']);
+  return worktreePath;
+}
+
+function cleanupPlanningWorktree(rootDir, worktreePath) {
+  if (!worktreePath) {
+    return;
+  }
+
+  try {
+    if (isGitWorktree(worktreePath)) {
+      runGit(rootDir, ['worktree', 'remove', '--force', worktreePath]);
+    }
+  } catch (_) {
+    // Best-effort cleanup only.
+  }
+
+  try {
+    fs.rmSync(worktreePath, { recursive: true, force: true });
+  } catch (_) {
+    // Best-effort cleanup only.
+  }
+}
+
+function sanitizePathSegment(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'prd';
+}
+
 function sanitizeTaskId(value) {
   return String(value || '')
     .trim()
@@ -146,4 +275,7 @@ function buildGeneratedTaskId(prdId, agentId, index) {
   return `${prdId}-${lane}-${index}`;
 }
 
-export { planPrdTasksWithCodex };
+export {
+  buildPlanningPrompt,
+  planPrdTasksWithCodex,
+};

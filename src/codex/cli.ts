@@ -60,6 +60,25 @@ async function runCodexExec({ cwd, prompt, readOnly }) {
   }
 }
 
+function runCodexExecSync({ cwd, prompt, readOnly }) {
+  const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
+  const streamOutput = shouldStreamCodexOutput();
+  try {
+    const args = buildCodexExecArgs({ cwd, readOnly });
+    logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
+    runCodexCommandSync({
+      binary: codexBin,
+      args,
+      cwd,
+      input: prompt,
+      streamOutput,
+    });
+  } catch (error) {
+    logCodexFailure(error, streamOutput);
+    throw new Error(`Codex CLI failed: ${extractExecError(error)}`);
+  }
+}
+
 function runCodexStructuredSync({ cwd, prompt, schema, readOnly }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
@@ -141,25 +160,12 @@ function buildCodexExecArgs({ cwd, readOnly }) {
   return args;
 }
 
-function readCodexOutput(outputPath, streamOutput) {
-  if (!fs.existsSync(outputPath)) {
-    throw new Error('Codex did not write an output payload.');
-  }
-
-  const raw = fs.readFileSync(outputPath, 'utf8').trim();
-  if (!raw) {
-    throw new Error('Codex output payload was empty.');
-  }
-  logCodexResult(raw, streamOutput);
-  return JSON.parse(raw);
-}
-
 function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
   const result = spawnSync(binary, args, {
     cwd,
     input,
     encoding: 'utf8',
-    stdio: streamOutput ? ['pipe', 'inherit', 'inherit'] : ['pipe', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
     maxBuffer: DEFAULT_CAPTURE_LIMIT,
     killSignal: 'SIGKILL',
   });
@@ -168,6 +174,14 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
   }
   if (result.status !== 0) {
     throw new Error(extractSpawnSyncError(result));
+  }
+  if (streamOutput) {
+    if (result.stdout) {
+      process.stdout.write(result.stdout);
+    }
+    if (result.stderr) {
+      process.stderr.write(result.stderr);
+    }
   }
 }
 
@@ -273,6 +287,19 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
   });
 }
 
+function readCodexOutput(outputPath, streamOutput) {
+  if (!fs.existsSync(outputPath)) {
+    throw new Error('Codex did not write an output payload.');
+  }
+
+  const raw = fs.readFileSync(outputPath, 'utf8').trim();
+  if (!raw) {
+    throw new Error('Codex output payload was empty.');
+  }
+  logCodexResult(raw, streamOutput);
+  return JSON.parse(raw);
+}
+
 function resolveCodexExecTimeoutMs() {
   const raw = String(process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS || '').trim();
   if (!raw) {
@@ -313,4 +340,4 @@ function logCodexResult(raw, streamOutput) {
   console.log('[codex] result:end');
 }
 
-export { runCodexExec, runCodexStructured, runCodexStructuredSync };
+export { runCodexExec, runCodexExecSync, runCodexStructured, runCodexStructuredSync };
