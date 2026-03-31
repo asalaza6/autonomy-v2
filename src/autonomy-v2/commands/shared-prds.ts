@@ -1,59 +1,14 @@
-import fs from 'fs';
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/config-main.js';
 import { buildPrdStateRelativePath } from '../../sync/sync-prd.js';
 import { commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
-import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, PrdSpecPayload, QueueMap, TrackedPrdRecord } from '../autonomy-types.js';
+import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, QueueMap, TrackedPrdRecord } from '../autonomy-types.js';
 import { getAutonomyPaths, readJson } from './shared-core.js';
 import { isTerminalTaskStatus, listTasks, readTaskQueues } from './shared-queues.js';
 
 const DEFAULT_AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const PRD_SPECS_SEGMENTS = [...DEFAULT_AUTONOMY_SEGMENTS, 'specs', 'prds'];
-const PRD_QUEUE_SEGMENTS = [...PRD_SPECS_SEGMENTS, 'queue'];
 const PRD_ARCHIVE_SEGMENTS = [...PRD_SPECS_SEGMENTS, 'archived'];
-
-function getPrdSpecsDir(rootDir) {
-  return path.join(rootDir, ...PRD_SPECS_SEGMENTS);
-}
-
-function getArchivedPrdSpecsDir(rootDir) {
-  return path.join(rootDir, ...PRD_ARCHIVE_SEGMENTS);
-}
-
-function listCurrentPrdSpecEntries(rootDir) {
-  const specsDir = getPrdSpecsDir(rootDir);
-  return listPrdSpecEntriesInDir(specsDir);
-}
-
-function listQueuedPrdSpecEntries(rootDir) {
-  const queueDir = path.join(rootDir, ...PRD_QUEUE_SEGMENTS);
-  return listPrdSpecEntriesInDir(queueDir);
-}
-
-function listPrdSpecEntriesInDir(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    return [];
-  }
-  return fs.readdirSync(dirPath, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-    .map((entry) => {
-      const filePath = path.join(dirPath, entry.name);
-      try {
-        const spec = readJson(filePath);
-        return {
-          id: String(spec.id || entry.name.replace(/\.json$/i, '')),
-          fileName: entry.name,
-          filePath,
-        };
-      } catch (_) {
-        return {
-          id: entry.name.replace(/\.json$/i, ''),
-          fileName: entry.name,
-          filePath,
-        };
-      }
-    });
-}
 
 function findArchivablePrdIds(prdIds: string[], { taskQueues, prs, prds }: { taskQueues: QueueMap; prs: PrState; prds: { prds: TrackedPrdRecord[] } }) {
   const prdIdSet = new Set(prdIds || []);
@@ -147,22 +102,15 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
 }
 
 function archiveCompletedPrdSpecs(rootDir, state) {
-  const currentSpecs = state && state.config && state.config.integrationBranch
-    ? listTrackedPrdSpecs(rootDir, state.config.integrationBranch).map((entry) => ({
-      id: entry.spec.id,
-      fileName: path.basename(entry.relativePath),
-      filePath: path.join(rootDir, entry.relativePath),
-      relativePath: entry.relativePath,
-      spec: entry.spec,
-    }))
-    : [
-      ...listCurrentPrdSpecEntries(rootDir),
-      ...listQueuedPrdSpecEntries(rootDir),
-    ].map((entry) => ({
-      ...entry,
-      relativePath: path.relative(rootDir, entry.filePath),
-      spec: readJson<PrdSpecPayload>(entry.filePath, {} as PrdSpecPayload),
-    }));
+  if (!state || !state.config || !state.config.integrationBranch) {
+    throw new Error('archiveCompletedPrdSpecs requires config.integrationBranch.');
+  }
+  const currentSpecs = listTrackedPrdSpecs(rootDir, state.config.integrationBranch).map((entry) => ({
+    id: entry.spec.id,
+    fileName: path.basename(entry.relativePath),
+    relativePath: entry.relativePath,
+    spec: entry.spec,
+  }));
   const archivableIds = new Set(findArchivablePrdIds(
     currentSpecs.map((entry) => entry.id),
     state
@@ -172,44 +120,31 @@ function archiveCompletedPrdSpecs(rootDir, state) {
     return [];
   }
 
-  fs.mkdirSync(getArchivedPrdSpecsDir(rootDir), { recursive: true });
   const archivableEntries = currentSpecs.filter((entry) => archivableIds.has(entry.id));
-  if (state && state.config && state.config.integrationBranch) {
-    const trackedUpdates = [];
-    archivableEntries.forEach((entry) => {
-      const destinationPath = path.join(getArchivedPrdSpecsDir(rootDir), entry.fileName);
-      trackedUpdates.push({
-        relativePath: path.relative(rootDir, destinationPath),
-        content: entry.spec,
-      });
-      trackedUpdates.push({
-        relativePath: entry.relativePath,
-        delete: true,
-      });
-      trackedUpdates.push({
-        relativePath: buildPrdStateRelativePath(entry.id),
-        delete: true,
-      });
-    });
-    commitTrackedFilesToIntegrationBranch(rootDir, state.config.integrationBranch, trackedUpdates, {
-      commitMessage: `autonomy(specs): archive completed prd${archivableEntries.length === 1 ? '' : 's'}`,
-    });
-  }
+  const archived = archivableEntries.map((entry) => ({
+    id: entry.id,
+    from: entry.relativePath,
+    to: path.posix.join(...PRD_ARCHIVE_SEGMENTS, entry.fileName),
+  }));
 
-  const archived = [];
+  const trackedUpdates = [];
   archivableEntries.forEach((entry) => {
-    const destinationPath = path.join(getArchivedPrdSpecsDir(rootDir), entry.fileName);
-    if (fs.existsSync(entry.filePath)) {
-      fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
-      fs.renameSync(entry.filePath, destinationPath);
-    }
-    const prdStatePath = path.join(rootDir, buildPrdStateRelativePath(entry.id));
-    fs.rmSync(prdStatePath, { force: true });
-    archived.push({
-      id: entry.id,
-      from: entry.relativePath,
-      to: path.relative(rootDir, destinationPath),
+    trackedUpdates.push({
+      relativePath: path.posix.join(...PRD_ARCHIVE_SEGMENTS, entry.fileName),
+      content: entry.spec,
     });
+    trackedUpdates.push({
+      relativePath: entry.relativePath,
+      delete: true,
+    });
+    trackedUpdates.push({
+      relativePath: buildPrdStateRelativePath(entry.id),
+      delete: true,
+    });
+  });
+  commitTrackedFilesToIntegrationBranch(rootDir, state.config.integrationBranch, trackedUpdates, {
+    commitMessage: `autonomy(specs): archive completed prd${archivableEntries.length === 1 ? '' : 's'}`,
+    gitIdentity: state.gitIdentity,
   });
   return archived;
 }

@@ -485,3 +485,68 @@ test('review follow-up is appended only to the implementation branch queue and r
   assert.equal(followupTask.type, 'review_followup');
   assert.equal(followupTask.status, 'active');
 });
+
+test('reviewer merge archives completed PRDs on dev without leaving staged fragments behind', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-reviewer-merge-archive-');
+  git(repoDir, ['checkout', 'dev']);
+  initAutonomyRepo(repoDir);
+
+  const task = {
+    id: 'helppage1-architecture-agent-1',
+    title: 'Add help page',
+    agentId: 'architecture-agent',
+    description: 'Create a new help page in frontend',
+    acceptance: ['Help page route exists and renders placeholder content.'],
+    sprintId: 'multi-agent-mvp',
+  };
+  addPrdWithTasks(repoDir, 'helppage1', 'helppage1', [task]);
+
+  runTick(repoDir);
+
+  const paths = getAutonomyPathsForTest(repoDir);
+  const prsState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
+  assert.equal(prsState.pullRequests.length, 1);
+  const pr = prsState.pullRequests[0];
+
+  runNode(CLI_BIN, [
+    'review:record',
+    '--root',
+    repoDir,
+    '--pr',
+    pr.id,
+    '--reviewer',
+    'reviewer',
+    '--decision',
+    'approve',
+    '--summary',
+    'Looks good to merge.',
+  ]);
+
+  runNode(CLI_BIN, [
+    'merge',
+    '--root',
+    repoDir,
+    '--pr',
+    pr.id,
+    '--actor',
+    'reviewer',
+    '--execute',
+  ]);
+
+  const archivedPrdPath = 'dev:prompts/autonomous/v2/specs/prds/archived/helppage1.json';
+  const activePrdPath = 'dev:prompts/autonomous/v2/specs/prds/helppage1.json';
+  const prdStatePath = 'dev:prompts/autonomous/v2/specs/prd-state/helppage1.json';
+  assert.equal(fileExistsInGitRevision(repoDir, archivedPrdPath), true);
+  assert.equal(fileExistsInGitRevision(repoDir, activePrdPath), false);
+  assert.equal(fileExistsInGitRevision(repoDir, prdStatePath), false);
+
+  const reviewerQueue = readGitJson(repoDir, 'dev:prompts/autonomous/v2/queues/reviewer.json');
+  assert.equal(reviewerQueue.tasks.length, 1);
+  assert.equal(reviewerQueue.tasks[0].prId, pr.id);
+  assert.equal(reviewerQueue.tasks[0].status, 'merged');
+
+  const postMergePrsState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
+  assert.equal(postMergePrsState.pullRequests[0].status, 'merged');
+
+  assert.equal(git(repoDir, ['status', '--short']), '');
+});

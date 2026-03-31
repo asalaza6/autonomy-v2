@@ -162,6 +162,7 @@ async function run(rootDir, options) {
       taskQueues: state.taskQueues,
       prs: state.prs,
       prds,
+      gitIdentity: actor.gitIdentity,
     });
     appendAgentLog(rootDir, state.config, actor.id, 'merge:success', {
       input: {
