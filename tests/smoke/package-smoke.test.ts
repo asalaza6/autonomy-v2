@@ -488,8 +488,9 @@ test('review follow-up is appended only to the implementation branch queue and r
 
 test('reviewer merge archives completed PRDs on dev without leaving staged fragments behind', () => {
   const repoDir = createFixtureRepo('autonomy-v2-reviewer-merge-archive-');
-  git(repoDir, ['checkout', 'dev']);
   initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize autonomy']);
 
   const task = {
     id: 'helppage1-architecture-agent-1',

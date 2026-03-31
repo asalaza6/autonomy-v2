@@ -86,15 +86,10 @@ function hasActivePrdSpecInIntegrationBranch(rootDir, integrationBranch) {
 function ensureControlWorktree(rootDir, integrationBranch, controlWorktree) {
   const fetchResult = fetchIntegrationBranch(rootDir, integrationBranch);
   const baseRef = fetchResult.ref || integrationBranch;
-  const attachLocalBranch = fetchResult.ref === integrationBranch && !gitRemoteExists(rootDir, 'origin');
   ensureDir(path.dirname(controlWorktree));
 
   if (!fs.existsSync(controlWorktree)) {
-    if (attachLocalBranch) {
-      runGitWorktreeAdd(rootDir, [controlWorktree, integrationBranch], controlWorktree);
-    } else {
-      runGitWorktreeAdd(rootDir, ['--detach', controlWorktree, baseRef], controlWorktree);
-    }
+    runGitWorktreeAdd(rootDir, ['--detach', controlWorktree, baseRef], controlWorktree);
   } else {
     if (!isGitWorktree(controlWorktree)) {
       throw new Error(`Control worktree path "${controlWorktree}" exists but is not a git worktree.`);
@@ -104,6 +99,10 @@ function ensureControlWorktree(rootDir, integrationBranch, controlWorktree) {
   }
 
   return controlWorktree;
+}
+
+function updateLocalIntegrationBranchRef(rootDir, integrationBranch, commitSha) {
+  runGit(rootDir, ['update-ref', `refs/heads/${integrationBranch}`, commitSha]);
 }
 
 function commitPrdSpecToIntegrationBranch(rootDir: string, integrationBranch: string, prdSpec: AnyRecord, options: AnyRecord = {}) {
@@ -146,6 +145,7 @@ function commitPrdSpecToIntegrationBranch(rootDir: string, integrationBranch: st
       throw new Error(`Failed to push PRD spec to origin/${integrationBranch}: ${pushMessage}`);
     }
   } else {
+    updateLocalIntegrationBranchRef(rootDir, integrationBranch, commitSha);
     pushMessage = 'origin remote not configured; committed locally only';
   }
 
@@ -260,6 +260,7 @@ function commitTrackedFilesToIntegrationBranch(rootDir: string, integrationBranc
       throw new Error(`Failed to push tracked files to origin/${integrationBranch}: ${pushMessage}`);
     }
   } else {
+    updateLocalIntegrationBranchRef(rootDir, integrationBranch, commitSha);
     pushMessage = 'origin remote not configured; committed locally only';
   }
 
