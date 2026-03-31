@@ -1,18 +1,40 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
+import type { AnyRecord, CliOptions } from '../autonomy-types.js';
 import { getAutonomyPaths, getStringOption, printOutput, readJson } from './shared-core.js';
 
 const PACKAGE_NAME = '@asalaza6/autonomy-v2';
 const SUPPORTED_PACKAGE_MANAGERS = new Set(['npm', 'pnpm', 'yarn']);
 
-function run(rootDir, options) {
+type PackageManager = 'npm' | 'pnpm' | 'yarn';
+type DependencyType = 'dependency' | 'devDependency' | 'optionalDependency';
+
+interface CommandSpec {
+  file: string;
+  args: string[];
+}
+
+interface RefreshSkipped {
+  skipped: true;
+  reason: string;
+}
+
+interface RefreshApplied {
+  skipped: false;
+  result: AnyRecord | null;
+  raw?: string;
+}
+
+type RefreshResult = RefreshSkipped | RefreshApplied;
+
+function run(rootDir: string, options: CliOptions) {
   const manifestPath = path.join(rootDir, 'package.json');
   if (!fs.existsSync(manifestPath)) {
     throw new Error(`Missing package.json at ${manifestPath}. Run "autonomy-v2 update" from a Node project root or pass --root.`);
   }
 
-  const manifest = readJson(manifestPath, {});
+  const manifest = readJson<AnyRecord>(manifestPath, {});
   const packageManager = resolvePackageManager(rootDir, options, manifest);
   const dependencyType = resolveDependencyType(manifest);
   const previousVersion = resolveDeclaredVersion(manifest);
@@ -20,12 +42,12 @@ function run(rootDir, options) {
 
   execCommand(installCommand.file, installCommand.args, rootDir);
 
-  const updatedManifest = readJson(manifestPath, {});
+  const updatedManifest = readJson<AnyRecord>(manifestPath, {});
   const declaredVersion = resolveDeclaredVersion(updatedManifest);
   const installedVersion = readInstalledVersion(rootDir);
   const initialized = fs.existsSync(getAutonomyPaths(rootDir).agentsConfig);
   const shouldRefresh = initialized && options['skip-init'] !== true;
-  const refresh = shouldRefresh
+  const refresh: RefreshResult = shouldRefresh
     ? runRefresh(rootDir, packageManager)
     : {
       skipped: true,
@@ -58,7 +80,7 @@ function run(rootDir, options) {
   });
 }
 
-function resolvePackageManager(rootDir, options, manifest) {
+function resolvePackageManager(rootDir: string, options: CliOptions, manifest: AnyRecord): PackageManager {
   const override = getStringOption(options, 'package-manager', '').trim().toLowerCase();
   if (override) {
     return assertSupportedPackageManager(override, '--package-manager');
@@ -78,14 +100,14 @@ function resolvePackageManager(rootDir, options, manifest) {
   return 'npm';
 }
 
-function assertSupportedPackageManager(value, source) {
+function assertSupportedPackageManager(value: string, source: string): PackageManager {
   if (SUPPORTED_PACKAGE_MANAGERS.has(value)) {
-    return value;
+    return value as PackageManager;
   }
   throw new Error(`Unsupported package manager "${value}" from ${source}. Supported values: npm, pnpm, yarn.`);
 }
 
-function resolveDependencyType(manifest) {
+function resolveDependencyType(manifest: AnyRecord): DependencyType {
   if (manifest.devDependencies && manifest.devDependencies[PACKAGE_NAME]) {
     return 'devDependency';
   }
@@ -98,7 +120,7 @@ function resolveDependencyType(manifest) {
   return 'devDependency';
 }
 
-function resolveDeclaredVersion(manifest) {
+function resolveDeclaredVersion(manifest: AnyRecord): string {
   if (manifest.devDependencies && manifest.devDependencies[PACKAGE_NAME]) {
     return String(manifest.devDependencies[PACKAGE_NAME]);
   }
@@ -111,7 +133,11 @@ function resolveDeclaredVersion(manifest) {
   return '';
 }
 
-function buildInstallCommand(packageManager, dependencyType, packageSpec) {
+function buildInstallCommand(
+  packageManager: PackageManager,
+  dependencyType: DependencyType,
+  packageSpec: string
+): CommandSpec {
   if (packageManager === 'pnpm') {
     return {
       file: 'pnpm',
@@ -144,25 +170,29 @@ function buildInstallCommand(packageManager, dependencyType, packageSpec) {
   };
 }
 
-function readInstalledVersion(rootDir) {
+function readInstalledVersion(rootDir: string): string {
   const installedManifestPath = path.join(rootDir, 'node_modules', ...PACKAGE_NAME.split('/'), 'package.json');
   if (!fs.existsSync(installedManifestPath)) {
     return '';
   }
-  const installedManifest = readJson(installedManifestPath, {});
+  const installedManifest = readJson<AnyRecord>(installedManifestPath, {});
   return String(installedManifest.version || '');
 }
 
-function runRefresh(rootDir, packageManager) {
+function runRefresh(rootDir: string, packageManager: PackageManager): RefreshResult {
   const installedCliPath = path.join(rootDir, 'node_modules', ...PACKAGE_NAME.split('/'), 'dist', 'bin', 'autonomy-v2.js');
-  const result = fs.existsSync(installedCliPath)
-    ? execCommand(process.execPath, [installedCliPath, 'init', '--root', rootDir, '--force', '--json'], rootDir)
-    : execCommand(...buildRefreshCommand(packageManager, rootDir), rootDir);
+  let result = '';
+  if (fs.existsSync(installedCliPath)) {
+    result = execCommand(process.execPath, [installedCliPath, 'init', '--root', rootDir, '--force', '--json'], rootDir);
+  } else {
+    const refreshCommand = buildRefreshCommand(packageManager, rootDir);
+    result = execCommand(refreshCommand.file, refreshCommand.args, rootDir);
+  }
 
   try {
     return {
       skipped: false,
-      result: JSON.parse(result || '{}'),
+      result: JSON.parse(result || '{}') as AnyRecord,
     };
   } catch (_) {
     return {
@@ -173,17 +203,26 @@ function runRefresh(rootDir, packageManager) {
   }
 }
 
-function buildRefreshCommand(packageManager, rootDir): [string, string[]] {
+function buildRefreshCommand(packageManager: PackageManager, rootDir: string): CommandSpec {
   if (packageManager === 'pnpm') {
-    return ['pnpm', ['exec', 'autonomy-v2', 'init', '--root', rootDir, '--force', '--json']];
+    return {
+      file: 'pnpm',
+      args: ['exec', 'autonomy-v2', 'init', '--root', rootDir, '--force', '--json'],
+    };
   }
   if (packageManager === 'yarn') {
-    return ['yarn', ['run', 'autonomy-v2', 'init', '--root', rootDir, '--force', '--json']];
+    return {
+      file: 'yarn',
+      args: ['run', 'autonomy-v2', 'init', '--root', rootDir, '--force', '--json'],
+    };
   }
-  return ['npm', ['exec', '--', 'autonomy-v2', 'init', '--root', rootDir, '--force', '--json']];
+  return {
+    file: 'npm',
+    args: ['exec', '--', 'autonomy-v2', 'init', '--root', rootDir, '--force', '--json'],
+  };
 }
 
-function execCommand(file, args, cwd) {
+function execCommand(file: string, args: string[], cwd: string): string {
   try {
     return execFileSync(file, args, {
       cwd,
@@ -192,7 +231,8 @@ function execCommand(file, args, cwd) {
       stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
   } catch (error) {
-    const detail = String(error.stderr || error.stdout || error.message || '').trim();
+    const failure = error as NodeJS.ErrnoException & { stderr?: string | Buffer; stdout?: string | Buffer };
+    const detail = String(failure.stderr || failure.stdout || failure.message || '').trim();
     const renderedCommand = [file, ...args].join(' ');
     throw new Error(`Failed to run "${renderedCommand}": ${detail || 'command failed'}`);
   }
