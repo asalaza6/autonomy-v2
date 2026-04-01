@@ -23,6 +23,11 @@ From there, the system is expected to:
 
 V2 is not a web server or dashboard. The "server" is a polling scheduler.
 
+The control plane is separate from the scheduler:
+
+- `autonomy-v2-control serve` hosts the browser/API queue
+- `autonomy-v2-control bridge` runs on the local machine and executes queued PRDs against allowed repos
+
 On each poll it:
 
 - syncs against `origin/dev`

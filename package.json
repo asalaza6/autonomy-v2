@@ -21,17 +21,21 @@
   "bin": {
     "autonomy-v2": "dist/bin/autonomy-v2.js",
     "autonomy-v2-server": "dist/bin/autonomy-v2-server.js",
+    "autonomy-v2-control": "dist/bin/autonomy-v2-control.js",
     "autonomy-v2-smoke": "dist/bin/autonomy-v2-smoke.js"
   },
   "exports": {
     ".": "./dist/src/autonomy-v2/index.js",
     "./server": "./dist/src/server/server-main.js",
+    "./control": "./dist/src/server/control-plane/control-plane-main.js",
     "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsc",
     "check:lines": "node scripts/check-line-count.js",
     "clean": "rm -rf dist",
+    "autonomy:v2:control": "node dist/bin/autonomy-v2-control.js serve",
+    "autonomy:v2:control:bridge": "node dist/bin/autonomy-v2-control.js bridge",
     "exports:mermaid": "node analyze-exports.mjs --format mermaid --layout TD --output docs/export-graph.mmd && open docs/export-graph.mmd",
     "exports:html": "node analyze-exports.mjs --format html --tree --layout TD --output docs/export-graph.html && open docs/export-graph.html",
     "exports:svg": "node analyze-exports.mjs --format dot --output /tmp/export-graph.dot && dot -Tsvg /tmp/export-graph.dot -o docs/export-graph.svg && open docs/export-graph.svg",

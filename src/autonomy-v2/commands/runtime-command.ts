@@ -1,50 +1,20 @@
-import fs from 'fs';
-import { countBy, ensureInitialized, formatCountSummary, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
-import { buildAgentStatusSummaries, formatAgentStatusLine } from './shared-agent-status.js';
-import { buildPullRequestStatusSummaries, formatPullRequestStatusLine } from './shared-pr-status.js';
-import { loadAllState, loadTrackedPrds } from './shared-prds.js';
+import { ensureInitialized, formatCountSummary, printOutput } from './shared-core.js';
+import { formatAgentStatusLine } from './shared-agent-status.js';
+import { formatPullRequestStatusLine } from './shared-pr-status.js';
+import { buildRuntimeSnapshot } from '../control-plane/status-service.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);
-  const paths = getAutonomyPaths(rootDir);
-  const runtime = fs.existsSync(paths.runtimeState)
-    ? readJson(paths.runtimeState)
-    : { workers: {} };
-  const { config, taskQueues, prs, branchLocks } = loadAllState(rootDir);
-  const prds = loadTrackedPrds(rootDir, config, {
-    taskQueues,
-    prs,
-  });
-  const agentStatuses = buildAgentStatusSummaries({
-    rootDir,
-    config,
-    taskQueues,
-    prs,
-    branchLocks,
-    runtime,
-    prds,
-  });
-  const pullRequestStatuses = buildPullRequestStatusSummaries({
-    taskQueues,
-    prs,
-    runtime,
-    branchLocks,
-  });
-  const payload = {
-    workers: runtime.workers || {},
-    agentStatuses,
-    pullRequestStatuses,
-    prdCounts: countBy(prds.prds || [], 'status'),
-  };
+  const payload = buildRuntimeSnapshot(rootDir);
 
   printOutput(options, payload, () => {
     console.log(`Workers: ${Object.keys(payload.workers).length}`);
-    agentStatuses.forEach((agentStatus) => {
+    payload.agentStatuses.forEach((agentStatus) => {
       console.log(formatAgentStatusLine(agentStatus, { includePid: true }));
     });
-    if (pullRequestStatuses.length > 0) {
+    if (payload.pullRequestStatuses.length > 0) {
       console.log('Active PRs:');
-      pullRequestStatuses.forEach((prStatus) => {
+      payload.pullRequestStatuses.forEach((prStatus) => {
         console.log(formatPullRequestStatusLine(prStatus));
       });
     }

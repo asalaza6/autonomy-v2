@@ -56,6 +56,7 @@ const BASE_TEMPLATE_FILES = [
   '.gitignore',
   'README.md',
   'config/agents.json',
+  'config/control-plane.json',
   'config/sprint.json',
   'state/prs.json',
   'state/branch-locks.json',

@@ -117,6 +117,54 @@ export interface PrdSpecPayload extends AnyRecord {
   requirements?: string[];
 }
 
+export interface ControlPlaneRepoRecord extends AnyRecord {
+  id: string;
+  label?: string;
+  description?: string;
+  default?: boolean;
+}
+
+export interface ControlPlaneConfig extends AnyRecord {
+  schemaVersion?: number;
+  repos: ControlPlaneRepoRecord[];
+}
+
+export interface ControlPlanePrdAddPayload extends AnyRecord {
+  repoId: string;
+  id: string;
+  title: string;
+  specification?: string;
+  requirements?: string[];
+  taskSpecs?: PrdTaskSpec[];
+  sprintId?: string;
+}
+
+export interface ControlPlaneJobRecord extends AnyRecord {
+  id: string;
+  type: 'prd:add';
+  repoId: string;
+  payload: ControlPlanePrdAddPayload;
+  status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
+  createdAt: string;
+  updatedAt: string;
+  claimedAt?: string;
+  completedAt?: string;
+  error?: string;
+  result?: AnyRecord;
+}
+
+export interface ControlPlaneRepoStatusRecord extends AnyRecord {
+  repoId: string;
+  updatedAt: string;
+  snapshot: AnyRecord;
+}
+
+export interface ControlPlaneState extends AnyRecord {
+  schemaVersion?: number;
+  jobs: ControlPlaneJobRecord[];
+  repoStatuses: Record<string, ControlPlaneRepoStatusRecord>;
+}
+
 export interface PrdStateRecord extends AnyRecord {
   schemaVersion?: number;
   prdId: string;

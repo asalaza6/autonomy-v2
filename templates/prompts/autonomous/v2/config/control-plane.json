@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "repos": [
+    {
+      "id": "default",
+      "label": "Current workspace",
+      "description": "Allowed PRD target for the control plane.",
+      "default": true
+    }
+  ]
+}
