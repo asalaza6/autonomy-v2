@@ -14,6 +14,8 @@ const DEFAULT_CONTROL_PLANE_STATE: ControlPlaneState = {
   repoStatuses: {},
 };
 
+const MEMORY_CONTROL_PLANE_STATES = new Map<string, ControlPlaneState>();
+
 function getControlPlanePaths(rootDir: string) {
   const controlPlaneDir = path.join(rootDir, '.autonomy', 'control-plane');
   return {
@@ -23,14 +25,30 @@ function getControlPlanePaths(rootDir: string) {
 }
 
 function loadControlPlaneState(rootDir: string): ControlPlaneState {
-  const paths = getControlPlanePaths(rootDir);
-  return normalizeControlPlaneState(readJson(paths.statePath, DEFAULT_CONTROL_PLANE_STATE));
+  const stateKey = getControlPlaneStateKey(rootDir);
+  const cachedState = MEMORY_CONTROL_PLANE_STATES.get(stateKey);
+  if (cachedState) {
+    return cachedState;
+  }
+
+  const persistedState = shouldPersistControlPlaneState(rootDir)
+    ? normalizeControlPlaneState(readJson(getControlPlanePaths(rootDir).statePath, DEFAULT_CONTROL_PLANE_STATE))
+    : normalizeControlPlaneState(DEFAULT_CONTROL_PLANE_STATE);
+  MEMORY_CONTROL_PLANE_STATES.set(stateKey, persistedState);
+  return persistedState;
 }
 
 function saveControlPlaneState(rootDir: string, state: ControlPlaneState) {
+  const normalizedState = normalizeControlPlaneState(state);
+  MEMORY_CONTROL_PLANE_STATES.set(getControlPlaneStateKey(rootDir), normalizedState);
+  if (!shouldPersistControlPlaneState(rootDir)) {
+    return normalizedState;
+  }
+
   const paths = getControlPlanePaths(rootDir);
   ensureDir(paths.controlPlaneDir);
-  writeJson(paths.statePath, normalizeControlPlaneState(state));
+  writeJson(paths.statePath, normalizedState);
+  return normalizedState;
 }
 
 function normalizeControlPlaneState(state: Partial<ControlPlaneState> = {}): ControlPlaneState {
@@ -166,9 +184,13 @@ function getRepoStatuses(rootDir: string) {
 
 function ensureControlPlaneDataDir(rootDir: string) {
   const paths = getControlPlanePaths(rootDir);
-  ensureDir(paths.controlPlaneDir);
-  if (!fs.existsSync(paths.statePath)) {
-    saveControlPlaneState(rootDir, DEFAULT_CONTROL_PLANE_STATE);
+  if (shouldPersistControlPlaneState(rootDir)) {
+    ensureDir(paths.controlPlaneDir);
+    if (!fs.existsSync(paths.statePath)) {
+      saveControlPlaneState(rootDir, DEFAULT_CONTROL_PLANE_STATE);
+    }
+  } else {
+    loadControlPlaneState(rootDir);
   }
   return paths;
 }
@@ -186,6 +208,21 @@ function createControlPlaneJob(payload: ControlPlanePrdAddPayload): ControlPlane
   return job;
 }
 
+function getControlPlaneStateKey(rootDir: string) {
+  return path.resolve(rootDir || process.cwd());
+}
+
+function shouldPersistControlPlaneState(rootDir: string) {
+  const explicitSetting = String(process.env.AUTONOMY_CONTROL_PLANE_PERSIST || '').trim().toLowerCase();
+  if (['0', 'false', 'no', 'off', 'memory'].includes(explicitSetting)) {
+    return false;
+  }
+  if (['1', 'true', 'yes', 'on', 'disk', 'file'].includes(explicitSetting)) {
+    return true;
+  }
+  return !process.env.DYNO && Boolean(rootDir);
+}
+
 export {
   claimJob,
   completeJob,
@@ -198,4 +235,5 @@ export {
   loadControlPlaneState,
   saveControlPlaneState,
   setRepoStatus,
+  shouldPersistControlPlaneState,
 };

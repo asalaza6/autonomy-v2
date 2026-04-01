@@ -29,6 +29,7 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     cwd: path.join(repoDir, '.'),
     env: {
       ...process.env,
+      AUTONOMY_CONTROL_PLANE_PERSIST: '0',
       PATH: process.env.PATH || '',
     },
     stdio: ['ignore', 'pipe', 'pipe'],

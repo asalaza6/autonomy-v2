@@ -1,6 +1,8 @@
 # Control Plane Bridge
 
 The bridge is the local process that executes queued control-plane jobs on this machine.
+The browser UI and queue API live online in the consumer repo's hosted deployment;
+the bridge stays on the machine that has access to the target repos.
 
 ## What it does
 
@@ -14,27 +16,17 @@ The bridge is the local process that executes queued control-plane jobs on this 
 ## What it does not do
 
 - It does not host the browser UI.
-- It does not store the main application state.
+- It does not store the main application state on the hosted side.
 - It does not replace the existing repo-local Autonomy scheduler.
 
 ## Typical setup
 
-Run the control-plane server in one terminal:
+Run the hosted control-plane server online, then point the bridge at it from the local repo machine.
+
+Run the bridge in one terminal:
 
 ```bash
-npm run autonomy:v2:control
-```
-
-Run the bridge in another terminal:
-
-```bash
-npm run autonomy:v2:control:bridge
-```
-
-Then open the browser page from the server:
-
-```text
-http://127.0.0.1:3333
+npx autonomy-v2-control bridge --server-url https://your-control-plane.example.com
 ```
 
 ## Repo mapping
@@ -68,3 +60,4 @@ That means:
 - One bridge process can usually handle multiple repos.
 - You only need multiple bridges if you want different machines or stricter isolation.
 - If the bridge is stopped, queued jobs wait until it starts again.
+- The hosted server can use `AUTONOMY_CONTROL_PLANE_CONFIG_JSON` for its repo allowlist and `AUTONOMY_CONTROL_PLANE_PERSIST=0` for in-memory queue/status storage.

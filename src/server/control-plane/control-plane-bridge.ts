@@ -1,7 +1,6 @@
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
-import { claimJob, completeJob, setRepoStatus } from './control-plane-store.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -33,16 +32,21 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
   const processed = [];
 
   for (const job of jobs) {
-    const claimed = claimJob(rootDir, job.id);
+    const claimed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/claim`, {
+      method: 'POST',
+    }).catch(() => null);
     if (!claimed) {
       continue;
     }
     const repoRoot = options.repoRoots[job.repoId];
     if (!repoRoot) {
-      const failure = completeJob(rootDir, job.id, {
-        status: 'failed',
-        error: `No local repo root configured for ${job.repoId}.`,
-      });
+      const failure = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
+        method: 'POST',
+        body: {
+          status: 'failed',
+          error: `No local repo root configured for ${job.repoId}.`,
+        },
+      }).catch(() => null);
       processed.push({ jobId: job.id, status: failure && failure.status });
       continue;
     }
@@ -51,29 +55,46 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       loadAutonomyEnv(repoRoot);
       const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));
       const snapshot = buildStatusSnapshot(repoRoot);
-      setRepoStatus(rootDir, job.repoId, snapshot);
-      const completed = completeJob(rootDir, job.id, {
-        status: 'completed',
-        result: {
-          prdId: execution.prdSpec.id,
-          commitSha: execution.commit.commitSha || null,
-          queueCommitSha: execution.queueCommit ? execution.queueCommit.commitSha : null,
+      await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+        method: 'POST',
+        body: {
+          snapshot,
         },
       });
+      const completed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
+        method: 'POST',
+        body: {
+          status: 'completed',
+          result: {
+            prdId: execution.prdSpec.id,
+            commitSha: execution.commit.commitSha || null,
+            queueCommitSha: execution.queueCommit ? execution.queueCommit.commitSha : null,
+          },
+        },
+      }).catch(() => null);
       processed.push({ jobId: job.id, status: completed && completed.status });
     } catch (error) {
-      const failed = completeJob(rootDir, job.id, {
-        status: 'failed',
-        error: error.message,
-      });
+      const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
+        method: 'POST',
+        body: {
+          status: 'failed',
+          error: formatErrorMessage(error),
+        },
+      }).catch(() => null);
       processed.push({ jobId: job.id, status: failed && failed.status });
     }
   }
 
   await Promise.all(Object.entries(options.repoRoots).map(async ([repoId, repoRoot]) => {
     try {
+      loadAutonomyEnv(repoRoot);
       const snapshot = buildStatusSnapshot(repoRoot);
-      setRepoStatus(rootDir, repoId, snapshot);
+      await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(repoId)}/status`, {
+        method: 'POST',
+        body: {
+          snapshot,
+        },
+      });
     } catch (error) {
       // Skip repos that are not initialized or temporarily unavailable.
     }
@@ -95,27 +116,41 @@ async function runControlPlaneBridgeLoop(rootDir: string, options: {
   }
 
   for (;;) {
-    await runControlPlaneBridgeOnce(rootDir, options);
+    try {
+      await runControlPlaneBridgeOnce(rootDir, options);
+    } catch (error) {
+      console.error(`Control plane bridge error: ${formatErrorMessage(error)}`);
+    }
     await delay(options.pollMs);
   }
 }
 
 async function requestJson(url: string, init: RequestInit = {}) {
-  const response = await fetch(url, {
+  const requestInit: RequestInit = {
     ...init,
     headers: {
       'content-type': 'application/json',
       ...(init.headers || {}),
     },
-  });
+  };
+  const body = (init as any).body;
+  if (body && typeof body === 'object' && !ArrayBuffer.isView(body) && !(body instanceof ArrayBuffer)) {
+    requestInit.body = JSON.stringify(body);
+  }
+  const response = await fetch(url, requestInit);
   if (!response.ok) {
     throw new Error(await response.text() || response.statusText);
   }
-  return response.json() as Promise<any>;
+  const text = await response.text();
+  return text ? JSON.parse(text) : {};
 }
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export {

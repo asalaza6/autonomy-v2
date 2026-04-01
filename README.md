@@ -4,6 +4,8 @@ This is the repository-local package form of `autonomy-v2`.
 
 The package owns the command implementations and prompt templates, while the
 runtime/state and execution still occur in a consumer workspace.
+Consumer repos that want a hosted browser/API control plane own that
+deployment, configuration, and runtime wiring themselves.
 
 ## Package layout
 
@@ -25,6 +27,9 @@ runtime/state and execution still occur in a consumer workspace.
 - [Feature Design Template](./features.md)
 
 ## Current package command usage
+
+The package itself is used through `npx autonomy-v2 ...` or by invoking the
+installed binaries directly from a consumer repo.
 
 ## Install + initialize in a new workspace
 
@@ -75,9 +80,6 @@ node packages/autonomy-v2/bin/autonomy-v2 init --root /path/to/repo
 node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> --specification <text>
 node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> ...
 node packages/autonomy-v2/bin/autonomy-v2-server serve --root /path/to/repo
-cd /path/to/control-plane-repo
-npm run autonomy:v2:control
-npm run autonomy:v2:control:bridge
 ```
 
 From another folder using the installed package:
@@ -116,9 +118,9 @@ Place in one of:
   - `autonomy:v2:init`
   - `autonomy:v2:status`
   - `autonomy:v2:runtime`
-- `autonomy:v2:server`
-- `autonomy:v2:control`
-- `autonomy:v2:tick`
+  - `autonomy:v2:server`
+  - `autonomy:v2:control`
+  - `autonomy:v2:tick`
 
 ## Package health checks
 

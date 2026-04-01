@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import http from 'http';
-import { fileURLToPath } from 'url';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneHtml } from './control-plane-browser.js';
@@ -31,7 +30,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
   }
 
   if (command === 'bridge') {
-    const serverUrl = String(options['server-url'] || 'http://127.0.0.1:3333');
+    const serverUrl = String(options['server-url'] || process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL || 'http://127.0.0.1:3333');
     const pollMs = Number(options['poll-ms'] || '2000');
     const repoRoots = parseRepoRoots(
       String(options['repo-map'] || process.env.AUTONOMY_CONTROL_PLANE_REPO_MAP || ''),
@@ -54,8 +53,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     throw new Error(`Unknown command "${command}". Use "serve" or "bridge".`);
   }
 
-  const port = Number(options.port || process.env.AUTONOMY_CONTROL_PLANE_PORT || '3333');
-  const host = String(options.host || process.env.AUTONOMY_CONTROL_PLANE_HOST || '127.0.0.1');
+  const port = Number(options.port || process.env.PORT || process.env.AUTONOMY_CONTROL_PLANE_PORT || '3333');
+  const host = String(
+    options.host ||
+    process.env.HOST ||
+    process.env.AUTONOMY_CONTROL_PLANE_HOST ||
+    (process.env.DYNO ? '0.0.0.0' : '127.0.0.1')
+  );
   if (!Number.isFinite(port) || port <= 0) {
     throw new Error('--port must be a positive number.');
   }
@@ -222,9 +226,9 @@ Commands:
 Options:
   --help, -h         Show this help
   --root <dir>       Control plane workspace root (default: cwd)
-  --port <port>      Server port for serve (default: 3333)
-  --host <host>      Server host for serve (default: 127.0.0.1)
-  --server-url <url> Bridge API base URL (default: http://127.0.0.1:3333)
+  --port <port>      Server port for serve (default: PORT or 3333)
+  --host <host>      Server host for serve (default: HOST, 0.0.0.0 on Heroku, otherwise 127.0.0.1)
+  --server-url <url> Bridge API base URL (default: AUTONOMY_CONTROL_PLANE_SERVER_URL or http://127.0.0.1:3333)
   --repo-map <map>   Optional repo allowlist map in the form repoId=/local/path,...
   --poll-ms <ms>     Bridge poll interval in milliseconds (default: 2000)
   --once             Run one bridge cycle and exit
