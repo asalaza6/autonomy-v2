@@ -2,6 +2,7 @@
 
 import http from 'http';
 import { fileURLToPath } from 'url';
+import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneHtml } from './control-plane-browser.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
@@ -22,6 +23,7 @@ import { validatePrdAddSubmission } from './control-plane-validation.js';
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
   const rootDir = resolveRootDir(String(options.root || ''));
+  loadAutonomyEnv(rootDir);
 
   if (options.help === true || command === 'help' || command === '-h' || command === '--help') {
     printHelp();
@@ -33,7 +35,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
     const pollMs = Number(options['poll-ms'] || '2000');
     const repoRoots = parseRepoRoots(
       String(options['repo-map'] || process.env.AUTONOMY_CONTROL_PLANE_REPO_MAP || ''),
-      process.cwd()
+      rootDir
     );
     const once = options.once === true;
     if (!Number.isFinite(pollMs) || pollMs <= 0) {

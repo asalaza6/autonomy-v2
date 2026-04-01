@@ -1,3 +1,4 @@
+import { loadAutonomyEnv } from '../../env/env-main.js';
 import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { claimJob, completeJob, setRepoStatus } from './control-plane-store.js';
@@ -26,6 +27,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
   serverUrl: string;
   repoRoots: Record<string, string>;
 }) {
+  loadAutonomyEnv(rootDir);
   const queuedJobs = await requestJson(`${options.serverUrl}/api/jobs?status=queued`);
   const jobs = Array.isArray(queuedJobs.jobs) ? queuedJobs.jobs : [];
   const processed = [];
@@ -46,6 +48,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     }
 
     try {
+      loadAutonomyEnv(repoRoot);
       const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));
       const snapshot = buildStatusSnapshot(repoRoot);
       setRepoStatus(rootDir, job.repoId, snapshot);
