@@ -34,7 +34,7 @@ nvm use 20
 
 ```bash
 # from the target workspace
-npm install -D @asalaza6/autonomy-v2
+npm install -O @asalaza6/autonomy-v2
 npx autonomy-v2 init --root .
 ```
 
@@ -65,7 +65,7 @@ Use `--force` to refresh and prune scaffolded artifacts:
 npx autonomy-v2 init --root . --force
 ```
 
-`autonomy-v2 update` detects `npm`, `pnpm`, or `yarn`, updates `@asalaza6/autonomy-v2` to `latest`, and runs `init --force` automatically when the repo is already initialized. Use `--skip-init` if you only want the package dependency update.
+`autonomy-v2 update` detects `npm`, `pnpm`, or `yarn`, updates `@asalaza6/autonomy-v2` to `latest` as an optional dependency, and runs `init --force` automatically when the repo is already initialized. Use `--skip-init` if you only want the package dependency update.
 
 From a local monorepo path:
 

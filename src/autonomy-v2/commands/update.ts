@@ -108,16 +108,9 @@ function assertSupportedPackageManager(value: string, source: string): PackageMa
 }
 
 function resolveDependencyType(manifest: AnyRecord): DependencyType {
-  if (manifest.devDependencies && manifest.devDependencies[PACKAGE_NAME]) {
-    return 'devDependency';
-  }
-  if (manifest.dependencies && manifest.dependencies[PACKAGE_NAME]) {
-    return 'dependency';
-  }
-  if (manifest.optionalDependencies && manifest.optionalDependencies[PACKAGE_NAME]) {
-    return 'optionalDependency';
-  }
-  return 'devDependency';
+  // Keep autonomy-v2 out of the hard install path so consumers can omit it on
+  // hosted builds that do not have GitHub Packages auth available.
+  return 'optionalDependency';
 }
 
 function resolveDeclaredVersion(manifest: AnyRecord): string {

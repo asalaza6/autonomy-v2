@@ -13,7 +13,7 @@ import {
   SERVER_BIN,
 } from './package-smoke.helpers.js';
 
-test('update installs the latest autonomy-v2 package and refreshes initialized scaffold', () => {
+test('update installs the latest autonomy-v2 package as an optional dependency and refreshes initialized scaffold', () => {
   const repoDir = createFixtureRepo('autonomy-v2-update-command-');
   initAutonomyRepo(repoDir);
 
@@ -22,7 +22,7 @@ test('update installs the latest autonomy-v2 package and refreshes initialized s
   fs.writeFileSync(manifestPath, `${JSON.stringify({
     name: 'autonomy-update-fixture',
     private: true,
-    devDependencies: {
+    optionalDependencies: {
       '@asalaza6/autonomy-v2': '1.0.0',
     },
   }, null, 2)}\n`, 'utf8');
@@ -46,6 +46,8 @@ const installVersion = process.env.AUTONOMY_UPDATE_TEST_INSTALLED_VERSION || '9.
 const packageSourceRoot = process.env.AUTONOMY_UPDATE_TEST_PACKAGE_SOURCE;
 const cwd = process.cwd();
 const args = process.argv.slice(2);
+const saveOptional = args.includes('--save-optional');
+const saveDev = args.includes('--save-dev') || args.includes('-D');
 
 if (args[0] !== 'install') {
   throw new Error('fake npm only supports install');
@@ -53,8 +55,28 @@ if (args[0] !== 'install') {
 
 const manifestPath = path.join(cwd, 'package.json');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-manifest.devDependencies = manifest.devDependencies || {};
-manifest.devDependencies[packageName] = '^' + installVersion;
+if (saveOptional) {
+  manifest.optionalDependencies = manifest.optionalDependencies || {};
+  manifest.optionalDependencies[packageName] = '^' + installVersion;
+  if (manifest.devDependencies) {
+    delete manifest.devDependencies[packageName];
+    if (Object.keys(manifest.devDependencies).length === 0) {
+      delete manifest.devDependencies;
+    }
+  }
+  if (manifest.dependencies) {
+    delete manifest.dependencies[packageName];
+    if (Object.keys(manifest.dependencies).length === 0) {
+      delete manifest.dependencies;
+    }
+  }
+} else if (saveDev) {
+  manifest.devDependencies = manifest.devDependencies || {};
+  manifest.devDependencies[packageName] = '^' + installVersion;
+} else {
+  manifest.dependencies = manifest.dependencies || {};
+  manifest.dependencies[packageName] = '^' + installVersion;
+}
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\\n', 'utf8');
 
 const lockfilePath = path.join(cwd, 'package-lock.json');
@@ -63,7 +85,9 @@ fs.writeFileSync(lockfilePath, JSON.stringify({
   lockfileVersion: 3,
   packages: {
     '': {
+      dependencies: manifest.dependencies,
       devDependencies: manifest.devDependencies,
+      optionalDependencies: manifest.optionalDependencies,
     },
     'node_modules/@asalaza6/autonomy-v2': {
       version: installVersion,

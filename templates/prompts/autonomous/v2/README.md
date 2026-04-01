@@ -226,7 +226,7 @@ nvm use 20
 ```
 
 ```bash
-npm install -D @asalaza6/autonomy-v2
+npm install -O @asalaza6/autonomy-v2
 ```
 
 Then initialize in your workspace root:
