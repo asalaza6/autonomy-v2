@@ -16,7 +16,7 @@ type VNode = {
 type ComponentType = (props: Props) => Renderable;
 type FragmentType = symbol;
 
-const Fragment: FragmentType = Symbol.for('control-plane.fragment');
+const Fragment: any = Symbol.for('control-plane.fragment');
 
 function h(type: VNode['type'], props: Props | null, ...children: Renderable[]) {
   const normalizedChildren = children.length === 0
@@ -84,7 +84,8 @@ function renderAttributes(props: Props) {
       rawName === 'key' ||
       rawName === 'ref' ||
       rawValue == null ||
-      rawValue === false
+      rawValue === false ||
+      typeof rawValue === 'function'
     ) {
       continue;
     }
@@ -114,6 +115,12 @@ function renderAttributes(props: Props) {
 function normalizeAttributeName(name: string) {
   if (name === 'className') {
     return 'class';
+  }
+  if (name === 'defaultChecked') {
+    return 'checked';
+  }
+  if (name === 'defaultValue') {
+    return 'value';
   }
   if (name === 'htmlFor') {
     return 'for';
@@ -216,7 +223,7 @@ const BOOLEAN_ATTRIBUTES = new Set([
 
 declare global {
   namespace JSX {
-    interface Element {}
+    interface Element extends VNode {}
     interface IntrinsicElements {
       [elementName: string]: Record<string, unknown>;
     }

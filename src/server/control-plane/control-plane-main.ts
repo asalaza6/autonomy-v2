@@ -9,6 +9,22 @@ import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml } from './control-plane-browser.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
+import { buildManagerDashboard } from './manager-dashboard.js';
+import {
+  createManagedSite,
+  reconcileManagedSites,
+  restartManagedSite,
+  startManagedSite,
+  stopManagedSite,
+} from './manager-process.js';
+import {
+  ensureManagerDataDir,
+  getManagedSite,
+  getManagedSiteLogPath,
+  listManagedSites,
+  loadManagerState,
+} from './manager-store.js';
+import { deployManagedSiteToHeroku } from './manager-heroku.js';
 import {
   claimJob,
   completeJob,
@@ -71,6 +87,10 @@ async function main(argv: string[] = process.argv.slice(2)) {
     throw new Error('--port must be a positive number.');
   }
   ensureControlPlaneDataDir(rootDir);
+  ensureManagerDataDir(rootDir);
+  await reconcileManagedSites(rootDir).catch((error) => {
+    console.error(`Manager reconcile error: ${error.message}`);
+  });
   const server = http.createServer(async (req, res) => {
     try {
       await handleRequest(rootDir, req, res);
@@ -82,7 +102,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
   await new Promise((resolve) => {
     server.listen(port, host, () => resolve(undefined));
   });
-  console.log(`Control plane listening on http://${host}:${port}`);
+  console.log(`Manager listening on http://${host}:${port}`);
 
   const shutdown = () => {
     server.close(() => process.exit(0));
@@ -114,6 +134,110 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
   if (url.pathname === '/control-plane-jsx-runtime/jsx-runtime.js' && req.method === 'GET') {
     await sendControlPlaneAsset(res, 'control-plane-jsx-runtime/jsx-runtime.js', 'application/javascript; charset=utf-8');
     return;
+  }
+
+  if (url.pathname === '/api/manager-state' && req.method === 'GET') {
+    const state = loadManagerState(rootDir);
+    sendJson(res, 200, {
+      state,
+      dashboard: buildManagerDashboard(rootDir, state),
+      sites: listManagedSites(rootDir),
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/sites' && req.method === 'GET') {
+    sendJson(res, 200, {
+      sites: listManagedSites(rootDir),
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/sites' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const site = await createManagedSite(rootDir, {
+        name: String(body.name || body.slug || `Site ${loadManagerState(rootDir).nextSiteIndex || 1}`).trim() || 'Managed site',
+        description: String(body.description || '').trim() || undefined,
+        slug: String(body.slug || '').trim() || undefined,
+        autoStart: body.autoStart !== false,
+        publishToHeroku: body.publishToHeroku === true,
+        content: {
+          headline: String(body.content && body.content.headline || body.headline || body.name || '').trim() || undefined,
+          body: String(body.content && body.content.body || body.body || '').trim() || undefined,
+          footer: String(body.content && body.content.footer || body.footer || '').trim() || undefined,
+        },
+      });
+      let deployment = site.deployment || null;
+      if (body.publishToHeroku === true) {
+        const deployed = await deployManagedSiteToHeroku(rootDir, site.id, {
+          appName: String(body.herokuAppName || body.appName || '').trim() || undefined,
+        });
+        deployment = deployed && deployed.site ? deployed.site.deployment || deployment : deployment;
+      }
+      sendJson(res, 201, {
+        site: getManagedSite(rootDir, site.id) || site,
+        deployment,
+      });
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/sites/') && url.pathname.endsWith('/logs') && req.method === 'GET') {
+    const siteId = url.pathname.split('/')[3];
+    const site = getManagedSite(rootDir, siteId);
+    if (!site) {
+      sendJson(res, 404, { error: 'Unknown site.' });
+      return;
+    }
+    sendJson(res, 200, await readManagedSiteLogs(rootDir, siteId));
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/sites/') && req.method === 'GET') {
+    const siteId = url.pathname.split('/')[3];
+    const site = getManagedSite(rootDir, siteId);
+    if (!site) {
+      sendJson(res, 404, { error: 'Unknown site.' });
+      return;
+    }
+    sendJson(res, 200, { site });
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/sites/') && req.method === 'POST') {
+    const siteId = url.pathname.split('/')[3];
+    const action = url.pathname.split('/')[4];
+    try {
+      if (action === 'start') {
+        const site = await startManagedSite(rootDir, siteId);
+        sendJson(res, 200, { site });
+        return;
+      }
+      if (action === 'stop') {
+        const site = await stopManagedSite(rootDir, siteId);
+        sendJson(res, 200, { site });
+        return;
+      }
+      if (action === 'restart') {
+        const site = await restartManagedSite(rootDir, siteId);
+        sendJson(res, 200, { site });
+        return;
+      }
+      if (action === 'deploy') {
+        const body = await readJsonBody(req);
+        const result = await deployManagedSiteToHeroku(rootDir, siteId, {
+          appName: String(body.appName || body.herokuAppName || '').trim() || undefined,
+        });
+        sendJson(res, 200, result);
+        return;
+      }
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+      return;
+    }
   }
 
   if (url.pathname === '/api/repos' && req.method === 'GET') {
@@ -205,6 +329,13 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
     return;
   }
 
+  const proxyRequest = resolveManagedSiteProxyRequest(rootDir, req, url);
+  if (proxyRequest) {
+    const proxyResponse = await proxyToManagedSite(proxyRequest);
+    sendProxyResponse(res, proxyResponse);
+    return;
+  }
+
   sendJson(res, 404, { error: 'Not found.' });
 }
 
@@ -240,7 +371,7 @@ Usage:
   autonomy-v2-control <command> [options]
 
 Commands:
-  serve              Start the browser/API control plane
+  serve              Start the local manager server
   bridge             Poll the hosted queue and execute jobs on local repos
 
 Options:
@@ -301,6 +432,172 @@ async function sendControlPlaneAsset(
     'content-type': contentType,
   });
   res.end(contents);
+}
+
+function resolveManagedSiteProxyRequest(rootDir: string, req: http.IncomingMessage, url: URL) {
+  const siteByPath = resolveManagedSiteFromPath(rootDir, req, url);
+  if (siteByPath) {
+    return siteByPath;
+  }
+
+  const siteByHost = resolveManagedSiteFromHost(rootDir, req, url);
+  if (siteByHost) {
+    return siteByHost;
+  }
+
+  return null;
+}
+
+function resolveManagedSiteFromPath(rootDir: string, req: http.IncomingMessage, url: URL) {
+  const pathname = url.pathname;
+  if (!pathname.startsWith('/sites/')) {
+    return null;
+  }
+  const segments = pathname.split('/').filter(Boolean);
+  const siteId = decodeURIComponent(segments[1] || '');
+  if (!siteId) {
+    return null;
+  }
+  const site = getManagedSite(rootDir, siteId);
+  if (!site) {
+    return null;
+  }
+  const relativePath = `/${segments.slice(2).map((segment) => encodeURIComponent(segment)).join('/')}`;
+  return {
+    site,
+    targetUrl: buildManagedSiteTargetUrl(site.port, relativePath || '/', url.search),
+    method: req.method || 'GET',
+    req,
+  };
+}
+
+function resolveManagedSiteFromHost(rootDir: string, req: http.IncomingMessage, url: URL) {
+  const hostHeader = req.headers.host || '';
+  const host = String(hostHeader || '').split(':')[0].toLowerCase();
+  if (!host || host === 'localhost' || host === '127.0.0.1') {
+    return null;
+  }
+  const candidate = host.endsWith('.localhost')
+    ? host.slice(0, -'.localhost'.length)
+    : host.split('.')[0];
+  if (!candidate) {
+    return null;
+  }
+  const site = getManagedSite(rootDir, candidate);
+  if (!site) {
+    return null;
+  }
+  return {
+    site,
+    targetUrl: buildManagedSiteTargetUrl(site.port, url.pathname, url.search),
+    method: req.method || 'GET',
+    req,
+  };
+}
+
+function buildManagedSiteTargetUrl(port: number, pathname: string, search: string) {
+  return `http://127.0.0.1:${port}${pathname || '/'}${search || ''}`;
+}
+
+async function proxyToManagedSite(proxyRequest: {
+  site: ReturnType<typeof getManagedSite>;
+  targetUrl: string;
+  method: string;
+  req: http.IncomingMessage | null;
+}) {
+  const headers: Record<string, string> = {};
+  if (proxyRequest.req) {
+    Object.entries(proxyRequest.req.headers || {}).forEach(([headerName, headerValue]) => {
+      if (
+        headerName === 'host'
+        || headerName === 'connection'
+        || headerName === 'content-length'
+        || headerName === 'transfer-encoding'
+      ) {
+        return;
+      }
+      if (typeof headerValue === 'undefined') {
+        return;
+      }
+      headers[headerName] = Array.isArray(headerValue) ? headerValue.join(',') : String(headerValue);
+    });
+  }
+
+  let body: Buffer | undefined;
+  if (proxyRequest.req && !['GET', 'HEAD'].includes((proxyRequest.method || 'GET').toUpperCase())) {
+    body = await readRequestBody(proxyRequest.req);
+  }
+
+  try {
+    const response = await fetch(proxyRequest.targetUrl, {
+      method: proxyRequest.method || 'GET',
+      headers,
+      body: body ? new Uint8Array(body) : undefined,
+      redirect: 'manual',
+    });
+    const responseBody = Buffer.from(await response.arrayBuffer());
+    return {
+      status: response.status,
+      headers: collectProxyResponseHeaders(response),
+      body: responseBody,
+    };
+  } catch (error) {
+    return {
+      status: 503,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+      },
+      body: Buffer.from(JSON.stringify({
+        error: `Site proxy failed: ${error instanceof Error ? error.message : String(error)}`,
+      }, null, 2), 'utf8'),
+    };
+  }
+}
+
+function collectProxyResponseHeaders(response: Response) {
+  const headers: Record<string, string> = {};
+  response.headers.forEach((value, key) => {
+    if (key === 'content-length' || key === 'transfer-encoding') {
+      return;
+    }
+    headers[key] = value;
+  });
+  return headers;
+}
+
+function sendProxyResponse(
+  res: http.ServerResponse,
+  proxyResponse: { status: number; headers: Record<string, string>; body: Buffer }
+) {
+  res.writeHead(proxyResponse.status, proxyResponse.headers);
+  res.end(proxyResponse.body);
+}
+
+async function readRequestBody(req: http.IncomingMessage) {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readManagedSiteLogs(rootDir: string, siteId: string, limit = 200) {
+  const site = getManagedSite(rootDir, siteId);
+  if (!site) {
+    return { lines: [], text: '' };
+  }
+  const logPath = getManagedSiteLogPath(rootDir, site);
+  try {
+    const contents = await readFile(logPath, 'utf8');
+    const lines = contents.split(/\r?\n/).filter(Boolean);
+    const slice = lines.slice(Math.max(0, lines.length - limit));
+    return {
+      lines: slice,
+      text: slice.join('\n'),
+    };
+  } catch {
+    return { lines: [], text: '' };
+  }
 }
 
 async function readJsonBody(req: http.IncomingMessage) {
