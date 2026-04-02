@@ -1,8 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
+import { normalizeManagedSiteRecord } from './manager-store.js';
 import type {
   ControlPlanePrdAddPayload,
+  ControlPlaneSiteCreatePayload,
+  ControlPlaneSiteDeployPayload,
   ControlPlaneJobRecord,
   ControlPlaneRepoStatusRecord,
   ControlPlaneState,
@@ -80,6 +83,38 @@ function normalizeJobRecord(job: ControlPlaneJobRecord | null | undefined) {
     return null;
   }
   const normalizedStatus = normalizeJobStatus(job.status);
+  if (job.type === 'site:create') {
+    const payload = normalizeSiteCreatePayload(job.payload as ControlPlaneSiteCreatePayload);
+    if (!payload) {
+      return null;
+    }
+    return {
+      ...job,
+      id: String(job.id),
+      type: 'site:create' as const,
+      repoId: String(job.repoId || payload.site.id),
+      status: normalizedStatus,
+      createdAt: String(job.createdAt || new Date().toISOString()),
+      updatedAt: String(job.updatedAt || job.createdAt || new Date().toISOString()),
+      payload,
+    };
+  }
+  if (job.type === 'site:deploy') {
+    const payload = normalizeSiteDeployPayload(job.payload as ControlPlaneSiteDeployPayload);
+    if (!payload) {
+      return null;
+    }
+    return {
+      ...job,
+      id: String(job.id),
+      type: 'site:deploy' as const,
+      repoId: String(job.repoId || payload.site.id),
+      status: normalizedStatus,
+      createdAt: String(job.createdAt || new Date().toISOString()),
+      updatedAt: String(job.updatedAt || job.createdAt || new Date().toISOString()),
+      payload,
+    };
+  }
   return {
     ...job,
     id: String(job.id),
@@ -97,6 +132,38 @@ function normalizeJobRecord(job: ControlPlaneJobRecord | null | undefined) {
       taskSpecs: Array.isArray(job.payload.taskSpecs) ? job.payload.taskSpecs : [],
     } as ControlPlanePrdAddPayload,
   };
+}
+
+function normalizeSiteCreatePayload(payload: ControlPlaneSiteCreatePayload | null | undefined) {
+  const sitePayload = normalizeManagedSitePayload(payload?.site);
+  if (!sitePayload) {
+    return null;
+  }
+  return {
+    site: sitePayload,
+    autoStart: payload.autoStart !== false,
+    publishToHeroku: payload.publishToHeroku === true,
+    herokuAppName: String(payload.herokuAppName || '').trim() || undefined,
+  } as ControlPlaneSiteCreatePayload;
+}
+
+function normalizeSiteDeployPayload(payload: ControlPlaneSiteDeployPayload | null | undefined) {
+  const sitePayload = normalizeManagedSitePayload(payload?.site);
+  if (!sitePayload) {
+    return null;
+  }
+  return {
+    site: sitePayload,
+    herokuAppName: String(payload?.herokuAppName || '').trim() || undefined,
+  } as ControlPlaneSiteDeployPayload;
+}
+
+function normalizeManagedSitePayload(site: ControlPlaneSiteCreatePayload['site'] | ControlPlaneSiteDeployPayload['site'] | null | undefined) {
+  if (!site) {
+    return null;
+  }
+  const normalized = normalizeManagedSiteRecord(site);
+  return normalized || null;
 }
 
 function normalizeJobStatus(status: string | undefined | null) {
@@ -208,6 +275,40 @@ function createControlPlaneJob(payload: ControlPlanePrdAddPayload): ControlPlane
   return job;
 }
 
+function createManagedSiteJob(payload: ControlPlaneSiteCreatePayload): ControlPlaneJobRecord {
+  const normalizedPayload = normalizeSiteCreatePayload(payload);
+  if (!normalizedPayload) {
+    throw new Error('Invalid managed site job payload.');
+  }
+  const job: ControlPlaneJobRecord = {
+    id: `job_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    type: 'site:create' as const,
+    repoId: normalizedPayload.site.id,
+    payload: normalizedPayload,
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
+function createManagedSiteDeployJob(payload: ControlPlaneSiteDeployPayload): ControlPlaneJobRecord {
+  const normalizedPayload = normalizeSiteDeployPayload(payload);
+  if (!normalizedPayload) {
+    throw new Error('Invalid managed site deployment job payload.');
+  }
+  const job: ControlPlaneJobRecord = {
+    id: `job_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    type: 'site:deploy' as const,
+    repoId: normalizedPayload.site.id,
+    payload: normalizedPayload,
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
 function getControlPlaneStateKey(rootDir: string) {
   return path.resolve(rootDir || process.cwd());
 }
@@ -234,6 +335,8 @@ export {
   listJobs,
   loadControlPlaneState,
   saveControlPlaneState,
+  createManagedSiteJob,
+  createManagedSiteDeployJob,
   setRepoStatus,
   shouldPersistControlPlaneState,
 };

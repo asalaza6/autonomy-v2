@@ -1,189 +1,144 @@
-import fs from 'fs';
-import path from 'path';
-import { execFileSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import type { ManagedSiteRecord, ManagedSiteDeployment } from '../../types.js';
-import {
-  getManagedSite,
-  getManagedSiteRoot,
-  updateManagedSite,
-} from './manager-store.js';
+import { getManagedSite, getManagedSiteRoot, updateManagedSite } from './manager-store.js';
+import { appendManagedSiteLog } from './manager-process.js';
 
-type HerokuBuildResponse = {
-  id?: string;
-  status?: string;
-  source_blob?: {
-    url?: string;
-    version?: string;
+type HerokuAppInfo = {
+  app?: {
+    id?: string;
+    name?: string;
+    web_url?: string;
   };
-  slug?: {
-    id?: string | null;
-  };
-};
-
-type HerokuAppResponse = {
   name?: string;
   web_url?: string;
+  id?: string;
 };
 
 async function deployManagedSiteToHeroku(rootDir: string, siteId: string, options: {
   appName?: string;
-  apiBaseUrl?: string;
 }) {
   const site = getManagedSite(rootDir, siteId);
   if (!site) {
     throw new Error(`Unknown site "${siteId}".`);
   }
 
-  const apiBaseUrl = String(options.apiBaseUrl || process.env.AUTONOMY_MANAGER_HEROKU_API_BASE_URL || 'https://api.heroku.com').replace(/\/+$/, '');
-  const apiKey = String(process.env.HEROKU_API_KEY || process.env.HEROKU_TOKEN || '').trim();
-  if (!apiKey) {
-    const updated = updateManagedSite(rootDir, siteId, {
-      deployment: {
-        ...(site.deployment || { status: 'idle' }),
-        target: 'heroku',
-        status: 'skipped',
-        provider: 'heroku',
-        lastError: 'Missing HEROKU_API_KEY or HEROKU_TOKEN.',
-        updatedAt: new Date().toISOString(),
-      },
-    });
-    return {
-      site: updated || site,
-      skipped: true,
-    };
-  }
-
-  const bundlePath = buildHerokuSourceBundle(rootDir, site);
+  const siteRoot = getManagedSiteRoot(rootDir, site);
   const appName = slugifyHerokuAppName(options.appName || site.slug);
-  const app = await requestHerokuJson<HerokuAppResponse>(`${apiBaseUrl}/apps`, {
-    method: 'POST',
-    token: apiKey,
-    body: {
-      name: appName,
+  const herokuCli = resolveCliCommand('AUTONOMY_MANAGER_HEROKU_CLI', 'heroku');
+  const gitCli = resolveCliCommand('AUTONOMY_MANAGER_GIT_CLI', 'git');
+  const version = String(site.updatedAt || site.createdAt || new Date().toISOString());
+
+  try {
+    appendManagedSiteLog(rootDir, siteId, `[manager] deploy started for ${siteId} -> ${appName}\n`);
+
+    const existingApp = readHerokuAppInfo(rootDir, siteId, siteRoot, herokuCli, appName);
+    if (existingApp) {
+      appendManagedSiteLog(rootDir, siteId, `[manager] found existing Heroku app ${appName}\n`);
+      runCliCommand(herokuCli, ['git:remote', '-a', appName], siteRoot, rootDir, siteId);
+    } else {
+      appendManagedSiteLog(rootDir, siteId, `[manager] creating Heroku app ${appName}\n`);
+      runCliCommand(herokuCli, ['create', appName], siteRoot, rootDir, siteId);
+    }
+
+    appendManagedSiteLog(rootDir, siteId, `[manager] pushing ${siteId} to Heroku using git push heroku main\n`);
+    runCliCommand(gitCli, ['push', 'heroku', 'main'], siteRoot, rootDir, siteId);
+
+    const appInfo = readHerokuAppInfo(rootDir, siteId, siteRoot, herokuCli, appName) || existingApp || {};
+    const appUrl = normalizeAppUrl(appInfo, appName);
+    const deployment: ManagedSiteDeployment = {
+      target: 'heroku',
+      status: 'deployed',
+      provider: 'heroku',
+      appName,
+      appUrl,
+      version,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updatedSite = updateManagedSite(rootDir, siteId, {
+      publicUrl: appUrl,
+      deployment,
+      updatedAt: new Date().toISOString(),
+    });
+    appendManagedSiteLog(rootDir, siteId, `[manager] deploy complete for ${siteId} -> ${appUrl}\n`);
+
+    return {
+      site: updatedSite || site,
+      app: appInfo,
+      appUrl,
+    };
+  } catch (error) {
+    const message = formatErrorMessage(error);
+    const deployment: ManagedSiteDeployment = {
+      ...(site.deployment || { status: 'idle' }),
+      target: 'heroku',
+      status: 'failed',
+      provider: 'heroku',
+      appName,
+      lastError: message,
+      updatedAt: new Date().toISOString(),
+    };
+    const updatedSite = updateManagedSite(rootDir, siteId, {
+      deployment,
+      updatedAt: new Date().toISOString(),
+    });
+    appendManagedSiteLog(rootDir, siteId, `[manager] deploy failed for ${siteId}: ${message}\n`);
+    throw new Error(message);
+  }
+}
+
+function readHerokuAppInfo(rootDir: string, siteId: string, cwd: string, herokuCli: string, appName: string) {
+  const result = runCliCommand(herokuCli, ['apps:info', '--json', '-a', appName], cwd, rootDir, siteId, {
+    allowFailure: true,
+  });
+  if (result.status !== 0 || !result.stdout.trim()) {
+    return null;
+  }
+  try {
+    return JSON.parse(result.stdout) as HerokuAppInfo;
+  } catch {
+    return null;
+  }
+}
+
+function runCliCommand(command: string, args: string[], cwd: string, rootDir: string, siteId: string, options: {
+  allowFailure?: boolean;
+} = {}) {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
     },
   });
-  const herokuAppName = String(app.name || appName);
-  const source = await requestHerokuJson<{ source_blob?: { put_url?: string; get_url?: string } }>(
-    `${apiBaseUrl}/apps/${encodeURIComponent(herokuAppName)}/sources`,
-    {
-      method: 'POST',
-      token: apiKey,
-    }
-  );
-  const putUrl = String(source.source_blob?.put_url || '');
-  const getUrl = String(source.source_blob?.get_url || '');
-  if (!putUrl || !getUrl) {
-    throw new Error('Heroku source upload URLs were not returned.');
+
+  if (result.stdout) {
+    appendManagedSiteLog(rootDir, siteId, result.stdout);
+  }
+  if (result.stderr) {
+    appendManagedSiteLog(rootDir, siteId, result.stderr);
   }
 
-  const sourceBuffer = fs.readFileSync(bundlePath);
-  const putResponse = await fetch(putUrl, {
-    method: 'PUT',
-    headers: {
-      'content-type': '',
-    },
-    body: sourceBuffer,
-  });
-  if (!putResponse.ok) {
-    throw new Error(`Heroku source upload failed: ${await putResponse.text() || putResponse.statusText}`);
+  if (!options.allowFailure && result.status !== 0) {
+    const errorText = String(result.stderr || result.stdout || `Command failed: ${command} ${args.join(' ')}`);
+    throw new Error(errorText.trim());
   }
-
-  const build = await requestHerokuJson<HerokuBuildResponse>(
-    `${apiBaseUrl}/apps/${encodeURIComponent(herokuAppName)}/builds`,
-    {
-      method: 'POST',
-      token: apiKey,
-      body: {
-        source_blob: {
-          url: getUrl,
-          version: String(site.updatedAt || site.createdAt || new Date().toISOString()),
-        },
-      },
-    }
-  );
-
-  const appUrl = String(app.web_url || `https://${herokuAppName}.herokuapp.com`);
-  const deployment: ManagedSiteDeployment = {
-    target: 'heroku',
-    status: build.status === 'failed' ? 'failed' : 'pending',
-    provider: 'heroku',
-    appName: herokuAppName,
-    appUrl,
-    buildId: build.id,
-    version: String(site.updatedAt || site.createdAt || new Date().toISOString()),
-    sourceBundlePath: bundlePath,
-    updatedAt: new Date().toISOString(),
-  };
-
-  const updatedSite = updateManagedSite(rootDir, siteId, {
-    publicUrl: appUrl,
-    deployment,
-  });
 
   return {
-    site: updatedSite || site,
-    app,
-    build,
-    bundlePath,
+    status: typeof result.status === 'number' ? result.status : 1,
+    stdout: String(result.stdout || ''),
+    stderr: String(result.stderr || ''),
   };
 }
 
-function buildHerokuSourceBundle(rootDir: string, site: ManagedSiteRecord) {
-  const bundleDir = path.join(rootDir, '.autonomy', 'manager', 'deploy');
-  fs.mkdirSync(bundleDir, { recursive: true });
-  const tempDir = fs.mkdtempSync(path.join(bundleDir, `${site.slug}-`));
-  const siteRoot = getManagedSiteRoot(rootDir, site);
-  copyDirectory(siteRoot, tempDir);
-  const bundlePath = path.join(bundleDir, `${site.slug}.tgz`);
-  execFileSync('tar', ['-czf', bundlePath, '-C', tempDir, '.'], {
-    stdio: 'ignore',
-  });
-  fs.rmSync(tempDir, { recursive: true, force: true });
-  return bundlePath;
+function resolveCliCommand(envName: string, defaultCommand: string) {
+  const command = String(process.env[envName] || '').trim();
+  return command || defaultCommand;
 }
 
-function copyDirectory(sourceDir: string, targetDir: string) {
-  fs.mkdirSync(targetDir, { recursive: true });
-  fs.readdirSync(sourceDir, { withFileTypes: true }).forEach((entry) => {
-    const sourcePath = path.join(sourceDir, entry.name);
-    const targetPath = path.join(targetDir, entry.name);
-    if (entry.isDirectory()) {
-      copyDirectory(sourcePath, targetPath);
-      return;
-    }
-    if (entry.isSymbolicLink()) {
-      const linkTarget = fs.readlinkSync(sourcePath);
-      fs.symlinkSync(linkTarget, targetPath);
-      return;
-    }
-    fs.copyFileSync(sourcePath, targetPath);
-  });
-}
-
-async function requestHerokuJson<T>(url: string, init: {
-  method?: string;
-  token: string;
-  body?: unknown;
-}) {
-  const headers: Record<string, string> = {
-    accept: 'application/vnd.heroku+json; version=3',
-    authorization: `Bearer ${init.token}`,
-  };
-  let body: string | undefined;
-  if (typeof init.body !== 'undefined') {
-    body = JSON.stringify(init.body);
-    headers['content-type'] = 'application/json';
-  }
-  const response = await fetch(url, {
-    method: init.method || 'GET',
-    headers,
-    body,
-  });
-  if (!response.ok) {
-    throw new Error(await response.text() || response.statusText);
-  }
-  const text = await response.text();
-  return (text ? JSON.parse(text) : {}) as T;
+function normalizeAppUrl(appInfo: HerokuAppInfo | null, appName: string) {
+  const webUrl = String(appInfo?.app?.web_url || appInfo?.web_url || '').trim();
+  return webUrl || `https://${appName}.herokuapp.com`;
 }
 
 function slugifyHerokuAppName(value: string) {
@@ -195,8 +150,11 @@ function slugifyHerokuAppName(value: string) {
     .slice(0, 63) || 'managed-site';
 }
 
+function formatErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export {
-  buildHerokuSourceBundle,
   deployManagedSiteToHeroku,
   slugifyHerokuAppName,
 };

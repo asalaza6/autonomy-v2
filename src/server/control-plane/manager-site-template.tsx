@@ -1,401 +1,26 @@
 import fs from 'fs';
 import path from 'path';
-import { build } from 'esbuild';
+import { execFileSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import type { ManagedSiteContent, ManagedSiteRecord } from '../../types.js';
 
-const MANAGED_SITE_PAGE_TSX = [
-  "type Renderable = VNode | Renderable[] | string | number | boolean | null | undefined;",
-  '',
-  'type Props = Record<string, unknown> & {',
-  '  children?: Renderable;',
-  '  dangerouslySetInnerHTML?: {',
-  '    __html?: string;',
-  '  };',
-  '};',
-  '',
-  'type VNode = {',
-  '  type: string | FragmentType | ComponentType;',
-  '  props: Props;',
-  '  key: string | number | null;',
-  '};',
-  '',
-  'type ComponentType = (props: Props) => Renderable;',
-  'type FragmentType = symbol;',
-  '',
-  "const Fragment: FragmentType = Symbol.for('managed-site.fragment');",
-  '',
-  'function h(type: VNode[\'type\'], props: Props | null, ...children: Renderable[]) {',
-  '  const normalizedChildren = children.length === 0',
-  '    ? undefined',
-  '    : children.length === 1',
-  '      ? children[0]',
-  '      : children;',
-  '',
-  '  return {',
-  '    type,',
-  '    key: null,',
-  '    props: {',
-  '      ...(props || {}),',
-  '      children: normalizedChildren,',
-  '    },',
-  '  };',
-  '}',
-  '',
-  'function renderToHtml(node: Renderable): string {',
-  '  if (node == null || node === false || node === true) {',
-  "    return '';",
-  '  }',
-  '',
-  '  if (Array.isArray(node)) {',
-  '    return node.map((child) => renderToHtml(child)).join(\'\');',
-  '  }',
-  '',
-  "  if (typeof node === 'string' || typeof node === 'number') {",
-  '    return escapeHtml(String(node));',
-  '  }',
-  '',
-  "  if (typeof node.type === 'function') {",
-  '    return renderToHtml(node.type(node.props || {}));',
-  '  }',
-  '',
-  '  if (node.type === Fragment) {',
-  '    return renderToHtml(node.props?.children);',
-  '  }',
-  '',
-  "  if (typeof node.type !== 'string') {",
-  "    return '';",
-  '  }',
-  '',
-  '  const props = node.props || {};',
-  '  const attributes = renderAttributes(props);',
-  '  const rawHtml = props.dangerouslySetInnerHTML && typeof props.dangerouslySetInnerHTML.__html === \'string\'',
-  '    ? props.dangerouslySetInnerHTML.__html',
-  '    : null;',
-  '  const innerHtml = rawHtml !== null ? rawHtml : renderToHtml(props.children);',
-  '',
-  '  if (VOID_ELEMENTS.has(node.type)) {',
-  '    return `<${node.type}${attributes} />`;',
-  '  }',
-  '',
-  '  return `<${node.type}${attributes}>${innerHtml}</${node.type}>`;',
-  '}',
-  '',
-  'function renderAttributes(props: Props) {',
-  '  const chunks: string[] = [];',
-  '',
-  '  for (const [rawName, rawValue] of Object.entries(props)) {',
-  '    if (',
-  "      rawName === 'children' ||",
-  "      rawName === 'dangerouslySetInnerHTML' ||",
-  "      rawName === 'key' ||",
-  "      rawName === 'ref' ||",
-  '      rawValue == null ||',
-  '      rawValue === false ||',
-  "      typeof rawValue === 'function'",
-  '    ) {',
-  '      continue;',
-  '    }',
-  '',
-  '    const name = normalizeAttributeName(rawName);',
-  '',
-  '    if (typeof rawValue === \'boolean\') {',
-  '      if (BOOLEAN_ATTRIBUTES.has(name)) {',
-  '        chunks.push(` ${name}`);',
-  '      } else {',
-  '        chunks.push(` ${name}="true"`);',
-  '      }',
-  '      continue;',
-  '    }',
-  '',
-  "    if (name === 'style' && typeof rawValue === 'object') {",
-  '      chunks.push(` style="${escapeHtml(styleObjectToString(rawValue as Record<string, unknown>))}"`);',
-  '      continue;',
-  '    }',
-  '',
-  '    chunks.push(` ${name}="${escapeHtml(String(rawValue))}"`);',
-  '  }',
-  '',
-  '  return chunks.join(\'\');',
-  '}',
-  '',
-  'function normalizeAttributeName(name: string) {',
-  "  if (name === 'className') {",
-  "    return 'class';",
-  '  }',
-  "  if (name === 'defaultChecked') {",
-  "    return 'checked';",
-  '  }',
-  "  if (name === 'defaultValue') {",
-  "    return 'value';",
-  '  }',
-  "  if (name === 'htmlFor') {",
-  "    return 'for';",
-  '  }',
-  "  if (name === 'charSet') {",
-  "    return 'charset';",
-  '  }',
-  "  if (name === 'tabIndex') {",
-  "    return 'tabindex';",
-  '  }',
-  "  if (name === 'readOnly') {",
-  "    return 'readonly';",
-  '  }',
-  "  if (name === 'autoFocus') {",
-  "    return 'autofocus';",
-  '  }',
-  "  if (name === 'acceptCharset') {",
-  "    return 'accept-charset';",
-  '  }',
-  "  if (name === 'httpEquiv') {",
-  "    return 'http-equiv';",
-  '  }',
-  "  if (name === 'allowFullScreen') {",
-  "    return 'allowfullscreen';",
-  '  }',
-  "  if (name === 'formNoValidate') {",
-  "    return 'formnovalidate';",
-  '  }',
-  "  if (name === 'noValidate') {",
-  "    return 'novalidate';",
-  '  }',
-  "  if (name === 'colSpan') {",
-  "    return 'colspan';",
-  '  }',
-  "  if (name === 'rowSpan') {",
-  "    return 'rowspan';",
-  '  }',
-  "  if (name === 'contentEditable') {",
-  "    return 'contenteditable';",
-  '  }',
-  "  if (name === 'spellCheck') {",
-  "    return 'spellcheck';",
-  '  }',
-  "  if (/^(aria-|data-)/.test(name)) {",
-  '    return name;',
-  '  }',
-  '  return name.replace(/[A-Z]/g, (value) => `-${value.toLowerCase()}`);',
-  '}',
-  '',
-  'function styleObjectToString(style: Record<string, unknown>) {',
-  '  return Object.entries(style)',
-  '    .filter(([, value]) => value != null && value !== false)',
-  '    .map(([key, value]) => `${key.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`)}:${String(value)}`)',
-  "    .join(';');",
-  '}',
-  '',
-  'function escapeHtml(value: string) {',
-  '  return value',
-  "    .replace(/&/g, '&amp;')",
-  "    .replace(/</g, '&lt;')",
-  "    .replace(/>/g, '&gt;')",
-  '    .replace(/\"/g, \'&quot;\')',
-  "    .replace(/'/g, '&#39;');",
-  '}',
-  '',
-  "const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);",
-  "const BOOLEAN_ATTRIBUTES = new Set(['allowfullscreen', 'autofocus', 'checked', 'controls', 'disabled', 'formnovalidate', 'hidden', 'loop', 'multiple', 'muted', 'novalidate', 'open', 'readonly', 'required', 'selected']);",
-  '',
-  'type SiteRecord = {',
-  '  id: string;',
-  '  name?: string;',
-  '  description?: string;',
-  '};',
-  '',
-  'type SiteContent = {',
-  '  title?: string;',
-  '  headline?: string;',
-  '  description?: string;',
-  '  body?: string;',
-  '  footer?: string;',
-  '  accent?: string;',
-  '};',
-  '',
-  'const pageStyles = {',
-  '  page: {',
-  '    minHeight: \'100vh\',',
-  '    margin: 0,',
-  '    display: \'grid\',',
-  '    placeItems: \'center\',',
-  '    color: \'#1f1a15\',',
-  '    background: \'linear-gradient(180deg, #fffaf4 0%, #f7f1ea 100%)\',',
-  '    fontFamily: \'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif\',',
-  '  },',
-  '  shell: {',
-  '    width: \'min(960px, calc(100vw - 32px))\',',
-  '    padding: \'40px 0 56px\',',
-  '  },',
-  '  card: {',
-  '    borderRadius: \'28px\',',
-  '    padding: \'28px\',',
-  '    background: \'rgba(255, 255, 255, 0.88)\',',
-  '    border: \'1px solid rgba(31, 26, 21, 0.12)\',',
-  '    boxShadow: \'0 20px 50px rgba(31, 26, 21, 0.08)\',',
-  '    backdropFilter: \'blur(10px)\',',
-  '  },',
-  '  eyebrow: {',
-  '    color: \'#245b75\',',
-  '    fontSize: \'0.8rem\',',
-  '    fontWeight: 700,',
-  '    letterSpacing: \'0.16em\',',
-  '    textTransform: \'uppercase\',',
-  '    marginBottom: \'14px\',',
-  '  },',
-  '  title: {',
-  '    margin: 0,',
-  '    fontSize: \'clamp(2rem, 6vw, 4rem)\',',
-  '    lineHeight: 0.95,',
-  '    letterSpacing: \'-0.05em\',',
-  '  },',
-  '  body: {',
-  '    margin: \'16px 0 0\',',
-  '    color: \'#6a6056\',',
-  '    lineHeight: 1.6,',
-  '    fontSize: \'1.02rem\',',
-  '  },',
-  '  meta: {',
-  '    display: \'flex\',',
-  '    gap: \'12px\',',
-  '    flexWrap: \'wrap\',',
-  '    marginTop: \'22px\',',
-  '  },',
-  '  pill: {',
-  '    display: \'inline-flex\',',
-  '    alignItems: \'center\',',
-  '    gap: \'8px\',',
-  '    padding: \'8px 12px\',',
-  '    borderRadius: \'999px\',',
-  '    background: \'rgba(36, 91, 117, 0.12)\',',
-  '    color: \'#245b75\',',
-  '    fontSize: \'0.9rem\',',
-  '  },',
-  '  footer: {',
-  '    marginTop: \'24px\',',
-  '    color: \'#6a6056\',',
-  '    fontSize: \'0.92rem\',',
-  '  },',
-  '} as const;',
-  '',
-  'function ManagedSitePage({ site, content, port }: { site: SiteRecord; content: SiteContent; port: number }) {',
-  '  const title = content.title || site.name || \'Managed site\';',
-  '  const headline = content.headline || content.title || site.name || \'Managed site\';',
-  '  const description = content.description || site.description || \'\';',
-  '  const body = content.body || \'Managed by the local manager.\';',
-  '  const footer = content.footer || \'Managed site template\';',
-  '  return (',
-  '    <html lang="en">',
-  '      <head>',
-  '        <meta charSet="utf-8" />',
-  '        <meta name="viewport" content="width=device-width, initial-scale=1" />',
-  '        <meta name="color-scheme" content="light" />',
-  '        <title>{title}</title>',
-  '      </head>',
-  '      <body style={pageStyles.page}>',
-  '        <main style={pageStyles.shell}>',
-  '          <section style={pageStyles.card}>',
-  '            <div style={pageStyles.eyebrow}>Managed site</div>',
-  '            <h1 style={pageStyles.title}>{headline}</h1>',
-  '            <p style={pageStyles.body}>{body}{description ? ` ${description}` : \'\'} </p>',
-  '            <div style={pageStyles.meta}>',
-  '              <span style={pageStyles.pill}>Site: {site.id}</span>',
-  '              <span style={pageStyles.pill}>Port: {port}</span>',
-  '              <span style={pageStyles.pill}>Health: /healthz</span>',
-  '            </div>',
-  '            <div style={pageStyles.footer}>{footer}</div>',
-  '          </section>',
-  '        </main>',
-  '      </body>',
-  '    </html>',
-  '  );',
-  '}',
-  '',
-  'function renderPageHtml(site: SiteRecord, content: SiteContent, port: number) {',
-  '  return renderToHtml(<ManagedSitePage site={site} content={content} port={port} />);',
-  '}',
-  '',
-  'export {',
-  '  Fragment,',
-  '  ManagedSitePage,',
-  '  renderPageHtml,',
-  '};',
-].join('\n');
+function getPackageRoot() {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../');
+}
 
-const MANAGED_SITE_SERVER_JS = [
-  "import fs from 'node:fs';",
-  "import http from 'node:http';",
-  "import path from 'node:path';",
-  "import { renderPageHtml } from './site-page.js';",
-  '',
-  'const siteRoot = process.cwd();',
-  "const port = Number(process.env.PORT || process.env.HEROKU_PORT || '3000');",
-  '',
-  'function readJson(filePath, fallback) {',
-  '  try {',
-  "    return JSON.parse(fs.readFileSync(filePath, 'utf8'));",
-  '  } catch (_) {',
-  '    return fallback;',
-  '  }',
-  '}',
-  '',
-  'function loadSite() {',
-  "  return readJson(path.join(siteRoot, 'site.json'), {",
-  "    id: path.basename(siteRoot),",
-  "    name: 'Managed site',",
-  "    description: '',",
-  '  });',
-  '}',
-  '',
-  'function loadContent() {',
-  "  return readJson(path.join(siteRoot, 'content.json'), {",
-  "    title: 'Managed site',",
-  "    headline: 'Managed by the Autonomy v2 manager',",
-  "    body: 'This site was created from the local manager template.',",
-  "    footer: 'Autonomy v2 managed site',",
-  "    accent: '#245b75',",
-  '  });',
-  '}',
-  '',
-  'const server = http.createServer((req, res) => {',
-  "  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);",
-  "  if (url.pathname === '/healthz') {",
-  '    const site = loadSite();',
-  "    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });",
-  '    res.end(JSON.stringify({',
-  '      ok: true,',
-  "      siteId: site.id || path.basename(siteRoot),",
-  "      name: site.name || 'Managed site',",
-  '      port,',
-  '    }));',
-  '    return;',
-  '  }',
-  '',
-  "  if (url.pathname === '/api/site') {",
-  "    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });",
-  '    res.end(JSON.stringify({',
-  '      site: loadSite(),',
-  '      content: loadContent(),',
-  '    }));',
-  '    return;',
-  '  }',
-  '',
-  "  if (url.pathname === '/api/content') {",
-  "    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });",
-  '    res.end(JSON.stringify(loadContent()));',
-  '    return;',
-  '  }',
-  '',
-  '  const site = loadSite();',
-  '  const content = loadContent();',
-  "  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });",
-  '  res.end(renderPageHtml(site, content, port));',
-  '});',
-  '',
-  "server.listen(port, '0.0.0.0', () => {",
-  '  console.log(`Managed site listening on port ${port}`);',
-  '});',
-].join('\n');
+function getPackageVersion() {
+  try {
+    const packageJsonPath = path.join(getPackageRoot(), 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    return String(packageJson.version || '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+}
+
 
 function buildManagedSiteFiles(site: ManagedSiteRecord & { content?: ManagedSiteContent }) {
-  const content = site.content || buildDefaultSiteContent(site);
+  const autonomyVersion = `^${getPackageVersion()}`;
   return {
     'package.json': `${JSON.stringify({
       name: site.slug,
@@ -405,23 +30,10 @@ function buildManagedSiteFiles(site: ManagedSiteRecord & { content?: ManagedSite
       engines: {
         node: '>=20',
       },
-      scripts: {
-        start: 'node server.js',
+      dependencies: {
+        '@asalaza6/autonomy-v2': autonomyVersion,
       },
     }, null, 2)}\n`,
-    'site-page.tsx': `${MANAGED_SITE_PAGE_TSX}\n`,
-    'server.js': `${MANAGED_SITE_SERVER_JS}\n`,
-    'site.json': `${JSON.stringify({
-      id: site.id,
-      slug: site.slug,
-      name: site.name,
-      description: site.description || '',
-      createdAt: site.createdAt,
-      updatedAt: site.updatedAt,
-      routePath: site.routePath,
-    }, null, 2)}\n`,
-    'content.json': `${JSON.stringify(content, null, 2)}\n`,
-    'README.md': `# ${site.name}\n\nManaged by Autonomy v2.\n`,
   };
 }
 
@@ -437,22 +49,82 @@ function buildDefaultSiteContent(site: ManagedSiteRecord): ManagedSiteContent {
 }
 
 async function compileManagedSite(rootDir: string, site: ManagedSiteRecord) {
-  const siteRoot = path.resolve(rootDir, site.siteDir);
-  const sourcePath = path.join(siteRoot, 'site-page.tsx');
-  const outputPath = path.join(siteRoot, 'site-page.js');
-  await build({
-    entryPoints: [sourcePath],
-    outfile: outputPath,
-    bundle: true,
-    format: 'esm',
-    platform: 'node',
-    target: 'node20',
-    jsx: 'transform',
-    jsxFactory: 'h',
-    jsxFragment: 'Fragment',
-    logLevel: 'silent',
+  return path.resolve(rootDir, site.siteDir);
+}
+
+function initializeManagedSiteRepository(siteRoot: string) {
+  if (fs.existsSync(path.join(siteRoot, '.git'))) {
+    return readManagedSiteRepositoryBranch(siteRoot);
+  }
+
+  try {
+    execFileSync('git', ['init', '-b', 'main'], {
+      cwd: siteRoot,
+      stdio: 'ignore',
+    });
+  } catch {
+    execFileSync('git', ['init'], {
+      cwd: siteRoot,
+      stdio: 'ignore',
+    });
+    try {
+      execFileSync('git', ['checkout', '-b', 'main'], {
+        cwd: siteRoot,
+        stdio: 'ignore',
+      });
+    } catch {
+      // Keep the default branch if the local git version is older.
+    }
+  }
+
+  execFileSync('git', ['config', 'user.name', 'Autonomy v2'], {
+    cwd: siteRoot,
+    stdio: 'ignore',
   });
-  return outputPath;
+  execFileSync('git', ['config', 'user.email', 'autonomy@example.com'], {
+    cwd: siteRoot,
+    stdio: 'ignore',
+  });
+  return readManagedSiteRepositoryBranch(siteRoot);
+}
+
+function installManagedSiteDependencies(siteRoot: string) {
+  execFileSync('npm', ['install', '--no-audit', '--no-fund'], {
+    cwd: siteRoot,
+    stdio: 'ignore',
+  });
+}
+
+function runManagedSiteAutonomyInit(siteRoot: string) {
+  execFileSync('npx', ['autonomy-v2', 'init', '--root', '.'], {
+    cwd: siteRoot,
+    stdio: 'ignore',
+  });
+}
+
+function commitManagedSiteRepository(siteRoot: string, message = 'Initial site bootstrap') {
+  execFileSync('git', ['add', '.'], {
+    cwd: siteRoot,
+    stdio: 'ignore',
+  });
+  execFileSync('git', ['commit', '-m', message], {
+    cwd: siteRoot,
+    stdio: 'ignore',
+  });
+  return readManagedSiteRepositoryBranch(siteRoot);
+}
+
+function readManagedSiteRepositoryBranch(siteRoot: string) {
+  try {
+    const branch = execFileSync('git', ['branch', '--show-current'], {
+      cwd: siteRoot,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
+    }).trim();
+    return branch || 'main';
+  } catch {
+    return 'main';
+  }
 }
 
 async function scaffoldManagedSite(rootDir: string, site: ManagedSiteRecord & { content?: ManagedSiteContent }) {
@@ -464,7 +136,7 @@ async function scaffoldManagedSite(rootDir: string, site: ManagedSiteRecord & { 
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, contents, 'utf8');
   });
-  await compileManagedSite(rootDir, site);
+  initializeManagedSiteRepository(siteRoot);
   return siteRoot;
 }
 
@@ -472,5 +144,10 @@ export {
   buildDefaultSiteContent,
   buildManagedSiteFiles,
   compileManagedSite,
+  commitManagedSiteRepository,
+  initializeManagedSiteRepository,
+  installManagedSiteDependencies,
+  readManagedSiteRepositoryBranch,
   scaffoldManagedSite,
+  runManagedSiteAutonomyInit,
 };

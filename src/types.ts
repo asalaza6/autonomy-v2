@@ -139,11 +139,23 @@ export interface ControlPlanePrdAddPayload extends AnyRecord {
   sprintId?: string;
 }
 
+export interface ControlPlaneSiteCreatePayload extends AnyRecord {
+  site: ManagedSiteRecord;
+  autoStart?: boolean;
+  publishToHeroku?: boolean;
+  herokuAppName?: string;
+}
+
+export interface ControlPlaneSiteDeployPayload extends AnyRecord {
+  site: ManagedSiteRecord;
+  herokuAppName?: string;
+}
+
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add';
+  type: 'prd:add' | 'site:create' | 'site:deploy';
   repoId: string;
-  payload: ControlPlanePrdAddPayload;
+  payload: ControlPlanePrdAddPayload | ControlPlaneSiteCreatePayload | ControlPlaneSiteDeployPayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
@@ -192,13 +204,19 @@ export interface ManagedSiteRecord extends AnyRecord {
   slug: string;
   name: string;
   description?: string;
+  repoRoot?: string;
+  branch?: string;
   siteDir: string;
   port: number;
+  localUrl?: string | null;
   routePath: string;
   status: 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
   desiredState: 'running' | 'stopped';
   createdAt: string;
   updatedAt: string;
+  installStatus?: 'pending' | 'installing' | 'installed' | 'failed';
+  initStatus?: 'pending' | 'initializing' | 'initialized' | 'failed';
+  bootstrapError?: string | null;
   pid?: number | null;
   startedAt?: string | null;
   stoppedAt?: string | null;

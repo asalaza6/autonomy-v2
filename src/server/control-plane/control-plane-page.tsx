@@ -282,6 +282,18 @@ const styles = `
     color: var(--text);
   }
 
+  button {
+    cursor: pointer;
+  }
+
+  button:hover:not(:disabled) {
+    filter: brightness(0.985);
+  }
+
+  button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
   textarea { min-height: 140px; resize: vertical; }
 
   button.primary {

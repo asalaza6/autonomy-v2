@@ -1,6 +1,10 @@
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
+import { bootstrapManagedSite } from './manager-process.js';
+import { deployManagedSiteToHeroku } from './manager-heroku.js';
+import { upsertManagedSite } from './manager-store.js';
+import type { ControlPlaneSiteCreatePayload, ControlPlaneSiteDeployPayload } from '../../types.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -32,14 +36,119 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
   const processed = [];
 
   for (const job of jobs) {
+    console.log(`[bridge] claimed job ${job.id} (${job.type})`);
     const claimed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/claim`, {
       method: 'POST',
     }).catch(() => null);
     if (!claimed) {
+      console.log(`[bridge] skipped job ${job.id} because it was already claimed`);
       continue;
     }
+
+    if (job.type === 'site:create') {
+      const payload = job.payload as ControlPlaneSiteCreatePayload;
+      try {
+        loadAutonomyEnv(rootDir);
+        console.log(`[bridge] bootstrapping site ${payload.site.id} at ${payload.site.siteDir}`);
+        const site = await bootstrapManagedSite(rootDir, payload.site);
+        console.log(`[bridge] bootstrap complete for ${site.id}; publishing=${payload.publishToHeroku === true}`);
+        const updatedSite = payload.publishToHeroku === true
+          ? (await deployManagedSiteToHeroku(rootDir, site.id, {
+              appName: payload.herokuAppName,
+            })).site
+          : site;
+        if (payload.publishToHeroku === true) {
+          console.log(`[bridge] deployed site ${site.id} to ${updatedSite.publicUrl || updatedSite.deployment?.appUrl || 'Heroku'}`);
+        }
+        await requestJson(`${options.serverUrl}/api/sites/${encodeURIComponent(site.id)}/bootstrap`, {
+          method: 'POST',
+          body: {
+            site: updatedSite,
+          },
+        });
+        console.log(`[bridge] synced site ${site.id} back to manager`);
+        const completed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
+          method: 'POST',
+          body: {
+            status: 'completed',
+            result: {
+              siteId: site.id,
+              localUrl: updatedSite.localUrl || null,
+              publicUrl: updatedSite.publicUrl || null,
+              deploymentStatus: updatedSite.deployment?.status || null,
+            },
+          },
+        }).catch(() => null);
+        console.log(`[bridge] completed job ${job.id} for site ${site.id}`);
+        processed.push({ jobId: job.id, status: completed && completed.status });
+      } catch (error) {
+        console.error(`[bridge] site:create failed for ${payload.site.id}: ${formatErrorMessage(error)}`);
+        const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
+          method: 'POST',
+          body: {
+            status: 'failed',
+            error: formatErrorMessage(error),
+          },
+        }).catch(() => null);
+        processed.push({ jobId: job.id, status: failed && failed.status });
+      }
+      continue;
+    }
+
+    if (job.type === 'site:deploy') {
+      const payload = job.payload as ControlPlaneSiteDeployPayload;
+      try {
+        loadAutonomyEnv(rootDir);
+        const siteRoot = String(payload.site.repoRoot || payload.site.siteDir);
+        console.log(`[bridge] deploying site ${payload.site.id} from ${siteRoot}`);
+        upsertManagedSite(rootDir, payload.site);
+        const updatedSite = await deployManagedSiteToHeroku(rootDir, payload.site.id, {
+          appName: payload.herokuAppName,
+        }).then((result) => result.site);
+        if (updatedSite.deployment?.status === 'skipped') {
+          console.log(`[bridge] deploy skipped for ${payload.site.id}: ${String(updatedSite.deployment.lastError || 'unknown reason')}`);
+        } else if (updatedSite.deployment?.status === 'failed') {
+          console.log(`[bridge] deploy failed for ${payload.site.id}: ${String(updatedSite.deployment.lastError || 'unknown error')}`);
+        } else {
+          console.log(`[bridge] deploy complete for ${payload.site.id} -> ${updatedSite.publicUrl || updatedSite.deployment?.appUrl || 'Heroku'}`);
+        }
+        await requestJson(`${options.serverUrl}/api/sites/${encodeURIComponent(payload.site.id)}/bootstrap`, {
+          method: 'POST',
+          body: {
+            site: updatedSite,
+          },
+        });
+        console.log(`[bridge] synced deployment for ${payload.site.id} back to manager`);
+        const completed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
+          method: 'POST',
+          body: {
+            status: 'completed',
+            result: {
+              siteId: payload.site.id,
+              publicUrl: updatedSite.publicUrl || null,
+              deploymentStatus: updatedSite.deployment?.status || null,
+            },
+          },
+        }).catch(() => null);
+        console.log(`[bridge] completed deploy job ${job.id} for site ${payload.site.id}`);
+        processed.push({ jobId: job.id, status: completed && completed.status });
+      } catch (error) {
+        console.error(`[bridge] site:deploy failed for ${payload.site.id}: ${formatErrorMessage(error)}`);
+        const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
+          method: 'POST',
+          body: {
+            status: 'failed',
+            error: formatErrorMessage(error),
+          },
+        }).catch(() => null);
+        processed.push({ jobId: job.id, status: failed && failed.status });
+      }
+      continue;
+    }
+
     const repoRoot = options.repoRoots[job.repoId];
     if (!repoRoot) {
+      console.error(`[bridge] no repo root configured for ${job.repoId}`);
       const failure = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
         body: {
@@ -53,6 +162,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
 
     try {
       loadAutonomyEnv(repoRoot);
+      console.log(`[bridge] running prd:add ${job.payload.id} in ${repoRoot}`);
       const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));
       const snapshot = buildStatusSnapshot(repoRoot);
       await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
@@ -61,6 +171,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           snapshot,
         },
       });
+      console.log(`[bridge] synced repo status for ${job.repoId}`);
       const completed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
         body: {
@@ -72,8 +183,10 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           },
         },
       }).catch(() => null);
+      console.log(`[bridge] completed job ${job.id} for repo ${job.repoId}`);
       processed.push({ jobId: job.id, status: completed && completed.status });
     } catch (error) {
+      console.error(`[bridge] prd:add failed for ${job.id}: ${formatErrorMessage(error)}`);
       const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
         body: {

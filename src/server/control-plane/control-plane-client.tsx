@@ -20,13 +20,19 @@ type SiteSummary = {
   slug?: string;
   name?: string;
   description?: string;
+  repoRoot?: string;
+  branch?: string;
   routePath?: string;
   status?: string;
   desiredState?: string;
+  installStatus?: string;
+  initStatus?: string;
+  bootstrapError?: string | null;
   port?: number;
   pid?: number | null;
   healthStatus?: string;
   healthMessage?: string;
+  localUrl?: string | null;
   publicUrl?: string | null;
   deploymentStatus?: string;
   deployment?: SiteDeployment;
@@ -211,7 +217,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 async function performSiteAction(siteId: string, action: 'start' | 'stop' | 'restart' | 'deploy') {
-  setMessage(`${action}ing site...`);
+  setMessage(action === 'deploy' ? 'Queueing deploy...' : `${action}ing site...`);
   const response = await requestJson<{ site?: SiteSummary }>(`/api/sites/${encodeURIComponent(siteId)}/${action}`, {
     method: 'POST',
   });
@@ -219,7 +225,7 @@ async function performSiteAction(siteId: string, action: 'start' | 'stop' | 'res
     selectedSiteId = response.site.id;
   }
   await refresh();
-  setMessage(`${capitalize(action)} complete.`);
+  setMessage(action === 'deploy' ? 'Deploy queued.' : `${capitalize(action)} complete.`);
 }
 
 function handleSiteStackClick(event: MouseEvent) {
@@ -453,6 +459,7 @@ function SiteCard({
   site: SiteSummary;
   selected: boolean;
 }) {
+  const bootstrapOnly = !site.localUrl && !site.port;
   return (
     <article
       className={`site-card${selected ? ' selected' : ''}`}
@@ -473,12 +480,18 @@ function SiteCard({
       </div>
       <div className="overview">
         {site.healthStatus ? `${site.healthStatus}. ` : ''}
-        {site.publicUrl ? `Heroku: ${site.publicUrl}` : site.routePath || ''}
+        {bootstrapOnly ? `Repo: ${site.repoRoot || 'n/a'}` : site.localUrl ? `Local: ${site.localUrl}` : site.routePath || ''}
       </div>
       <div className="row">
-        <button type="button" data-site-id={site.id} data-site-action="start">Start</button>
-        <button type="button" data-site-id={site.id} data-site-action="stop">Stop</button>
-        <button type="button" data-site-id={site.id} data-site-action="restart">Restart</button>
+        {!bootstrapOnly ? (
+          <>
+            <button type="button" data-site-id={site.id} data-site-action="start">Start</button>
+            <button type="button" data-site-id={site.id} data-site-action="stop">Stop</button>
+            <button type="button" data-site-id={site.id} data-site-action="restart">Restart</button>
+          </>
+        ) : (
+          <span className="list-note">Bootstrap-only site</span>
+        )}
         <button type="button" data-site-id={site.id} data-site-action="deploy">Deploy</button>
       </div>
     </article>
@@ -496,10 +509,12 @@ function SelectedSitePanel({
     return (
       <div>
         <h3>Selected site</h3>
-        <div className="list-note">Select a site to view process details, proxy links, and deployment status.</div>
+        <div className="list-note">Select a site to view repo details, bootstrap status, and deployment status.</div>
       </div>
     );
   }
+
+  const bootstrapOnly = !site.localUrl && !site.port;
 
   return (
     <>
@@ -515,17 +530,28 @@ function SelectedSitePanel({
       </div>
       <div className="list-note">{site.description || 'No description provided.'}</div>
       <div className="section-row">
-        <div className="list-note">Route: <a href={site.routePath || '#'}>{site.routePath || 'n/a'}</a></div>
-        <div className="list-note">Local port: {site.port ? `:${site.port}` : 'n/a'}</div>
-        <div className="list-note">Process id: {site.pid || 'n/a'}</div>
+        <div className="list-note">Repo root: {site.repoRoot || 'n/a'}</div>
+        <div className="list-note">Branch: {site.branch || 'main'}</div>
+        <div className="list-note">Install: {site.installStatus || 'installed'}</div>
+        <div className="list-note">Autonomy init: {site.initStatus || 'initialized'}</div>
+        <div className="list-note">Path: {site.routePath || 'n/a'}</div>
+        <div className="list-note">Runtime: {bootstrapOnly ? 'none' : 'local server'}</div>
+        <div className="list-note">Local URL: {site.localUrl || 'n/a'}</div>
         <div className="list-note">Public URL: {site.publicUrl || 'Not published yet'}</div>
         <div className="list-note">Deployment: {site.deploymentStatus || 'idle'}</div>
         <div className="list-note">Health: {site.healthMessage || 'No health check yet.'}</div>
+        <div className="list-note">Bootstrap error: {site.bootstrapError || 'None'}</div>
       </div>
       <div className="row body-note">
-        <button type="button" data-site-id={site.id} data-site-action="start">Start</button>
-        <button type="button" data-site-id={site.id} data-site-action="stop">Stop</button>
-        <button type="button" data-site-id={site.id} data-site-action="restart">Restart</button>
+        {!bootstrapOnly ? (
+          <>
+            <button type="button" data-site-id={site.id} data-site-action="start">Start</button>
+            <button type="button" data-site-id={site.id} data-site-action="stop">Stop</button>
+            <button type="button" data-site-id={site.id} data-site-action="restart">Restart</button>
+          </>
+        ) : (
+          <span className="list-note">Bootstrap-only site</span>
+        )}
         <button type="button" data-site-id={site.id} data-site-action="deploy">Deploy</button>
       </div>
       <div className="section-divider" />

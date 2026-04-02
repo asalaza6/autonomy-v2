@@ -32,6 +32,8 @@
   },
   "scripts": {
     "build": "tsc",
+    "start": "node dist/bin/autonomy-v2-control.js serve",
+    "heroku-postbuild": "npm run build",
     "check:lines": "node scripts/check-line-count.js",
     "clean": "rm -rf dist",
     "autonomy:v2:control": "node dist/bin/autonomy-v2-control.js serve",
@@ -63,7 +65,6 @@
     "@types/node": "^20.16.0",
     "@typescript-eslint/eslint-plugin": "^8.37.0",
     "@typescript-eslint/parser": "^8.37.0",
-    "esbuild": "^0.25.11",
     "eslint": "^9.39.4",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^17.4.0",
@@ -71,6 +72,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "esbuild": "^0.25.12",
     "ts-morph": "^27.0.2"
   }
 }

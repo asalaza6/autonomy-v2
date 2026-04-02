@@ -82,6 +82,8 @@ function normalizeManagedSiteRecord(site: ManagedSiteRecord | Record<string, unk
   const slug = String(site.slug || id).trim() || id;
   const siteDir = String(site.siteDir || path.join('sites', slug)).trim();
   const port = Number(site.port || 0);
+  const repoRoot = String((site as ManagedSiteRecord).repoRoot || siteDir).trim() || siteDir;
+  const branch = String((site as ManagedSiteRecord).branch || 'main').trim() || 'main';
   const routePath = String(site.routePath || `/sites/${slug}`).trim();
   const deployment = normalizeDeploymentRecord((site as ManagedSiteRecord).deployment);
   const content = normalizeContentRecord((site as ManagedSiteRecord).content, site as ManagedSiteRecord);
@@ -91,13 +93,19 @@ function normalizeManagedSiteRecord(site: ManagedSiteRecord | Record<string, unk
     slug,
     name: String(site.name || slug).trim() || slug,
     description: String(site.description || '').trim() || undefined,
+    repoRoot,
+    branch,
     siteDir,
     port: Number.isFinite(port) && port > 0 ? port : 0,
+    localUrl: normalizeOptionalString((site as ManagedSiteRecord).localUrl),
     routePath,
     status: normalizeSiteStatus(String(site.status || 'stopped')),
     desiredState: String(site.desiredState || 'stopped') === 'running' ? 'running' : 'stopped',
     createdAt: String(site.createdAt || new Date().toISOString()),
     updatedAt: String(site.updatedAt || site.createdAt || new Date().toISOString()),
+    installStatus: normalizeInstallStatus((site as ManagedSiteRecord).installStatus),
+    initStatus: normalizeInitStatus((site as ManagedSiteRecord).initStatus),
+    bootstrapError: normalizeOptionalString((site as ManagedSiteRecord).bootstrapError),
     pid: normalizeOptionalNumber((site as ManagedSiteRecord).pid),
     startedAt: normalizeOptionalString((site as ManagedSiteRecord).startedAt),
     stoppedAt: normalizeOptionalString((site as ManagedSiteRecord).stoppedAt),
@@ -155,6 +163,22 @@ function normalizeDeploymentStatus(status: string | undefined | null) {
     return normalized as NonNullable<ManagedSiteRecord['deployment']>['status'];
   }
   return 'idle';
+}
+
+function normalizeInstallStatus(status: ManagedSiteRecord['installStatus'] | undefined | null) {
+  const normalized = String(status || 'installed').trim();
+  if (['pending', 'installing', 'installed', 'failed'].includes(normalized)) {
+    return normalized as NonNullable<ManagedSiteRecord['installStatus']>;
+  }
+  return 'installed';
+}
+
+function normalizeInitStatus(status: ManagedSiteRecord['initStatus'] | undefined | null) {
+  const normalized = String(status || 'initialized').trim();
+  if (['pending', 'initializing', 'initialized', 'failed'].includes(normalized)) {
+    return normalized as NonNullable<ManagedSiteRecord['initStatus']>;
+  }
+  return 'initialized';
 }
 
 function normalizeContentRecord(content: ManagedSiteRecord['content'] | undefined | null, site: ManagedSiteRecord) {

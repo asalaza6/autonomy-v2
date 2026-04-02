@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import net from 'net';
-import { spawn } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import type { ManagedSiteContent, ManagedSiteRecord, ManagerSiteCreateRequest } from '../../types.js';
 import {
   ensureManagerDataDir,
@@ -14,32 +14,64 @@ import {
   updateManagedSite,
   upsertManagedSite,
 } from './manager-store.js';
-import { scaffoldManagedSite, buildDefaultSiteContent } from './manager-site-template.js';
+import {
+  buildDefaultSiteContent,
+  commitManagedSiteRepository,
+  installManagedSiteDependencies,
+  readManagedSiteRepositoryBranch,
+  runManagedSiteAutonomyInit,
+  scaffoldManagedSite,
+} from './manager-site-template.js';
 
 const MANAGED_SITE_PROCESSES = new Map<string, ReturnType<typeof spawn>>();
 const MANAGED_SITE_STOP_REQUESTS = new Set<string>();
 const MANAGED_SITE_RESTART_TIMERS = new Map<string, NodeJS.Timeout>();
 
-async function createManagedSite(rootDir: string, request: ManagerSiteCreateRequest) {
+function canBootstrapManagedSiteLocally() {
+  if (process.env.DYNO) {
+    return false;
+  }
+  return ['git', 'npm', 'npx'].every((command) => {
+    try {
+      execFileSync(command, ['--version'], { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function resolveManagedSitesRootDir() {
+  const configuredRoot = String(process.env.AUTONOMY_MANAGER_SITES_ROOT || '').trim();
+  return path.resolve(configuredRoot || '/Users/bytedance/Documents/GitHub/auto');
+}
+
+function reserveManagedSiteDraft(rootDir: string, request: ManagerSiteCreateRequest) {
   ensureManagerDataDir(rootDir);
   const stateSites = listManagedSites(rootDir);
   const baseSlug = buildManagedSiteSlug(request.slug || request.name, stateSites.map((site) => site.slug));
   const siteId = baseSlug;
   const now = new Date().toISOString();
-  const siteDir = path.join('sites', siteId);
-  const port = await allocateFreePort();
-  const site: ManagedSiteRecord = normalizeManagedSiteRecord({
+  const siteDir = path.join(resolveManagedSitesRootDir(), siteId);
+  incrementManagedSiteIndex(rootDir);
+  return normalizeManagedSiteRecord({
     id: siteId,
     slug: siteId,
     name: String(request.name || siteId).trim() || siteId,
     description: String(request.description || '').trim() || undefined,
+    repoRoot: siteDir,
+    branch: 'main',
     siteDir,
-    port,
+    port: 0,
+    localUrl: null,
     routePath: `/sites/${siteId}`,
     status: 'stopped',
-    desiredState: request.autoStart === false ? 'stopped' : 'running',
+    desiredState: 'stopped',
     createdAt: now,
     updatedAt: now,
+    installStatus: 'pending',
+    initStatus: 'pending',
+    bootstrapError: null,
     startedAt: null,
     stoppedAt: now,
     pid: null,
@@ -58,7 +90,7 @@ async function createManagedSite(rootDir: string, request: ManagerSiteCreateRequ
         name: String(request.name || siteId).trim() || siteId,
         description: String(request.description || '').trim() || undefined,
         siteDir,
-        port,
+        port: 0,
         routePath: `/sites/${siteId}`,
         status: 'stopped',
         desiredState: 'stopped',
@@ -68,140 +100,127 @@ async function createManagedSite(rootDir: string, request: ManagerSiteCreateRequ
       ...(request.content || {}),
     } as ManagedSiteContent,
   }) as ManagedSiteRecord;
+}
 
-  await scaffoldManagedSite(rootDir, site);
-  upsertManagedSite(rootDir, site);
-  incrementManagedSiteIndex(rootDir);
-  if (request.autoStart !== false) {
-    return startManagedSite(rootDir, site.id);
+async function createManagedSite(rootDir: string, request: ManagerSiteCreateRequest) {
+  const draft = reserveManagedSiteDraft(rootDir, request);
+  return bootstrapManagedSite(rootDir, draft);
+}
+
+async function bootstrapManagedSite(rootDir: string, draftSite: ManagedSiteRecord) {
+  ensureManagerDataDir(rootDir);
+  const site = normalizeManagedSiteRecord(draftSite);
+  if (!site) {
+    throw new Error('Invalid managed site record.');
   }
-  return site;
+  const siteRoot = path.resolve(rootDir, site.siteDir);
+  fs.mkdirSync(siteRoot, { recursive: true });
+  const preparedSite = normalizeManagedSiteRecord({
+    ...site,
+    port: 0,
+    localUrl: null,
+    desiredState: 'stopped',
+    status: 'stopped',
+    installStatus: 'pending',
+    initStatus: 'pending',
+    bootstrapError: null,
+  });
+  if (!preparedSite) {
+    throw new Error(`Unable to prepare site "${site.id}".`);
+  }
+  upsertManagedSite(rootDir, preparedSite);
+  try {
+    const siteLogPath = getManagedSiteLogPath(rootDir, preparedSite);
+    appendSiteLog(siteLogPath, `[manager] creating repo at ${siteRoot}\n`);
+    await scaffoldManagedSite(rootDir, preparedSite);
+    const scaffoldedBranch = readManagedSiteRepositoryBranch(siteRoot);
+    updateManagedSite(rootDir, site.id, {
+      repoRoot: preparedSite.repoRoot || preparedSite.siteDir,
+      branch: scaffoldedBranch,
+      installStatus: 'installing',
+      initStatus: 'pending',
+      bootstrapError: null,
+      updatedAt: new Date().toISOString(),
+    });
+    appendSiteLog(siteLogPath, `[manager] installing autonomy-v2 for ${preparedSite.id}\n`);
+    installManagedSiteDependencies(siteRoot);
+    updateManagedSite(rootDir, site.id, {
+      installStatus: 'installed',
+      updatedAt: new Date().toISOString(),
+    });
+    appendSiteLog(siteLogPath, `[manager] running autonomy-v2 init for ${preparedSite.id}\n`);
+    updateManagedSite(rootDir, site.id, {
+      initStatus: 'initializing',
+      updatedAt: new Date().toISOString(),
+    });
+    runManagedSiteAutonomyInit(siteRoot);
+    appendSiteLog(siteLogPath, `[manager] committing bootstrap for ${preparedSite.id}\n`);
+    const finalBranch = commitManagedSiteRepository(siteRoot);
+    const finished = updateManagedSite(rootDir, site.id, {
+      repoRoot: preparedSite.repoRoot || preparedSite.siteDir,
+      branch: finalBranch,
+      installStatus: 'installed',
+      initStatus: 'initialized',
+      status: 'stopped',
+      desiredState: 'stopped',
+      port: 0,
+      localUrl: null,
+      bootstrapError: null,
+      updatedAt: new Date().toISOString(),
+    });
+    if (!finished) {
+      throw new Error(`Unable to update site "${site.id}" after bootstrap.`);
+    }
+    appendSiteLog(siteLogPath, `[manager] bootstrap complete for ${preparedSite.id}\n`);
+  } catch (error) {
+    const message = formatErrorMessage(error);
+    updateManagedSite(rootDir, preparedSite.id, {
+      status: 'error',
+      desiredState: 'stopped',
+      installStatus: 'failed',
+      initStatus: 'failed',
+      port: 0,
+      localUrl: null,
+      bootstrapError: message,
+      updatedAt: new Date().toISOString(),
+    });
+    appendSiteLog(getManagedSiteLogPath(rootDir, preparedSite), `[manager] bootstrap failed for ${preparedSite.id}: ${message}\n`);
+    throw error;
+  }
+
+  return getManagedSite(rootDir, preparedSite.id) || preparedSite;
 }
 
 async function startManagedSite(rootDir: string, siteId: string) {
-  const site = getManagedSite(rootDir, siteId);
-  if (!site) {
-    throw new Error(`Unknown site "${siteId}".`);
-  }
-  const existing = MANAGED_SITE_PROCESSES.get(siteId);
-  if (existing && existing.exitCode === null && existing.signalCode === null) {
-    return site;
-  }
-  clearManagedSiteRestartTimer(siteId);
-  MANAGED_SITE_STOP_REQUESTS.delete(siteId);
-  const siteRoot = getManagedSiteRoot(rootDir, site);
-  const logPath = getManagedSiteLogPath(rootDir, site);
-  fs.mkdirSync(path.dirname(logPath), { recursive: true });
-  fs.mkdirSync(siteRoot, { recursive: true });
-
-  const child = spawn(process.execPath, ['server.js'], {
-    cwd: siteRoot,
-    env: {
-      ...process.env,
-      PORT: String(site.port),
-      HOST: '0.0.0.0',
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  MANAGED_SITE_PROCESSES.set(siteId, child);
-  appendSiteLog(logPath, `[manager] started site ${siteId} on port ${site.port}\n`);
-  updateManagedSite(rootDir, siteId, {
-    status: 'starting',
-    desiredState: 'running',
-    pid: child.pid || null,
-    startedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    healthStatus: 'unknown',
-    healthMessage: 'starting',
-    healthCheckedAt: new Date().toISOString(),
-  });
-
-  attachManagedSiteStreams(rootDir, siteId, child, logPath);
-  const health = await waitForManagedSiteHealth(site.port);
-  const now = new Date().toISOString();
-  const updated = updateManagedSite(rootDir, siteId, {
-    status: 'running',
-    desiredState: 'running',
-    pid: child.pid || null,
-    updatedAt: now,
-    healthStatus: health.ok ? 'healthy' : 'unhealthy',
-    healthMessage: health.message,
-    healthCheckedAt: now,
-    stoppedAt: null,
-    lastExitCode: null,
-    lastSignal: null,
-  });
-  if (!updated) {
-    throw new Error(`Unable to update site "${siteId}".`);
-  }
-  return updated;
+  throw new Error('Managed sites are bootstrap-only. No site runtime is created by the manager.');
 }
 
 async function stopManagedSite(rootDir: string, siteId: string) {
-  const site = getManagedSite(rootDir, siteId);
-  if (!site) {
-    throw new Error(`Unknown site "${siteId}".`);
-  }
-  const child = MANAGED_SITE_PROCESSES.get(siteId);
-  if (!child) {
-    return updateManagedSite(rootDir, siteId, {
-      status: 'stopped',
-      desiredState: 'stopped',
-      pid: null,
-      stoppedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      healthStatus: 'unknown',
-      healthMessage: 'stopped',
-      healthCheckedAt: new Date().toISOString(),
-    }) || site;
-  }
-
-  MANAGED_SITE_STOP_REQUESTS.add(siteId);
-  updateManagedSite(rootDir, siteId, {
-    status: 'stopping',
-    desiredState: 'stopped',
-    updatedAt: new Date().toISOString(),
-  });
-  child.kill('SIGTERM');
-  await waitForProcessExit(child, 2500);
-  MANAGED_SITE_PROCESSES.delete(siteId);
-  MANAGED_SITE_STOP_REQUESTS.delete(siteId);
-  return updateManagedSite(rootDir, siteId, {
-    status: 'stopped',
-    desiredState: 'stopped',
-    pid: null,
-    stoppedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    healthStatus: 'unknown',
-    healthMessage: 'stopped',
-    healthCheckedAt: new Date().toISOString(),
-  }) || site;
+  throw new Error('Managed sites are bootstrap-only. No site runtime is created by the manager.');
 }
 
 async function restartManagedSite(rootDir: string, siteId: string) {
-  await stopManagedSite(rootDir, siteId);
-  return startManagedSite(rootDir, siteId);
+  throw new Error('Managed sites are bootstrap-only. No site runtime is created by the manager.');
 }
 
 async function reconcileManagedSites(rootDir: string) {
   ensureManagerDataDir(rootDir);
   const sites = listManagedSites(rootDir);
-  const results = [];
-  for (const site of sites) {
-    const child = MANAGED_SITE_PROCESSES.get(site.id);
-    const isAlive = Boolean(child && child.exitCode === null && child.signalCode === null);
-    if (site.desiredState === 'running' && !isAlive) {
-      results.push(await startManagedSite(rootDir, site.id));
-      continue;
+  return sites.map((site) => {
+    if (site.status === 'running' || site.status === 'starting' || site.status === 'stopping') {
+      return updateManagedSite(rootDir, site.id, {
+        status: 'stopped',
+        desiredState: 'stopped',
+        pid: null,
+        localUrl: null,
+        port: 0,
+        healthStatus: 'unknown',
+        healthMessage: 'bootstrap-only',
+        healthCheckedAt: new Date().toISOString(),
+      }) || site;
     }
-    if (site.desiredState === 'stopped' && isAlive) {
-      results.push(await stopManagedSite(rootDir, site.id));
-      continue;
-    }
-    results.push(site);
-  }
-  return results;
+    return site;
+  });
 }
 
 function attachManagedSiteStreams(rootDir: string, siteId: string, child: ReturnType<typeof spawn>, logPath: string) {
@@ -257,6 +276,12 @@ function clearManagedSiteRestartTimer(siteId: string) {
 function appendSiteLog(logPath: string, line: string) {
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
   fs.appendFileSync(logPath, line, 'utf8');
+}
+
+function appendManagedSiteLog(rootDir: string, siteId: string, line: string) {
+  const site = getManagedSite(rootDir, siteId);
+  const logPath = site ? getManagedSiteLogPath(rootDir, site) : path.join(rootDir, '.autonomy', 'manager', 'logs', `${siteId}.log`);
+  appendSiteLog(logPath, line);
 }
 
 async function waitForManagedSiteHealth(port: number, timeoutMs = 10000) {
@@ -347,10 +372,14 @@ function formatErrorMessage(error: unknown) {
 
 export {
   allocateFreePort,
+  appendManagedSiteLog,
+  bootstrapManagedSite,
   buildManagedSiteSlug,
+  canBootstrapManagedSiteLocally,
   createManagedSite,
   reconcileManagedSites,
   restartManagedSite,
+  reserveManagedSiteDraft,
   startManagedSite,
   stopManagedSite,
 };

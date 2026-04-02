@@ -11,11 +11,9 @@ import { buildControlPlaneHtml } from './control-plane-browser.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { buildManagerDashboard } from './manager-dashboard.js';
 import {
-  createManagedSite,
+  appendManagedSiteLog,
   reconcileManagedSites,
-  restartManagedSite,
-  startManagedSite,
-  stopManagedSite,
+  reserveManagedSiteDraft,
 } from './manager-process.js';
 import {
   ensureManagerDataDir,
@@ -23,12 +21,14 @@ import {
   getManagedSiteLogPath,
   listManagedSites,
   loadManagerState,
+  upsertManagedSite,
 } from './manager-store.js';
-import { deployManagedSiteToHeroku } from './manager-heroku.js';
 import {
   claimJob,
   completeJob,
   createControlPlaneJob,
+  createManagedSiteDeployJob,
+  createManagedSiteJob,
   ensureControlPlaneDataDir,
   enqueueJob,
   getRepoStatuses,
@@ -156,7 +156,7 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
   if (url.pathname === '/api/sites' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
-      const site = await createManagedSite(rootDir, {
+      const createRequest = {
         name: String(body.name || body.slug || `Site ${loadManagerState(rootDir).nextSiteIndex || 1}`).trim() || 'Managed site',
         description: String(body.description || '').trim() || undefined,
         slug: String(body.slug || '').trim() || undefined,
@@ -167,17 +167,20 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
           body: String(body.content && body.content.body || body.body || '').trim() || undefined,
           footer: String(body.content && body.content.footer || body.footer || '').trim() || undefined,
         },
-      });
-      let deployment = site.deployment || null;
-      if (body.publishToHeroku === true) {
-        const deployed = await deployManagedSiteToHeroku(rootDir, site.id, {
-          appName: String(body.herokuAppName || body.appName || '').trim() || undefined,
-        });
-        deployment = deployed && deployed.site ? deployed.site.deployment || deployment : deployment;
-      }
+      };
+
+      const draftSite = reserveManagedSiteDraft(rootDir, createRequest);
+      upsertManagedSite(rootDir, draftSite);
+      const job = enqueueJob(rootDir, createManagedSiteJob({
+        site: draftSite,
+        autoStart: createRequest.autoStart,
+        publishToHeroku: createRequest.publishToHeroku,
+        herokuAppName: String(body.herokuAppName || body.appName || '').trim() || undefined,
+      }));
       sendJson(res, 201, {
-        site: getManagedSite(rootDir, site.id) || site,
-        deployment,
+        site: draftSite,
+        job,
+        bootstrapMode: 'queued',
       });
     } catch (error) {
       sendJson(res, 400, { error: error.message });
@@ -207,31 +210,71 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
     return;
   }
 
+  if (url.pathname.startsWith('/api/sites/') && url.pathname.endsWith('/bootstrap') && req.method === 'POST') {
+    const siteId = url.pathname.split('/')[3];
+    try {
+      const body = await readJsonBody(req);
+      const updatedSite = body && body.site ? upsertManagedSite(rootDir, body.site) : null;
+      if (!updatedSite) {
+        sendJson(res, 400, { error: 'Missing site payload.' });
+        return;
+      }
+      if (updatedSite.id !== siteId) {
+        sendJson(res, 400, { error: 'Site payload does not match the requested site.' });
+        return;
+      }
+      sendJson(res, 200, { site: updatedSite });
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
   if (url.pathname.startsWith('/api/sites/') && req.method === 'POST') {
     const siteId = url.pathname.split('/')[3];
     const action = url.pathname.split('/')[4];
     try {
       if (action === 'start') {
-        const site = await startManagedSite(rootDir, siteId);
-        sendJson(res, 200, { site });
+        sendJson(res, 400, { error: 'Managed sites are bootstrap-only. Start is disabled.' });
         return;
       }
       if (action === 'stop') {
-        const site = await stopManagedSite(rootDir, siteId);
-        sendJson(res, 200, { site });
+        sendJson(res, 400, { error: 'Managed sites are bootstrap-only. Stop is disabled.' });
         return;
       }
       if (action === 'restart') {
-        const site = await restartManagedSite(rootDir, siteId);
-        sendJson(res, 200, { site });
+        sendJson(res, 400, { error: 'Managed sites are bootstrap-only. Restart is disabled.' });
         return;
       }
       if (action === 'deploy') {
         const body = await readJsonBody(req);
-        const result = await deployManagedSiteToHeroku(rootDir, siteId, {
-          appName: String(body.appName || body.herokuAppName || '').trim() || undefined,
+        const site = getManagedSite(rootDir, siteId);
+        if (!site) {
+          sendJson(res, 404, { error: 'Unknown site.' });
+          return;
+        }
+        const updatedSite = upsertManagedSite(rootDir, {
+          ...site,
+          deployment: {
+            ...(site.deployment || { status: 'idle' }),
+            target: 'heroku',
+            status: 'pending',
+            provider: 'heroku',
+            appName: String(body.appName || body.herokuAppName || site.deployment?.appName || '').trim() || undefined,
+            updatedAt: new Date().toISOString(),
+          },
+          updatedAt: new Date().toISOString(),
         });
-        sendJson(res, 200, result);
+        appendManagedSiteLog(rootDir, siteId, `[manager] deploy queued for bridge: ${String(body.appName || body.herokuAppName || updatedSite?.deployment?.appName || 'Heroku')}\n`);
+        const job = enqueueJob(rootDir, createManagedSiteDeployJob({
+          site: updatedSite || site,
+          herokuAppName: String(body.appName || body.herokuAppName || '').trim() || undefined,
+        }));
+        sendJson(res, 202, {
+          site: updatedSite || site,
+          job,
+          deployMode: 'queued',
+        });
         return;
       }
     } catch (error) {
