@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import http from 'http';
+import { fileURLToPath } from 'url';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneHtml } from './control-plane-browser.js';

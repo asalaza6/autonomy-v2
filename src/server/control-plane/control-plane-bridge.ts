@@ -125,19 +125,19 @@ async function runControlPlaneBridgeLoop(rootDir: string, options: {
   }
 }
 
-async function requestJson(url: string, init: RequestInit = {}) {
-  const requestInit: RequestInit = {
+async function requestJson(url: string, init: Omit<RequestInit, 'body'> & { body?: unknown } = {}) {
+  const requestInit: Omit<RequestInit, 'body'> & { body?: unknown } = {
     ...init,
     headers: {
       'content-type': 'application/json',
       ...(init.headers || {}),
     },
   };
-  const body = (init as any).body;
+  const body = init.body;
   if (body && typeof body === 'object' && !ArrayBuffer.isView(body) && !(body instanceof ArrayBuffer)) {
     requestInit.body = JSON.stringify(body);
   }
-  const response = await fetch(url, requestInit);
+  const response = await fetch(url, requestInit as RequestInit);
   if (!response.ok) {
     throw new Error(await response.text() || response.statusText);
   }
