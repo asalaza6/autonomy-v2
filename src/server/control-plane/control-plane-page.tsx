@@ -28,7 +28,7 @@ const styles = `
   }
 
   main {
-    max-width: 1320px;
+    max-width: 1360px;
     margin: 0 auto;
     padding: 28px 20px 56px;
     display: grid;
@@ -60,7 +60,7 @@ const styles = `
     letter-spacing: 0.15em;
   }
 
-  .lede { margin-top: 10px; max-width: 720px; line-height: 1.5; }
+  .lede { margin-top: 10px; max-width: 760px; line-height: 1.5; }
 
   .status-chip {
     display: inline-flex;
@@ -173,25 +173,63 @@ const styles = `
     letter-spacing: -0.03em;
   }
 
-  .repo-stack, .job-stack, .agent-stack, .queue-stack, .pull-request-stack {
+  .manager-grid {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  }
+
+  .site-stack {
     display: grid;
     gap: 12px;
   }
 
-  .repo, .job, .agent, .queued-prd, .pull-request, .advanced-block {
+  .site-card, .site-detail, .advanced-block {
     border: 1px solid rgba(31, 26, 21, 0.1);
     border-radius: 18px;
     padding: 14px;
     background: rgba(255, 255, 255, 0.76);
   }
 
-  .repo-head, .job-head, .agent-head, .item-head {
+  .site-card {
+    cursor: pointer;
+    transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  }
+
+  .site-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px rgba(31, 26, 21, 0.08);
+  }
+
+  .site-card.selected {
+    border-color: rgba(36, 91, 117, 0.32);
+    box-shadow: 0 16px 36px rgba(36, 91, 117, 0.14);
+  }
+
+  .site-head, .item-head {
     display: flex;
     justify-content: space-between;
     gap: 12px;
     align-items: start;
     flex-wrap: wrap;
     margin-bottom: 10px;
+  }
+
+  .site-title {
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .site-detail {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+  }
+
+  .site-badges, .row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   .pill {
@@ -203,6 +241,11 @@ const styles = `
     background: rgba(36, 91, 117, 0.12);
     color: var(--accent);
     white-space: nowrap;
+  }
+
+  .pill.warn {
+    background: rgba(192, 74, 87, 0.12);
+    color: var(--accent-2);
   }
 
   .overview {
@@ -217,27 +260,10 @@ const styles = `
     margin-top: 12px;
   }
 
-  .list-note { color: var(--muted); font-size: 0.92rem; }
-
-  .queue-item, .agent-item, .pull-request-item {
-    display: grid;
-    gap: 6px;
-    padding: 10px 0;
-    border-top: 1px solid rgba(31, 26, 21, 0.08);
-  }
-
-  .queue-item:first-child, .agent-item:first-child, .pull-request-item:first-child {
-    border-top: none;
-    padding-top: 0;
-  }
-
-  .queue-title, .agent-title, .pull-request-title { font-weight: 650; }
-  .queue-detail, .agent-detail, .pull-request-detail, .job-detail { color: var(--muted); line-height: 1.45; }
-
-  .grid {
-    display: grid;
-    gap: 18px;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  .list-note {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.45;
   }
 
   label {
@@ -273,21 +299,18 @@ const styles = `
     border: 1px solid rgba(36, 91, 117, 0.3);
   }
 
-  .row { display: flex; gap: 12px; flex-wrap: wrap; }
-  .row > * { flex: 1 1 180px; }
-
-  .subtle-box {
-    border-radius: 16px;
-    border: 1px dashed rgba(31, 26, 21, 0.14);
-    background: rgba(255, 255, 255, 0.5);
-    padding: 14px;
+  .section-divider {
+    height: 1px;
+    margin: 18px 0;
+    background: rgba(31, 26, 21, 0.08);
   }
 
-  details summary {
-    cursor: pointer;
-    font-weight: 650;
-    color: var(--accent);
-    margin-bottom: 10px;
+  .body-note { margin-top: 12px; }
+
+  .raw-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   pre {
@@ -300,24 +323,22 @@ const styles = `
     margin: 0;
   }
 
-  .raw-grid {
-    display: grid;
-    gap: 12px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  details summary {
+    cursor: pointer;
+    font-weight: 650;
+    color: var(--accent);
+    margin-bottom: 10px;
   }
 
-  .section-divider {
-    height: 1px;
-    margin: 18px 0;
-    background: rgba(31, 26, 21, 0.08);
+  .subtle-box {
+    border-radius: 16px;
+    border: 1px dashed rgba(31, 26, 21, 0.14);
+    background: rgba(255, 255, 255, 0.5);
+    padding: 14px;
   }
 
-  .body-note { margin-top: 12px; }
-  .repo-section { display: grid; gap: 10px; }
-  .repo-section + .repo-section { margin-top: 12px; }
-
-  @media (max-width: 980px) {
-    .metric-grid, .raw-grid, .grid { grid-template-columns: 1fr; }
+  @media (max-width: 1080px) {
+    .metric-grid, .raw-grid, .manager-grid { grid-template-columns: 1fr; }
   }
 `;
 
@@ -328,7 +349,7 @@ function ControlPlanePage() {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="light" />
-        <title>Autonomy v2 Control Plane</title>
+        <title>Autonomy v2 Manager</title>
         <style dangerouslySetInnerHTML={{ __html: styles }} />
       </head>
       <body className="control-plane-shell">
@@ -336,8 +357,10 @@ function ControlPlanePage() {
           <header className="masthead">
             <div>
               <div className="eyebrow">Autonomy v2</div>
-              <h1>Control Plane</h1>
-              <p className="lede muted">Human-readable PRD status, agent state, and queue tracking. Raw JSON lives in Advanced.</p>
+              <h1>Manager</h1>
+              <p className="lede muted">
+                One local server manages all site processes, routes traffic, and publishes sites to Heroku when requested.
+              </p>
             </div>
             <div className="status-chip muted">
               <span className="status-dot" />
@@ -345,82 +368,82 @@ function ControlPlanePage() {
             </div>
           </header>
 
-          <nav className="tabs" role="tablist" aria-label="Control plane views">
-            <button type="button" className="tab-button active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
-            <button type="button" className="tab-button" data-tab="submit" role="tab" aria-selected="false">Submit PRD</button>
+          <nav className="tabs" role="tablist" aria-label="Manager views">
+            <button type="button" className="tab-button active" data-tab="overview" role="tab" aria-selected="true">Sites</button>
+            <button type="button" className="tab-button" data-tab="create" role="tab" aria-selected="false">Create site</button>
             <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
           </nav>
 
-          <section id="dashboard-panel" className="tabs-panel active" role="tabpanel">
+          <section id="overview-panel" className="tabs-panel active" role="tabpanel">
             <article className="surface">
               <div className="surface-head">
                 <div>
-                  <h2>Status dashboard</h2>
-                  <p className="muted">Active PRDs, queued PRDs, agent status, and the bridge queue in plain language.</p>
+                  <h2>Local sites</h2>
+                  <p className="muted">Running processes, deployment state, and proxy routes.</p>
                 </div>
-                <div className="muted" id="dashboard-summary-note" />
+                <div className="muted" id="manager-summary-note" />
               </div>
-              <div id="dashboard-metrics" className="metric-grid" aria-live="polite" />
-              <div id="dashboard-repos" className="repo-stack" />
-              <div className="section-divider" />
-              <div className="surface-head">
+              <div id="manager-metrics" className="metric-grid" aria-live="polite" />
+              <div className="manager-grid">
                 <div>
-                  <h3>Bridge queue</h3>
-                  <p className="muted">Jobs waiting to be claimed, running, or completed by the local bridge.</p>
+                  <div id="site-stack" className="site-stack" />
                 </div>
+                <aside id="site-detail" className="site-detail" aria-label="Selected site details" />
               </div>
-              <div id="dashboard-jobs" className="job-stack" />
             </article>
           </section>
 
-          <section id="submit-panel" className="tabs-panel" role="tabpanel">
-            <section className="grid">
+          <section id="create-panel" className="tabs-panel" role="tabpanel">
+            <section className="manager-grid">
               <article className="surface">
                 <div className="surface-head">
                   <div>
-                    <h2>New PRD</h2>
-                    <p className="muted">Queue a PRD with plain-text fields. Advanced fields stay hidden unless you open them.</p>
+                    <h2>Create site</h2>
+                    <p className="muted">Scaffold a new website, start it locally, and optionally publish it to Heroku.</p>
                   </div>
                 </div>
-                <form id="prd-form">
-                  <label>
-                    Repo
-                    <select id="repo-id" name="repoId" />
-                  </label>
+                <form id="site-form">
                   <div className="row">
                     <label>
-                      PRD ID
-                      <input id="prd-id" name="id" placeholder="prd-123" />
+                      Site name
+                      <input id="site-name" name="name" placeholder="Acme storefront" />
                     </label>
                     <label>
-                      Title
-                      <input id="prd-title" name="title" placeholder="New capability" />
+                      Slug
+                      <input id="site-slug" name="slug" placeholder="acme-storefront" />
                     </label>
                   </div>
                   <label>
-                    Specification
-                    <textarea id="prd-spec" name="specification" placeholder="Describe the product requirement here." />
+                    Description
+                    <textarea id="site-description" name="description" placeholder="A short description for the site dashboard and scaffolded homepage." />
                   </label>
-                  <label>
-                    Requirements, one per line
-                    <textarea id="prd-req" name="requirements" placeholder="First requirement&#10;Second requirement" />
-                  </label>
-                  <div className="row">
-                    <label>
-                      Sprint ID
-                      <input id="prd-sprint" name="sprintId" placeholder="optional" />
-                    </label>
-                  </div>
                   <details className="subtle-box">
-                    <summary>Advanced PRD fields</summary>
-                    <div className="muted body-note">Optional JSON payload used for task generation. Hidden by default.</div>
+                    <summary>Homepage content</summary>
                     <label>
-                      Task Specs JSON
-                      <textarea id="prd-task-specs" name="taskSpecs" placeholder='[{"id":"...","title":"...","agentId":"..."}]' />
+                      Headline
+                      <input id="site-headline" name="headline" placeholder="Welcome to Acme" />
+                    </label>
+                    <label>
+                      Body
+                      <textarea id="site-body" name="body" placeholder="This site was created by the manager." />
+                    </label>
+                    <label>
+                      Footer
+                      <input id="site-footer" name="footer" placeholder="Managed by Autonomy v2" />
                     </label>
                   </details>
                   <div className="row body-note">
-                    <button type="submit" className="primary">Queue PRD</button>
+                    <label>
+                      <span>Start immediately</span>
+                      <input id="site-auto-start" name="autoStart" type="checkbox" defaultChecked />
+                    </label>
+                    <label>
+                      <span>Publish to Heroku</span>
+                      <input id="site-publish-heroku" name="publishToHeroku" type="checkbox" />
+                    </label>
+                  </div>
+                  <div className="row body-note">
+                    <button type="submit" className="primary">Create site</button>
                     <button type="button" className="secondary" id="refresh-button">Refresh</button>
                   </div>
                   <div className="muted body-note" id="form-message" />
@@ -430,15 +453,15 @@ function ControlPlanePage() {
               <article className="surface">
                 <div className="surface-head">
                   <div>
-                    <h2>Submission notes</h2>
-                    <p className="muted">The bridge still executes the same <code>prd:add</code> payload. This view only changes presentation.</p>
+                    <h2>How it works</h2>
+                    <p className="muted">Each site is scaffolded into its own folder and launched as its own local Node process.</p>
                   </div>
                 </div>
                 <div className="subtle-box">
-                  <h3 style={{ marginBottom: '8px' }}>What stays the same</h3>
-                  <div className="list-note">• repo allowlist and job payload validation</div>
-                  <div className="list-note">• bridge claim / complete behavior</div>
-                  <div className="list-note">• PRD commit semantics inside the local repo</div>
+                  <div className="list-note">• one site record per process</div>
+                  <div className="list-note">• one local port per site</div>
+                  <div className="list-note">• one reverse-proxy front door on the manager</div>
+                  <div className="list-note">• optional Heroku build + publish from the same site folder</div>
                 </div>
               </article>
             </section>
@@ -449,25 +472,25 @@ function ControlPlanePage() {
               <div className="surface-head">
                 <div>
                   <h2>Advanced</h2>
-                  <p className="muted">Debug and raw state view for queue records, repo snapshots, and the rendered dashboard model.</p>
+                  <p className="muted">Raw state for the manager, selected site details, and the latest site logs.</p>
                 </div>
               </div>
               <div className="raw-grid">
                 <div className="advanced-block">
-                  <h3>State JSON</h3>
-                  <pre id="raw-state" />
+                  <h3>Manager state</h3>
+                  <pre id="raw-manager-state" />
                 </div>
                 <div className="advanced-block">
-                  <h3>Dashboard JSON</h3>
-                  <pre id="raw-dashboard" />
+                  <h3>Sites</h3>
+                  <pre id="raw-sites" />
                 </div>
                 <div className="advanced-block">
-                  <h3>Jobs JSON</h3>
-                  <pre id="raw-jobs" />
+                  <h3>Selected site</h3>
+                  <pre id="raw-selected-site" />
                 </div>
                 <div className="advanced-block">
-                  <h3>Repo status JSON</h3>
-                  <pre id="raw-repos" />
+                  <h3>Logs</h3>
+                  <pre id="raw-logs" />
                 </div>
               </div>
             </article>
