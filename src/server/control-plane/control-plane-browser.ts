@@ -646,7 +646,7 @@ function buildControlPlaneHtml() {
         title: document.getElementById('prd-title').value.trim(),
         specification: document.getElementById('prd-spec').value.trim(),
         requirements: document.getElementById('prd-req').value
-          .split('\n')
+          .split('\\n')
           .map((value) => value.trim())
           .filter(Boolean),
         sprintId: document.getElementById('prd-sprint').value.trim(),
