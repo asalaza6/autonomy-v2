@@ -46,6 +46,14 @@ test('control plane queues a browser PRD and the bridge executes it on the local
   try {
     await waitForHttp(`http://127.0.0.1:${port}/api/repos`);
 
+    const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+    assert.match(html, /Dashboard/);
+    assert.match(html, /Submit PRD/);
+    assert.match(html, /Advanced/);
+    assert.match(html, /Status dashboard/);
+    assert.match(html, /Active PRD/);
+    assert.match(html, /Queued PRDs/);
+
     const response = await fetch(`http://127.0.0.1:${port}/api/jobs`, {
       method: 'POST',
       headers: {
@@ -60,9 +68,11 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     });
     assert.equal(response.status, 201);
 
-    const stateAfterQueue = await fetchJson(`http://127.0.0.1:${port}/api/state`);
+    const stateAfterQueue = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state`);
     assert.equal(stateAfterQueue.jobs.length, 1);
     assert.equal(stateAfterQueue.jobs[0].status, 'queued');
+    assert.equal(stateAfterQueue.dashboard.repoCount, 1);
+    assert.equal(Array.isArray(stateAfterQueue.dashboard.repos), true);
 
     runNode(CONTROL_BIN, [
       'bridge',
@@ -75,10 +85,12 @@ test('control plane queues a browser PRD and the bridge executes it on the local
       '--once',
     ]);
 
-    const stateAfterBridge = await fetchJson(`http://127.0.0.1:${port}/api/state`);
+    const stateAfterBridge = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state`);
     assert.equal(stateAfterBridge.jobs[0].status, 'completed');
     assert.equal(stateAfterBridge.repoStatuses.default.repoId, 'default');
     assert.equal(stateAfterBridge.repoStatuses.default.snapshot.integrationBranch, 'dev');
+    assert.match(stateAfterBridge.dashboard.repos[0].overview, /PRD/);
+    assert.equal(stateAfterBridge.dashboard.jobs[0].statusLabel, 'Completed and committed');
 
     const committedPrdSpec = git(repoDir, [
       'show',
@@ -96,6 +108,20 @@ async function fetchJson(url: string): Promise<any> {
     throw new Error(await response.text());
   }
   return response.json();
+}
+
+async function fetchJsonWithRetry(url: string, timeoutMs = 10000): Promise<any> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown = null;
+  while (Date.now() < deadline) {
+    try {
+      return await fetchJson(url);
+    } catch (error) {
+      lastError = error;
+      await delay(100);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`Timed out fetching ${url}`);
 }
 
 async function waitForHttp(url: string, timeoutMs = 30000) {

@@ -3,6 +3,7 @@ import { formatAgentStatusLine } from './shared-agent-status.js';
 import { formatPullRequestStatusLine } from './shared-pr-status.js';
 import { syncIntegrationSpecs } from './shared-sync.js';
 import { buildStatusSnapshot } from '../control-plane/status-service.js';
+import { describePrd, selectActivePrd, selectQueuedPrds } from '../control-plane/status-view.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);
@@ -33,6 +34,24 @@ function run(rootDir, options) {
       payload.pullRequestStatuses.forEach((prStatus) => {
         console.log(formatPullRequestStatusLine(prStatus));
       });
+    }
+    const activePrd = selectActivePrd(payload.prds && payload.prds.prds ? payload.prds.prds : []);
+    const queuedPrds = selectQueuedPrds(payload.prds && payload.prds.prds ? payload.prds.prds : []);
+    console.log('PRDs:');
+    if (activePrd) {
+      const summary = describePrd(activePrd);
+      console.log(`Active PRD: ${summary.title} | ${summary.stateLabel}${summary.detail ? ` | ${summary.detail}` : ''}`);
+    } else {
+      console.log('Active PRD: none');
+    }
+    if (queuedPrds.length > 0) {
+      console.log('Queued PRDs:');
+      queuedPrds.forEach((prd) => {
+        const summary = describePrd(prd);
+        console.log(`- ${summary.title} | ${summary.stateLabel}${summary.detail ? ` | ${summary.detail}` : ''}`);
+      });
+    } else {
+      console.log('Queued PRDs: none');
     }
     console.log(`Branch locks: ${payload.branchLockCount}`);
   });

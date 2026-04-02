@@ -4,6 +4,7 @@ import http from 'http';
 import { fileURLToPath } from 'url';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
+import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml } from './control-plane-browser.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import {
@@ -108,7 +109,10 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
 
   if (url.pathname === '/api/state' && req.method === 'GET') {
     const state = loadControlPlaneState(rootDir);
-    sendJson(res, 200, state);
+    sendJson(res, 200, {
+      ...state,
+      dashboard: buildControlPlaneDashboard(rootDir, state),
+    });
     return;
   }
 

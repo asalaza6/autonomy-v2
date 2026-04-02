@@ -31,4 +31,12 @@ test('status snapshots include the current runtime and PRD state', () => {
   assert.equal(snapshot.prds.prds[0].id, 'prd-status-001');
   assert.equal(Array.isArray(snapshot.agentStatuses), true);
   assert.equal(snapshot.queues.length > 0, true);
+
+  const output = runNode(CLI_BIN, [
+    'status',
+    '--root',
+    repoDir,
+  ]);
+  assert.match(output, /PRDs:/);
+  assert.match(output, /Active PRD:/);
 });

@@ -126,6 +126,26 @@ async function runControlPlaneBridgeLoop(rootDir: string, options: {
 }
 
 async function requestJson(url: string, init: Omit<RequestInit, 'body'> & { body?: unknown } = {}) {
+  return requestJsonWithRetry(url, init);
+}
+
+async function requestJsonWithRetry(url: string, init: Omit<RequestInit, 'body'> & { body?: unknown } = {}, retries = 2) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await requestJsonOnce(url, init);
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryRequestError(error) || attempt === retries) {
+        break;
+      }
+      await delay(100 * (attempt + 1));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(formatErrorMessage(lastError));
+}
+
+async function requestJsonOnce(url: string, init: Omit<RequestInit, 'body'> & { body?: unknown } = {}) {
   const requestInit: Omit<RequestInit, 'body'> & { body?: unknown } = {
     ...init,
     headers: {
@@ -151,6 +171,16 @@ function delay(ms: number) {
 
 function formatErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function shouldRetryRequestError(error: unknown) {
+  const message = formatErrorMessage(error).toLowerCase();
+  return (
+    message.includes('fetch failed')
+    || message.includes('econnreset')
+    || message.includes('etimedout')
+    || message.includes('eai_again')
+  );
 }
 
 export {
