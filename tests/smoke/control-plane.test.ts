@@ -53,6 +53,7 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     assert.match(html, /Status dashboard/);
     assert.match(html, /Active PRD/);
     assert.match(html, /Queued PRDs/);
+    assert.match(html, /control-plane-client\.js/);
 
     const response = await fetch(`http://127.0.0.1:${port}/api/jobs`, {
       method: 'POST',

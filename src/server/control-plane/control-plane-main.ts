@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import http from 'http';
+import { readFile } from 'fs/promises';
+import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
@@ -20,6 +22,9 @@ import {
 } from './control-plane-store.js';
 import { runControlPlaneBridgeLoop } from './control-plane-bridge.js';
 import { validatePrdAddSubmission } from './control-plane-validation.js';
+
+const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
+const controlPlaneAssetCache = new Map<string, string>();
 
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
@@ -98,6 +103,16 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
   if (url.pathname === '/') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(buildControlPlaneHtml());
+    return;
+  }
+
+  if (url.pathname === '/control-plane-client.js' && req.method === 'GET') {
+    await sendControlPlaneAsset(res, 'control-plane-client.js', 'application/javascript; charset=utf-8');
+    return;
+  }
+
+  if (url.pathname === '/control-plane-jsx-runtime/jsx-runtime.js' && req.method === 'GET') {
+    await sendControlPlaneAsset(res, 'control-plane-jsx-runtime/jsx-runtime.js', 'application/javascript; charset=utf-8');
     return;
   }
 
@@ -261,6 +276,31 @@ function parseRepoRoots(value: string, fallbackRepoRoot = '') {
     repoRoots.default = fallbackRepoRoot;
   }
   return repoRoots;
+}
+
+async function sendControlPlaneAsset(
+  res: http.ServerResponse,
+  relativePath: string,
+  contentType: string
+) {
+  const cached = controlPlaneAssetCache.get(relativePath);
+  if (cached) {
+    res.writeHead(200, {
+      'cache-control': 'no-cache',
+      'content-type': contentType,
+    });
+    res.end(cached);
+    return;
+  }
+
+  const assetPath = resolve(controlPlaneAssetDir, relativePath);
+  const contents = await readFile(assetPath, 'utf8');
+  controlPlaneAssetCache.set(relativePath, contents);
+  res.writeHead(200, {
+    'cache-control': 'no-cache',
+    'content-type': contentType,
+  });
+  res.end(contents);
 }
 
 async function readJsonBody(req: http.IncomingMessage) {

@@ -8,7 +8,7 @@ export default [
     ignores: ['node_modules/**'],
   },
   {
-    files: ['src/**/*.{js,ts}', 'tests/**/*.{js,ts}', 'bin/**/*.ts', 'scripts/**/*.ts'],
+    files: ['src/**/*.{js,ts,tsx}', 'tests/**/*.{js,ts,tsx}', 'bin/**/*.ts', 'scripts/**/*.ts'],
     languageOptions: {
       ecmaVersion: 'latest',
       parser: tsParser,
@@ -35,7 +35,7 @@ export default [
         {
           vars: 'all',
           args: 'after-used',
-          varsIgnorePattern: '^_',
+          varsIgnorePattern: '^_|^(h|Fragment)$',
           argsIgnorePattern: '^_',
           caughtErrors: 'none',
           ignoreRestSiblings: false,
