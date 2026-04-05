@@ -3,55 +3,51 @@
 
 import { Fragment, h, renderToHtml } from './control-plane-jsx-runtime/jsx-runtime.js';
 
-type SiteDeployment = {
-  target?: string;
-  status?: string;
-  provider?: string;
-  appName?: string;
-  appUrl?: string;
-  buildId?: string;
-  version?: string;
-  lastError?: string;
+type RepoRecord = {
+  id: string;
+  label: string;
+  description?: string;
+  default?: boolean;
+};
+
+type PrdSummary = {
+  id?: string;
+  title?: string;
+  stateLabel?: string;
+  detail?: string;
   updatedAt?: string | null;
 };
 
-type SiteSummary = {
-  id: string;
-  slug?: string;
-  name?: string;
-  description?: string;
-  routePath?: string;
-  status?: string;
-  desiredState?: string;
-  port?: number;
-  pid?: number | null;
-  healthStatus?: string;
-  healthMessage?: string;
-  publicUrl?: string | null;
-  deploymentStatus?: string;
-  deployment?: SiteDeployment;
-  content?: {
-    title?: string;
-    headline?: string;
-    body?: string;
-    footer?: string;
-  } | null;
-  createdAt?: string;
-  updatedAt?: string;
-  startedAt?: string | null;
-  stoppedAt?: string | null;
-  lastExitCode?: number | null;
-  lastSignal?: string | null;
+type AgentSummary = {
+  role?: string;
+  agentId?: string;
+  workerStatus?: string;
+  detail?: string;
+  pid?: number;
 };
 
-type ManagerDashboard = {
-  siteCount?: number;
-  runningSiteCount?: number;
-  stoppedSiteCount?: number;
-  healthySiteCount?: number;
-  deployedSiteCount?: number;
-  pendingDeployCount?: number;
-  sites?: SiteSummary[];
+type PullRequestSummary = {
+  title?: string;
+  prId?: string;
+  statusLabel?: string;
+  status?: string;
+  action?: string;
+  branch?: string;
+  updatedAt?: string | null;
+};
+
+type JobSummary = {
+  id?: string;
+  title?: string;
+  status?: string;
+  statusLabel?: string;
+  detail?: string;
+  repoId?: string;
+  repoLabel?: string;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+  action?: string;
+  branch?: string;
 };
 
 type HeartbeatSummary = {
@@ -69,77 +65,94 @@ type ControlPlaneHeartbeatSummary = {
   bridge?: HeartbeatSummary;
 };
 
-type ManagerStateSnapshot = {
-  state?: Record<string, unknown>;
-  dashboard?: ManagerDashboard;
-  sites?: SiteSummary[];
-  controlPlane?: ControlPlaneHeartbeatSummary;
+type RepoSummary = {
+  repoId?: string;
+  label?: string;
+  description?: string;
+  default?: boolean;
+  updatedAt?: string | null;
+  overview?: string;
+  activePrd?: PrdSummary | null;
+  queuedPrds?: PrdSummary[];
+  agentStatuses?: AgentSummary[];
+  pullRequestStatuses?: PullRequestSummary[];
 };
 
-type SiteLogsResponse = {
-  lines?: string[];
-  text?: string;
+type DashboardSummary = {
+  repoCount?: number;
+  activePrdCount?: number;
+  queuedPrdCount?: number;
+  pendingJobCount?: number;
+  runningAgentCount?: number;
+  activePullRequestCount?: number;
+  overallHeartbeatStatus?: string;
+  statusLabel?: string;
+  serverHeartbeat?: HeartbeatSummary;
+  bridgeHeartbeat?: HeartbeatSummary;
+  repos?: RepoSummary[];
+  jobs?: JobSummary[];
 };
 
-const siteForm = document.getElementById('site-form') as HTMLFormElement | null;
-const refreshButton = document.getElementById('refresh-button');
-const messageEl = document.getElementById('form-message');
+type StateSnapshot = {
+  dashboard?: DashboardSummary;
+  jobs?: JobSummary[];
+  [key: string]: unknown;
+};
+
+const repoSelect = document.getElementById('repo-id') as HTMLSelectElement | null;
 const lastUpdatedEl = document.getElementById('last-updated');
+const messageEl = document.getElementById('form-message');
+const form = document.getElementById('prd-form') as HTMLFormElement | null;
+const refreshButton = document.getElementById('refresh-button');
+const dashboardMetricsEl = document.getElementById('dashboard-metrics');
+const dashboardReposEl = document.getElementById('dashboard-repos');
+const dashboardJobsEl = document.getElementById('dashboard-jobs');
+const dashboardSummaryNoteEl = document.getElementById('dashboard-summary-note');
 const controlPlaneHeartbeatsEl = document.getElementById('control-plane-heartbeats');
-const managerMetricsEl = document.getElementById('manager-metrics');
-const managerSummaryNoteEl = document.getElementById('manager-summary-note');
-const siteStackEl = document.getElementById('site-stack');
-const siteDetailEl = document.getElementById('site-detail');
-const rawManagerStateEl = document.getElementById('raw-manager-state');
-const rawSitesEl = document.getElementById('raw-sites');
-const rawSelectedSiteEl = document.getElementById('raw-selected-site');
-const rawLogsEl = document.getElementById('raw-logs');
+const rawStateEl = document.getElementById('raw-state');
+const rawDashboardEl = document.getElementById('raw-dashboard');
+const rawJobsEl = document.getElementById('raw-jobs');
+const rawReposEl = document.getElementById('raw-repos');
 const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-tab]'));
 const panels: Record<string, HTMLElement | null> = {
-  overview: document.getElementById('overview-panel'),
-  create: document.getElementById('create-panel'),
+  dashboard: document.getElementById('dashboard-panel'),
+  submit: document.getElementById('submit-panel'),
   advanced: document.getElementById('advanced-panel'),
 };
 
-let latestSnapshot: ManagerStateSnapshot = {};
-let selectedSiteId: string | null = null;
-let latestSites: SiteSummary[] = [];
-let latestLogs = '';
+let latestRepos: RepoRecord[] = [];
 
 function mountControlPlane() {
   if (
-    !siteForm
-    || !refreshButton
-    || !messageEl
+    !repoSelect
     || !lastUpdatedEl
+    || !messageEl
+    || !form
+    || !refreshButton
+    || !dashboardMetricsEl
+    || !dashboardReposEl
+    || !dashboardJobsEl
+    || !dashboardSummaryNoteEl
     || !controlPlaneHeartbeatsEl
-    || !managerMetricsEl
-    || !managerSummaryNoteEl
-    || !siteStackEl
-    || !siteDetailEl
-    || !rawManagerStateEl
-    || !rawSitesEl
-    || !rawSelectedSiteEl
-    || !rawLogsEl
+    || !rawStateEl
+    || !rawDashboardEl
+    || !rawJobsEl
+    || !rawReposEl
   ) {
     return;
   }
 
-  siteForm.addEventListener('submit', handleSubmit);
+  form.addEventListener('submit', handleSubmit);
   refreshButton.addEventListener('click', () => refresh().catch((error: unknown) => {
-    setMessage(getErrorMessage(error));
+    messageEl.textContent = getErrorMessage(error);
   }));
 
   tabs.forEach((tab) => {
-    tab.addEventListener('click', () => setActiveTab(String(tab.dataset.tab || 'overview')));
+    tab.addEventListener('click', () => setActiveTab(String(tab.dataset.tab || 'dashboard')));
   });
 
-  siteStackEl.addEventListener('click', handleSiteStackClick);
-  siteStackEl.addEventListener('keydown', handleSiteStackKeydown);
-  siteDetailEl.addEventListener('click', handleSiteDetailClick);
-
   refresh().catch((error: unknown) => {
-    setMessage(getErrorMessage(error));
+    messageEl.textContent = getErrorMessage(error);
   });
 
   window.setInterval(() => refresh().catch(() => {}), 5000);
@@ -147,65 +160,50 @@ function mountControlPlane() {
 
 async function handleSubmit(event: SubmitEvent) {
   event.preventDefault();
-  if (!siteForm || !messageEl) {
+
+  if (!repoSelect || !form || !messageEl) {
     return;
   }
 
-  setMessage('Creating site...');
+  messageEl.textContent = 'Queueing...';
 
   try {
-    const body = buildCreatePayload();
-    const response = await requestJson<{ site?: SiteSummary }>('/api/sites', {
+    const taskSpecsRaw = (document.getElementById('prd-task-specs') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const body = {
+      repoId: repoSelect.value,
+      id: (document.getElementById('prd-id') as HTMLInputElement | null)?.value.trim() || '',
+      title: (document.getElementById('prd-title') as HTMLInputElement | null)?.value.trim() || '',
+      specification: (document.getElementById('prd-spec') as HTMLTextAreaElement | null)?.value.trim() || '',
+      requirements: ((document.getElementById('prd-req') as HTMLTextAreaElement | null)?.value || '')
+        .split('\n')
+        .map((value) => value.trim())
+        .filter(Boolean),
+      sprintId: (document.getElementById('prd-sprint') as HTMLInputElement | null)?.value.trim() || '',
+      taskSpecs: taskSpecsRaw ? JSON.parse(taskSpecsRaw) : [],
+    };
+
+    await requestJson('/api/jobs', {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    if (response && response.site && response.site.id) {
-      selectedSiteId = response.site.id;
-    }
-    siteForm.reset();
+    form.reset();
     await refresh();
-    setActiveTab('overview');
-    setMessage('Site created.');
+    messageEl.textContent = 'Queued.';
   } catch (error) {
-    setMessage(getErrorMessage(error));
+    messageEl.textContent = getErrorMessage(error);
   }
-}
-
-function buildCreatePayload() {
-  const getValue = (id: string) => (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null)?.value.trim() || '';
-  const getChecked = (id: string) => Boolean((document.getElementById(id) as HTMLInputElement | null)?.checked);
-
-  return {
-    name: getValue('site-name'),
-    slug: getValue('site-slug'),
-    description: getValue('site-description'),
-    autoStart: getChecked('site-auto-start'),
-    publishToHeroku: getChecked('site-publish-heroku'),
-    content: {
-      headline: getValue('site-headline') || getValue('site-name'),
-      body: getValue('site-body'),
-      footer: getValue('site-footer'),
-    },
-  };
 }
 
 async function refresh() {
-  const snapshot = await requestJson<ManagerStateSnapshot>('/api/manager-state');
-  latestSnapshot = snapshot || {};
-  latestSites = Array.isArray(snapshot.sites) ? snapshot.sites.slice() : Array.isArray(snapshot.dashboard?.sites) ? snapshot.dashboard!.sites!.slice() : [];
+  const [repos, state] = await Promise.all([
+    requestJson<{ repos?: RepoRecord[] }>('/api/repos'),
+    requestJson<StateSnapshot>('/api/state'),
+  ]);
 
-  if (selectedSiteId && !latestSites.some((site) => site.id === selectedSiteId)) {
-    selectedSiteId = latestSites.length > 0 ? latestSites[0].id : null;
-  }
-  if (!selectedSiteId && latestSites.length > 0) {
-    selectedSiteId = latestSites[0].id;
-  }
-
-  renderControlPlaneHeartbeats(snapshot.controlPlane || {});
-  renderMetrics(snapshot.dashboard || {});
-  renderSiteStack(latestSites);
-  renderSiteDetail();
-  renderAdvanced();
+  renderRepos(repos.repos || []);
+  renderDashboard(state.dashboard || {});
+  renderControlPlaneHeartbeats(state.dashboard || {});
+  renderAdvanced(state);
 
   if (lastUpdatedEl) {
     lastUpdatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
@@ -229,183 +227,72 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-async function performSiteAction(siteId: string, action: 'start' | 'stop' | 'restart' | 'deploy') {
-  setMessage(`${action}ing site...`);
-  const response = await requestJson<{ site?: SiteSummary }>(`/api/sites/${encodeURIComponent(siteId)}/${action}`, {
-    method: 'POST',
-  });
-  if (response && response.site && response.site.id) {
-    selectedSiteId = response.site.id;
+function renderRepos(repos: RepoRecord[]) {
+  if (!repoSelect) {
+    return;
   }
-  await refresh();
-  setMessage(`${capitalize(action)} complete.`);
+
+  latestRepos = Array.isArray(repos) ? repos.slice() : [];
+  const previous = repoSelect.value;
+  repoSelect.innerHTML = renderToHtml(<RepoOptions repos={latestRepos} />);
+
+  if (previous && latestRepos.some((repo) => repo.id === previous)) {
+    repoSelect.value = previous;
+  } else if (!repoSelect.value && latestRepos.length > 0) {
+    repoSelect.value = latestRepos[0].id;
+  }
+
+  repoSelect.disabled = latestRepos.length === 0;
 }
 
-function handleSiteStackClick(event: MouseEvent) {
-  const target = event.target as HTMLElement | null;
-  if (!target) {
-    return;
-  }
-  const button = target.closest('[data-site-action]') as HTMLElement | null;
-  if (button) {
-    event.preventDefault();
-    event.stopPropagation();
-    const siteId = String(button.getAttribute('data-site-id') || '');
-    const action = String(button.getAttribute('data-site-action') || '') as 'start' | 'stop' | 'restart' | 'deploy';
-    if (siteId && action) {
-      void performSiteAction(siteId, action).catch((error: unknown) => {
-        setMessage(getErrorMessage(error));
-      });
-    }
+function renderDashboard(dashboard: DashboardSummary) {
+  if (!dashboardMetricsEl || !dashboardReposEl || !dashboardJobsEl || !dashboardSummaryNoteEl) {
     return;
   }
 
-  const card = target.closest('[data-site-id]') as HTMLElement | null;
-  if (card) {
-    selectedSiteId = String(card.getAttribute('data-site-id') || '');
-    renderSiteStack(latestSites);
-    renderSiteDetail();
-    renderAdvanced();
-  }
+  dashboardMetricsEl.innerHTML = renderToHtml(<MetricGrid dashboard={dashboard} />);
+  dashboardSummaryNoteEl.textContent = dashboard.repoCount && dashboard.repoCount > 0
+    ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} online`
+    : 'No repo snapshots yet';
+  dashboardReposEl.innerHTML = renderToHtml(<RepoStack repos={dashboard.repos || []} />);
+  dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
 }
 
-function handleSiteStackKeydown(event: KeyboardEvent) {
-  const target = event.target as HTMLElement | null;
-  if (!target) {
-    return;
-  }
-  if (target.closest('[data-site-action]')) {
-    return;
-  }
-  const card = target.closest('[data-site-id]') as HTMLElement | null;
-  if (!card) {
-    return;
-  }
-  if (event.key !== 'Enter' && event.key !== ' ') {
-    return;
-  }
-  event.preventDefault();
-  selectedSiteId = String(card.getAttribute('data-site-id') || '');
-  renderSiteStack(latestSites);
-  renderSiteDetail();
-  renderAdvanced();
-}
-
-function handleSiteDetailClick(event: MouseEvent) {
-  const target = event.target as HTMLElement | null;
-  if (!target) {
-    return;
-  }
-  const button = target.closest('[data-site-action]') as HTMLElement | null;
-  if (!button) {
-    return;
-  }
-  event.preventDefault();
-  const siteId = String(button.getAttribute('data-site-id') || selectedSiteId || '');
-  const action = String(button.getAttribute('data-site-action') || '') as 'start' | 'stop' | 'restart' | 'deploy';
-  if (!siteId || !action) {
-    return;
-  }
-  void performSiteAction(siteId, action).catch((error: unknown) => {
-    setMessage(getErrorMessage(error));
-  });
-}
-
-function renderMetrics(dashboard: ManagerDashboard) {
-  if (!managerMetricsEl || !managerSummaryNoteEl) {
-    return;
-  }
-
-  const metrics = [
-    ['Sites', dashboard.siteCount || 0],
-    ['Running', dashboard.runningSiteCount || 0],
-    ['Stopped', dashboard.stoppedSiteCount || 0],
-    ['Healthy', dashboard.healthySiteCount || 0],
-    ['Heroku', dashboard.deployedSiteCount || 0],
-    ['Pending deploys', dashboard.pendingDeployCount || 0],
-  ] as const;
-
-  managerMetricsEl.innerHTML = renderToHtml(
-    <MetricGrid metrics={metrics} />
-  );
-  managerSummaryNoteEl.textContent = dashboard.siteCount && dashboard.siteCount > 0
-    ? `${dashboard.siteCount} site${dashboard.siteCount === 1 ? '' : 's'} under management`
-    : 'No sites yet';
-}
-
-function renderControlPlaneHeartbeats(controlPlane: ControlPlaneHeartbeatSummary) {
+function renderControlPlaneHeartbeats(dashboard: DashboardSummary) {
   if (!controlPlaneHeartbeatsEl) {
     return;
   }
 
   controlPlaneHeartbeatsEl.innerHTML = renderToHtml(
-    <HeartbeatStrip controlPlane={controlPlane} />
-  );
-}
-
-function renderSiteStack(sites: SiteSummary[]) {
-  if (!siteStackEl) {
-    return;
-  }
-  siteStackEl.innerHTML = renderToHtml(
-    <SiteStack
-      sites={sites}
-      selectedSiteId={selectedSiteId}
+    <HeartbeatStrip
+      controlPlane={{
+        overallStatus: dashboard.overallHeartbeatStatus,
+        statusLabel: dashboard.statusLabel,
+        server: dashboard.serverHeartbeat,
+        bridge: dashboard.bridgeHeartbeat,
+      }}
     />
   );
 }
 
-function renderSiteDetail() {
-  if (!siteDetailEl) {
-    return;
-  }
-  const site = latestSites.find((entry) => entry.id === selectedSiteId) || latestSites[0] || null;
-  const logs = site ? latestLogs : '';
-  siteDetailEl.innerHTML = renderToHtml(
-    <SelectedSitePanel
-      site={site}
-      logs={logs}
-    />
-  );
-  if (site) {
-    void loadSiteLogs(site.id);
-  } else {
-    latestLogs = '';
-  }
-}
-
-async function loadSiteLogs(siteId: string) {
-  try {
-    const response = await requestJson<SiteLogsResponse>(`/api/sites/${encodeURIComponent(siteId)}/logs`);
-    latestLogs = Array.isArray(response.lines) ? response.lines.join('\n') : String(response.text || '');
-  } catch {
-    latestLogs = '';
-  }
-  renderAdvanced();
-  if (selectedSiteId === siteId && siteDetailEl) {
-    const site = latestSites.find((entry) => entry.id === siteId) || null;
-    siteDetailEl.innerHTML = renderToHtml(
-      <SelectedSitePanel
-        site={site}
-        logs={latestLogs}
-      />
-    );
-  }
-}
-
-function renderAdvanced() {
-  if (!rawManagerStateEl || !rawSitesEl || !rawSelectedSiteEl || !rawLogsEl) {
+function renderAdvanced(state: StateSnapshot) {
+  if (!rawStateEl || !rawDashboardEl || !rawJobsEl || !rawReposEl) {
     return;
   }
 
-  rawManagerStateEl.textContent = JSON.stringify(latestSnapshot.state || latestSnapshot, null, 2);
-  rawSitesEl.textContent = JSON.stringify(latestSites, null, 2);
-  rawSelectedSiteEl.textContent = JSON.stringify(
-    latestSites.find((site) => site.id === selectedSiteId) || null,
+  rawStateEl.textContent = JSON.stringify(state, null, 2);
+  rawDashboardEl.textContent = JSON.stringify(state.dashboard || {}, null, 2);
+  rawJobsEl.textContent = JSON.stringify(state.jobs || [], null, 2);
+  rawReposEl.textContent = JSON.stringify(
+    latestRepos.map((repo) => ({
+      id: repo.id,
+      label: repo.label,
+      description: repo.description || '',
+      default: Boolean(repo.default),
+    })),
     null,
     2
   );
-  rawLogsEl.textContent = latestLogs || 'No logs yet.';
 }
 
 function setActiveTab(tabName: string) {
@@ -422,28 +309,27 @@ function setActiveTab(tabName: string) {
   });
 }
 
-function setMessage(message: string) {
-  if (messageEl) {
-    messageEl.textContent = message;
-  }
+function RepoOptions({ repos }: { repos: RepoRecord[] }) {
+  return (
+    <>
+      {repos.map((repo) => {
+        const label = repo.description ? `${repo.label} - ${repo.description}` : repo.label;
+        return <option value={repo.id}>{label}</option>;
+      })}
+    </>
+  );
 }
 
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
+function MetricGrid({ dashboard }: { dashboard: DashboardSummary }) {
+  const metrics = [
+    ['Repos', dashboard.repoCount || 0],
+    ['Active PRDs', dashboard.activePrdCount || 0],
+    ['Queued PRDs', dashboard.queuedPrdCount || 0],
+    ['Bridge jobs', dashboard.pendingJobCount || 0],
+    ['Agents running', dashboard.runningAgentCount || 0],
+    ['Active PRs', dashboard.activePullRequestCount || 0],
+  ] as const;
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error || 'Unexpected error');
-}
-
-function statusClass(status?: string) {
-  return String(status || 'offline');
-}
-
-function MetricGrid({ metrics }: { metrics: readonly (readonly [string, number])[] }) {
   return (
     <>
       {metrics.map(([label, value]) => (
@@ -483,118 +369,173 @@ function HeartbeatStrip({
   );
 }
 
-function SiteStack({
-  sites,
-  selectedSiteId,
-}: {
-  sites: SiteSummary[];
-  selectedSiteId: string | null;
-}) {
-  if (!sites.length) {
-    return <div className="muted">No sites yet. Create one to start managing it.</div>;
+function statusClass(status?: string) {
+  return String(status || 'offline');
+}
+
+function RepoStack({ repos }: { repos: RepoSummary[] }) {
+  if (!repos.length) {
+    return <div className="muted">No repository snapshots yet.</div>;
   }
 
   return (
     <>
-      {sites.map((site) => (
-        <SiteCard
-          site={site}
-          selected={site.id === selectedSiteId}
-        />
+      {repos.map((repo) => (
+        <RepoCard repo={repo} />
       ))}
     </>
   );
 }
 
-function SiteCard({
-  site,
-  selected,
-}: {
-  site: SiteSummary;
-  selected: boolean;
-}) {
+function RepoCard({ repo }: { repo: RepoSummary }) {
+  const updated = repo.updatedAt ? `Updated ${formatTimestamp(repo.updatedAt)}` : 'No status snapshot yet';
+
   return (
-    <article
-      className={`site-card${selected ? ' selected' : ''}`}
-      data-site-id={site.id}
-      role="button"
-      tabIndex={0}
-    >
-      <div className="site-head">
+    <article className="repo">
+      <div className="repo-head">
         <div>
-          <div className="site-title">{site.name || site.slug || site.id}</div>
-          <div className="muted">{site.description || site.routePath || ''}</div>
+          <h3>{repo.label || repo.repoId || 'Repository'}</h3>
+          <div className="muted">{repo.description || repo.repoId || ''}</div>
         </div>
-        <div className="site-badges">
-          <span className={`pill${site.status === 'error' ? ' warn' : ''}`}>{site.status || 'stopped'}</span>
-          <span className="pill">{site.port ? `:${site.port}` : 'no port'}</span>
-          <span className={`pill${site.deploymentStatus === 'failed' ? ' warn' : ''}`}>{site.deploymentStatus || 'idle'}</span>
+        <div className="row" style={{ justifyContent: 'flex-end', flex: '0 0 auto' }}>
+          {repo.default ? <span className="pill">Default repo</span> : null}
+          <span className="pill">{updated}</span>
         </div>
       </div>
-      <div className="overview">
-        {site.healthStatus ? `${site.healthStatus}. ` : ''}
-        {site.publicUrl ? `Heroku: ${site.publicUrl}` : site.routePath || ''}
-      </div>
-      <div className="row">
-        <button type="button" data-site-id={site.id} data-site-action="start">Start</button>
-        <button type="button" data-site-id={site.id} data-site-action="stop">Stop</button>
-        <button type="button" data-site-id={site.id} data-site-action="restart">Restart</button>
-        <button type="button" data-site-id={site.id} data-site-action="deploy">Deploy</button>
+      <p className="overview">{repo.overview || 'No status snapshot yet'}</p>
+      <div className="section-row">
+        <RepoSection title="Active PRD">
+          {repo.activePrd ? <PrdCard prd={repo.activePrd} label="Active PRD" /> : <div className="list-note">No active PRD yet.</div>}
+        </RepoSection>
+        <RepoSection title="Queued PRDs">
+          {repo.queuedPrds && repo.queuedPrds.length > 0
+            ? repo.queuedPrds.map((prd) => <PrdCard prd={prd} label="Queued PRD" />)
+            : <div className="list-note">No queued PRDs.</div>}
+        </RepoSection>
+        <RepoSection title="Agents">
+          {repo.agentStatuses && repo.agentStatuses.length > 0
+            ? repo.agentStatuses.map((agent) => <AgentCard agent={agent} />)
+            : <div className="list-note">No agent status yet.</div>}
+        </RepoSection>
+        <RepoSection title="Active PRs">
+          {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
+            ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
+            : <div className="list-note">No active PRs.</div>}
+        </RepoSection>
       </div>
     </article>
   );
 }
 
-function SelectedSitePanel({
-  site,
-  logs,
-}: {
-  site: SiteSummary | null;
-  logs: string;
-}) {
-  if (!site) {
-    return (
-      <div>
-        <h3>Selected site</h3>
-        <div className="list-note">Select a site to view process details, proxy links, and deployment status.</div>
+function RepoSection({ title, children }: { title: string; children: JSX.Element | JSX.Element[] }) {
+  return (
+    <div className="repo-section">
+      <h4>{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+function PrdCard({ prd, label }: { prd: PrdSummary; label: string }) {
+  const headline = prd.title || prd.id || 'Untitled PRD';
+  const meta = [prd.stateLabel, prd.detail].filter(Boolean).join(' | ');
+
+  return (
+    <div className="queued-prd">
+      <div className="item-head">
+        <div>
+          <div className="pill">{label}</div>
+          <div className="queue-title">{headline}</div>
+        </div>
+        {prd.updatedAt ? <span className="pill">{formatTimestamp(prd.updatedAt)}</span> : null}
       </div>
-    );
+      {meta ? <div className="queue-detail">{meta}</div> : null}
+    </div>
+  );
+}
+
+function AgentCard({ agent }: { agent: AgentSummary }) {
+  const details = [agent.workerStatus, agent.detail].filter(Boolean).join(' | ');
+
+  return (
+    <div className="agent">
+      <div className="agent-head">
+        <div>
+          <div className="pill">{agent.role || agent.agentId || 'Agent'}</div>
+          <div className="agent-title">{agent.agentId || 'unknown agent'}</div>
+        </div>
+        <span className="pill">{agent.pid ? `pid ${agent.pid}` : 'pid -'}</span>
+      </div>
+      {details ? <div className="agent-detail">{details}</div> : null}
+    </div>
+  );
+}
+
+function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
+  const details = [pullRequest.statusLabel || pullRequest.status, pullRequest.action, pullRequest.branch ? `branch ${pullRequest.branch}` : '']
+    .filter(Boolean)
+    .join(' | ');
+
+  return (
+    <div className="pull-request">
+      <div className="item-head">
+        <div>
+          <div className="pill">Active PR</div>
+          <div className="pull-request-title">{pullRequest.title || pullRequest.prId || 'Untitled PR'}</div>
+        </div>
+        {pullRequest.updatedAt ? <span className="pill">{formatTimestamp(pullRequest.updatedAt)}</span> : null}
+      </div>
+      {details ? <div className="pull-request-detail">{details}</div> : null}
+    </div>
+  );
+}
+
+function JobStack({ jobs }: { jobs: JobSummary[] }) {
+  if (!jobs.length) {
+    return <div className="muted">No bridge jobs queued yet.</div>;
   }
 
   return (
     <>
-      <div className="item-head">
-        <div>
-          <div className="pill">Selected site</div>
-          <h3 style={{ marginTop: '8px' }}>{site.name || site.id}</h3>
-        </div>
-        <div className="site-badges">
-          <span className="pill">{site.status || 'stopped'}</span>
-          <span className="pill">{site.healthStatus || 'unknown'}</span>
-        </div>
-      </div>
-      <div className="list-note">{site.description || 'No description provided.'}</div>
-      <div className="section-row">
-        <div className="list-note">Route: <a href={site.routePath || '#'}>{site.routePath || 'n/a'}</a></div>
-        <div className="list-note">Local port: {site.port ? `:${site.port}` : 'n/a'}</div>
-        <div className="list-note">Process id: {site.pid || 'n/a'}</div>
-        <div className="list-note">Public URL: {site.publicUrl || 'Not published yet'}</div>
-        <div className="list-note">Deployment: {site.deploymentStatus || 'idle'}</div>
-        <div className="list-note">Health: {site.healthMessage || 'No health check yet.'}</div>
-      </div>
-      <div className="row body-note">
-        <button type="button" data-site-id={site.id} data-site-action="start">Start</button>
-        <button type="button" data-site-id={site.id} data-site-action="stop">Stop</button>
-        <button type="button" data-site-id={site.id} data-site-action="restart">Restart</button>
-        <button type="button" data-site-id={site.id} data-site-action="deploy">Deploy</button>
-      </div>
-      <div className="section-divider" />
-      <div>
-        <h4>Site logs</h4>
-        <pre>{logs || 'No logs yet.'}</pre>
-      </div>
+      {jobs.map((job) => <JobCard job={job} />)}
     </>
   );
+}
+
+function JobCard({ job }: { job: JobSummary }) {
+  const details = [job.repoLabel, job.detail].filter(Boolean).join(' | ');
+
+  return (
+    <div className="job">
+      <div className="job-head">
+        <div>
+          <div className="pill">{job.statusLabel || job.status || 'queued'}</div>
+          <h3 style={{ marginTop: '8px' }}>{job.title || job.id || 'Untitled job'}</h3>
+        </div>
+        {job.updatedAt ? <span className="pill">{formatTimestamp(job.updatedAt)}</span> : null}
+      </div>
+      <div className="job-detail">{job.repoId || ''}{details ? ` | ${details}` : ''}</div>
+    </div>
+  );
+}
+
+function formatTimestamp(value: string | null | undefined) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) {
+    return String(value || 'unknown time');
+  }
+
+  return date.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error || 'Unexpected error');
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
