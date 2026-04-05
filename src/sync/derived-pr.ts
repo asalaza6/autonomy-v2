@@ -15,7 +15,7 @@ function isPendingRuntimeTask(task) {
   if (!task) {
     return false;
   }
-  return !['approved', 'merged'].includes(String(task.status || ''));
+  return !['approved', 'merged', 'done'].includes(String(task.status || ''));
 }
 
 function findLatestReview(pr) {
@@ -70,6 +70,34 @@ function reviewedCommitCountIsStale(pr, existingTask) {
     return false;
   }
   return currentCommitCount > reviewedCommitCount;
+}
+
+function getTaskCompletionTimestamp(task) {
+  const completionValue = task && (task.completedAt || task.updatedAt || task.startedAt || task.createdAt);
+  const timestamp = Date.parse(String(completionValue || ''));
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function hasCompletedFollowupSinceLastReview(existingTask, linkedRuntimeTasks = []) {
+  const reviewedAt = Date.parse(String(existingTask && existingTask.reviewedAt || ''));
+  if (!Number.isFinite(reviewedAt) || reviewedAt <= 0) {
+    return false;
+  }
+  return (linkedRuntimeTasks || [])
+    .filter((task) => task && task.type !== TASK_TYPES.REVIEW)
+    .filter((task) => !isPendingRuntimeTask(task))
+    .some((task) => getTaskCompletionTimestamp(task) > reviewedAt);
+}
+
+function reviewerNeedsRefresh(pr, existingTask, linkedRuntimeTasks = []) {
+  return reviewedCommitCountIsStale(pr, existingTask)
+    || hasCompletedFollowupSinceLastReview(existingTask, linkedRuntimeTasks);
+}
+
+function reviewerSourceTaskIsStale(pr, existingTask) {
+  const currentTaskId = String(pr && pr.taskId || '').trim();
+  const reviewedTaskId = String(existingTask && existingTask.sourceTaskId || '').trim();
+  return Boolean(currentTaskId && reviewedTaskId && currentTaskId !== reviewedTaskId);
 }
 
 function prIsApprovedAndOpen(pr) {
@@ -141,7 +169,8 @@ function uniqueStrings(values) {
 function buildDerivedReviewerTask(pr: PullRequestRecord, sourceTask: TaskRecord, now: string, existingTask: TaskRecord | null = null, linkedRuntimeTasks: TaskRecord[] = []) {
   const pendingLinkedTasks = linkedRuntimeTasks.filter((task) => task && task.type !== TASK_TYPES.REVIEW && isPendingRuntimeTask(task));
   const existingStatus = existingTask && existingTask.status ? existingTask.status : '';
-  const reviewerHasStaleCommitView = reviewedCommitCountIsStale(pr, existingTask);
+  const reviewerHasStaleCommitView = reviewerNeedsRefresh(pr, existingTask, linkedRuntimeTasks)
+    || reviewerSourceTaskIsStale(pr, existingTask);
   const needsReviewerRecovery = approvedPrNeedsReviewerRecovery(pr, existingTask);
   let status = existingStatus || 'queued';
   if (pr.status === 'merged') {
@@ -162,7 +191,7 @@ function buildDerivedReviewerTask(pr: PullRequestRecord, sourceTask: TaskRecord,
     agentId: 'reviewer',
     type: TASK_TYPES.REVIEW,
     prId: pr.id,
-    sourceTaskId: sourceTask.id,
+    sourceTaskId: pr.taskId || sourceTask.id,
     sourceAgentId: sourceTask.agentId,
     headBranch: pr.headBranch,
     baseBranch: pr.baseBranch,
@@ -221,16 +250,26 @@ function buildDerivedPullRequestRecord({
   const linkedWorkTasks = (linkedRuntimeTasks || [])
     .filter((task) => task && task.type !== TASK_TYPES.REVIEW)
     .filter((task) => !(reviewerHasStaleCommitView && task.type === 'review_followup'));
+  const completedLinkedWorkTaskIds = new Set(linkedWorkTasks
+    .filter((task) => !isPendingRuntimeTask(task))
+    .map((task) => task.id)
+    .filter(Boolean));
+  const completedExtraTaskIds = new Set([
+    ...((existingPr && existingPr.completedTaskIds) || []).filter((taskId) => !baseTaskIdSet.has(taskId)),
+    ...completedLinkedWorkTaskIds,
+  ]);
   const extraTaskIds = uniqueStrings([
     ...((existingPr && existingPr.taskIds) || []).filter((taskId) => !baseTaskIdSet.has(taskId)),
     ...(linkedWorkTasks.map((task) => task.id)).filter((taskId) => !baseTaskIdSet.has(taskId)),
   ]);
   const extraPendingTaskIds = uniqueStrings([
-    ...((existingPr && existingPr.pendingTaskIds) || []).filter((taskId) => !baseTaskIdSet.has(taskId)),
+    ...((existingPr && existingPr.pendingTaskIds) || [])
+      .filter((taskId) => !baseTaskIdSet.has(taskId))
+      .filter((taskId) => !completedExtraTaskIds.has(taskId)),
     ...(linkedWorkTasks.filter((task) => isPendingRuntimeTask(task)).map((task) => task.id)).filter((taskId) => !baseTaskIdSet.has(taskId)),
   ]).filter((taskId) => !(reviewerHasStaleCommitView && inferLinkedTaskType(taskId) === 'review_followup'));
   const extraCompletedTaskIds = uniqueStrings([
-    ...((existingPr && existingPr.completedTaskIds) || []).filter((taskId) => !baseTaskIdSet.has(taskId)),
+    ...completedExtraTaskIds,
   ]);
   const reviews = Array.isArray(existingPr && existingPr.reviews)
     ? existingPr.reviews.map((decisionRecord) => ({ ...decisionRecord }))

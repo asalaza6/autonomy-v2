@@ -14,7 +14,44 @@ import { buildTrackedImplementationTaskIndex, readTrackedImplementationQueuesFro
 import { buildImportedSpecState } from './lanes.js';
 import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
 import { commitTrackedFilesToIntegrationBranch, fetchIntegrationBranch } from './sync-git.js';
-import { listTreeFiles, readGit, readTreeFile } from './git-shared.js';
+import { listTreeFiles, readGit, readJsonFromGitRef, readTreeFile } from './git-shared.js';
+
+function buildTrackedReviewQueueState(agent, tasks = []) {
+  return {
+    agentId: agent.id,
+    role: agent.role,
+    tasks,
+  };
+}
+
+function syncTrackedReviewerQueues(rootDir: string, integrationBranch: string, config: AutonomyConfig, ref: string, derivedTasks: AnyRecord[] = []) {
+  const updates = [];
+  (config.agents || []).forEach((agent) => {
+    if (agent.role !== 'review') {
+      return;
+    }
+    const relativePath = agent.taskQueue;
+    if (!relativePath || path.isAbsolute(relativePath)) {
+      return;
+    }
+    const existingQueue = readJsonFromGitRef(rootDir, ref, relativePath, buildTrackedReviewQueueState(agent, []));
+    const retainedTasks = Array.isArray(existingQueue && existingQueue.tasks)
+      ? existingQueue.tasks.filter((task) => {
+        return !derivedTasks.some((candidate) => candidate && candidate.id === task.id);
+      })
+      : [];
+    updates.push({
+      relativePath,
+      content: buildTrackedReviewQueueState(agent, retainedTasks.concat(derivedTasks)),
+    });
+  });
+  if (updates.length === 0) {
+    return null;
+  }
+  return commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, updates, {
+    commitMessage: 'autonomy(queue): sync reviewer queue',
+  });
+}
 
 function dedupeBranchLocksByOwnership(locks) {
   const byLane = new Map();
@@ -244,6 +281,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
       .concat(derived.branchLocks));
     writeJson(paths.prsState, { pullRequests: nextPrs });
     writeJson(paths.branchLocksState, { locks: nextBranchLocks });
+    syncTrackedReviewerQueues(rootDir, integrationBranch, config, ref, derived.tasks || []);
     emitSyncProgress(options, 'sync:state:written', {
       prs: nextPrs.length,
       branchLocks: nextBranchLocks.length,
