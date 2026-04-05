@@ -10,6 +10,16 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
 
   const dashboard = buildControlPlaneDashboard(repoDir, {
     schemaVersion: 1,
+    heartbeats: {
+      server: {
+        kind: 'server',
+        updatedAt: new Date(Date.now() + 1000).toISOString(),
+      },
+      bridge: {
+        kind: 'bridge',
+        updatedAt: new Date(Date.now() - 20000).toISOString(),
+      },
+    },
     jobs: [
       {
         id: 'job-001',
@@ -31,7 +41,7 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
     repoStatuses: {
       default: {
         repoId: 'default',
-        updatedAt: '2026-04-01T12:10:00.000Z',
+        updatedAt: new Date(Date.now() - 20000).toISOString(),
         snapshot: {
           prds: {
             prds: [
@@ -91,10 +101,14 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.equal(dashboard.activePrdCount, 1);
   assert.equal(dashboard.queuedPrdCount, 1);
   assert.equal(dashboard.pendingJobCount, 1);
+  assert.equal(dashboard.overallHeartbeatStatus, 'stale');
+  assert.equal(dashboard.serverHeartbeat.status, 'online');
+  assert.equal(dashboard.bridgeHeartbeat.status, 'stale');
   assert.match(dashboard.repos[0].overview, /Active PRD/);
   assert.match(dashboard.repos[0].overview, /queued PRD/i);
   assert.equal(dashboard.repos[0].activePrd.title, 'Active PRD');
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
+  assert.equal(dashboard.repos[0].freshnessStatus, 'stale');
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
   assert.match(dashboard.jobs[0].detail, /created/);

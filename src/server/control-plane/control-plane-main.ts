@@ -10,6 +10,7 @@ import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml } from './control-plane-browser.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { buildManagerDashboard } from './manager-dashboard.js';
+import { buildControlPlaneHeartbeatSummary } from '../../autonomy-v2/control-plane/status-view.js';
 import {
   createManagedSite,
   reconcileManagedSites,
@@ -29,18 +30,21 @@ import {
   claimJob,
   completeJob,
   createControlPlaneJob,
+  createControlPlaneDeployJob,
   ensureControlPlaneDataDir,
   enqueueJob,
   getRepoStatuses,
   listJobs,
   loadControlPlaneState,
   setRepoStatus,
+  touchHeartbeat,
 } from './control-plane-store.js';
 import { runControlPlaneBridgeLoop } from './control-plane-bridge.js';
-import { validatePrdAddSubmission } from './control-plane-validation.js';
+import { validateDeploySubmission, validatePrdAddSubmission } from './control-plane-validation.js';
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
 const controlPlaneAssetCache = new Map<string, string>();
+const CONTROL_PLANE_HEARTBEAT_MS = 5000;
 
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
@@ -81,13 +85,25 @@ async function main(argv: string[] = process.argv.slice(2)) {
     options.host ||
     process.env.HOST ||
     process.env.AUTONOMY_CONTROL_PLANE_HOST ||
-    (process.env.DYNO ? '0.0.0.0' : '127.0.0.1')
-  );
+    ''
+  ).trim();
   if (!Number.isFinite(port) || port <= 0) {
     throw new Error('--port must be a positive number.');
   }
   ensureControlPlaneDataDir(rootDir);
   ensureManagerDataDir(rootDir);
+  touchHeartbeat(rootDir, 'server', {
+    note: 'control-plane server started',
+  });
+  const serverHeartbeatTimer = setInterval(() => {
+    try {
+      touchHeartbeat(rootDir, 'server', {
+        note: 'control-plane server alive',
+      });
+    } catch (error) {
+      console.error(`Server heartbeat update failed: ${error.message}`);
+    }
+  }, CONTROL_PLANE_HEARTBEAT_MS);
   await reconcileManagedSites(rootDir).catch((error) => {
     console.error(`Manager reconcile error: ${error.message}`);
   });
@@ -100,11 +116,16 @@ async function main(argv: string[] = process.argv.slice(2)) {
   });
 
   await new Promise((resolve) => {
-    server.listen(port, host, () => resolve(undefined));
+    if (host) {
+      server.listen(port, host, () => resolve(undefined));
+      return;
+    }
+    server.listen(port, () => resolve(undefined));
   });
-  console.log(`Manager listening on http://${host}:${port}`);
+  console.log(`Manager listening on http://${host || '127.0.0.1'}:${port}`);
 
   const shutdown = () => {
+    clearInterval(serverHeartbeatTimer);
     server.close(() => process.exit(0));
   };
   process.on('SIGINT', shutdown);
@@ -138,10 +159,12 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
 
   if (url.pathname === '/api/manager-state' && req.method === 'GET') {
     const state = loadManagerState(rootDir);
+    const controlPlaneState = loadControlPlaneState(rootDir);
     sendJson(res, 200, {
       state,
       dashboard: buildManagerDashboard(rootDir, state),
       sites: listManagedSites(rootDir),
+      controlPlane: buildControlPlaneHeartbeatSummary(controlPlaneState.heartbeats || {}),
     });
     return;
   }
@@ -280,6 +303,35 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
       const body = await readJsonBody(req);
       const { payload } = validatePrdAddSubmission(config, body);
       const job = enqueueJob(rootDir, createControlPlaneJob(payload));
+      sendJson(res, 201, job);
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/heartbeats/bridge' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const heartbeat = touchHeartbeat(rootDir, 'bridge', {
+        note: String(body && body.note || 'bridge poll complete').trim() || 'bridge poll complete',
+      });
+      sendJson(res, 200, { heartbeat });
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/deploy') && req.method === 'POST') {
+    const config = loadControlPlaneConfig(rootDir);
+    const repoId = url.pathname.split('/')[3];
+    try {
+      const body = await readJsonBody(req);
+      const { payload } = validateDeploySubmission(config, {
+        repoId: String(body && body.repoId || repoId || '').trim(),
+      });
+      const job = enqueueJob(rootDir, createControlPlaneDeployJob(payload));
       sendJson(res, 201, job);
     } catch (error) {
       sendJson(res, 400, { error: error.message });

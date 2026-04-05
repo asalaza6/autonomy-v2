@@ -1,3 +1,6 @@
+const HEARTBEAT_ONLINE_MS = 15000;
+const HEARTBEAT_OFFLINE_MS = 45000;
+
 function selectActivePrd(prds: any[] = []) {
   const candidates = (prds || [])
     .filter((prd) => {
@@ -104,6 +107,77 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
   };
 }
 
+function buildHeartbeatSummary(updatedAt: string | null | undefined, label: string, nowMs = Date.now()) {
+  const timestamp = String(updatedAt || '').trim();
+  if (!timestamp) {
+    return {
+      label,
+      status: 'offline',
+      statusLabel: 'Offline',
+      detail: 'No heartbeat yet',
+      updatedAt: null,
+      ageMs: null,
+    };
+  }
+
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) {
+    return {
+      label,
+      status: 'offline',
+      statusLabel: 'Offline',
+      detail: `Invalid heartbeat time: ${timestamp}`,
+      updatedAt: timestamp,
+      ageMs: null,
+    };
+  }
+
+  const ageMs = Math.max(0, nowMs - parsed);
+  const status = ageMs <= HEARTBEAT_ONLINE_MS
+    ? 'online'
+    : ageMs <= HEARTBEAT_OFFLINE_MS
+      ? 'stale'
+      : 'offline';
+  const statusLabel = status === 'online'
+    ? 'Online'
+    : status === 'stale'
+      ? 'Stale'
+      : 'Offline';
+
+  return {
+    label,
+    status,
+    statusLabel,
+    detail: ageMs === 0
+      ? 'Seen just now'
+      : `Last seen ${formatHeartbeatAge(ageMs)} ago`,
+    updatedAt: timestamp,
+    ageMs,
+  };
+}
+
+function buildControlPlaneHeartbeatSummary(heartbeats: any = {}, nowMs = Date.now()) {
+  const server = buildHeartbeatSummary(heartbeats.server && heartbeats.server.updatedAt, 'Server', nowMs);
+  const bridge = buildHeartbeatSummary(heartbeats.bridge && heartbeats.bridge.updatedAt, 'Bridge', nowMs);
+  const overallStatus = [server.status, bridge.status].includes('offline')
+    ? 'offline'
+    : [server.status, bridge.status].includes('stale')
+      ? 'stale'
+      : 'online';
+  const statusLabel = overallStatus === 'online'
+    ? 'Healthy'
+    : overallStatus === 'stale'
+      ? 'Stale'
+      : 'Offline';
+
+  return {
+    overallStatus,
+    statusLabel,
+    server,
+    bridge,
+  };
+}
+
 function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const snapshot = (repoStatus && repoStatus.snapshot) || {};
   const prds = Array.isArray(snapshot.prds && snapshot.prds.prds) ? snapshot.prds.prds : [];
@@ -112,6 +186,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const agentStatuses = Array.isArray(snapshot.agentStatuses) ? snapshot.agentStatuses : [];
   const pullRequestStatuses = Array.isArray(snapshot.pullRequestStatuses) ? snapshot.pullRequestStatuses : [];
   const runningAgents = agentStatuses.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
+  const freshness = buildHeartbeatSummary(repoStatus && repoStatus.updatedAt, repoLabel || 'Repository');
 
   const overviewParts = [];
   overviewParts.push(activePrd ? `Active PRD: ${activePrd.title}` : 'No active PRD yet');
@@ -136,6 +211,10 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     agentStatuses,
     pullRequestStatuses,
     branchLockCount: Number(snapshot.branchLockCount || 0),
+    freshnessStatus: freshness.status,
+    freshnessStatusLabel: freshness.statusLabel,
+    freshnessDetail: freshness.detail,
+    freshnessUpdatedAt: freshness.updatedAt,
   };
 }
 
@@ -164,6 +243,25 @@ function compareTimestamps(left: string, right: string) {
   return (Date.parse(left || '') || 0) - (Date.parse(right || '') || 0);
 }
 
+function formatHeartbeatAge(ageMs: number) {
+  if (!Number.isFinite(ageMs) || ageMs < 1000) {
+    return '0s';
+  }
+
+  const totalSeconds = Math.floor(ageMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) {
+    return `${seconds}s`;
+  }
+  if (minutes < 60) {
+    return `${minutes}m ${seconds}s`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
+}
+
 function rankPrdForStatus(prd: any) {
   const status = String(prd && prd.status || '');
   if (status === 'planning') {
@@ -176,6 +274,8 @@ function rankPrdForStatus(prd: any) {
 }
 
 export {
+  buildControlPlaneHeartbeatSummary,
+  buildHeartbeatSummary,
   describePrd,
   formatStatusLabel,
   formatTimestamp,

@@ -54,10 +54,26 @@ type ManagerDashboard = {
   sites?: SiteSummary[];
 };
 
+type HeartbeatSummary = {
+  label?: string;
+  status?: string;
+  statusLabel?: string;
+  detail?: string;
+  updatedAt?: string | null;
+};
+
+type ControlPlaneHeartbeatSummary = {
+  overallStatus?: string;
+  statusLabel?: string;
+  server?: HeartbeatSummary;
+  bridge?: HeartbeatSummary;
+};
+
 type ManagerStateSnapshot = {
   state?: Record<string, unknown>;
   dashboard?: ManagerDashboard;
   sites?: SiteSummary[];
+  controlPlane?: ControlPlaneHeartbeatSummary;
 };
 
 type SiteLogsResponse = {
@@ -69,6 +85,7 @@ const siteForm = document.getElementById('site-form') as HTMLFormElement | null;
 const refreshButton = document.getElementById('refresh-button');
 const messageEl = document.getElementById('form-message');
 const lastUpdatedEl = document.getElementById('last-updated');
+const controlPlaneHeartbeatsEl = document.getElementById('control-plane-heartbeats');
 const managerMetricsEl = document.getElementById('manager-metrics');
 const managerSummaryNoteEl = document.getElementById('manager-summary-note');
 const siteStackEl = document.getElementById('site-stack');
@@ -95,6 +112,7 @@ function mountControlPlane() {
     || !refreshButton
     || !messageEl
     || !lastUpdatedEl
+    || !controlPlaneHeartbeatsEl
     || !managerMetricsEl
     || !managerSummaryNoteEl
     || !siteStackEl
@@ -183,6 +201,7 @@ async function refresh() {
     selectedSiteId = latestSites[0].id;
   }
 
+  renderControlPlaneHeartbeats(snapshot.controlPlane || {});
   renderMetrics(snapshot.dashboard || {});
   renderSiteStack(latestSites);
   renderSiteDetail();
@@ -314,6 +333,16 @@ function renderMetrics(dashboard: ManagerDashboard) {
     : 'No sites yet';
 }
 
+function renderControlPlaneHeartbeats(controlPlane: ControlPlaneHeartbeatSummary) {
+  if (!controlPlaneHeartbeatsEl) {
+    return;
+  }
+
+  controlPlaneHeartbeatsEl.innerHTML = renderToHtml(
+    <HeartbeatStrip controlPlane={controlPlane} />
+  );
+}
+
 function renderSiteStack(sites: SiteSummary[]) {
   if (!siteStackEl) {
     return;
@@ -410,6 +439,10 @@ function getErrorMessage(error: unknown) {
   return String(error || 'Unexpected error');
 }
 
+function statusClass(status?: string) {
+  return String(status || 'offline');
+}
+
 function MetricGrid({ metrics }: { metrics: readonly (readonly [string, number])[] }) {
   return (
     <>
@@ -419,6 +452,33 @@ function MetricGrid({ metrics }: { metrics: readonly (readonly [string, number])
           <strong>{String(value)}</strong>
         </div>
       ))}
+    </>
+  );
+}
+
+function HeartbeatStrip({
+  controlPlane,
+}: {
+  controlPlane: ControlPlaneHeartbeatSummary;
+}) {
+  const server = controlPlane.server || {};
+  const bridge = controlPlane.bridge || {};
+  return (
+    <>
+      <div className={`status-chip ${statusClass(controlPlane.overallStatus)}`}>
+        <span className="status-dot" />
+        <span>Control plane: {controlPlane.statusLabel || 'Offline'}</span>
+      </div>
+      <div className="status-stack">
+        <div className={`status-chip ${statusClass(server.status)}`}>
+          <span className="status-dot" />
+          <span>{server.label || 'Server'}: {server.statusLabel || 'Offline'}</span>
+        </div>
+        <div className={`status-chip ${statusClass(bridge.status)}`}>
+          <span className="status-dot" />
+          <span>{bridge.label || 'Bridge'}: {bridge.statusLabel || 'Offline'}</span>
+        </div>
+      </div>
     </>
   );
 }

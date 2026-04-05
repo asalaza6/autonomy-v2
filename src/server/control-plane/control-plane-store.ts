@@ -3,7 +3,9 @@ import path from 'path';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 import type {
   ControlPlanePrdAddPayload,
+  ControlPlaneDeployPayload,
   ControlPlaneJobRecord,
+  ControlPlaneHeartbeatRecord,
   ControlPlaneRepoStatusRecord,
   ControlPlaneState,
 } from '../../types.js';
@@ -12,6 +14,7 @@ const DEFAULT_CONTROL_PLANE_STATE: ControlPlaneState = {
   schemaVersion: 1,
   jobs: [],
   repoStatuses: {},
+  heartbeats: {},
 };
 
 const MEMORY_CONTROL_PLANE_STATES = new Map<string, ControlPlaneState>();
@@ -56,7 +59,32 @@ function normalizeControlPlaneState(state: Partial<ControlPlaneState> = {}): Con
     schemaVersion: typeof state.schemaVersion === 'number' ? state.schemaVersion : 1,
     jobs: Array.isArray(state.jobs) ? state.jobs.map(normalizeJobRecord).filter(Boolean) : [],
     repoStatuses: normalizeRepoStatuses(state.repoStatuses),
+    heartbeats: normalizeHeartbeats(state.heartbeats),
   };
+}
+
+function normalizeHeartbeats(heartbeats: Record<string, ControlPlaneHeartbeatRecord> | undefined | null) {
+  const normalized: Record<string, ControlPlaneHeartbeatRecord> = {};
+  Object.entries(heartbeats || {}).forEach(([kind, heartbeat]) => {
+    const normalizedKind = normalizeHeartbeatKind(kind);
+    if (!normalizedKind || !heartbeat) {
+      return;
+    }
+    normalized[normalizedKind] = {
+      kind: normalizedKind,
+      updatedAt: String(heartbeat.updatedAt || new Date().toISOString()),
+      note: normalizeOptionalString(heartbeat.note),
+    };
+  });
+  return normalized;
+}
+
+function normalizeHeartbeatKind(kind: string | undefined | null) {
+  const normalized = String(kind || '').trim();
+  if (normalized === 'server' || normalized === 'bridge') {
+    return normalized;
+  }
+  return null;
 }
 
 function normalizeRepoStatuses(repoStatuses: Record<string, ControlPlaneRepoStatusRecord> | undefined | null) {
@@ -80,23 +108,60 @@ function normalizeJobRecord(job: ControlPlaneJobRecord | null | undefined) {
     return null;
   }
   const normalizedStatus = normalizeJobStatus(job.status);
+  const normalizedType = normalizeJobType(job.type);
+  const payload = normalizeJobPayload(normalizedType, job.payload, job.repoId);
+  if (!payload) {
+    return null;
+  }
   return {
     ...job,
     id: String(job.id),
-    type: 'prd:add' as const,
+    type: normalizedType,
     repoId: String(job.repoId),
     status: normalizedStatus,
     createdAt: String(job.createdAt || new Date().toISOString()),
     updatedAt: String(job.updatedAt || job.createdAt || new Date().toISOString()),
-    payload: {
-      ...job.payload,
-      repoId: String(job.payload.repoId || job.repoId),
-      id: String(job.payload.id || ''),
-      title: String(job.payload.title || ''),
-      requirements: Array.isArray(job.payload.requirements) ? job.payload.requirements : [],
-      taskSpecs: Array.isArray(job.payload.taskSpecs) ? job.payload.taskSpecs : [],
-    } as ControlPlanePrdAddPayload,
+    payload,
   };
+}
+
+function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null) {
+  const normalized = String(type || 'prd:add').trim();
+  if (normalized === 'deploy') {
+    return 'deploy' as const;
+  }
+  return 'prd:add' as const;
+}
+
+function normalizeJobPayload(
+  type: ControlPlaneJobRecord['type'],
+  payload: ControlPlaneJobRecord['payload'],
+  repoId: string
+) {
+  if (type === 'deploy') {
+    return {
+      repoId: String((payload as ControlPlaneDeployPayload).repoId || repoId).trim() || repoId,
+    } as ControlPlaneDeployPayload;
+  }
+
+  return {
+    repoId: String((payload as ControlPlanePrdAddPayload).repoId || repoId),
+    id: String((payload as ControlPlanePrdAddPayload).id || ''),
+    title: String((payload as ControlPlanePrdAddPayload).title || ''),
+    specification: String((payload as ControlPlanePrdAddPayload).specification || '').trim() || undefined,
+    requirements: Array.isArray((payload as ControlPlanePrdAddPayload).requirements)
+      ? (payload as ControlPlanePrdAddPayload).requirements.map((entry) => String(entry || '').trim()).filter(Boolean)
+      : [],
+    taskSpecs: Array.isArray((payload as ControlPlanePrdAddPayload).taskSpecs)
+      ? (payload as ControlPlanePrdAddPayload).taskSpecs
+      : [],
+    sprintId: String((payload as ControlPlanePrdAddPayload).sprintId || '').trim() || undefined,
+  } as ControlPlanePrdAddPayload;
+}
+
+function normalizeOptionalString(value: unknown) {
+  const text = String(value || '').trim();
+  return text || undefined;
 }
 
 function normalizeJobStatus(status: string | undefined | null) {
@@ -162,6 +227,17 @@ function completeJob(rootDir: string, jobId: string, patch: Partial<ControlPlane
   return job;
 }
 
+function touchHeartbeat(rootDir: string, kind: 'server' | 'bridge', patch: Partial<ControlPlaneHeartbeatRecord> = {}) {
+  const state = loadControlPlaneState(rootDir);
+  state.heartbeats[kind] = {
+    kind,
+    updatedAt: new Date().toISOString(),
+    note: normalizeOptionalString(patch.note),
+  };
+  saveControlPlaneState(rootDir, state);
+  return state.heartbeats[kind];
+}
+
 function setRepoStatus(rootDir: string, repoId: string, snapshot: Record<string, unknown>) {
   const state = loadControlPlaneState(rootDir);
   const normalizedRepoId = String(repoId || '').trim();
@@ -208,6 +284,21 @@ function createControlPlaneJob(payload: ControlPlanePrdAddPayload): ControlPlane
   return job;
 }
 
+function createControlPlaneDeployJob(payload: ControlPlaneDeployPayload): ControlPlaneJobRecord {
+  const job: ControlPlaneJobRecord = {
+    id: `job_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    type: 'deploy' as const,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+    },
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
 function getControlPlaneStateKey(rootDir: string) {
   return path.resolve(rootDir || process.cwd());
 }
@@ -227,6 +318,7 @@ export {
   claimJob,
   completeJob,
   createControlPlaneJob,
+  createControlPlaneDeployJob,
   ensureControlPlaneDataDir,
   enqueueJob,
   getControlPlanePaths,
@@ -235,5 +327,6 @@ export {
   loadControlPlaneState,
   saveControlPlaneState,
   setRepoStatus,
+  touchHeartbeat,
   shouldPersistControlPlaneState,
 };

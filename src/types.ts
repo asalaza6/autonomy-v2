@@ -139,11 +139,15 @@ export interface ControlPlanePrdAddPayload extends AnyRecord {
   sprintId?: string;
 }
 
+export interface ControlPlaneDeployPayload extends AnyRecord {
+  repoId: string;
+}
+
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add';
+  type: 'prd:add' | 'deploy';
   repoId: string;
-  payload: ControlPlanePrdAddPayload;
+  payload: ControlPlanePrdAddPayload | ControlPlaneDeployPayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
@@ -163,6 +167,13 @@ export interface ControlPlaneState extends AnyRecord {
   schemaVersion?: number;
   jobs: ControlPlaneJobRecord[];
   repoStatuses: Record<string, ControlPlaneRepoStatusRecord>;
+  heartbeats: Record<string, ControlPlaneHeartbeatRecord>;
+}
+
+export interface ControlPlaneHeartbeatRecord extends AnyRecord {
+  kind: 'server' | 'bridge';
+  updatedAt: string;
+  note?: string;
 }
 
 export interface ManagedSiteContent extends AnyRecord {

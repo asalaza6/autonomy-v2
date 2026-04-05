@@ -1,6 +1,10 @@
 import type { AnyRecord, ControlPlaneConfig, ControlPlaneRepoRecord, ControlPlaneState } from '../../types.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
-import { summarizeControlPlaneJob, summarizeRepoStatus } from '../../autonomy-v2/control-plane/status-view.js';
+import {
+  buildControlPlaneHeartbeatSummary,
+  summarizeControlPlaneJob,
+  summarizeRepoStatus,
+} from '../../autonomy-v2/control-plane/status-view.js';
 
 interface ControlPlaneDashboard {
   repoCount: number;
@@ -9,6 +13,9 @@ interface ControlPlaneDashboard {
   runningAgentCount: number;
   activePullRequestCount: number;
   pendingJobCount: number;
+  overallHeartbeatStatus: string;
+  serverHeartbeat: AnyRecord;
+  bridgeHeartbeat: AnyRecord;
   jobs: AnyRecord[];
   repos: AnyRecord[];
 }
@@ -38,6 +45,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     .slice()
     .sort(compareJobsByFreshness)
     .map((job) => summarizeControlPlaneJob(job, labelForRepo(job.repoId, repoConfigById)));
+  const heartbeats = buildControlPlaneHeartbeatSummary(state.heartbeats || {});
 
   const activePrdCount = repos.filter((repo) => Boolean(repo.activePrd)).length;
   const queuedPrdCount = repos.reduce((total, repo) => total + (repo.queuedPrds || []).length, 0);
@@ -55,6 +63,9 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     runningAgentCount,
     activePullRequestCount,
     pendingJobCount,
+    overallHeartbeatStatus: heartbeats.overallStatus,
+    serverHeartbeat: heartbeats.server,
+    bridgeHeartbeat: heartbeats.bridge,
     jobs,
     repos,
   };
@@ -80,6 +91,10 @@ function buildRepoDashboard(
         agentStatuses: [],
         pullRequestStatuses: [],
         branchLockCount: 0,
+        freshnessStatus: 'offline',
+        freshnessStatusLabel: 'Offline',
+        freshnessDetail: 'No status snapshot yet',
+        freshnessUpdatedAt: null,
       };
 
   return {

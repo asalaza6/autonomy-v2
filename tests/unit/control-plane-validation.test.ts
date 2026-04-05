@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   normalizeControlPlaneConfig,
+  validateDeploySubmission,
   validatePrdAddSubmission,
 } from '../../src/server/control-plane/control-plane-validation.js';
 import { parseRepoRoots } from '../../src/server/control-plane/control-plane-main.js';
@@ -48,6 +49,27 @@ test('prd submission validation enforces repo allowlist and required fields', ()
   assert.equal(payload.repoId, 'alpha');
   assert.equal(payload.id, 'prd-1');
   assert.deepEqual(payload.requirements, ['First requirement']);
+});
+
+test('deploy submission validation enforces repo allowlist', () => {
+  const config = normalizeControlPlaneConfig({
+    repos: [
+      {
+        id: 'alpha',
+        label: 'Alpha',
+      },
+    ],
+  });
+
+  assert.throws(() => validateDeploySubmission(config, {
+    repoId: 'missing',
+  }));
+
+  const { payload } = validateDeploySubmission(config, {
+    repoId: 'alpha',
+  });
+
+  assert.equal(payload.repoId, 'alpha');
 });
 
 test('bridge repo map defaults the current working directory when omitted', () => {

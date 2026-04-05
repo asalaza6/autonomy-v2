@@ -1,4 +1,4 @@
-import type { ControlPlaneConfig, ControlPlanePrdAddPayload, ControlPlaneRepoRecord } from '../../types.js';
+import type { ControlPlaneConfig, ControlPlaneDeployPayload, ControlPlanePrdAddPayload, ControlPlaneRepoRecord } from '../../types.js';
 
 const DEFAULT_CONTROL_PLANE_CONFIG: ControlPlaneConfig = {
   schemaVersion: 1,
@@ -96,6 +96,16 @@ function validatePrdAddSubmission(config: ControlPlaneConfig, submission: Partia
   };
 }
 
+function validateDeploySubmission(config: ControlPlaneConfig, submission: Partial<ControlPlaneDeployPayload> = {}) {
+  const repo = resolveRepoById(config, submission.repoId || '');
+  return {
+    repo,
+    payload: {
+      repoId: repo.id,
+    },
+  };
+}
+
 function normalizeTaskSpec(taskSpec: Record<string, unknown> | null | undefined, index: number) {
   const id = String(taskSpec && taskSpec.id || '').trim();
   const title = String(taskSpec && taskSpec.title || '').trim();
@@ -119,5 +129,6 @@ export {
   DEFAULT_CONTROL_PLANE_CONFIG,
   normalizeControlPlaneConfig,
   resolveRepoById,
+  validateDeploySubmission,
   validatePrdAddSubmission,
 };

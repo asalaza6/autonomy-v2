@@ -13,6 +13,7 @@ import { run as prRun } from './pr.js';
 import { run as gateRun } from './gate.js';
 import { run as mergeRun } from './merge.js';
 import { run as runtimeRun } from './runtime-command.js';
+import { run as deployRun } from './deploy.js';
 import { run as updateRun } from './update.js';
 import type { CliOptions } from '../autonomy-types.js';
 
@@ -32,6 +33,7 @@ const COMMAND_HANDLERS = new Map([
   ['pr:record', prRun],
   [REVIEW_RECORD_COMMAND, gateRun],
   ['merge', mergeRun],
+  ['deploy', deployRun],
   ['runtime:status', runtimeRun],
   ['update', updateRun],
 ]);

@@ -80,6 +80,8 @@ test('manager server creates, routes, stops, and deploys local sites', async () 
     assert.equal(stateAfterCreate.dashboard.deployedSiteCount, 1);
     assert.equal(stateAfterCreate.sites[0].deployment.status, 'pending');
     assert.match(String(stateAfterCreate.sites[0].publicUrl || ''), /acme-storefront-smoke/);
+    assert.equal(stateAfterCreate.controlPlane.server.status, 'online');
+    assert.equal(stateAfterCreate.controlPlane.bridge.status, 'offline');
 
     const siteHtml = await (await fetch(`http://127.0.0.1:${port}/sites/acme-storefront`)).text();
     assert.match(siteHtml, /Acme Storefront/);
@@ -178,7 +180,7 @@ async function getFreePort() {
   return new Promise<number>((resolve, reject) => {
     const server = net.createServer();
     server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(0, () => {
       const address = server.address();
       if (!address || typeof address === 'string') {
         reject(new Error('Unable to find a free port.'));
@@ -274,7 +276,7 @@ function readRequestBody(req: http.IncomingMessage) {
 function listen(server: http.Server) {
   return new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => resolve());
+    server.listen(0, () => resolve());
   });
 }
 

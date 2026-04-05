@@ -74,6 +74,34 @@ const styles = `
     white-space: nowrap;
   }
 
+  .status-stack {
+    display: grid;
+    gap: 10px;
+  }
+
+  .heartbeat-strip {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: start;
+    justify-content: flex-end;
+  }
+
+  .status-chip.online .status-dot {
+    background: linear-gradient(135deg, #1f7a4f, #4fb37d);
+    box-shadow: 0 0 0 5px rgba(31, 122, 79, 0.08);
+  }
+
+  .status-chip.stale .status-dot {
+    background: linear-gradient(135deg, #b36a18, #e2a34c);
+    box-shadow: 0 0 0 5px rgba(179, 106, 24, 0.1);
+  }
+
+  .status-chip.offline .status-dot {
+    background: linear-gradient(135deg, #8d3a43, #c86b74);
+    box-shadow: 0 0 0 5px rgba(141, 58, 67, 0.1);
+  }
+
   .status-dot {
     width: 10px;
     height: 10px;
@@ -362,9 +390,12 @@ function ControlPlanePage() {
                 One local server manages all site processes, routes traffic, and publishes sites to Heroku when requested.
               </p>
             </div>
-            <div className="status-chip muted">
-              <span className="status-dot" />
-              <span id="last-updated">Loading...</span>
+            <div className="heartbeat-strip">
+              <div id="control-plane-heartbeats" className="heartbeat-strip" aria-live="polite" />
+              <div className="status-chip muted">
+                <span className="status-dot" />
+                <span id="last-updated">Loading...</span>
+              </div>
             </div>
           </header>
 

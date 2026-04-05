@@ -1,6 +1,7 @@
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
+import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -53,7 +54,6 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
 
     try {
       loadAutonomyEnv(repoRoot);
-      const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));
       const snapshot = buildStatusSnapshot(repoRoot);
       await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
         method: 'POST',
@@ -61,15 +61,29 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           snapshot,
         },
       });
+      let result: Record<string, unknown>;
+      if (job.type === 'deploy') {
+        const execution = runDeploy(repoRoot, {});
+        result = {
+          sourceBranch: execution.sourceBranch,
+          targetBranch: execution.targetBranch,
+          commitSha: execution.sha || null,
+          pushed: execution.pushed,
+          pushMessage: execution.pushMessage || null,
+        };
+      } else {
+        const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));
+        result = {
+          prdId: execution.prdSpec.id,
+          commitSha: execution.commit.commitSha || null,
+          queueCommitSha: execution.queueCommit ? execution.queueCommit.commitSha : null,
+        };
+      }
       const completed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
         body: {
           status: 'completed',
-          result: {
-            prdId: execution.prdSpec.id,
-            commitSha: execution.commit.commitSha || null,
-            queueCommitSha: execution.queueCommit ? execution.queueCommit.commitSha : null,
-          },
+          result,
         },
       }).catch(() => null);
       processed.push({ jobId: job.id, status: completed && completed.status });
@@ -99,6 +113,13 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       // Skip repos that are not initialized or temporarily unavailable.
     }
   }));
+
+  await requestJson(`${options.serverUrl}/api/heartbeats/bridge`, {
+    method: 'POST',
+    body: {
+      note: 'bridge poll completed',
+    },
+  }).catch(() => null);
 
   return {
     processed,
