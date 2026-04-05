@@ -53,6 +53,8 @@ Options:
   --help, -h         Show this help
   --json              Print JSON output for tick command
   --inline            Run workers inline for tick command
+  --control-plane-url <url>
+                     Optional control-plane server to report scheduler heartbeats to
   --poll-ms <ms>     Poll interval in milliseconds (serve only, default: 2000)
   --sync-ms <ms>     Sync interval in milliseconds (serve only, default: 30000)
 `);
@@ -66,17 +68,27 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
   loadAutonomyEnv(rootDir);
+  const controlPlaneUrl = String(
+    options['control-plane-url'] ||
+    process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL ||
+    ''
+  ).trim();
 
   if (command === 'tick') {
-    const result = runSchedulerTick(rootDir, { inline: options.inline === true });
-    if (options.json === true) {
-      console.log(JSON.stringify(result, null, 2));
-      return;
+    let result;
+    try {
+      result = runSchedulerTick(rootDir, { inline: options.inline === true });
+      if (options.json === true) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(`Tick complete. Started ${result.started.length} worker(s).`);
+        result.started.forEach((entry) => {
+          console.log(`${entry.agentId} | ${entry.mode} | ${entry.reason}`);
+        });
+      }
+    } finally {
+      await reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler tick complete');
     }
-    console.log(`Tick complete. Started ${result.started.length} worker(s).`);
-    result.started.forEach((entry) => {
-      console.log(`${entry.agentId} | ${entry.mode} | ${entry.reason}`);
-    });
     return;
   }
 
@@ -141,6 +153,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
     syncMs,
   }));
   console.log(formatServerEventLine('server:lock-acquired', { root: rootDir }));
+  void reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler started');
 
   const runTick = () => {
     const tickId = tickCount + 1;
@@ -177,10 +190,38 @@ async function main(argv: string[] = process.argv.slice(2)) {
         shutdown(1);
       }
     }
+    void reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler tick complete');
   };
 
   runTick();
   setInterval(runTick, pollMs);
+}
+
+async function reportControlPlaneHeartbeat(controlPlaneUrl: string, note: string) {
+  const target = String(controlPlaneUrl || '').trim();
+  if (!target) {
+    return;
+  }
+
+  try {
+    const response = await fetch(new URL('/api/heartbeats/server', target), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        note,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(await response.text() || response.statusText);
+    }
+  } catch (error) {
+    console.error(formatServerEventLine('server:heartbeat-failed', {
+      message: error instanceof Error ? error.message : String(error),
+      controlPlaneUrl: target,
+    }));
+  }
 }
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {

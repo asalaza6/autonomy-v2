@@ -10,6 +10,7 @@ import {
   createFixtureRepo,
   git,
   initAutonomyRepo,
+  SERVER_BIN,
   runNode,
 } from './package-smoke.helpers.js';
 
@@ -69,6 +70,15 @@ test('control plane queues a browser PRD and the bridge executes it on the local
       }),
     });
     assert.equal(response.status, 201);
+
+    runNode(SERVER_BIN, [
+      'tick',
+      '--root',
+      repoDir,
+      '--control-plane-url',
+      `http://127.0.0.1:${port}`,
+      '--json',
+    ]);
 
     const stateAfterQueue = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state`);
     assert.equal(stateAfterQueue.jobs.length, 1);

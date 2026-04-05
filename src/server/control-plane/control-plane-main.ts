@@ -27,7 +27,6 @@ import { validateDeploySubmission, validatePrdAddSubmission } from './control-pl
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
 const controlPlaneAssetCache = new Map<string, string>();
-const CONTROL_PLANE_HEARTBEAT_MS = 5000;
 
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
@@ -74,19 +73,6 @@ async function main(argv: string[] = process.argv.slice(2)) {
     throw new Error('--port must be a positive number.');
   }
   ensureControlPlaneDataDir(rootDir);
-  touchHeartbeat(rootDir, 'server', {
-    note: 'control-plane server started',
-  });
-
-  const serverHeartbeatTimer = setInterval(() => {
-    try {
-      touchHeartbeat(rootDir, 'server', {
-        note: 'control-plane server alive',
-      });
-    } catch (error) {
-      console.error(`Server heartbeat update failed: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }, CONTROL_PLANE_HEARTBEAT_MS);
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -102,7 +88,6 @@ async function main(argv: string[] = process.argv.slice(2)) {
   console.log(`Control plane listening on http://${host}:${port}`);
 
   const shutdown = () => {
-    clearInterval(serverHeartbeatTimer);
     server.close(() => process.exit(0));
   };
   process.on('SIGINT', shutdown);
@@ -186,6 +171,19 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
       const body = await readJsonBody(req);
       const heartbeat = touchHeartbeat(rootDir, 'bridge', {
         note: String(body && body.note || 'bridge poll complete').trim() || 'bridge poll complete',
+      });
+      sendJson(res, 200, { heartbeat });
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/heartbeats/server' && req.method === 'POST') {
+    try {
+      const body = await readJsonBody(req);
+      const heartbeat = touchHeartbeat(rootDir, 'server', {
+        note: String(body && body.note || 'scheduler heartbeat').trim() || 'scheduler heartbeat',
       });
       sendJson(res, 200, { heartbeat });
     } catch (error) {
