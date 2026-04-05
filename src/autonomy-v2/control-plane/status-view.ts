@@ -73,6 +73,7 @@ function describePrd(prd: any) {
 
 function summarizeControlPlaneJob(job: any, repoLabel = '') {
   const status = String(job && job.status || 'queued');
+  const jobType = String(job && job.type || 'prd:add');
   const statusLabelMap: Record<string, string> = {
     queued: 'Waiting to be claimed',
     claimed: 'Claimed by the bridge',
@@ -86,6 +87,8 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
   }
   if (status === 'failed' && job && job.error) {
     details.push(`error: ${summarizeText(job.error)}`);
+  } else if (status === 'completed' && jobType === 'deploy' && job && job.result) {
+    details.push(`merged ${job.result.sourceBranch || 'dev'} into ${job.result.targetBranch || 'main'}`);
   } else if (status === 'completed' && job && job.result && job.result.prdId) {
     details.push(`PRD ${job.result.prdId} committed`);
   } else if (job && job.claimedAt) {
@@ -98,7 +101,9 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     id: String(job && job.id || ''),
     repoId: String(job && job.repoId || ''),
     repoLabel: repoLabel || String(job && job.repoId || ''),
-    title: String(job && job.payload && job.payload.title || job && job.id || 'Untitled job'),
+    title: jobType === 'deploy'
+      ? `Deploy ${String(job && job.result && job.result.sourceBranch || job && job.payload && job.payload.sourceBranch || 'dev')} to ${String(job && job.result && job.result.targetBranch || job && job.payload && job.payload.targetBranch || 'main')}`
+      : String(job && job.payload && job.payload.title || job && job.id || 'Untitled job'),
     status,
     statusLabel: statusLabelMap[status] || formatStatusLabel(status),
     detail: details.join(' | '),
@@ -187,6 +192,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const pullRequestStatuses = Array.isArray(snapshot.pullRequestStatuses) ? snapshot.pullRequestStatuses : [];
   const runningAgents = agentStatuses.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
   const freshness = buildHeartbeatSummary(repoStatus && repoStatus.updatedAt, repoLabel || 'Repository');
+  const deployment = snapshot.deployment || null;
 
   const overviewParts = [];
   overviewParts.push(activePrd ? `Active PRD: ${activePrd.title}` : 'No active PRD yet');
@@ -199,6 +205,9 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   if (pullRequestStatuses.length > 0) {
     overviewParts.push(`${pullRequestStatuses.length} active PR${pullRequestStatuses.length === 1 ? '' : 's'}`);
   }
+  if (deployment && deployment.statusLabel) {
+    overviewParts.push(`Deploy: ${deployment.statusLabel}`);
+  }
 
   return {
     repoId: String(repoStatus && repoStatus.repoId || ''),
@@ -210,6 +219,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     queuedPrds,
     agentStatuses,
     pullRequestStatuses,
+    deployment,
     branchLockCount: Number(snapshot.branchLockCount || 0),
     freshnessStatus: freshness.status,
     freshnessStatusLabel: freshness.statusLabel,

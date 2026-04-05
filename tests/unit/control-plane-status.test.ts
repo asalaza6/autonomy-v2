@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import { buildStatusSnapshot } from '../../src/autonomy-v2/control-plane/status-service.js';
 import {
   CLI_BIN,
   createFixtureRepo,
+  git,
   initAutonomyRepo,
   runNode,
 } from '../smoke/package-smoke.helpers.js';
@@ -39,4 +42,22 @@ test('status snapshots include the current runtime and PRD state', () => {
   ]);
   assert.match(output, /PRDs:/);
   assert.match(output, /Active PRD:/);
+});
+
+test('status snapshots include deployment branch comparison details', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-deploy-');
+  initAutonomyRepo(repoDir);
+
+  git(repoDir, ['checkout', 'dev']);
+  fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'deploy.js'), 'export const deploy = true;\n', 'utf8');
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'advance dev']);
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  assert.equal(snapshot.deployment.sourceBranch, 'dev');
+  assert.equal(snapshot.deployment.targetBranch, 'main');
+  assert.equal(snapshot.deployment.branchesAligned, false);
+  assert.equal(snapshot.deployment.hasChanges, true);
+  assert.equal(snapshot.deployment.sourceAheadBy > 0, true);
+  assert.match(snapshot.deployment.detail, /ahead of main/);
 });

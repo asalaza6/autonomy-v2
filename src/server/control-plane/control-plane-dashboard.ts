@@ -25,6 +25,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
   const repoConfigById = new Map(
     (config.repos || []).map((repo) => [repo.id, repo] as const)
   );
+  const jobs = (state.jobs || []).slice().sort(compareJobsByFreshness);
   const repoIds = new Set<string>([
     ...Object.keys(state.repoStatuses || {}),
     ...(config.repos || []).map((repo) => repo.id),
@@ -39,11 +40,9 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
       }
       return String(left).localeCompare(String(right));
     })
-    .map((repoId) => buildRepoDashboard(repoId, repoConfigById.get(repoId) || null, state.repoStatuses?.[repoId] || null));
+    .map((repoId) => buildRepoDashboard(repoId, repoConfigById.get(repoId) || null, state.repoStatuses?.[repoId] || null, jobs));
 
-  const jobs = (state.jobs || [])
-    .slice()
-    .sort(compareJobsByFreshness)
+  const summarizedJobs = jobs
     .map((job) => summarizeControlPlaneJob(job, labelForRepo(job.repoId, repoConfigById)));
   const heartbeats = buildControlPlaneHeartbeatSummary(state.heartbeats || {});
 
@@ -54,7 +53,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     return total + agents.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
   }, 0);
   const activePullRequestCount = repos.reduce((total, repo) => total + (repo.pullRequestStatuses || []).length, 0);
-  const pendingJobCount = jobs.filter((job) => ['queued', 'claimed', 'running'].includes(String(job.status || ''))).length;
+  const pendingJobCount = summarizedJobs.filter((job) => ['queued', 'claimed', 'running'].includes(String(job.status || ''))).length;
 
   return {
     repoCount: repos.length,
@@ -66,7 +65,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     overallHeartbeatStatus: heartbeats.overallStatus,
     serverHeartbeat: heartbeats.server,
     bridgeHeartbeat: heartbeats.bridge,
-    jobs,
+    jobs: summarizedJobs,
     repos,
   };
 }
@@ -74,7 +73,8 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
 function buildRepoDashboard(
   repoId: string,
   repoConfig: ControlPlaneRepoRecord | null,
-  repoStatus: AnyRecord | null
+  repoStatus: AnyRecord | null,
+  jobs: AnyRecord[]
 ) {
   const label = String(repoConfig?.label || repoId || 'Repository');
   const description = String(repoConfig?.description || '');
@@ -97,6 +97,8 @@ function buildRepoDashboard(
         freshnessUpdatedAt: null,
       };
 
+  const deployJob = jobs.find((job) => job.repoId === repoId && job.type === 'deploy') || null;
+
   return {
     ...summary,
     repoId,
@@ -104,6 +106,9 @@ function buildRepoDashboard(
     description,
     default: Boolean(repoConfig?.default),
     updatedAt: summary.updatedAt || null,
+    deploymentUrl: String(repoConfig?.deploymentUrl || '').trim() || null,
+    deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
+    deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
   };
 }
 

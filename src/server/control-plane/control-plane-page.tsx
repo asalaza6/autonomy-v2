@@ -343,6 +343,26 @@ const styles = `
   .body-note { margin-top: 12px; }
   .repo-section { display: grid; gap: 10px; }
   .repo-section + .repo-section { margin-top: 12px; }
+  .repo-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .action-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(36, 91, 117, 0.24);
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.82);
+    text-decoration: none;
+    font-weight: 650;
+  }
+  .action-link:hover { transform: translateY(-1px); }
 
   @media (max-width: 980px) {
     .metric-grid, .raw-grid, .grid { grid-template-columns: 1fr; }

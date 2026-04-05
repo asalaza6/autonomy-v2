@@ -3,6 +3,7 @@ import path from 'path';
 import { countBy, ensureInitialized, getAutonomyPaths, readJson } from '../commands/shared-core.js';
 import { buildAgentStatusSummaries } from '../commands/shared-agent-status.js';
 import { buildPullRequestStatusSummaries } from '../commands/shared-pr-status.js';
+import { gitRefExists, resolveBaseRef, runGitRead } from '../commands/shared-repo.js';
 import { loadAllState, loadTrackedPrds } from '../commands/shared-prds.js';
 import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
 
@@ -59,6 +60,7 @@ function buildStatusSnapshot(rootDir) {
     prCounts,
     pullRequestStatuses,
     branchLockCount: branchLocks.locks.length,
+    deployment: buildDeploymentSnapshot(rootDir, config),
     runtime,
     prds,
   };
@@ -76,6 +78,88 @@ function buildRuntimeSnapshot(rootDir) {
 
 function pathRelative(rootDir, targetPath) {
   return path.relative(rootDir, targetPath);
+}
+
+function buildDeploymentSnapshot(rootDir, config) {
+  const sourceBranch = String(config.integrationBranch || 'dev').trim() || 'dev';
+  const targetBranch = String(config.productionBranch || 'main').trim() || 'main';
+
+  if (sourceBranch === targetBranch) {
+    return {
+      sourceBranch,
+      targetBranch,
+      sourceAheadBy: 0,
+      targetAheadBy: 0,
+      branchesAligned: true,
+      hasChanges: false,
+      deployable: false,
+      status: 'invalid',
+      statusLabel: 'Invalid deploy branches',
+      detail: `Deploy source and target branches must differ. Received ${sourceBranch}.`,
+      sourceSha: null,
+      targetSha: null,
+    };
+  }
+
+  try {
+    const sourceRef = gitRefExists(rootDir, sourceBranch) ? sourceBranch : resolveBaseRef(rootDir, sourceBranch);
+    const targetRef = gitRefExists(rootDir, targetBranch) ? targetBranch : resolveBaseRef(rootDir, targetBranch);
+    const counts = runGitRead(rootDir, ['rev-list', '--left-right', '--count', `${targetRef}...${sourceRef}`]).trim();
+    const [targetAheadRaw, sourceAheadRaw] = counts.split(/\s+/);
+    const targetAheadBy = Number(targetAheadRaw || 0);
+    const sourceAheadBy = Number(sourceAheadRaw || 0);
+    const sourceSha = runGitRead(rootDir, ['rev-parse', sourceRef]).trim() || null;
+    const targetSha = runGitRead(rootDir, ['rev-parse', targetRef]).trim() || null;
+    const branchesAligned = targetAheadBy === 0 && sourceAheadBy === 0;
+    const hasChanges = !branchesAligned;
+    const deployable = hasChanges;
+
+    let status = 'aligned';
+    let statusLabel = 'Ready';
+    let detail = `${sourceBranch} and ${targetBranch} are aligned.`;
+    if (hasChanges) {
+      status = sourceAheadBy > 0 ? 'pending' : 'diverged';
+      statusLabel = sourceAheadBy > 0 ? 'Deploy available' : 'Branches differ';
+      const parts = [];
+      if (sourceAheadBy > 0) {
+        parts.push(`${sourceBranch} is ${sourceAheadBy} commit${sourceAheadBy === 1 ? '' : 's'} ahead of ${targetBranch}`);
+      }
+      if (targetAheadBy > 0) {
+        parts.push(`${targetBranch} is ${targetAheadBy} commit${targetAheadBy === 1 ? '' : 's'} ahead of ${sourceBranch}`);
+      }
+      detail = parts.join(' | ');
+    }
+
+    return {
+      sourceBranch,
+      targetBranch,
+      sourceAheadBy,
+      targetAheadBy,
+      branchesAligned,
+      hasChanges,
+      deployable,
+      status,
+      statusLabel,
+      detail,
+      sourceSha,
+      targetSha,
+    };
+  } catch (error) {
+    return {
+      sourceBranch,
+      targetBranch,
+      sourceAheadBy: 0,
+      targetAheadBy: 0,
+      branchesAligned: false,
+      hasChanges: false,
+      deployable: false,
+      status: 'unknown',
+      statusLabel: 'Deploy status unavailable',
+      detail: error instanceof Error ? error.message : String(error),
+      sourceSha: null,
+      targetSha: null,
+    };
+  }
 }
 
 export {

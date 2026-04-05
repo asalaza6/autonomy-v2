@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
 import { createFixtureRepo, initAutonomyRepo } from '../smoke/package-smoke.helpers.js';
@@ -7,6 +9,19 @@ import { createFixtureRepo, initAutonomyRepo } from '../smoke/package-smoke.help
 test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and jobs in plain language', () => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-dashboard-');
   initAutonomyRepo(repoDir);
+  fs.mkdirSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json'), JSON.stringify({
+    schemaVersion: 1,
+    repos: [
+      {
+        id: 'default',
+        label: 'Current workspace',
+        default: true,
+        deploymentUrl: 'https://deploy.example.com',
+        deploymentLabel: 'Production site',
+      },
+    ],
+  }, null, 2));
 
   const dashboard = buildControlPlaneDashboard(repoDir, {
     schemaVersion: 1,
@@ -23,15 +38,10 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
     jobs: [
       {
         id: 'job-001',
-        type: 'prd:add',
+        type: 'deploy',
         repoId: 'default',
         payload: {
           repoId: 'default',
-          id: 'prd-bridge-001',
-          title: 'Bridge job PRD',
-          specification: 'Queued from the control plane.',
-          requirements: [],
-          taskSpecs: [],
         },
         status: 'queued',
         createdAt: '2026-04-01T12:00:00.000Z',
@@ -91,6 +101,18 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
               updatedAt: '2026-04-01T12:05:00.000Z',
             },
           ],
+          deployment: {
+            sourceBranch: 'dev',
+            targetBranch: 'main',
+            sourceAheadBy: 2,
+            targetAheadBy: 0,
+            branchesAligned: false,
+            hasChanges: true,
+            deployable: true,
+            status: 'pending',
+            statusLabel: 'Deploy available',
+            detail: 'dev is 2 commits ahead of main',
+          },
           branchLockCount: 1,
         },
       },
@@ -110,6 +132,9 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
   assert.equal(dashboard.repos[0].freshnessStatus, 'stale');
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);
+  assert.equal(dashboard.repos[0].deployment.statusLabel, 'Deploy available');
+  assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
+  assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
   assert.match(dashboard.jobs[0].detail, /created/);
 });

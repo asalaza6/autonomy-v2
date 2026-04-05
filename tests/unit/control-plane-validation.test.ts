@@ -13,6 +13,23 @@ test('control plane config normalizes a default allowlist', () => {
   const config = normalizeControlPlaneConfig();
   assert.equal(config.repos.length, 1);
   assert.equal(config.repos[0].id, 'default');
+  assert.equal(config.repos[0].deploymentUrl, undefined);
+});
+
+test('control plane config preserves optional deployment metadata', () => {
+  const config = normalizeControlPlaneConfig({
+    repos: [
+      {
+        id: 'alpha',
+        label: 'Alpha',
+        deploymentUrl: ' https://deploy.example.com/app ',
+        deploymentLabel: ' Live app ',
+      },
+    ],
+  });
+
+  assert.equal(config.repos[0].deploymentUrl, 'https://deploy.example.com/app');
+  assert.equal(config.repos[0].deploymentLabel, 'Live app');
 });
 
 test('prd submission validation enforces repo allowlist and required fields', () => {

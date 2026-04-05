@@ -122,6 +122,8 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   label?: string;
   description?: string;
   default?: boolean;
+  deploymentUrl?: string;
+  deploymentLabel?: string;
 }
 
 export interface ControlPlaneConfig extends AnyRecord {

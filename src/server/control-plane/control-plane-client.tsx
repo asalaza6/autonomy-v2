@@ -8,6 +8,8 @@ type RepoRecord = {
   label: string;
   description?: string;
   default?: boolean;
+  deploymentUrl?: string;
+  deploymentLabel?: string;
 };
 
 type PrdSummary = {
@@ -76,6 +78,21 @@ type RepoSummary = {
   queuedPrds?: PrdSummary[];
   agentStatuses?: AgentSummary[];
   pullRequestStatuses?: PullRequestSummary[];
+  deployment?: {
+    sourceBranch?: string;
+    targetBranch?: string;
+    sourceAheadBy?: number;
+    targetAheadBy?: number;
+    branchesAligned?: boolean;
+    hasChanges?: boolean;
+    deployable?: boolean;
+    status?: string;
+    statusLabel?: string;
+    detail?: string;
+  } | null;
+  deploymentUrl?: string | null;
+  deploymentLabel?: string | null;
+  deployJob?: JobSummary | null;
 };
 
 type DashboardSummary = {
@@ -121,6 +138,7 @@ const panels: Record<string, HTMLElement | null> = {
 };
 
 let latestRepos: RepoRecord[] = [];
+let deployingRepoIds = new Set<string>();
 
 function mountControlPlane() {
   if (
@@ -146,6 +164,22 @@ function mountControlPlane() {
   refreshButton.addEventListener('click', () => refresh().catch((error: unknown) => {
     messageEl.textContent = getErrorMessage(error);
   }));
+  dashboardReposEl.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null;
+    const button = target ? target.closest<HTMLButtonElement>('[data-action="deploy"]') : null;
+    if (!button) {
+      return;
+    }
+    const repoId = String(button.dataset.repoId || '').trim();
+    if (!repoId) {
+      return;
+    }
+    handleDeploy(repoId).catch((error: unknown) => {
+      if (messageEl) {
+        messageEl.textContent = getErrorMessage(error);
+      }
+    });
+  });
 
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => setActiveTab(String(tab.dataset.tab || 'dashboard')));
@@ -207,6 +241,32 @@ async function refresh() {
 
   if (lastUpdatedEl) {
     lastUpdatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  }
+}
+
+async function handleDeploy(repoId: string) {
+  if (!repoId || deployingRepoIds.has(repoId)) {
+    return;
+  }
+
+  deployingRepoIds = new Set(deployingRepoIds).add(repoId);
+  if (messageEl) {
+    messageEl.textContent = `Queueing deploy for ${repoId}...`;
+  }
+
+  try {
+    await requestJson(`/api/repos/${encodeURIComponent(repoId)}/deploy`, {
+      method: 'POST',
+      body: JSON.stringify({ repoId }),
+    });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `Deploy queued for ${repoId}.`;
+    }
+  } finally {
+    const next = new Set(deployingRepoIds);
+    next.delete(repoId);
+    deployingRepoIds = next;
   }
 }
 
@@ -389,6 +449,10 @@ function RepoStack({ repos }: { repos: RepoSummary[] }) {
 
 function RepoCard({ repo }: { repo: RepoSummary }) {
   const updated = repo.updatedAt ? `Updated ${formatTimestamp(repo.updatedAt)}` : 'No status snapshot yet';
+  const deployment = repo.deployment || null;
+  const deployJobPending = ['queued', 'claimed', 'running'].includes(String(repo.deployJob && repo.deployJob.status || ''));
+  const showDeployButton = Boolean(repo.repoId && deployment && deployment.hasChanges);
+  const deployButtonLabel = deployJobPending ? 'Deploy queued' : `Deploy ${deployment && deployment.sourceBranch ? deployment.sourceBranch : 'dev'} to ${deployment && deployment.targetBranch ? deployment.targetBranch : 'main'}`;
 
   return (
     <article className="repo">
@@ -421,6 +485,52 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
           {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
             ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
             : <div className="list-note">No active PRs.</div>}
+        </RepoSection>
+        <RepoSection title="Deployment">
+          <div className="queued-prd">
+            <div className="item-head">
+              <div>
+                <div className="pill">{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deploy status unavailable'}</div>
+                <div className="queue-title">
+                  {deployment
+                    ? `${deployment.sourceBranch || 'dev'} -> ${deployment.targetBranch || 'main'}`
+                    : 'Deployment status'}
+                </div>
+              </div>
+            </div>
+            <div className="queue-detail">
+              {deployment && deployment.detail ? deployment.detail : 'No deployment status snapshot yet.'}
+            </div>
+            {repo.deployJob ? (
+              <div className="queue-detail" style={{ marginTop: '8px' }}>
+                Latest deploy job: {repo.deployJob.statusLabel || repo.deployJob.status || 'queued'}
+                {repo.deployJob.detail ? ` | ${repo.deployJob.detail}` : ''}
+              </div>
+            ) : null}
+            <div className="repo-actions" style={{ marginTop: '12px' }}>
+              {showDeployButton ? (
+                <button
+                  type="button"
+                  className="primary"
+                  data-action="deploy"
+                  data-repo-id={repo.repoId || ''}
+                  disabled={deployJobPending || deployingRepoIds.has(String(repo.repoId || ''))}
+                >
+                  {deployingRepoIds.has(String(repo.repoId || '')) ? 'Queueing deploy...' : deployButtonLabel}
+                </button>
+              ) : null}
+              {repo.deploymentUrl ? (
+                <a
+                  className="action-link"
+                  href={repo.deploymentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {repo.deploymentLabel || 'Deployment site'}
+                </a>
+              ) : null}
+            </div>
+          </div>
         </RepoSection>
       </div>
     </article>

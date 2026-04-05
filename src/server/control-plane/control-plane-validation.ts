@@ -46,6 +46,8 @@ function normalizeRepoRecord(repo: ControlPlaneRepoRecord | Record<string, unkno
     label: String(repo.label || id).trim(),
     description: String(repo.description || '').trim() || undefined,
     default: repo.default === true,
+    deploymentUrl: String(repo.deploymentUrl || '').trim() || undefined,
+    deploymentLabel: String(repo.deploymentLabel || '').trim() || undefined,
   };
 }
 

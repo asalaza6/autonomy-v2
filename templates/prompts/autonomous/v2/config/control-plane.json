@@ -5,7 +5,9 @@
       "id": "default",
       "label": "Current workspace",
       "description": "Allowed PRD target for the control plane.",
-      "default": true
+      "default": true,
+      "deploymentUrl": "https://example.com",
+      "deploymentLabel": "Production site"
     }
   ]
 }
