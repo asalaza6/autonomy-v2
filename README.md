@@ -90,6 +90,22 @@ npx autonomy-v2 prd:add --root /path/to/consumer-repo --id <id> --title <title> 
 npx autonomy-v2-server serve --root /path/to/consumer-repo
 ```
 
+## Happy-path consumer repo setup
+
+For a brand-new consumer repo, the functional happy path is:
+
+1. Install `@asalaza6/autonomy-v2` in the consumer repo.
+2. Run `npx autonomy-v2 init --root .` to scaffold prompts, queues, specs, and runtime bootstrap files.
+3. Add repo-level scripts that wrap `npx autonomy-v2`, `npx autonomy-v2-server`, and `npx autonomy-v2-control`.
+4. Commit the tracked `prompts/autonomous/v2/` scaffold into the consumer repo.
+5. Add `.npmrc` when the package is installed from GitHub Packages.
+6. Add `.env.autonomy` with `AUTONOMY_INITIALIZED=1`, `GITHUB_TOKEN`, and `AUTONOMY_CONTROL_PLANE_SERVER_URL`.
+7. Add Heroku control-plane wiring in the consumer repo with a `Procfile`, a launcher script, and `APP_ROLE=control-plane`.
+8. Deploy the consumer repo to a Heroku control-plane app running `npx --no-install autonomy-v2-control serve`.
+9. Run the local bridge with `npx autonomy-v2-control bridge`.
+10. Run the local scheduler with `npx autonomy-v2-server serve --root .`.
+11. Submit PRDs in the hosted control plane and let the bridge import them into the local repo.
+
 ## GitHub auth setup
 
 Create a GitHub token with repository access and store it in your environment:
