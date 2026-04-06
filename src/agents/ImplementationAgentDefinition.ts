@@ -334,7 +334,23 @@ class ImplementationAgentDefinition extends AgentDefinition {
     const commitMessage = context.scm.buildCommitMessage
       ? context.scm.buildCommitMessage(context.agent.id, task, completedLaneTasks.length > 0 || Boolean(existingPr))
       : `auto(${context.agent.id}): draft ${task.id}`;
-    context.scm.runGit?.(worktreePath, ['add', '--all', '--', ...filesToCommit]);
+    context.scm.runGit?.(worktreePath, ['add', '.']);
+    if (!context.scm.hasStagedGitChanges?.(worktreePath)) {
+      context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'commit-skip'), {
+        taskId: task.id,
+        branch,
+        reason: 'no staged changes after git add .',
+        changedFiles: filesToCommit,
+      });
+      return {
+        ok: true,
+        status: 'noop',
+        taskId: task.id,
+        branch,
+        worktreePath,
+        reason: 'no_staged_changes',
+      };
+    }
     context.scm.runGit?.(worktreePath, ['commit', '-m', commitMessage]);
     const commitSha = context.scm.readGit ? context.scm.readGit(worktreePath, ['rev-parse', 'HEAD']) : '';
     const queueCommitUpdate = context.queueStore.recordImplementationTaskCommitSha

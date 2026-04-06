@@ -96,6 +96,7 @@ function createImplementationRunnerExecutionContext(params: AnyRecord, deps: Any
       runGit: deps.runGit,
       readGit: deps.readGit,
       tryPushBranch: deps.tryPushBranch,
+      hasStagedGitChanges: deps.hasStagedGitChanges,
     },
     reviewClient: {
       hasGithubAuth: deps.hasGithubAuth,
