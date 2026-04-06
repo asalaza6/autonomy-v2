@@ -8,3 +8,5 @@ docs/export-graph.grid.json
 docs/export-graph.app.js.map
 docs/export-graph.app.js
 .tooling/
+.env.publish
+.env.publish.local

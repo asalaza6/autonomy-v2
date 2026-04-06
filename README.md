@@ -128,6 +128,23 @@ Place in one of:
 - `.env.local`
 - `.env`
 
+## npm publish auth setup
+
+To publish this package without storing a token in the repo, create a local publish env file:
+
+```bash
+cp .env.publish.example .env.publish
+```
+
+Then set your npm token in `.env.publish`:
+
+```bash
+NPM_TOKEN=npm_...
+```
+
+The release scripts load `.env.publish.local` first, then `.env.publish`, and use that token for `npm publish`.
+Both files are gitignored.
+
 ## Compatibility with current repo setup
 
 - Root scripts in `package.json` already forward into this package:
