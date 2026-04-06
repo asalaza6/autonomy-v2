@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
 const mode = process.argv[2];
 const cwd = process.cwd();
 const envFiles = ['.env.publish.local', '.env.publish'];
+let tempDir;
 
 function parseEnvFile(content) {
   const values = {};
@@ -62,9 +64,24 @@ function loadPublishEnv() {
 }
 
 function runNpm(args) {
+  const env = { ...process.env };
+
+  if (process.env.NPM_TOKEN) {
+    tempDir ??= mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-npmrc-'));
+    const userConfigPath = path.join(tempDir, '.npmrc');
+    writeFileSync(
+      userConfigPath,
+      [
+        'registry=https://registry.npmjs.org/',
+        `//registry.npmjs.org/:_authToken=${process.env.NPM_TOKEN}`
+      ].join('\n')
+    );
+    env.NPM_CONFIG_USERCONFIG = userConfigPath;
+  }
+
   execFileSync('npm', args, {
     cwd,
-    env: process.env,
+    env,
     stdio: 'inherit'
   });
 }
@@ -75,14 +92,20 @@ if (!['patch', 'minor', 'major', 'tag'].includes(mode)) {
 }
 
 loadPublishEnv();
-runNpm(['run', 'check:publish']);
-runNpm(['run', 'smoke']);
+try {
+  runNpm(['run', 'check:publish']);
+  runNpm(['run', 'smoke']);
 
-if (mode === 'tag') {
-  const tag = process.env.npm_config_tag || 'latest';
-  runNpm(['publish', '--access', 'public', '--tag', tag]);
-  process.exit(0);
+  if (mode === 'tag') {
+    const tag = process.env.npm_config_tag || 'latest';
+    runNpm(['publish', '--access', 'public', '--tag', tag]);
+    process.exit(0);
+  }
+
+  runNpm(['version', mode]);
+  runNpm(['publish', '--access', 'public']);
+} finally {
+  if (tempDir) {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
 }
-
-runNpm(['version', mode]);
-runNpm(['publish', '--access', 'public']);

@@ -11,6 +11,7 @@ try {
     ['whoami', '--registry=https://registry.npmjs.org/'],
     {
       encoding: 'utf8',
+      env: process.env,
       stdio: ['ignore', 'pipe', 'pipe']
     }
   ).trim();
@@ -33,7 +34,7 @@ try {
   fail(
     [
       'npm publish preflight failed: this shell is not authenticated to npmjs.org.',
-      'Run `npm login` or replace the token in ~/.npmrc with a valid npm access token, then retry.',
+      'Set `NPM_TOKEN` in `.env.publish.local` or `.env.publish`, or run `npm login`, then retry.',
       details ? `npm said: ${details}` : ''
     ]
       .filter(Boolean)

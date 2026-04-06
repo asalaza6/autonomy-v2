@@ -142,7 +142,7 @@ Then set your npm token in `.env.publish`:
 NPM_TOKEN=npm_...
 ```
 
-The release scripts load `.env.publish.local` first, then `.env.publish`, and use that token for `npm publish`.
+The release scripts load `.env.publish.local` first, then `.env.publish`, generate a temporary npm config from `NPM_TOKEN`, and use that token for `npm publish`.
 Both files are gitignored.
 
 ## Compatibility with current repo setup
