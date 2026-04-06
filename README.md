@@ -145,6 +145,10 @@ NPM_TOKEN=npm_...
 The release scripts load `.env.publish.local` first, then `.env.publish`, generate a temporary npm config from `NPM_TOKEN`, and use that token for `npm publish`.
 Both files are gitignored.
 
+If `NPM_TOKEN` is a GitHub token such as `ghp_...` or `github_pat_...`, publish defaults to GitHub Packages at `https://npm.pkg.github.com/`.
+If `NPM_TOKEN` is an npm token such as `npm_...`, publish defaults to `https://registry.npmjs.org/`.
+You can override that with `NPM_PUBLISH_REGISTRY=...` in the same env file.
+
 ## Compatibility with current repo setup
 
 - Root scripts in `package.json` already forward into this package:
