@@ -99,6 +99,7 @@ type DashboardSummary = {
   repoCount?: number;
   activePrdCount?: number;
   queuedPrdCount?: number;
+  deployableRepoCount?: number;
   pendingJobCount?: number;
   runningAgentCount?: number;
   activePullRequestCount?: number;
@@ -310,9 +311,11 @@ function renderDashboard(dashboard: DashboardSummary) {
     return;
   }
 
+  const deployableRepoCount = resolveDeployableRepoCount(dashboard);
+  const deployableRepoLabel = `${deployableRepoCount} deployable repo${deployableRepoCount === 1 ? '' : 's'}`;
   dashboardMetricsEl.innerHTML = renderToHtml(<MetricGrid dashboard={dashboard} />);
   dashboardSummaryNoteEl.textContent = dashboard.repoCount && dashboard.repoCount > 0
-    ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} online`
+    ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} online · ${deployableRepoLabel}`
     : 'No repo snapshots yet';
   dashboardReposEl.innerHTML = renderToHtml(<RepoStack repos={dashboard.repos || []} />);
   dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
@@ -381,10 +384,12 @@ function RepoOptions({ repos }: { repos: RepoRecord[] }) {
 }
 
 function MetricGrid({ dashboard }: { dashboard: DashboardSummary }) {
+  const deployableRepoCount = resolveDeployableRepoCount(dashboard);
   const metrics = [
     ['Repos', dashboard.repoCount || 0],
     ['Active PRDs', dashboard.activePrdCount || 0],
     ['Queued PRDs', dashboard.queuedPrdCount || 0],
+    ['Deployable repos', deployableRepoCount],
     ['Bridge jobs', dashboard.pendingJobCount || 0],
     ['Agents running', dashboard.runningAgentCount || 0],
     ['Active PRs', dashboard.activePullRequestCount || 0],
@@ -433,6 +438,17 @@ function statusClass(status?: string) {
   return String(status || 'offline');
 }
 
+function resolveDeployableRepoCount(dashboard: DashboardSummary) {
+  if (typeof dashboard.deployableRepoCount === 'number') {
+    return dashboard.deployableRepoCount;
+  }
+  return countDeployableRepos(dashboard.repos || []);
+}
+
+function countDeployableRepos(repos: RepoSummary[]) {
+  return repos.filter((repo) => Boolean(repo && repo.deployment && (repo.deployment.hasChanges || repo.deployment.deployable))).length;
+}
+
 function RepoStack({ repos }: { repos: RepoSummary[] }) {
   if (!repos.length) {
     return <div className="muted">No repository snapshots yet.</div>;
@@ -453,6 +469,7 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
   const deployJobPending = ['queued', 'claimed', 'running'].includes(String(repo.deployJob && repo.deployJob.status || ''));
   const showDeployButton = Boolean(repo.repoId && deployment && deployment.hasChanges);
   const deployButtonLabel = deployJobPending ? 'Deploy queued' : `Deploy ${deployment && deployment.sourceBranch ? deployment.sourceBranch : 'dev'} to ${deployment && deployment.targetBranch ? deployment.targetBranch : 'main'}`;
+  const deploymentStatus = deployment ? deployment.status : null;
 
   return (
     <article className="repo">
@@ -490,7 +507,10 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
           <div className="queued-prd">
             <div className="item-head">
               <div>
-                <div className="pill">{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deploy status unavailable'}</div>
+                <div className={`status-chip ${statusClass(deploymentStatus)}`}>
+                  <span className="status-dot" />
+                  <span>{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deploy status unavailable'}</span>
+                </div>
                 <div className="queue-title">
                   {deployment
                     ? `${deployment.sourceBranch || 'dev'} -> ${deployment.targetBranch || 'main'}`

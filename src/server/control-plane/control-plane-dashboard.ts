@@ -1,4 +1,5 @@
 import type { AnyRecord, ControlPlaneConfig, ControlPlaneRepoRecord, ControlPlaneState } from '../../types.js';
+import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import {
   buildControlPlaneHeartbeatSummary,
@@ -12,6 +13,7 @@ interface ControlPlaneDashboard {
   queuedPrdCount: number;
   runningAgentCount: number;
   activePullRequestCount: number;
+  deployableRepoCount: number;
   pendingJobCount: number;
   overallHeartbeatStatus: string;
   serverHeartbeat: AnyRecord;
@@ -22,6 +24,7 @@ interface ControlPlaneDashboard {
 
 function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): ControlPlaneDashboard {
   const config = loadControlPlaneConfig(rootDir);
+  const liveDeploymentSnapshot = readLiveDeploymentSnapshot(rootDir);
   const repoConfigById = new Map(
     (config.repos || []).map((repo) => [repo.id, repo] as const)
   );
@@ -40,7 +43,13 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
       }
       return String(left).localeCompare(String(right));
     })
-    .map((repoId) => buildRepoDashboard(repoId, repoConfigById.get(repoId) || null, state.repoStatuses?.[repoId] || null, jobs));
+    .map((repoId) => buildRepoDashboard(
+      repoId,
+      repoConfigById.get(repoId) || null,
+      state.repoStatuses?.[repoId] || null,
+      jobs,
+      liveDeploymentSnapshot,
+    ));
 
   const summarizedJobs = jobs
     .map((job) => summarizeControlPlaneJob(job, labelForRepo(job.repoId, repoConfigById)));
@@ -53,6 +62,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     return total + agents.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
   }, 0);
   const activePullRequestCount = repos.reduce((total, repo) => total + (repo.pullRequestStatuses || []).length, 0);
+  const deployableRepoCount = repos.filter((repo) => Boolean(repo.deployment && (repo.deployment.hasChanges || repo.deployment.deployable))).length;
   const pendingJobCount = summarizedJobs.filter((job) => ['queued', 'claimed', 'running'].includes(String(job.status || ''))).length;
 
   return {
@@ -61,6 +71,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     queuedPrdCount,
     runningAgentCount,
     activePullRequestCount,
+    deployableRepoCount,
     pendingJobCount,
     overallHeartbeatStatus: heartbeats.overallStatus,
     serverHeartbeat: heartbeats.server,
@@ -74,12 +85,13 @@ function buildRepoDashboard(
   repoId: string,
   repoConfig: ControlPlaneRepoRecord | null,
   repoStatus: AnyRecord | null,
-  jobs: AnyRecord[]
+  jobs: AnyRecord[],
+  liveDeploymentSnapshot: AnyRecord | null
 ) {
   const label = String(repoConfig?.label || repoId || 'Repository');
   const description = String(repoConfig?.description || '');
   const summary = repoStatus
-    ? summarizeRepoStatus(repoStatus, label)
+    ? summarizeRepoStatus(mergeDeploymentSnapshot(repoStatus, liveDeploymentSnapshot), label)
     : {
         repoId,
         label,
@@ -110,6 +122,32 @@ function buildRepoDashboard(
     deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
     deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
   };
+}
+
+function mergeDeploymentSnapshot(repoStatus: AnyRecord | null, liveDeploymentSnapshot: AnyRecord | null) {
+  if (!repoStatus || !liveDeploymentSnapshot) {
+    return repoStatus;
+  }
+  const snapshot = repoStatus.snapshot || {};
+  if (snapshot.deployment) {
+    return repoStatus;
+  }
+  return {
+    ...repoStatus,
+    snapshot: {
+      ...snapshot,
+      deployment: liveDeploymentSnapshot,
+    },
+  };
+}
+
+function readLiveDeploymentSnapshot(rootDir: string) {
+  try {
+    const snapshot = buildStatusSnapshot(rootDir);
+    return snapshot && snapshot.deployment ? snapshot.deployment : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 function labelForRepo(repoId: string, repoConfigById: Map<string, ControlPlaneRepoRecord>) {

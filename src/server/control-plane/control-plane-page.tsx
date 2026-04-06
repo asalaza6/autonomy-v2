@@ -102,6 +102,27 @@ const styles = `
     box-shadow: 0 0 0 5px rgba(141, 58, 67, 0.1);
   }
 
+  .status-chip.aligned .status-dot {
+    background: linear-gradient(135deg, #1f7a4f, #4fb37d);
+    box-shadow: 0 0 0 5px rgba(31, 122, 79, 0.08);
+  }
+
+  .status-chip.pending .status-dot {
+    background: linear-gradient(135deg, #b36a18, #e2a34c);
+    box-shadow: 0 0 0 5px rgba(179, 106, 24, 0.1);
+  }
+
+  .status-chip.diverged .status-dot,
+  .status-chip.invalid .status-dot {
+    background: linear-gradient(135deg, #8d3a43, #c86b74);
+    box-shadow: 0 0 0 5px rgba(141, 58, 67, 0.1);
+  }
+
+  .status-chip.unknown .status-dot {
+    background: linear-gradient(135deg, #6f657c, #968ba5);
+    box-shadow: 0 0 0 5px rgba(111, 101, 124, 0.1);
+  }
+
   .status-dot {
     width: 10px;
     height: 10px;
@@ -173,7 +194,7 @@ const styles = `
 
   .metric-grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 12px;
     margin-bottom: 18px;
   }

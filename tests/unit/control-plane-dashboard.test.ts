@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
-import { createFixtureRepo, initAutonomyRepo } from '../smoke/package-smoke.helpers.js';
+import { createFixtureRepo, git, initAutonomyRepo } from '../smoke/package-smoke.helpers.js';
 
 test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and jobs in plain language', () => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-dashboard-');
@@ -122,6 +122,7 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.equal(dashboard.repoCount, 1);
   assert.equal(dashboard.activePrdCount, 1);
   assert.equal(dashboard.queuedPrdCount, 1);
+  assert.equal(dashboard.deployableRepoCount, 1);
   assert.equal(dashboard.pendingJobCount, 1);
   assert.equal(dashboard.overallHeartbeatStatus, 'stale');
   assert.equal(dashboard.serverHeartbeat.status, 'online');
@@ -137,4 +138,50 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
   assert.match(dashboard.jobs[0].detail, /created/);
+});
+
+test('control plane dashboard backfills deployment status when the stored snapshot is stale', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-dashboard-backfill-');
+  initAutonomyRepo(repoDir);
+
+  git(repoDir, ['checkout', 'dev']);
+  fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'deploy.js'), 'export const deployed = true;\n', 'utf8');
+  git(repoDir, ['add', 'src/apps/fixture/deploy.js']);
+  git(repoDir, ['commit', '-m', 'advance dev']);
+
+  fs.mkdirSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json'), JSON.stringify({
+    schemaVersion: 1,
+    repos: [
+      {
+        id: 'default',
+        label: 'Current workspace',
+        default: true,
+        deploymentUrl: 'https://deploy.example.com',
+        deploymentLabel: 'Production site',
+      },
+    ],
+  }, null, 2));
+
+  const dashboard = buildControlPlaneDashboard(repoDir, {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      default: {
+        repoId: 'default',
+        updatedAt: new Date(Date.now() - 20000).toISOString(),
+        snapshot: {
+          prds: { prds: [] },
+          agentStatuses: [],
+          pullRequestStatuses: [],
+          branchLockCount: 0,
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.deployableRepoCount, 1);
+  assert.equal(dashboard.repos[0].deployment.statusLabel, 'Deploy available');
+  assert.match(dashboard.repos[0].overview, /Deploy: Deploy available/);
 });
