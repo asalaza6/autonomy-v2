@@ -87,6 +87,22 @@ function fail(message) {
   process.exit(1);
 }
 
+function parseHeaderBlock(headers) {
+  const values = {};
+  for (const line of headers.split(/\r?\n/)) {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const key = line.slice(0, separatorIndex).trim().toLowerCase();
+    const value = line.slice(separatorIndex + 1).trim();
+    values[key] = value;
+  }
+
+  return values;
+}
+
 const loadedEnvFiles = loadPublishEnv();
 const { env, cleanup, publishConfig } = buildNpmEnv();
 
@@ -110,6 +126,36 @@ try {
   if (loadedEnvFiles.length) {
     console.log(`Loaded publish env from ${loadedEnvFiles.join(', ')}.`);
   }
+
+  if (publishConfig.isGitHubPackages && env.NPM_TOKEN) {
+    const scopeHeaders = execFileSync(
+      'curl',
+      ['-sSI', '-H', `Authorization: token ${env.NPM_TOKEN}`, 'https://api.github.com/user'],
+      {
+        encoding: 'utf8',
+        env,
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    );
+    const headerMap = parseHeaderBlock(scopeHeaders);
+    const grantedScopes = (headerMap['x-oauth-scopes'] ?? '')
+      .split(',')
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+
+    if (!grantedScopes.includes('write:packages')) {
+      fail(
+        [
+          'npm publish preflight failed: the GitHub token can authenticate, but it cannot publish packages.',
+          `Resolved registry: ${publishConfig.registry}`,
+          `Granted scopes: ${grantedScopes.join(', ') || '(none)'}`,
+          'This token needs `write:packages` to publish to GitHub Packages.',
+          'Create or update a classic GitHub personal access token with at least `write:packages` and replace `NPM_TOKEN` in `.env.publish.local`.'
+        ].join('\n')
+      );
+    }
+  }
+
   console.log(`npm publish preflight passed for "${username}" via ${publishConfig.registry}.`);
 } catch (error) {
   const details =
