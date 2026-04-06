@@ -98,6 +98,7 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
               status: 'open',
               action: 'waiting for reviewer',
               branch: 'dev',
+              url: 'https://github.com/asalaza6/autonomy-v2/pull/7',
               updatedAt: '2026-04-01T12:05:00.000Z',
             },
           ],
@@ -133,6 +134,7 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
   assert.equal(dashboard.repos[0].freshnessStatus, 'stale');
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);
+  assert.equal(dashboard.repos[0].pullRequestStatuses[0].url, 'https://github.com/asalaza6/autonomy-v2/pull/7');
   assert.equal(dashboard.repos[0].deployment.statusLabel, 'Deploy available');
   assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');

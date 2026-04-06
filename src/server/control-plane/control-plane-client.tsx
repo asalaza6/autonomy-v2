@@ -35,6 +35,7 @@ type PullRequestSummary = {
   status?: string;
   action?: string;
   branch?: string;
+  url?: string | null;
   updatedAt?: string | null;
 };
 
@@ -605,13 +606,25 @@ function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
   const details = [pullRequest.statusLabel || pullRequest.status, pullRequest.action, pullRequest.branch ? `branch ${pullRequest.branch}` : '']
     .filter(Boolean)
     .join(' | ');
+  const title = pullRequest.title || pullRequest.prId || 'Untitled PR';
 
   return (
     <div className="pull-request">
       <div className="item-head">
         <div>
           <div className="pill">Active PR</div>
-          <div className="pull-request-title">{pullRequest.title || pullRequest.prId || 'Untitled PR'}</div>
+          {pullRequest.url ? (
+            <a
+              className="pull-request-title pull-request-link"
+              href={pullRequest.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {title}
+            </a>
+          ) : (
+            <div className="pull-request-title">{title}</div>
+          )}
         </div>
         {pullRequest.updatedAt ? <span className="pill">{formatTimestamp(pullRequest.updatedAt)}</span> : null}
       </div>

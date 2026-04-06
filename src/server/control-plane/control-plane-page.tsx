@@ -282,6 +282,15 @@ const styles = `
 
   .queue-title, .agent-title, .pull-request-title { font-weight: 650; }
   .queue-detail, .agent-detail, .pull-request-detail, .job-detail { color: var(--muted); line-height: 1.45; }
+  .pull-request-link {
+    color: var(--text);
+    text-decoration: none;
+    display: inline-block;
+  }
+  .pull-request-link:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
 
   .grid {
     display: grid;
