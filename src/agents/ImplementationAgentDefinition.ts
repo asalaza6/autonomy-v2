@@ -336,6 +336,37 @@ class ImplementationAgentDefinition extends AgentDefinition {
       : `auto(${context.agent.id}): draft ${task.id}`;
     context.scm.runGit?.(worktreePath, ['add', '.']);
     if (!context.scm.hasStagedGitChanges?.(worktreePath)) {
+      const completedTaskIds = context.branchLockStore.recordLaneTaskCompletion
+        ? context.branchLockStore.recordLaneTaskCompletion(task, branch, worktreePath, scopeResult).map((candidate) => candidate.id)
+        : [];
+      const shouldRecordPr = Boolean(existingPr) || remainingLaneTasks.length === 0;
+      if (shouldRecordPr) {
+        context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'record-pr'), {
+          taskId: task.id,
+          branch,
+          existingPrId: existingPr ? existingPr.id : null,
+          completedTaskIds,
+          publish: false,
+          reason: 'no_staged_changes',
+        });
+      }
+      context.prStore.finalizeTaskRun?.({
+        rootDir: context.rootDir,
+        task,
+        branch,
+        completedTaskIds,
+        publish: false,
+        shouldRecordPr,
+      });
+      context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'done'), {
+        taskId: task.id,
+        changedFiles: changedFiles.length,
+        pushed: false,
+        published: false,
+        prRecorded: shouldRecordPr,
+        completionMode,
+        reason: 'no_staged_changes',
+      });
       context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'commit-skip'), {
         taskId: task.id,
         branch,
@@ -348,6 +379,8 @@ class ImplementationAgentDefinition extends AgentDefinition {
         taskId: task.id,
         branch,
         worktreePath,
+        completedTaskIds,
+        prRecorded: shouldRecordPr,
         reason: 'no_staged_changes',
       };
     }

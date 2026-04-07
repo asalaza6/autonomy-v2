@@ -76,14 +76,17 @@ function readImplementationQueueFromWorktree(config, agentId, worktreePath) {
 }
 
 function readImplementationQueueSnapshot(rootDir: string, config: AutonomyConfig, agentId: string, options: AnyRecord = {}) {
+  if (options.worktreePath && fs.existsSync(options.worktreePath)) {
+    const queueFromWorktree = readImplementationQueueFromWorktree(config, agentId, options.worktreePath);
+    if (queueFromWorktree) {
+      return queueFromWorktree;
+    }
+  }
   const queueFromBranch = options.branch && gitRefExists(rootDir, options.branch)
     ? readImplementationQueueFromGitRef(rootDir, config, agentId, options.branch, null)
     : null;
   if (queueFromBranch) {
     return queueFromBranch;
-  }
-  if (options.worktreePath && fs.existsSync(options.worktreePath)) {
-    return readImplementationQueueFromWorktree(config, agentId, options.worktreePath);
   }
   return null;
 }
