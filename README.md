@@ -90,6 +90,54 @@ npx autonomy-v2 prd:add --root /path/to/consumer-repo --id <id> --title <title> 
 npx autonomy-v2-server serve --root /path/to/consumer-repo
 ```
 
+## Local consumer debugging
+
+To make sibling apps use this checkout's built package instead of the published npm release:
+
+1. Build this repo once, or keep it running in watch mode while you debug:
+
+```bash
+npm run build
+npm run build:watch
+```
+
+2. In each consumer repo, link the sibling package:
+
+```bash
+cd ../moving-game && npm run autonomy:v2:link-local
+cd ../jsvpoolsinc && npm run autonomy:v2:link-local
+```
+
+3. Verify where the package resolves from:
+
+```bash
+npm run autonomy:v2:which
+```
+
+If the printed path points into `../autonomy-v2`, that consumer is running this repo's current `dist/`.
+
+To switch a consumer back to the published package, run `npm run autonomy:v2:unlink-local` in that repo.
+
+### Local control-plane dev mode
+
+For live control-plane debugging against this checkout:
+
+1. In this repo, keep the package rebuilding:
+
+```bash
+npm run build:watch
+```
+
+2. In the consumer repo, run the control plane in watch mode:
+
+```bash
+cd ../moving-game && npm run autonomy:v2:control:dev
+cd ../jsvpoolsinc && npm run autonomy:v2:control:dev
+```
+
+That watch mode runs the sibling `../autonomy-v2/dist` control-plane entrypoint directly, so rebuilding this repo restarts the local control-plane server with your latest changes.
+In `--dev` mode, the browser UI also auto-reloads when the watched control-plane process restarts after a local rebuild.
+
 ## Happy-path consumer repo setup
 
 For a brand-new consumer repo, the functional happy path is:

@@ -27,6 +27,7 @@ import { validateDeploySubmission, validatePrdAddSubmission } from './control-pl
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
 const controlPlaneAssetCache = new Map<string, string>();
+const controlPlaneDevToken = new Date().toISOString();
 
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
@@ -62,6 +63,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
     throw new Error(`Unknown command "${command}". Use "serve" or "bridge".`);
   }
 
+  const devMode = options.dev === true || process.env.AUTONOMY_CONTROL_PLANE_DEV === '1';
   const port = Number(options.port || process.env.PORT || process.env.AUTONOMY_CONTROL_PLANE_PORT || '3333');
   const host = String(
     options.host ||
@@ -76,7 +78,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   const server = http.createServer(async (req, res) => {
     try {
-      await handleRequest(rootDir, req, res);
+      await handleRequest(rootDir, req, res, { devMode });
     } catch (error) {
       sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
     }
@@ -94,7 +96,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
   process.on('SIGTERM', shutdown);
 }
 
-async function handleRequest(rootDir: string, req: http.IncomingMessage, res: http.ServerResponse) {
+async function handleRequest(rootDir: string, req: http.IncomingMessage, res: http.ServerResponse, options: { devMode?: boolean } = {}) {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   applyCors(res, req.method || 'GET');
   if (req.method === 'OPTIONS') {
@@ -105,7 +107,18 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
 
   if (url.pathname === '/') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(buildControlPlaneHtml());
+    res.end(buildControlPlaneHtml({
+      devMode: options.devMode === true,
+      devToken: controlPlaneDevToken,
+    }));
+    return;
+  }
+
+  if (url.pathname === '/api/dev-meta' && req.method === 'GET') {
+    sendJson(res, 200, {
+      devMode: options.devMode === true,
+      devToken: controlPlaneDevToken,
+    });
     return;
   }
 
@@ -293,6 +306,7 @@ Options:
   --root <dir>       Control plane workspace root (default: cwd)
   --port <port>      Server port for serve (default: PORT or 3333)
   --host <host>      Server host for serve (default: HOST, 0.0.0.0 on Heroku, otherwise 127.0.0.1)
+  --dev              Enable local UI dev mode with browser auto-reload after watch rebuilds
   --server-url <url> Bridge API base URL (default: AUTONOMY_CONTROL_PLANE_SERVER_URL or http://127.0.0.1:3333)
   --repo-map <map>   Optional repo allowlist map in the form repoId=/local/path,...
   --poll-ms <ms>     Bridge poll interval in milliseconds (default: 2000)

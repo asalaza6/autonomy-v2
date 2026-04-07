@@ -89,9 +89,31 @@ function hasCompletedFollowupSinceLastReview(existingTask, linkedRuntimeTasks = 
     .some((task) => getTaskCompletionTimestamp(task) > reviewedAt);
 }
 
+function prShowsCompletedReviewFollowupSinceLastReview(pr, existingTask) {
+  const reviewedAt = Date.parse(String(existingTask && existingTask.reviewedAt || ''));
+  if (!Number.isFinite(reviewedAt) || reviewedAt <= 0) {
+    return false;
+  }
+  if (!reviewDecisionIsChangesRequested(findLatestReview(pr))) {
+    return false;
+  }
+  const prUpdatedAt = Date.parse(String(pr && pr.updatedAt || ''));
+  if (!Number.isFinite(prUpdatedAt) || prUpdatedAt <= reviewedAt) {
+    return false;
+  }
+  const currentTaskId = String(pr && pr.taskId || '').trim();
+  if (!currentTaskId || inferLinkedTaskType(currentTaskId) !== 'review_followup') {
+    return false;
+  }
+  const pendingTaskIds = new Set(Array.isArray(pr && pr.pendingTaskIds) ? pr.pendingTaskIds : []);
+  const completedTaskIds = new Set(Array.isArray(pr && pr.completedTaskIds) ? pr.completedTaskIds : []);
+  return completedTaskIds.has(currentTaskId) && !pendingTaskIds.has(currentTaskId);
+}
+
 function reviewerNeedsRefresh(pr, existingTask, linkedRuntimeTasks = []) {
   return reviewedCommitCountIsStale(pr, existingTask)
-    || hasCompletedFollowupSinceLastReview(existingTask, linkedRuntimeTasks);
+    || hasCompletedFollowupSinceLastReview(existingTask, linkedRuntimeTasks)
+    || prShowsCompletedReviewFollowupSinceLastReview(pr, existingTask);
 }
 
 function reviewerSourceTaskIsStale(pr, existingTask) {

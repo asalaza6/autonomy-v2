@@ -5,7 +5,7 @@ import { execFileSync } from 'child_process';
 import type { AnyRecord } from '../autonomy-types.js';
 import { buildMergeCommitTitle, ensureDir, slugify } from './shared-core.js';
 import { extractExecError, gitRefExists, resolveBaseRef, runGitQuiet, runGitRead, runGitWorktreeAdd } from './shared-repo.js';
-import { gitAuthArgs, gitRemoteExists, gitWorkingTreeClean } from '../../sync/git-shared.js';
+import { gitAuthArgs, gitIsAncestor, gitRemoteExists, gitWorkingTreeClean } from '../../sync/git-shared.js';
 
 function resolveGithubRepo(rootDir) {
   const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
@@ -163,24 +163,20 @@ function performLocalDeploy(rootDir, config) {
       message: 'Working tree must be clean before deploy.',
     };
   }
-
-  const mergeRunDir = path.join(rootDir, '.autonomy', 'deploy-runs');
-  const mergePath = path.join(mergeRunDir, slugify(`${sourceBranch}-to-${targetBranch}`));
-  const tempBranch = `deploy-run-${slugify(targetBranch)}-${slugify(sourceBranch)}`;
   const rootBranch = getCheckedOutBranch(rootDir);
   const syncRootWorktree = rootBranch === targetBranch && isTrackedWorktreeClean(rootDir);
-  ensureDir(mergeRunDir);
-  cleanupWorktree(rootDir, mergePath);
-  deleteLocalBranch(rootDir, tempBranch);
 
   try {
-    const baseRef = gitRefExists(rootDir, targetBranch) ? targetBranch : resolveBaseRef(rootDir, targetBranch);
+    const targetRef = gitRefExists(rootDir, targetBranch) ? targetBranch : resolveBaseRef(rootDir, targetBranch);
     const sourceRef = gitRefExists(rootDir, sourceBranch) ? sourceBranch : resolveBaseRef(rootDir, sourceBranch);
-    runGitWorktreeAdd(rootDir, ['--detach', mergePath, baseRef], mergePath, { quiet: true });
-    runGitQuiet(mergePath, ['switch', '-c', tempBranch]);
-    runGitQuiet(mergePath, ['merge', '--no-ff', '--no-edit', sourceRef]);
+    if (!gitIsAncestor(rootDir, targetRef, sourceRef)) {
+      return {
+        ok: false,
+        message: `Cannot fast-forward deploy ${sourceBranch} to ${targetBranch}: ${targetBranch} has commits that are not in ${sourceBranch}.`,
+      };
+    }
 
-    const sha = runGitRead(mergePath, ['rev-parse', 'HEAD']).trim();
+    const sha = runGitRead(rootDir, ['rev-parse', sourceRef]).trim();
     runGitQuiet(rootDir, ['update-ref', `refs/heads/${targetBranch}`, sha]);
     if (syncRootWorktree) {
       syncCheckedOutBranchWorktree(rootDir);
@@ -198,9 +194,6 @@ function performLocalDeploy(rootDir, config) {
         throw new Error(`Failed to push deploy to origin/${targetBranch}: ${pushMessage}`);
       }
     }
-
-    cleanupWorktree(rootDir, mergePath);
-    deleteLocalBranch(rootDir, tempBranch);
     return {
       ok: true,
       sha,
@@ -210,8 +203,6 @@ function performLocalDeploy(rootDir, config) {
       pushMessage,
     };
   } catch (error) {
-    cleanupWorktree(rootDir, mergePath);
-    deleteLocalBranch(rootDir, tempBranch);
     return { ok: false, message: extractExecError(error) };
   }
 }

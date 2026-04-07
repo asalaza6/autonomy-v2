@@ -103,6 +103,10 @@ function findBranchLockByLane(branchLocks, agentId, laneKey) {
   }) || null;
 }
 
+function findTaskById(queue, taskId) {
+  return listTasks(queue).find((candidate) => candidate && candidate.id === taskId) || null;
+}
+
 function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, fallbackQueue) {
   const locks = ((branchLocks && branchLocks.locks) || [])
     .filter((lock) => lock && lock.agentId === agent.id)
@@ -136,6 +140,7 @@ function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, 
       }
       return String(left.createdAt || '').localeCompare(String(right.createdAt || ''));
     });
+  const rootTasksBlockedByBranchCompletion = new Set<string>();
 
   for (const task of branchTasks) {
     const laneKey = buildTaskLaneKey(task);
@@ -155,7 +160,23 @@ function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, 
       branch,
       worktreePath: derivedWorktreePath,
     });
-    if (queue && listTasks(queue).some((candidate) => implementationTaskNeedsDispatch(candidate))) {
+    if (!queue) {
+      continue;
+    }
+    const matchingTask = findTaskById(queue, task.id);
+    if (matchingTask && implementationTaskNeedsDispatch(matchingTask)) {
+      return {
+        source: 'branch',
+        queue,
+        branch,
+        worktreePath: fs.existsSync(derivedWorktreePath) ? derivedWorktreePath : null,
+      };
+    }
+    if (matchingTask && !implementationTaskNeedsDispatch(matchingTask)) {
+      rootTasksBlockedByBranchCompletion.add(task.id);
+      continue;
+    }
+    if (listTasks(queue).some((candidate) => implementationTaskNeedsDispatch(candidate))) {
       return {
         source: 'branch',
         queue,
@@ -165,9 +186,15 @@ function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, 
     }
   }
 
+  const filteredRootQueue = filterCompletedImplementationTasks(fallbackQueue, branchLocks, agent.id);
+
   return {
     source: 'root',
-    queue: filterCompletedImplementationTasks(fallbackQueue, branchLocks, agent.id),
+    queue: {
+      ...filteredRootQueue,
+      tasks: listTasks(filteredRootQueue)
+        .filter((task) => !rootTasksBlockedByBranchCompletion.has(task.id)),
+    },
     branch: null,
     worktreePath: null,
   };

@@ -12,11 +12,14 @@ import {
   runNode,
 } from './package-smoke.helpers.js';
 
-test('deploy command merges dev into main and pushes the merge commit', () => {
+test('deploy command fast-forwards main to dev without creating a merge commit', () => {
   const repoDir = createFixtureRepo('autonomy-v2-deploy-');
   initAutonomyRepo(repoDir);
   git(repoDir, ['add', '.']);
   git(repoDir, ['commit', '-m', 'initialize autonomy']);
+  git(repoDir, ['checkout', 'dev']);
+  git(repoDir, ['merge', '--ff-only', 'main']);
+  git(repoDir, ['checkout', 'main']);
 
   const originDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-deploy-origin-'));
   git(originDir, ['init', '--bare']);
@@ -42,10 +45,11 @@ test('deploy command merges dev into main and pushes the merge commit', () => {
 
   const mainAfter = git(repoDir, ['rev-parse', 'main']);
   const remoteMainAfter = git(originDir, ['rev-parse', 'main']);
-  const mergeCommit = git(repoDir, ['rev-list', '--parents', '-n', '1', 'main']).split(/\s+/);
+  const mainParents = git(repoDir, ['rev-list', '--parents', '-n', '1', 'main']).split(/\s+/);
 
   assert.equal(mainAfter, remoteMainAfter);
-  assert.equal(mergeCommit.length, 3);
+  assert.equal(mainAfter, devBefore);
+  assert.equal(mainParents.length, 2);
   assert.match(output, /Deployed dev to main/);
   assert.match(output, /pushed to origin\/main/);
   assert.equal(git(repoDir, ['status', '--short']), '');

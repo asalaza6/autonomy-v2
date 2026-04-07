@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES } from '../../agents/role-catalog.js';
+import { hasStagedGitChanges } from '../commands/shared-repo.js';
 import { evaluateScope } from '../scope/scope-main.js';
 import { createImplementationRunnerExecutionContext } from './runner-agent-context.js';
 import { ensureDir, logRunnerEvent, summarizeText, uniqueStrings, useCodexStub } from './runner-shared.js';
@@ -31,6 +32,7 @@ const runnerDependencies = {
   getLaneTasks,
   getPrForLane,
   getTask,
+  hasStagedGitChanges,
   isPendingImplementationTask,
   listChangedFiles,
   loadState,

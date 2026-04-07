@@ -3,6 +3,13 @@
 
 import { Fragment, h, renderToHtml } from './control-plane-jsx-runtime/jsx-runtime.js';
 
+declare global {
+  interface Window {
+    __AUTONOMY_CONTROL_PLANE_DEV__?: boolean;
+    __AUTONOMY_CONTROL_PLANE_DEV_TOKEN__?: string;
+  }
+}
+
 type RepoRecord = {
   id: string;
   label: string;
@@ -139,6 +146,7 @@ const panels: Record<string, HTMLElement | null> = {
 
 let latestRepos: RepoRecord[] = [];
 let deployingRepoIds = new Set<string>();
+let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 
 function mountControlPlane() {
   if (
@@ -190,6 +198,9 @@ function mountControlPlane() {
   });
 
   window.setInterval(() => refresh().catch(() => {}), 5000);
+  if (window.__AUTONOMY_CONTROL_PLANE_DEV__ === true) {
+    window.setInterval(() => checkForUiReload().catch(() => {}), 1000);
+  }
 }
 
 async function handleSubmit(event: SubmitEvent) {
@@ -285,6 +296,21 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+async function checkForUiReload() {
+  const payload = await requestJson<{ devMode?: boolean; devToken?: string }>('/api/dev-meta');
+  if (payload.devMode !== true) {
+    return;
+  }
+  const nextToken = String(payload.devToken || '');
+  if (!devUiToken) {
+    devUiToken = nextToken;
+    return;
+  }
+  if (nextToken && nextToken !== devUiToken) {
+    window.location.reload();
+  }
 }
 
 function renderRepos(repos: RepoRecord[]) {

@@ -32,10 +32,12 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:watch": "tsc --watch --preserveWatchOutput",
     "check:publish": "node scripts/check-publish-config.js",
     "check:lines": "node scripts/check-line-count.js",
     "clean": "rm -rf dist",
     "autonomy:v2:control": "node dist/bin/autonomy-v2-control.js serve",
+    "autonomy:v2:control:dev": "AUTONOMY_CONTROL_PLANE_DEV=1 node --watch dist/bin/autonomy-v2-control.js serve --dev",
     "autonomy:v2:control:bridge": "node dist/bin/autonomy-v2-control.js bridge",
     "exports:mermaid": "node analyze-exports.mjs --format mermaid --layout TD --output docs/export-graph.mmd && open docs/export-graph.mmd",
     "exports:html": "node analyze-exports.mjs --format html --tree --layout TD --output docs/export-graph.html && open docs/export-graph.html",
