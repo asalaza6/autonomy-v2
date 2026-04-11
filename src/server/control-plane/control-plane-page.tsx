@@ -1,5 +1,10 @@
 import { h } from './control-plane-jsx-runtime/jsx-runtime.js';
 
+interface ControlPlanePageProps {
+  entrance: 'manager' | 'project';
+  repoId?: string;
+}
+
 const styles = `
   :root {
     color-scheme: light;
@@ -399,7 +404,18 @@ const styles = `
   }
 `;
 
-function ControlPlanePage() {
+function ControlPlanePage(props: ControlPlanePageProps) {
+  const entrance = props.entrance;
+  const repoId = String(props.repoId || '').trim();
+  const isManager = entrance === 'manager';
+  const shellTitle = isManager
+    ? 'Manager Control Plane'
+    : repoId
+      ? `${repoId} Control Plane`
+      : 'Repository Control Plane';
+  const shellLede = isManager
+    ? 'Browse all discovered repos, inspect health, and submit work from the single hosted control plane.'
+    : `Repository-scoped control plane for ${repoId || 'this repo'}. Dashboard, queue, and PRD submission stay pinned to this route.`;
   return (
     <html lang="en">
       <head>
@@ -409,13 +425,17 @@ function ControlPlanePage() {
         <title>Autonomy v2 Control Plane</title>
         <style dangerouslySetInnerHTML={{ __html: styles }} />
       </head>
-      <body className="control-plane-shell">
+      <body
+        className="control-plane-shell"
+        data-control-plane-entrance={entrance}
+        data-control-plane-repo-id={repoId}
+      >
         <main>
           <header className="masthead">
             <div>
               <div className="eyebrow">Autonomy v2</div>
-              <h1>Control Plane</h1>
-              <p className="lede muted">Human-readable PRD status, agent state, and queue tracking. Raw JSON lives in Advanced.</p>
+              <h1>{shellTitle}</h1>
+              <p className="lede muted">{shellLede}</p>
             </div>
             <div className="heartbeat-strip">
               <div id="control-plane-heartbeats" className="heartbeat-strip" aria-live="polite" />
@@ -464,10 +484,17 @@ function ControlPlanePage() {
                   </div>
                 </div>
                 <form id="prd-form">
-                  <label>
-                    Repo
-                    <select id="repo-id" name="repoId" />
-                  </label>
+                  {isManager ? (
+                    <label id="repo-select-field">
+                      Repo
+                      <select id="repo-id" name="repoId" />
+                    </label>
+                  ) : (
+                    <div className="subtle-box">
+                      <h3 style={{ marginBottom: '8px' }}>Target repo</h3>
+                      <div className="muted body-note" id="fixed-repo-id">{repoId || 'Unknown repo'}</div>
+                    </div>
+                  )}
                   <div className="row">
                     <label>
                       PRD ID
@@ -517,8 +544,8 @@ function ControlPlanePage() {
                 </div>
                 <div className="subtle-box">
                   <h3 style={{ marginBottom: '8px' }}>What stays the same</h3>
-                  <div className="list-note">• repo allowlist and job payload validation</div>
-                  <div className="list-note">• bridge claim / complete behavior</div>
+                  <div className="list-note">• repo-local PRD payload validation</div>
+                  <div className="list-note">• bridge claim / complete execution flow</div>
                   <div className="list-note">• PRD commit semantics inside the local repo</div>
                 </div>
               </article>
@@ -561,7 +588,31 @@ function ControlPlanePage() {
   );
 }
 
+function ControlPlaneMissingEntrancePage() {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light" />
+        <title>Autonomy v2 Control Plane</title>
+        <style dangerouslySetInnerHTML={{ __html: styles }} />
+      </head>
+      <body>
+        <main>
+          <article className="surface">
+            <div className="eyebrow">Autonomy v2</div>
+            <h1>Missing Control Panel Entrance</h1>
+            <p className="lede muted">Use <code>/manager</code> for the aggregate view or <code>/project/&lt;repoId&gt;</code> for a repo-specific entrance.</p>
+          </article>
+        </main>
+      </body>
+    </html>
+  );
+}
+
 export {
+  ControlPlaneMissingEntrancePage,
   ControlPlanePage,
   styles,
 };

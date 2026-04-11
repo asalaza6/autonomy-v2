@@ -21,7 +21,7 @@ From there, the system is expected to:
 
 ## What v2 is
 
-V2 still uses a polling scheduler for repo-local execution. The hosted control plane is a separate browser/API app, and the local bridge only submits browser PRDs into the repo.
+V2 still uses a polling scheduler for repo-local execution. The hosted control plane is a separate shared browser/API app, and the local bridge registers this repo and submits browser PRDs into it.
 
 The control plane is separate from the scheduler:
 

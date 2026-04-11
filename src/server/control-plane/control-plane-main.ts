@@ -4,11 +4,11 @@ import http from 'http';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
+import type { ControlPlaneState } from '../../types.js';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
-import { buildControlPlaneHtml } from './control-plane-browser.js';
-import { loadControlPlaneConfig } from './control-plane-config.js';
+import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './control-plane-browser.js';
 import {
   claimJob,
   completeJob,
@@ -17,6 +17,7 @@ import {
   ensureControlPlaneDataDir,
   enqueueJob,
   getRepoStatuses,
+  listDiscoveredRepos,
   listJobs,
   loadControlPlaneState,
   setRepoStatus,
@@ -96,16 +97,11 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
 async function handleRequest(rootDir: string, req: http.IncomingMessage, res: http.ServerResponse) {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  const entrance = resolveControlPlaneEntrance(url.pathname);
   applyCors(res, req.method || 'GET');
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
     res.end();
-    return;
-  }
-
-  if (url.pathname === '/') {
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(buildControlPlaneHtml());
     return;
   }
 
@@ -119,14 +115,30 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
     return;
   }
 
+  if (entrance.kind === 'missing' && req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+    res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(buildControlPlaneMissingEntranceHtml());
+    return;
+  }
+
+  if ((entrance.kind === 'manager' || entrance.kind === 'project') && req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(buildControlPlaneHtml(entrance.kind === 'project'
+      ? { entrance: 'project', repoId: entrance.repoId }
+      : { entrance: 'manager' }));
+    return;
+  }
+
   if (url.pathname === '/api/repos' && req.method === 'GET') {
-    const config = loadControlPlaneConfig(rootDir);
-    sendJson(res, 200, { repos: config.repos });
+    const requestedRepoId = String(url.searchParams.get('repoId') || '').trim();
+    const repos = listDiscoveredRepos(rootDir).filter((repo) => !requestedRepoId || repo.repoId === requestedRepoId);
+    sendJson(res, 200, { repos });
     return;
   }
 
   if (url.pathname === '/api/state' && req.method === 'GET') {
-    const state = loadControlPlaneState(rootDir);
+    const repoId = String(url.searchParams.get('repoId') || '').trim();
+    const state = filterControlPlaneState(loadControlPlaneState(rootDir), repoId);
     sendJson(res, 200, {
       ...state,
       dashboard: buildControlPlaneDashboard(rootDir, state),
@@ -136,6 +148,7 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
 
   if (url.pathname === '/api/jobs' && req.method === 'GET') {
     const repoId = url.searchParams.get('repoId') || '';
+    const repoIds = parseRepoIds(url.searchParams.get('repoIds') || '');
     const status = url.searchParams.get('status') || '';
     const type = url.searchParams.get('type') || '';
     const filter: Record<string, string | undefined> = {};
@@ -148,16 +161,15 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
     if (type) {
       filter.type = type;
     }
-    const jobs = listJobs(rootDir, filter as any);
+    const jobs = listJobs(rootDir, filter as any).filter((job) => repoIds.length === 0 || repoIds.includes(String(job.repoId || '')));
     sendJson(res, 200, { jobs });
     return;
   }
 
   if (url.pathname === '/api/jobs' && req.method === 'POST') {
-    const config = loadControlPlaneConfig(rootDir);
     try {
       const body = await readJsonBody(req);
-      const { payload } = validatePrdAddSubmission(config, body);
+      const { payload } = validatePrdAddSubmission(listDiscoveredRepos(rootDir), body);
       const job = enqueueJob(rootDir, createControlPlaneJob(payload));
       sendJson(res, 201, job);
     } catch (error) {
@@ -193,11 +205,10 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
   }
 
   if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/deploy') && req.method === 'POST') {
-    const config = loadControlPlaneConfig(rootDir);
     const repoId = url.pathname.split('/')[3];
     try {
       const body = await readJsonBody(req);
-      const { payload } = validateDeploySubmission(config, {
+      const { payload } = validateDeploySubmission(listDiscoveredRepos(rootDir), {
         repoId: String(body && body.repoId || repoId || '').trim(),
       });
       const job = enqueueJob(rootDir, createControlPlaneDeployJob(payload));
@@ -210,7 +221,10 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
 
   if (url.pathname.startsWith('/api/jobs/') && url.pathname.endsWith('/claim') && req.method === 'POST') {
     const jobId = url.pathname.split('/')[3];
-    const job = claimJob(rootDir, jobId);
+    const body = await readJsonBody(req);
+    const job = claimJob(rootDir, jobId, {
+      repoIds: parseBodyRepoIds(body),
+    });
     if (!job) {
       sendJson(res, 409, { error: 'Job is not available for claiming.' });
       return;
@@ -235,7 +249,12 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
     const repoId = url.pathname.split('/')[3];
     try {
       const body = await readJsonBody(req);
-      const record = setRepoStatus(rootDir, repoId, (body && body.snapshot) || body);
+      const record = setRepoStatus(
+        rootDir,
+        repoId,
+        (body && body.snapshot) || body,
+        body && body.repo ? body.repo : {}
+      );
       sendJson(res, 200, record);
     } catch (error) {
       sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
@@ -251,6 +270,51 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
   }
 
   sendJson(res, 404, { error: 'Not found.' });
+}
+
+function resolveControlPlaneEntrance(pathname: string) {
+  const normalized = String(pathname || '/').replace(/\/+$/, '') || '/';
+  if (normalized === '/manager') {
+    return { kind: 'manager' as const };
+  }
+  if (normalized.startsWith('/project/')) {
+    const repoId = decodeURIComponent(normalized.slice('/project/'.length)).trim();
+    if (repoId) {
+      return {
+        kind: 'project' as const,
+        repoId,
+      };
+    }
+  }
+  return { kind: 'missing' as const };
+}
+
+function parseRepoIds(value: string) {
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function parseBodyRepoIds(body: any) {
+  if (Array.isArray(body && body.repoIds)) {
+    return body.repoIds.map((entry: unknown) => String(entry || '').trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function filterControlPlaneState(state: ControlPlaneState, repoId: string) {
+  const normalizedRepoId = String(repoId || '').trim();
+  if (!normalizedRepoId) {
+    return state;
+  }
+  return {
+    ...state,
+    jobs: (state.jobs || []).filter((job) => String(job.repoId || '') === normalizedRepoId),
+    repoStatuses: normalizedRepoId && state.repoStatuses[normalizedRepoId]
+      ? { [normalizedRepoId]: state.repoStatuses[normalizedRepoId] }
+      : {},
+  };
 }
 
 function parseCli(argv: string[]) {
@@ -294,7 +358,7 @@ Options:
   --port <port>      Server port for serve (default: PORT or 3333)
   --host <host>      Server host for serve (default: HOST, 0.0.0.0 on Heroku, otherwise 127.0.0.1)
   --server-url <url> Bridge API base URL (default: AUTONOMY_CONTROL_PLANE_SERVER_URL or http://127.0.0.1:3333)
-  --repo-map <map>   Optional repo allowlist map in the form repoId=/local/path,...
+  --repo-map <map>   Optional repo roots in the form /local/path,... or repoId=/local/path,...
   --poll-ms <ms>     Bridge poll interval in milliseconds (default: 2000)
   --once             Run one bridge cycle and exit
 `);
@@ -306,9 +370,10 @@ function parseRepoRoots(value: string, fallbackRepoRoot = '') {
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
-    .forEach((entry) => {
+    .forEach((entry, index) => {
       const separatorIndex = entry.indexOf('=');
       if (separatorIndex <= 0) {
+        repoRoots[`__path_${index}`] = entry;
         return;
       }
       const repoId = entry.slice(0, separatorIndex).trim();
@@ -316,9 +381,9 @@ function parseRepoRoots(value: string, fallbackRepoRoot = '') {
       if (repoId && rootDir) {
         repoRoots[repoId] = rootDir;
       }
-    });
+  });
   if (Object.keys(repoRoots).length === 0 && fallbackRepoRoot) {
-    repoRoots.default = fallbackRepoRoot;
+    repoRoots.__path_0 = fallbackRepoRoot;
   }
   return repoRoots;
 }

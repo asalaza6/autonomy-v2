@@ -1,7 +1,7 @@
 # Control Plane Bridge
 
 The bridge is the local process that executes queued control-plane jobs on this machine.
-The browser UI and queue API live online in the consumer repo's hosted deployment;
+The browser UI and queue API live online in the shared hosted deployment;
 the bridge stays on the machine that has access to the target repos.
 
 ## What it does
@@ -31,20 +31,20 @@ npx autonomy-v2-control bridge --server-url https://your-control-plane.example.c
 
 ## Repo mapping
 
-`--repo-map` is optional. If you do not pass it, the bridge defaults `default` to the current working directory.
+`--repo-map` is optional. If you do not pass it, the bridge defaults to the current working directory.
 
-If you do pass it, it becomes the lookup table that tells the bridge where each repo lives on disk.
+If you do pass it, it becomes the lookup table that tells the bridge where each repo lives on disk. Each repo still provides its canonical `repoId` from `prompts/autonomous/v2/config/control-plane.json`.
 
 Example:
 
 ```bash
---repo-map default=/Users/me/projects/app-one,admin=/Users/me/projects/admin-app
+--repo-map /Users/me/projects/app-one,/Users/me/projects/admin-app
 ```
 
 That means:
 
-- `default` jobs run in `/Users/me/projects/app-one`
-- `admin` jobs run in `/Users/me/projects/admin-app`
+- the bridge reads the repo-local `repoId` for `/Users/me/projects/app-one`
+- the bridge reads the repo-local `repoId` for `/Users/me/projects/admin-app`
 
 ## Lifecycle
 
@@ -60,4 +60,5 @@ That means:
 - One bridge process can usually handle multiple repos.
 - You only need multiple bridges if you want different machines or stricter isolation.
 - If the bridge is stopped, queued jobs wait until it starts again.
-- The hosted server can use `AUTONOMY_CONTROL_PLANE_CONFIG_JSON` for its repo allowlist and `AUTONOMY_CONTROL_PLANE_PERSIST=0` for in-memory queue/status storage.
+- The hosted server no longer needs a deploy-time repo allowlist. Repos appear when bridges register them by pushing status.
+- `AUTONOMY_CONTROL_PLANE_PERSIST=0` still keeps queue/status storage in memory.

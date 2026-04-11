@@ -70,7 +70,7 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   let completedJob: any = null;
 
   const server = http.createServer((req, res) => {
-    if (req.url === '/api/jobs?status=queued') {
+    if (req.url === '/api/jobs?status=queued&repoIds=default') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         jobs: [

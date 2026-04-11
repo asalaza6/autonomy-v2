@@ -1,6 +1,5 @@
-import type { AnyRecord, ControlPlaneConfig, ControlPlaneRepoRecord, ControlPlaneState } from '../../types.js';
-import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
-import { loadControlPlaneConfig } from './control-plane-config.js';
+import type { AnyRecord, ControlPlaneRepoRecord, ControlPlaneState } from '../../types.js';
+import { normalizeRepoRecord } from './control-plane-validation.js';
 import {
   buildControlPlaneHeartbeatSummary,
   summarizeControlPlaneJob,
@@ -23,32 +22,28 @@ interface ControlPlaneDashboard {
 }
 
 function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): ControlPlaneDashboard {
-  const config = loadControlPlaneConfig(rootDir);
-  const liveDeploymentSnapshot = readLiveDeploymentSnapshot(rootDir);
   const repoConfigById = new Map(
-    (config.repos || []).map((repo) => [repo.id, repo] as const)
+    Object.values(state.repoStatuses || {})
+      .map((repo) => normalizeRepoRecord(repo))
+      .filter(isRepoRecord)
+      .map((repo) => [repo.repoId, repo] as const)
   );
   const jobs = (state.jobs || []).slice().sort(compareJobsByFreshness);
   const repoIds = new Set<string>([
     ...Object.keys(state.repoStatuses || {}),
-    ...(config.repos || []).map((repo) => repo.id),
   ]);
 
   const repos = Array.from(repoIds)
     .sort((left, right) => {
-      const leftRank = repoSortRank(left, config);
-      const rightRank = repoSortRank(right, config);
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank;
-      }
-      return String(left).localeCompare(String(right));
+      const leftLabel = String(repoConfigById.get(left)?.label || left || '');
+      const rightLabel = String(repoConfigById.get(right)?.label || right || '');
+      return leftLabel.localeCompare(rightLabel);
     })
     .map((repoId) => buildRepoDashboard(
       repoId,
       repoConfigById.get(repoId) || null,
       state.repoStatuses?.[repoId] || null,
       jobs,
-      liveDeploymentSnapshot,
     ));
 
   const summarizedJobs = jobs
@@ -86,12 +81,11 @@ function buildRepoDashboard(
   repoConfig: ControlPlaneRepoRecord | null,
   repoStatus: AnyRecord | null,
   jobs: AnyRecord[],
-  liveDeploymentSnapshot: AnyRecord | null
 ) {
   const label = String(repoConfig?.label || repoId || 'Repository');
   const description = String(repoConfig?.description || '');
   const summary = repoStatus
-    ? summarizeRepoStatus(mergeDeploymentSnapshot(repoStatus, liveDeploymentSnapshot), label)
+    ? summarizeRepoStatus(repoStatus, label)
     : {
         repoId,
         label,
@@ -116,38 +110,11 @@ function buildRepoDashboard(
     repoId,
     label,
     description,
-    default: Boolean(repoConfig?.default),
     updatedAt: summary.updatedAt || null,
     deploymentUrl: String(repoConfig?.deploymentUrl || '').trim() || null,
     deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
     deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
   };
-}
-
-function mergeDeploymentSnapshot(repoStatus: AnyRecord | null, liveDeploymentSnapshot: AnyRecord | null) {
-  if (!repoStatus || !liveDeploymentSnapshot) {
-    return repoStatus;
-  }
-  const snapshot = repoStatus.snapshot || {};
-  if (snapshot.deployment) {
-    return repoStatus;
-  }
-  return {
-    ...repoStatus,
-    snapshot: {
-      ...snapshot,
-      deployment: liveDeploymentSnapshot,
-    },
-  };
-}
-
-function readLiveDeploymentSnapshot(rootDir: string) {
-  try {
-    const snapshot = buildStatusSnapshot(rootDir);
-    return snapshot && snapshot.deployment ? snapshot.deployment : null;
-  } catch (_) {
-    return null;
-  }
 }
 
 function labelForRepo(repoId: string, repoConfigById: Map<string, ControlPlaneRepoRecord>) {
@@ -186,9 +153,8 @@ function jobRank(job: AnyRecord) {
   return 4;
 }
 
-function repoSortRank(repoId: string, config: ControlPlaneConfig) {
-  const index = (config.repos || []).findIndex((repo) => repo.id === repoId);
-  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+function isRepoRecord(repo: ControlPlaneRepoRecord | null): repo is ControlPlaneRepoRecord {
+  return Boolean(repo && repo.repoId);
 }
 
 export {

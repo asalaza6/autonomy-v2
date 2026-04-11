@@ -1,29 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
-import { createFixtureRepo, git, initAutonomyRepo } from '../smoke/package-smoke.helpers.js';
 
-test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and jobs in plain language', () => {
-  const repoDir = createFixtureRepo('autonomy-v2-control-plane-dashboard-');
-  initAutonomyRepo(repoDir);
-  fs.mkdirSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config'), { recursive: true });
-  fs.writeFileSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json'), JSON.stringify({
-    schemaVersion: 1,
-    repos: [
-      {
-        id: 'default',
-        label: 'Current workspace',
-        default: true,
-        deploymentUrl: 'https://deploy.example.com',
-        deploymentLabel: 'Production site',
-      },
-    ],
-  }, null, 2));
-
-  const dashboard = buildControlPlaneDashboard(repoDir, {
+test('control plane dashboard summarizes discovered repos, jobs, and metadata in plain language', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
     schemaVersion: 1,
     heartbeats: {
       server: {
@@ -39,9 +20,9 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
       {
         id: 'job-001',
         type: 'deploy',
-        repoId: 'default',
+        repoId: 'alpha',
         payload: {
-          repoId: 'default',
+          repoId: 'alpha',
         },
         status: 'queued',
         createdAt: '2026-04-01T12:00:00.000Z',
@@ -49,8 +30,12 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
       },
     ],
     repoStatuses: {
-      default: {
-        repoId: 'default',
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        description: 'Primary app',
+        deploymentUrl: 'https://deploy.example.com',
+        deploymentLabel: 'Production site',
         updatedAt: new Date(Date.now() - 20000).toISOString(),
         snapshot: {
           prds: {
@@ -142,37 +127,17 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.match(dashboard.jobs[0].detail, /created/);
 });
 
-test('control plane dashboard backfills deployment status when the stored snapshot is stale', () => {
-  const repoDir = createFixtureRepo('autonomy-v2-control-plane-dashboard-backfill-');
-  initAutonomyRepo(repoDir);
-
-  git(repoDir, ['checkout', 'dev']);
-  fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'deploy.js'), 'export const deployed = true;\n', 'utf8');
-  git(repoDir, ['add', 'src/apps/fixture/deploy.js']);
-  git(repoDir, ['commit', '-m', 'advance dev']);
-
-  fs.mkdirSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config'), { recursive: true });
-  fs.writeFileSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json'), JSON.stringify({
-    schemaVersion: 1,
-    repos: [
-      {
-        id: 'default',
-        label: 'Current workspace',
-        default: true,
-        deploymentUrl: 'https://deploy.example.com',
-        deploymentLabel: 'Production site',
-      },
-    ],
-  }, null, 2));
-
-  const dashboard = buildControlPlaneDashboard(repoDir, {
+test('control plane dashboard retains offline repos that were previously discovered', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
     schemaVersion: 1,
     heartbeats: {},
     jobs: [],
     repoStatuses: {
-      default: {
-        repoId: 'default',
-        updatedAt: new Date(Date.now() - 20000).toISOString(),
+      beta: {
+        repoId: 'beta',
+        label: 'Beta',
+        description: 'Offline repo',
+        updatedAt: new Date(Date.now() - 60000).toISOString(),
         snapshot: {
           prds: { prds: [] },
           agentStatuses: [],
@@ -183,7 +148,8 @@ test('control plane dashboard backfills deployment status when the stored snapsh
     },
   } as any);
 
-  assert.equal(dashboard.deployableRepoCount, 1);
-  assert.equal(dashboard.repos[0].deployment.statusLabel, 'Deploy available');
-  assert.match(dashboard.repos[0].overview, /Deploy: Deploy available/);
+  assert.equal(dashboard.repoCount, 1);
+  assert.equal(dashboard.repos[0].label, 'Beta');
+  assert.equal(dashboard.repos[0].freshnessStatus, 'offline');
+  assert.match(dashboard.repos[0].overview, /No active PRD yet/);
 });
