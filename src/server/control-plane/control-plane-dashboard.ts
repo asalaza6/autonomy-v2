@@ -33,7 +33,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     ...Object.keys(state.repoStatuses || {}),
   ]);
 
-  const repos = Array.from(repoIds)
+  const repos: AnyRecord[] = Array.from(repoIds)
     .sort((left, right) => {
       const leftLabel = String(repoConfigById.get(left)?.label || left || '');
       const rightLabel = String(repoConfigById.get(right)?.label || right || '');
@@ -81,7 +81,7 @@ function buildRepoDashboard(
   repoConfig: ControlPlaneRepoRecord | null,
   repoStatus: AnyRecord | null,
   jobs: AnyRecord[],
-) {
+): AnyRecord {
   const label = String(repoConfig?.label || repoId || 'Repository');
   const description = String(repoConfig?.description || '');
   const summary = repoStatus
