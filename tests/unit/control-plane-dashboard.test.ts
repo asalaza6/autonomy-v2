@@ -1,29 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
-import { createFixtureRepo, initAutonomyRepo } from '../smoke/package-smoke.helpers.js';
 
-test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and jobs in plain language', () => {
-  const repoDir = createFixtureRepo('autonomy-v2-control-plane-dashboard-');
-  initAutonomyRepo(repoDir);
-  fs.mkdirSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config'), { recursive: true });
-  fs.writeFileSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json'), JSON.stringify({
-    schemaVersion: 1,
-    repos: [
-      {
-        id: 'default',
-        label: 'Current workspace',
-        default: true,
-        deploymentUrl: 'https://deploy.example.com',
-        deploymentLabel: 'Production site',
-      },
-    ],
-  }, null, 2));
-
-  const dashboard = buildControlPlaneDashboard(repoDir, {
+test('control plane dashboard summarizes discovered repos, jobs, and metadata in plain language', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
     schemaVersion: 1,
     heartbeats: {
       server: {
@@ -39,9 +20,9 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
       {
         id: 'job-001',
         type: 'deploy',
-        repoId: 'default',
+        repoId: 'alpha',
         payload: {
-          repoId: 'default',
+          repoId: 'alpha',
         },
         status: 'queued',
         createdAt: '2026-04-01T12:00:00.000Z',
@@ -49,8 +30,12 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
       },
     ],
     repoStatuses: {
-      default: {
-        repoId: 'default',
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        description: 'Primary app',
+        deploymentUrl: 'https://deploy.example.com',
+        deploymentLabel: 'Production site',
         updatedAt: new Date(Date.now() - 20000).toISOString(),
         snapshot: {
           prds: {
@@ -98,6 +83,7 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
               status: 'open',
               action: 'waiting for reviewer',
               branch: 'dev',
+              url: 'https://github.com/asalaza6/autonomy-v2/pull/7',
               updatedAt: '2026-04-01T12:05:00.000Z',
             },
           ],
@@ -122,6 +108,7 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.equal(dashboard.repoCount, 1);
   assert.equal(dashboard.activePrdCount, 1);
   assert.equal(dashboard.queuedPrdCount, 1);
+  assert.equal(dashboard.deployableRepoCount, 1);
   assert.equal(dashboard.pendingJobCount, 1);
   assert.equal(dashboard.overallHeartbeatStatus, 'stale');
   assert.equal(dashboard.serverHeartbeat.status, 'online');
@@ -132,9 +119,37 @@ test('control plane dashboard summarizes active PRDs, queued PRDs, agents, and j
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
   assert.equal(dashboard.repos[0].freshnessStatus, 'stale');
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);
+  assert.equal(dashboard.repos[0].pullRequestStatuses[0].url, 'https://github.com/asalaza6/autonomy-v2/pull/7');
   assert.equal(dashboard.repos[0].deployment.statusLabel, 'Deploy available');
   assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
   assert.match(dashboard.jobs[0].detail, /created/);
+});
+
+test('control plane dashboard retains offline repos that were previously discovered', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      beta: {
+        repoId: 'beta',
+        label: 'Beta',
+        description: 'Offline repo',
+        updatedAt: new Date(Date.now() - 60000).toISOString(),
+        snapshot: {
+          prds: { prds: [] },
+          agentStatuses: [],
+          pullRequestStatuses: [],
+          branchLockCount: 0,
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repoCount, 1);
+  assert.equal(dashboard.repos[0].label, 'Beta');
+  assert.equal(dashboard.repos[0].freshnessStatus, 'offline');
+  assert.match(dashboard.repos[0].overview, /No active PRD yet/);
 });

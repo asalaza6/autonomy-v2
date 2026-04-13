@@ -11,7 +11,7 @@ declare global {
 }
 
 type RepoRecord = {
-  id: string;
+  repoId: string;
   label: string;
   description?: string;
   default?: boolean;
@@ -42,6 +42,7 @@ type PullRequestSummary = {
   status?: string;
   action?: string;
   branch?: string;
+  url?: string | null;
   updatedAt?: string | null;
 };
 
@@ -106,6 +107,7 @@ type DashboardSummary = {
   repoCount?: number;
   activePrdCount?: number;
   queuedPrdCount?: number;
+  deployableRepoCount?: number;
   pendingJobCount?: number;
   runningAgentCount?: number;
   activePullRequestCount?: number;
@@ -123,6 +125,11 @@ type StateSnapshot = {
   [key: string]: unknown;
 };
 
+type EntranceContext = {
+  entrance: 'manager' | 'project';
+  repoId: string;
+};
+
 const repoSelect = document.getElementById('repo-id') as HTMLSelectElement | null;
 const lastUpdatedEl = document.getElementById('last-updated');
 const messageEl = document.getElementById('form-message');
@@ -137,12 +144,14 @@ const rawStateEl = document.getElementById('raw-state');
 const rawDashboardEl = document.getElementById('raw-dashboard');
 const rawJobsEl = document.getElementById('raw-jobs');
 const rawReposEl = document.getElementById('raw-repos');
+const fixedRepoIdEl = document.getElementById('fixed-repo-id');
 const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-tab]'));
 const panels: Record<string, HTMLElement | null> = {
   dashboard: document.getElementById('dashboard-panel'),
   submit: document.getElementById('submit-panel'),
   advanced: document.getElementById('advanced-panel'),
 };
+const entranceContext = readEntranceContext();
 
 let latestRepos: RepoRecord[] = [];
 let deployingRepoIds = new Set<string>();
@@ -150,7 +159,7 @@ let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 
 function mountControlPlane() {
   if (
-    !repoSelect
+    (entranceContext.entrance === 'manager' && !repoSelect)
     || !lastUpdatedEl
     || !messageEl
     || !form
@@ -206,7 +215,7 @@ function mountControlPlane() {
 async function handleSubmit(event: SubmitEvent) {
   event.preventDefault();
 
-  if (!repoSelect || !form || !messageEl) {
+  if (!form || !messageEl) {
     return;
   }
 
@@ -214,8 +223,14 @@ async function handleSubmit(event: SubmitEvent) {
 
   try {
     const taskSpecsRaw = (document.getElementById('prd-task-specs') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const targetRepoId = entranceContext.entrance === 'project'
+      ? entranceContext.repoId
+      : String(repoSelect && repoSelect.value || '').trim();
+    if (!targetRepoId) {
+      throw new Error('No repo selected.');
+    }
     const body = {
-      repoId: repoSelect.value,
+      repoId: targetRepoId,
       id: (document.getElementById('prd-id') as HTMLInputElement | null)?.value.trim() || '',
       title: (document.getElementById('prd-title') as HTMLInputElement | null)?.value.trim() || '',
       specification: (document.getElementById('prd-spec') as HTMLTextAreaElement | null)?.value.trim() || '',
@@ -240,9 +255,15 @@ async function handleSubmit(event: SubmitEvent) {
 }
 
 async function refresh() {
+  const reposRequestUrl = entranceContext.entrance === 'project' && entranceContext.repoId
+    ? `/api/repos?repoId=${encodeURIComponent(entranceContext.repoId)}`
+    : '/api/repos';
+  const stateRequestUrl = entranceContext.entrance === 'project' && entranceContext.repoId
+    ? `/api/state?repoId=${encodeURIComponent(entranceContext.repoId)}`
+    : '/api/state';
   const [repos, state] = await Promise.all([
-    requestJson<{ repos?: RepoRecord[] }>('/api/repos'),
-    requestJson<StateSnapshot>('/api/state'),
+    requestJson<{ repos?: RepoRecord[] }>(reposRequestUrl),
+    requestJson<StateSnapshot>(stateRequestUrl),
   ]);
 
   renderRepos(repos.repos || []);
@@ -314,21 +335,26 @@ async function checkForUiReload() {
 }
 
 function renderRepos(repos: RepoRecord[]) {
-  if (!repoSelect) {
-    return;
-  }
-
   latestRepos = Array.isArray(repos) ? repos.slice() : [];
-  const previous = repoSelect.value;
-  repoSelect.innerHTML = renderToHtml(<RepoOptions repos={latestRepos} />);
+  if (repoSelect) {
+    const previous = repoSelect.value;
+    repoSelect.innerHTML = renderToHtml(<RepoOptions repos={latestRepos} />);
 
-  if (previous && latestRepos.some((repo) => repo.id === previous)) {
-    repoSelect.value = previous;
-  } else if (!repoSelect.value && latestRepos.length > 0) {
-    repoSelect.value = latestRepos[0].id;
+    if (previous && latestRepos.some((repo) => repo.repoId === previous)) {
+      repoSelect.value = previous;
+    } else if (!repoSelect.value && latestRepos.length > 0) {
+      repoSelect.value = latestRepos[0].repoId;
+    }
+
+    repoSelect.disabled = latestRepos.length === 0;
   }
 
-  repoSelect.disabled = latestRepos.length === 0;
+  if (fixedRepoIdEl) {
+    const activeRepo = latestRepos.find((repo) => repo.repoId === entranceContext.repoId);
+    fixedRepoIdEl.textContent = activeRepo
+      ? `${activeRepo.label}${activeRepo.description ? ` - ${activeRepo.description}` : ''}`
+      : entranceContext.repoId || 'Unknown repo';
+  }
 }
 
 function renderDashboard(dashboard: DashboardSummary) {
@@ -336,11 +362,22 @@ function renderDashboard(dashboard: DashboardSummary) {
     return;
   }
 
+  const deployableRepoCount = resolveDeployableRepoCount(dashboard);
+  const deployableRepoLabel = `${deployableRepoCount} deployable repo${deployableRepoCount === 1 ? '' : 's'}`;
   dashboardMetricsEl.innerHTML = renderToHtml(<MetricGrid dashboard={dashboard} />);
   dashboardSummaryNoteEl.textContent = dashboard.repoCount && dashboard.repoCount > 0
-    ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} online`
-    : 'No repo snapshots yet';
-  dashboardReposEl.innerHTML = renderToHtml(<RepoStack repos={dashboard.repos || []} />);
+    ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} visible · ${deployableRepoLabel}`
+    : entranceContext.entrance === 'project'
+      ? `Repo ${entranceContext.repoId || ''} is not registered yet.`
+      : 'No repo snapshots yet';
+  dashboardReposEl.innerHTML = renderToHtml(
+    <RepoStack
+      repos={dashboard.repos || []}
+      emptyMessage={entranceContext.entrance === 'project'
+        ? `Repo ${entranceContext.repoId || 'unknown'} is unavailable or has not registered yet.`
+        : 'No repository snapshots yet.'}
+    />
+  );
   dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
 }
 
@@ -371,7 +408,7 @@ function renderAdvanced(state: StateSnapshot) {
   rawJobsEl.textContent = JSON.stringify(state.jobs || [], null, 2);
   rawReposEl.textContent = JSON.stringify(
     latestRepos.map((repo) => ({
-      id: repo.id,
+      repoId: repo.repoId,
       label: repo.label,
       description: repo.description || '',
       default: Boolean(repo.default),
@@ -400,17 +437,19 @@ function RepoOptions({ repos }: { repos: RepoRecord[] }) {
     <>
       {repos.map((repo) => {
         const label = repo.description ? `${repo.label} - ${repo.description}` : repo.label;
-        return <option value={repo.id}>{label}</option>;
+        return <option value={repo.repoId}>{label}</option>;
       })}
     </>
   );
 }
 
 function MetricGrid({ dashboard }: { dashboard: DashboardSummary }) {
+  const deployableRepoCount = resolveDeployableRepoCount(dashboard);
   const metrics = [
     ['Repos', dashboard.repoCount || 0],
     ['Active PRDs', dashboard.activePrdCount || 0],
     ['Queued PRDs', dashboard.queuedPrdCount || 0],
+    ['Deployable repos', deployableRepoCount],
     ['Bridge jobs', dashboard.pendingJobCount || 0],
     ['Agents running', dashboard.runningAgentCount || 0],
     ['Active PRs', dashboard.activePullRequestCount || 0],
@@ -459,9 +498,20 @@ function statusClass(status?: string) {
   return String(status || 'offline');
 }
 
-function RepoStack({ repos }: { repos: RepoSummary[] }) {
+function resolveDeployableRepoCount(dashboard: DashboardSummary) {
+  if (typeof dashboard.deployableRepoCount === 'number') {
+    return dashboard.deployableRepoCount;
+  }
+  return countDeployableRepos(dashboard.repos || []);
+}
+
+function countDeployableRepos(repos: RepoSummary[]) {
+  return repos.filter((repo) => Boolean(repo && repo.deployment && (repo.deployment.hasChanges || repo.deployment.deployable))).length;
+}
+
+function RepoStack({ repos, emptyMessage }: { repos: RepoSummary[]; emptyMessage: string }) {
   if (!repos.length) {
-    return <div className="muted">No repository snapshots yet.</div>;
+    return <div className="muted">{emptyMessage}</div>;
   }
 
   return (
@@ -479,6 +529,7 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
   const deployJobPending = ['queued', 'claimed', 'running'].includes(String(repo.deployJob && repo.deployJob.status || ''));
   const showDeployButton = Boolean(repo.repoId && deployment && deployment.hasChanges);
   const deployButtonLabel = deployJobPending ? 'Deploy queued' : `Deploy ${deployment && deployment.sourceBranch ? deployment.sourceBranch : 'dev'} to ${deployment && deployment.targetBranch ? deployment.targetBranch : 'main'}`;
+  const deploymentStatus = deployment ? deployment.status : null;
 
   return (
     <article className="repo">
@@ -516,7 +567,10 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
           <div className="queued-prd">
             <div className="item-head">
               <div>
-                <div className="pill">{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deploy status unavailable'}</div>
+                <div className={`status-chip ${statusClass(deploymentStatus)}`}>
+                  <span className="status-dot" />
+                  <span>{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deploy status unavailable'}</span>
+                </div>
                 <div className="queue-title">
                   {deployment
                     ? `${deployment.sourceBranch || 'dev'} -> ${deployment.targetBranch || 'main'}`
@@ -611,13 +665,25 @@ function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
   const details = [pullRequest.statusLabel || pullRequest.status, pullRequest.action, pullRequest.branch ? `branch ${pullRequest.branch}` : '']
     .filter(Boolean)
     .join(' | ');
+  const title = pullRequest.title || pullRequest.prId || 'Untitled PR';
 
   return (
     <div className="pull-request">
       <div className="item-head">
         <div>
           <div className="pill">Active PR</div>
-          <div className="pull-request-title">{pullRequest.title || pullRequest.prId || 'Untitled PR'}</div>
+          {pullRequest.url ? (
+            <a
+              className="pull-request-title pull-request-link"
+              href={pullRequest.url}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {title}
+            </a>
+          ) : (
+            <div className="pull-request-title">{title}</div>
+          )}
         </div>
         {pullRequest.updatedAt ? <span className="pill">{formatTimestamp(pullRequest.updatedAt)}</span> : null}
       </div>
@@ -672,6 +738,17 @@ function getErrorMessage(error: unknown) {
     return error.message;
   }
   return String(error || 'Unexpected error');
+}
+
+function readEntranceContext(): EntranceContext {
+  const body = document.body;
+  const entrance = String(body?.dataset.controlPlaneEntrance || 'manager').trim() === 'project'
+    ? 'project'
+    : 'manager';
+  return {
+    entrance,
+    repoId: String(body?.dataset.controlPlaneRepoId || '').trim(),
+  };
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {

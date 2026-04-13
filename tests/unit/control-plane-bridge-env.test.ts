@@ -59,6 +59,7 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   initAutonomyRepo(repoDir);
   git(repoDir, ['add', '.']);
   git(repoDir, ['commit', '-m', 'initialize autonomy']);
+  git(repoDir, ['branch', '-f', 'dev', 'main']);
   git(repoDir, ['switch', 'dev']);
   fs.appendFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'index.js'), '\nexport const bridgeDeploy = true;\n', 'utf8');
   git(repoDir, ['add', 'src/apps/fixture/index.js']);
@@ -70,7 +71,7 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   let completedJob: any = null;
 
   const server = http.createServer((req, res) => {
-    if (req.url === '/api/jobs?status=queued') {
+    if (req.url === '/api/jobs?status=queued&repoIds=default') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
         jobs: [
@@ -135,7 +136,7 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   assert.equal(heartbeatCount, 1);
   assert.equal(Boolean(completedJob), true);
   assert.notEqual(git(repoDir, ['rev-parse', 'main']), mainBefore);
-  assert.equal(git(repoDir, ['rev-list', '--parents', '-n', '1', 'main']).split(/\s+/).length, 3);
+  assert.equal(git(repoDir, ['rev-parse', 'main']), git(repoDir, ['rev-parse', 'dev']));
 });
 
 function restoreEnv(key: string, value: string | undefined) {

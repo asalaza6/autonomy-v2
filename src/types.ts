@@ -118,7 +118,7 @@ export interface PrdSpecPayload extends AnyRecord {
 }
 
 export interface ControlPlaneRepoRecord extends AnyRecord {
-  id: string;
+  repoId: string;
   label?: string;
   description?: string;
   default?: boolean;
@@ -126,9 +126,8 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   deploymentLabel?: string;
 }
 
-export interface ControlPlaneConfig extends AnyRecord {
+export interface ControlPlaneConfig extends ControlPlaneRepoRecord {
   schemaVersion?: number;
-  repos: ControlPlaneRepoRecord[];
 }
 
 export interface ControlPlanePrdAddPayload extends AnyRecord {
@@ -162,6 +161,11 @@ export interface ControlPlaneJobRecord extends AnyRecord {
 export interface ControlPlaneRepoStatusRecord extends AnyRecord {
   repoId: string;
   updatedAt: string;
+  label?: string;
+  description?: string;
+  default?: boolean;
+  deploymentUrl?: string;
+  deploymentLabel?: string;
   snapshot: AnyRecord;
 }
 

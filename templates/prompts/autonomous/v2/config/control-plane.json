@@ -1,13 +1,8 @@
 {
   "schemaVersion": 1,
-  "repos": [
-    {
-      "id": "default",
-      "label": "Current workspace",
-      "description": "Allowed PRD target for the control plane.",
-      "default": true,
-      "deploymentUrl": "https://example.com",
-      "deploymentLabel": "Production site"
-    }
-  ]
+  "repoId": "default",
+  "label": "Current workspace",
+  "description": "Repo identity and display metadata for the hosted control plane.",
+  "deploymentUrl": "https://example.com",
+  "deploymentLabel": "Production site"
 }

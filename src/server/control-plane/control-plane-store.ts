@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 import type {
+  ControlPlaneRepoRecord,
   ControlPlanePrdAddPayload,
   ControlPlaneDeployPayload,
   ControlPlaneJobRecord,
@@ -9,6 +10,7 @@ import type {
   ControlPlaneRepoStatusRecord,
   ControlPlaneState,
 } from '../../types.js';
+import { normalizeRepoRecord } from './control-plane-validation.js';
 
 const DEFAULT_CONTROL_PLANE_STATE: ControlPlaneState = {
   schemaVersion: 1,
@@ -90,13 +92,19 @@ function normalizeHeartbeatKind(kind: string | undefined | null) {
 function normalizeRepoStatuses(repoStatuses: Record<string, ControlPlaneRepoStatusRecord> | undefined | null) {
   const normalized: Record<string, ControlPlaneRepoStatusRecord> = {};
   Object.entries(repoStatuses || {}).forEach(([repoId, statusRecord]) => {
-    const normalizedRepoId = String(repoId || '').trim();
+    const repo = normalizeRepoRecord(statusRecord, String(repoId || '').trim());
+    const normalizedRepoId = String(repo && repo.repoId || '').trim();
     if (!normalizedRepoId || !statusRecord) {
       return;
     }
     normalized[normalizedRepoId] = {
       repoId: normalizedRepoId,
       updatedAt: String(statusRecord.updatedAt || new Date().toISOString()),
+      label: repo?.label,
+      description: repo?.description,
+      default: repo?.default,
+      deploymentUrl: repo?.deploymentUrl,
+      deploymentLabel: repo?.deploymentLabel,
       snapshot: statusRecord.snapshot || {},
     };
   });
@@ -195,10 +203,16 @@ function listJobs(rootDir: string, filter: Partial<Pick<ControlPlaneJobRecord, '
   });
 }
 
-function claimJob(rootDir: string, jobId: string) {
+function claimJob(rootDir: string, jobId: string, options: { repoIds?: string[] } = {}) {
   const state = loadControlPlaneState(rootDir);
   const job = state.jobs.find((entry) => entry.id === jobId);
   if (!job || job.status !== 'queued') {
+    return null;
+  }
+  const eligibleRepoIds = Array.isArray(options.repoIds)
+    ? options.repoIds.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  if (eligibleRepoIds.length > 0 && !eligibleRepoIds.includes(String(job.repoId || '').trim())) {
     return null;
   }
   job.status = 'claimed';
@@ -238,15 +252,30 @@ function touchHeartbeat(rootDir: string, kind: 'server' | 'bridge', patch: Parti
   return state.heartbeats[kind];
 }
 
-function setRepoStatus(rootDir: string, repoId: string, snapshot: Record<string, unknown>) {
+function setRepoStatus(
+  rootDir: string,
+  repoId: string,
+  snapshot: Record<string, unknown>,
+  repo: Partial<ControlPlaneRepoRecord> = {}
+) {
   const state = loadControlPlaneState(rootDir);
-  const normalizedRepoId = String(repoId || '').trim();
+  const normalizedRepo = normalizeRepoRecord({
+    ...repo,
+    repoId,
+  });
+  const normalizedRepoId = String(normalizedRepo && normalizedRepo.repoId || '').trim();
   if (!normalizedRepoId) {
     throw new Error('Missing repoId.');
   }
+  const existing = state.repoStatuses[normalizedRepoId];
   state.repoStatuses[normalizedRepoId] = {
     repoId: normalizedRepoId,
     updatedAt: new Date().toISOString(),
+    label: normalizedRepo?.label || existing?.label,
+    description: normalizedRepo?.description || existing?.description,
+    default: normalizedRepo?.default === true || existing?.default === true,
+    deploymentUrl: normalizedRepo?.deploymentUrl || existing?.deploymentUrl,
+    deploymentLabel: normalizedRepo?.deploymentLabel || existing?.deploymentLabel,
     snapshot,
   };
   saveControlPlaneState(rootDir, state);
@@ -256,6 +285,18 @@ function setRepoStatus(rootDir: string, repoId: string, snapshot: Record<string,
 function getRepoStatuses(rootDir: string) {
   const state = loadControlPlaneState(rootDir);
   return state.repoStatuses;
+}
+
+function listDiscoveredRepos(rootDir: string) {
+  const state = loadControlPlaneState(rootDir);
+  return Object.values(state.repoStatuses || {})
+    .map((repo) => normalizeRepoRecord(repo))
+    .filter((repo): repo is ControlPlaneRepoRecord => Boolean(repo && repo.repoId))
+    .sort((left, right) => {
+      const leftLabel = String(left && left.label || left && left.repoId || '');
+      const rightLabel = String(right && right.label || right && right.repoId || '');
+      return leftLabel.localeCompare(rightLabel);
+    });
 }
 
 function ensureControlPlaneDataDir(rootDir: string) {
@@ -322,6 +363,7 @@ export {
   ensureControlPlaneDataDir,
   enqueueJob,
   getControlPlanePaths,
+  listDiscoveredRepos,
   getRepoStatuses,
   listJobs,
   loadControlPlaneState,

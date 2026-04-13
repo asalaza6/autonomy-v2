@@ -2,61 +2,67 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  assertControlPlaneRepoId,
   normalizeControlPlaneConfig,
+  normalizeRepoRecord,
   validateDeploySubmission,
   validatePrdAddSubmission,
 } from '../../src/server/control-plane/control-plane-validation.js';
 import { parseRepoRoots } from '../../src/server/control-plane/control-plane-main.js';
-import { loadControlPlaneConfigFromEnv } from '../../src/server/control-plane/control-plane-config.js';
 
-test('control plane config normalizes a default allowlist', () => {
+test('control plane config normalizes a repo-local identity record', () => {
   const config = normalizeControlPlaneConfig();
-  assert.equal(config.repos.length, 1);
-  assert.equal(config.repos[0].id, 'default');
-  assert.equal(config.repos[0].deploymentUrl, undefined);
+  assert.equal(config.repoId, 'default');
+  assert.equal(config.label, 'Current workspace');
+  assert.equal(config.deploymentUrl, undefined);
 });
 
 test('control plane config preserves optional deployment metadata', () => {
   const config = normalizeControlPlaneConfig({
-    repos: [
-      {
-        id: 'alpha',
-        label: 'Alpha',
-        deploymentUrl: ' https://deploy.example.com/app ',
-        deploymentLabel: ' Live app ',
-      },
-    ],
+    repoId: 'alpha',
+    label: 'Alpha',
+    deploymentUrl: ' https://deploy.example.com/app ',
+    deploymentLabel: ' Live app ',
   });
 
-  assert.equal(config.repos[0].deploymentUrl, 'https://deploy.example.com/app');
-  assert.equal(config.repos[0].deploymentLabel, 'Live app');
+  assert.equal(config.repoId, 'alpha');
+  assert.equal(config.deploymentUrl, 'https://deploy.example.com/app');
+  assert.equal(config.deploymentLabel, 'Live app');
 });
 
-test('prd submission validation enforces repo allowlist and required fields', () => {
-  const config = normalizeControlPlaneConfig({
-    repos: [
-      {
-        id: 'alpha',
-        label: 'Alpha',
-      },
-    ],
+test('repo record normalization accepts legacy id fields for compatibility', () => {
+  const repo = normalizeRepoRecord({
+    id: 'alpha',
+    label: 'Alpha',
   });
 
-  assert.throws(() => validatePrdAddSubmission(config, {
+  assert.equal(repo?.repoId, 'alpha');
+  assert.equal(repo?.label, 'Alpha');
+});
+
+test('prd submission validation enforces discovered repo registration and required fields', () => {
+  const repos = [
+    {
+      repoId: 'alpha',
+      label: 'Alpha',
+    },
+  ];
+
+  assert.throws(() => validatePrdAddSubmission(repos, {
     repoId: 'missing',
     id: 'prd-1',
     title: 'Example',
     specification: 'Spec text',
   }));
 
-  assert.throws(() => validatePrdAddSubmission(config, {
+  assert.throws(() => validatePrdAddSubmission(repos, {
     repoId: 'alpha',
     id: '',
     title: 'Example',
     specification: 'Spec text',
   }));
 
-  const { payload } = validatePrdAddSubmission(config, {
+  const { payload } = validatePrdAddSubmission(repos, {
     repoId: 'alpha',
     id: 'prd-1',
     title: 'Example',
@@ -68,21 +74,19 @@ test('prd submission validation enforces repo allowlist and required fields', ()
   assert.deepEqual(payload.requirements, ['First requirement']);
 });
 
-test('deploy submission validation enforces repo allowlist', () => {
-  const config = normalizeControlPlaneConfig({
-    repos: [
-      {
-        id: 'alpha',
-        label: 'Alpha',
-      },
-    ],
-  });
+test('deploy submission validation enforces discovered repo registration', () => {
+  const repos = [
+    {
+      repoId: 'alpha',
+      label: 'Alpha',
+    },
+  ];
 
-  assert.throws(() => validateDeploySubmission(config, {
+  assert.throws(() => validateDeploySubmission(repos, {
     repoId: 'missing',
   }));
 
-  const { payload } = validateDeploySubmission(config, {
+  const { payload } = validateDeploySubmission(repos, {
     repoId: 'alpha',
   });
 
@@ -91,28 +95,16 @@ test('deploy submission validation enforces repo allowlist', () => {
 
 test('bridge repo map defaults the current working directory when omitted', () => {
   const repoRoots = parseRepoRoots('', '/Users/me/projects/moving-game');
-  assert.equal(repoRoots.default, '/Users/me/projects/moving-game');
+  assert.equal(repoRoots.__path_0, '/Users/me/projects/moving-game');
 });
 
-test('control plane config can be provided from env json', () => {
-  const originalConfigJson = process.env.AUTONOMY_CONTROL_PLANE_CONFIG_JSON;
-  delete process.env.AUTONOMY_CONTROL_PLANE_CONFIG_JSON;
-  try {
-    process.env.AUTONOMY_CONTROL_PLANE_CONFIG_JSON = JSON.stringify({
-      repos: [
-        {
-          id: 'alpha',
-          label: 'Alpha',
-        },
-      ],
-    });
-    const config = loadControlPlaneConfigFromEnv();
-    assert.equal(config.repos[0].id, 'alpha');
-  } finally {
-    if (typeof originalConfigJson === 'undefined') {
-      delete process.env.AUTONOMY_CONTROL_PLANE_CONFIG_JSON;
-    } else {
-      process.env.AUTONOMY_CONTROL_PLANE_CONFIG_JSON = originalConfigJson;
-    }
-  }
+test('bridge repo map accepts raw paths without requiring repo ids', () => {
+  const repoRoots = parseRepoRoots('/Users/me/projects/app-one,/Users/me/projects/admin-app');
+  assert.equal(repoRoots.__path_0, '/Users/me/projects/app-one');
+  assert.equal(repoRoots.__path_1, '/Users/me/projects/admin-app');
+});
+
+test('repo-local control plane config requires a repo id before registration', () => {
+  assert.throws(() => assertControlPlaneRepoId({}));
+  assert.equal(assertControlPlaneRepoId({ repoId: 'alpha' }), 'alpha');
 });

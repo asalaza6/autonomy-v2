@@ -1,70 +1,80 @@
-import type { ControlPlaneConfig, ControlPlaneDeployPayload, ControlPlanePrdAddPayload, ControlPlaneRepoRecord } from '../../types.js';
+import type {
+  ControlPlaneConfig,
+  ControlPlaneDeployPayload,
+  ControlPlanePrdAddPayload,
+  ControlPlaneRepoRecord,
+} from '../../types.js';
 
 const DEFAULT_CONTROL_PLANE_CONFIG: ControlPlaneConfig = {
   schemaVersion: 1,
-  repos: [
-    {
-      id: 'default',
-      label: 'Current workspace',
-      description: 'Allowed PRD target for the control plane.',
-      default: true,
-    },
-  ],
+  repoId: 'default',
+  label: 'Current workspace',
+  description: 'Allowed PRD target for the control plane.',
 };
 
 function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): ControlPlaneConfig {
-  const repos = Array.isArray(config.repos) ? config.repos : [];
-  const normalizedRepos = repos
-    .map(normalizeRepoRecord)
-    .filter(Boolean) as ControlPlaneRepoRecord[];
-  const dedupedRepos = [];
-  const seen = new Set();
-  normalizedRepos.forEach((repo) => {
-    if (seen.has(repo.id)) {
-      return;
-    }
-    seen.add(repo.id);
-    dedupedRepos.push(repo);
-  });
-
+  const repo = normalizeRepoRecord(
+    {
+      ...DEFAULT_CONTROL_PLANE_CONFIG,
+      ...config,
+    },
+    DEFAULT_CONTROL_PLANE_CONFIG.repoId
+  ) || DEFAULT_CONTROL_PLANE_CONFIG;
   return {
     schemaVersion: typeof config.schemaVersion === 'number' ? config.schemaVersion : 1,
-    repos: dedupedRepos.length > 0 ? dedupedRepos : DEFAULT_CONTROL_PLANE_CONFIG.repos,
+    repoId: repo.repoId,
+    label: repo.label,
+    description: repo.description,
+    default: repo.default,
+    deploymentUrl: repo.deploymentUrl,
+    deploymentLabel: repo.deploymentLabel,
   };
 }
 
-function normalizeRepoRecord(repo: ControlPlaneRepoRecord | Record<string, unknown> | null | undefined) {
+function normalizeRepoRecord(
+  repo: ControlPlaneRepoRecord | Record<string, unknown> | null | undefined,
+  fallbackRepoId = ''
+) {
   if (!repo) {
-    return null;
+    return fallbackRepoId ? { repoId: fallbackRepoId } as ControlPlaneRepoRecord : null;
   }
-  const id = String(repo.id || '').trim();
-  if (!id) {
+  const repoId = String((repo as Record<string, unknown>).repoId || (repo as Record<string, unknown>).id || fallbackRepoId || '').trim();
+  if (!repoId) {
     return null;
   }
   return {
-    id,
-    label: String(repo.label || id).trim(),
-    description: String(repo.description || '').trim() || undefined,
-    default: repo.default === true,
-    deploymentUrl: String(repo.deploymentUrl || '').trim() || undefined,
-    deploymentLabel: String(repo.deploymentLabel || '').trim() || undefined,
-  };
+    repoId,
+    label: String((repo as Record<string, unknown>).label || repoId).trim(),
+    description: String((repo as Record<string, unknown>).description || '').trim() || undefined,
+    default: (repo as Record<string, unknown>).default === true,
+    deploymentUrl: String((repo as Record<string, unknown>).deploymentUrl || '').trim() || undefined,
+    deploymentLabel: String((repo as Record<string, unknown>).deploymentLabel || '').trim() || undefined,
+  } as ControlPlaneRepoRecord;
 }
 
-function resolveRepoById(config: ControlPlaneConfig, repoId: string) {
+function resolveRepoById(repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>, repoId: string) {
   const normalizedRepoId = String(repoId || '').trim();
   if (!normalizedRepoId) {
     throw new Error('Missing repoId.');
   }
-  const repo = (config.repos || []).find((entry) => entry.id === normalizedRepoId);
+
+  const repoList = Array.isArray(repos)
+    ? repos
+    : Object.values(repos || {});
+  const repo = repoList
+    .map((entry) => normalizeRepoRecord(entry))
+    .find((entry) => entry && entry.repoId === normalizedRepoId);
   if (!repo) {
-    throw new Error(`Repo "${normalizedRepoId}" is not enabled for this control plane.`);
+    throw new Error(`Repo "${normalizedRepoId}" is not registered with this control plane.`);
   }
   return repo;
 }
 
-function validatePrdAddSubmission(config: ControlPlaneConfig, submission: Partial<ControlPlanePrdAddPayload> = {}) {
-  const repo = resolveRepoById(config, submission.repoId || '');
+function validatePrdAddSubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlanePrdAddPayload> = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
   const id = String(submission.id || '').trim();
   const title = String(submission.title || '').trim();
   if (!id) {
@@ -87,7 +97,7 @@ function validatePrdAddSubmission(config: ControlPlaneConfig, submission: Partia
   return {
     repo,
     payload: {
-      repoId: repo.id,
+      repoId: repo.repoId,
       id,
       title,
       specification: specification || undefined,
@@ -98,14 +108,25 @@ function validatePrdAddSubmission(config: ControlPlaneConfig, submission: Partia
   };
 }
 
-function validateDeploySubmission(config: ControlPlaneConfig, submission: Partial<ControlPlaneDeployPayload> = {}) {
-  const repo = resolveRepoById(config, submission.repoId || '');
+function validateDeploySubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlaneDeployPayload> = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
   return {
     repo,
     payload: {
-      repoId: repo.id,
+      repoId: repo.repoId,
     },
   };
+}
+
+function assertControlPlaneRepoId(config: Partial<ControlPlaneConfig> | null | undefined) {
+  const repoId = String(config && config.repoId || '').trim();
+  if (!repoId) {
+    throw new Error('Missing required control-plane repoId.');
+  }
+  return repoId;
 }
 
 function normalizeTaskSpec(taskSpec: Record<string, unknown> | null | undefined, index: number) {
@@ -129,7 +150,9 @@ function normalizeTaskSpec(taskSpec: Record<string, unknown> | null | undefined,
 
 export {
   DEFAULT_CONTROL_PLANE_CONFIG,
+  assertControlPlaneRepoId,
   normalizeControlPlaneConfig,
+  normalizeRepoRecord,
   resolveRepoById,
   validateDeploySubmission,
   validatePrdAddSubmission,

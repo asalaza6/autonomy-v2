@@ -2,6 +2,7 @@ import { loadAutonomyEnv } from '../../env/env-main.js';
 import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
+import { loadControlPlaneConfig } from './control-plane-config.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -12,6 +13,7 @@ function parseRepoMap(value: string | undefined) {
     .forEach((entry) => {
       const separatorIndex = entry.indexOf('=');
       if (separatorIndex <= 0) {
+        repoMap[`__path_${Object.keys(repoMap).length}`] = entry;
         return;
       }
       const repoId = entry.slice(0, separatorIndex).trim();
@@ -28,18 +30,28 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
   repoRoots: Record<string, string>;
 }) {
   loadAutonomyEnv(rootDir);
-  const queuedJobs = await requestJson(`${options.serverUrl}/api/jobs?status=queued`);
+  const registeredRepoRoots = resolveRegisteredRepoRoots(options.repoRoots);
+  const registeredRepoIds = Object.keys(registeredRepoRoots);
+  const queuedJobs = registeredRepoIds.length > 0
+    ? await requestJson(
+      `${options.serverUrl}/api/jobs?status=queued&repoIds=${encodeURIComponent(registeredRepoIds.join(','))}`
+    )
+    : { jobs: [] };
   const jobs = Array.isArray(queuedJobs.jobs) ? queuedJobs.jobs : [];
   const processed = [];
 
   for (const job of jobs) {
     const claimed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/claim`, {
       method: 'POST',
+      body: {
+        repoIds: registeredRepoIds,
+      },
     }).catch(() => null);
     if (!claimed) {
       continue;
     }
-    const repoRoot = options.repoRoots[job.repoId];
+    const registration = registeredRepoRoots[job.repoId];
+    const repoRoot = registration && registration.rootDir;
     if (!repoRoot) {
       const failure = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
@@ -58,6 +70,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
         method: 'POST',
         body: {
+          repo: registration.repo,
           snapshot,
         },
       });
@@ -99,13 +112,15 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     }
   }
 
-  await Promise.all(Object.entries(options.repoRoots).map(async ([repoId, repoRoot]) => {
+  await Promise.all(Object.entries(registeredRepoRoots).map(async ([repoId, registration]) => {
     try {
+      const repoRoot = registration.rootDir;
       loadAutonomyEnv(repoRoot);
       const snapshot = buildStatusSnapshot(repoRoot);
       await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(repoId)}/status`, {
         method: 'POST',
         body: {
+          repo: registration.repo,
           snapshot,
         },
       });
@@ -204,8 +219,29 @@ function shouldRetryRequestError(error: unknown) {
   );
 }
 
+function resolveRegisteredRepoRoots(repoRoots: Record<string, string>) {
+  const registrations: Record<string, { rootDir: string; repo: ReturnType<typeof loadControlPlaneConfig> }> = {};
+  Object.entries(repoRoots).forEach(([configuredRepoId, repoRoot]) => {
+    const repo = loadControlPlaneConfig(repoRoot);
+    const repoId = String(repo.repoId || '').trim();
+    const isSyntheticRepoId = configuredRepoId.startsWith('__path_');
+    if (!isSyntheticRepoId && configuredRepoId && configuredRepoId !== repoId) {
+      throw new Error(`Configured repo map key "${configuredRepoId}" does not match repoId "${repoId}" in ${repoRoot}.`);
+    }
+    if (registrations[repoId]) {
+      throw new Error(`Duplicate control-plane repoId "${repoId}" for ${repoRoot}.`);
+    }
+    registrations[repoId] = {
+      rootDir: repoRoot,
+      repo,
+    };
+  });
+  return registrations;
+}
+
 export {
   parseRepoMap,
+  resolveRegisteredRepoRoots,
   runControlPlaneBridgeLoop,
   runControlPlaneBridgeOnce,
 };

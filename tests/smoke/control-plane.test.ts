@@ -47,7 +47,12 @@ test('control plane queues a browser PRD and the bridge executes it on the local
   try {
     await waitForHttp(`http://127.0.0.1:${port}/api/repos`);
 
-    const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+    const rootResponse = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(rootResponse.status, 404);
+    const rootHtml = await rootResponse.text();
+    assert.match(rootHtml, /Missing Control Panel Entrance/);
+
+    const html = await (await fetch(`http://127.0.0.1:${port}/manager`)).text();
     assert.match(html, /Dashboard/);
     assert.match(html, /Submit PRD/);
     assert.match(html, /Advanced/);
@@ -56,6 +61,21 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     assert.match(html, /Active PRD/);
     assert.match(html, /Bridge queue/);
     assert.match(html, /control-plane-client\.js/);
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ]);
+
+    const reposAfterRegistration = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/repos`);
+    assert.equal(reposAfterRegistration.repos.length, 1);
+    assert.equal(reposAfterRegistration.repos[0].repoId, 'default');
 
     const response = await fetch(`http://127.0.0.1:${port}/api/jobs`, {
       method: 'POST',
@@ -85,7 +105,11 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     assert.equal(stateAfterQueue.jobs[0].status, 'queued');
     assert.equal(stateAfterQueue.dashboard.repoCount, 1);
     assert.equal(stateAfterQueue.dashboard.serverHeartbeat.status, 'online');
-    assert.equal(stateAfterQueue.dashboard.bridgeHeartbeat.status, 'offline');
+    assert.notEqual(stateAfterQueue.dashboard.bridgeHeartbeat.status, 'offline');
+
+    const projectHtml = await (await fetch(`http://127.0.0.1:${port}/project/default`)).text();
+    assert.match(projectHtml, /Repository-scoped control plane/);
+    assert.doesNotMatch(projectHtml, /<select id="repo-id"/);
 
     runNode(CONTROL_BIN, [
       'bridge',
@@ -94,7 +118,7 @@ test('control plane queues a browser PRD and the bridge executes it on the local
       '--server-url',
       `http://127.0.0.1:${port}`,
       '--repo-map',
-      `default=${repoDir}`,
+      repoDir,
       '--once',
     ]);
 

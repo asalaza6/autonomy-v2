@@ -1,5 +1,5 @@
-import type { AnyRecord, ControlPlaneConfig, ControlPlaneRepoRecord, ControlPlaneState } from '../../types.js';
-import { loadControlPlaneConfig } from './control-plane-config.js';
+import type { AnyRecord, ControlPlaneRepoRecord, ControlPlaneState } from '../../types.js';
+import { normalizeRepoRecord } from './control-plane-validation.js';
 import {
   buildControlPlaneHeartbeatSummary,
   summarizeControlPlaneJob,
@@ -12,6 +12,7 @@ interface ControlPlaneDashboard {
   queuedPrdCount: number;
   runningAgentCount: number;
   activePullRequestCount: number;
+  deployableRepoCount: number;
   pendingJobCount: number;
   overallHeartbeatStatus: string;
   serverHeartbeat: AnyRecord;
@@ -21,26 +22,29 @@ interface ControlPlaneDashboard {
 }
 
 function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): ControlPlaneDashboard {
-  const config = loadControlPlaneConfig(rootDir);
   const repoConfigById = new Map(
-    (config.repos || []).map((repo) => [repo.id, repo] as const)
+    Object.values(state.repoStatuses || {})
+      .map((repo) => normalizeRepoRecord(repo))
+      .filter(isRepoRecord)
+      .map((repo) => [repo.repoId, repo] as const)
   );
   const jobs = (state.jobs || []).slice().sort(compareJobsByFreshness);
   const repoIds = new Set<string>([
     ...Object.keys(state.repoStatuses || {}),
-    ...(config.repos || []).map((repo) => repo.id),
   ]);
 
-  const repos = Array.from(repoIds)
+  const repos: AnyRecord[] = Array.from(repoIds)
     .sort((left, right) => {
-      const leftRank = repoSortRank(left, config);
-      const rightRank = repoSortRank(right, config);
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank;
-      }
-      return String(left).localeCompare(String(right));
+      const leftLabel = String(repoConfigById.get(left)?.label || left || '');
+      const rightLabel = String(repoConfigById.get(right)?.label || right || '');
+      return leftLabel.localeCompare(rightLabel);
     })
-    .map((repoId) => buildRepoDashboard(repoId, repoConfigById.get(repoId) || null, state.repoStatuses?.[repoId] || null, jobs));
+    .map((repoId) => buildRepoDashboard(
+      repoId,
+      repoConfigById.get(repoId) || null,
+      state.repoStatuses?.[repoId] || null,
+      jobs,
+    ));
 
   const summarizedJobs = jobs
     .map((job) => summarizeControlPlaneJob(job, labelForRepo(job.repoId, repoConfigById)));
@@ -53,6 +57,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     return total + agents.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
   }, 0);
   const activePullRequestCount = repos.reduce((total, repo) => total + (repo.pullRequestStatuses || []).length, 0);
+  const deployableRepoCount = repos.filter((repo) => Boolean(repo.deployment && (repo.deployment.hasChanges || repo.deployment.deployable))).length;
   const pendingJobCount = summarizedJobs.filter((job) => ['queued', 'claimed', 'running'].includes(String(job.status || ''))).length;
 
   return {
@@ -61,6 +66,7 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
     queuedPrdCount,
     runningAgentCount,
     activePullRequestCount,
+    deployableRepoCount,
     pendingJobCount,
     overallHeartbeatStatus: heartbeats.overallStatus,
     serverHeartbeat: heartbeats.server,
@@ -74,8 +80,8 @@ function buildRepoDashboard(
   repoId: string,
   repoConfig: ControlPlaneRepoRecord | null,
   repoStatus: AnyRecord | null,
-  jobs: AnyRecord[]
-) {
+  jobs: AnyRecord[],
+): AnyRecord {
   const label = String(repoConfig?.label || repoId || 'Repository');
   const description = String(repoConfig?.description || '');
   const summary = repoStatus
@@ -104,7 +110,6 @@ function buildRepoDashboard(
     repoId,
     label,
     description,
-    default: Boolean(repoConfig?.default),
     updatedAt: summary.updatedAt || null,
     deploymentUrl: String(repoConfig?.deploymentUrl || '').trim() || null,
     deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
@@ -148,9 +153,8 @@ function jobRank(job: AnyRecord) {
   return 4;
 }
 
-function repoSortRank(repoId: string, config: ControlPlaneConfig) {
-  const index = (config.repos || []).findIndex((repo) => repo.id === repoId);
-  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+function isRepoRecord(repo: ControlPlaneRepoRecord | null): repo is ControlPlaneRepoRecord {
+  return Boolean(repo && repo.repoId);
 }
 
 export {

@@ -148,11 +148,11 @@ For a brand-new consumer repo, the functional happy path is:
 4. Commit the tracked `prompts/autonomous/v2/` scaffold into the consumer repo.
 5. Add `.npmrc` when the package is installed from GitHub Packages.
 6. Add `.env.autonomy` with `AUTONOMY_INITIALIZED=1`, `GITHUB_TOKEN`, and `AUTONOMY_CONTROL_PLANE_SERVER_URL`.
-7. Add Heroku control-plane wiring in the consumer repo with a `Procfile`, a launcher script, and `APP_ROLE=control-plane`.
-8. Deploy the consumer repo to a Heroku control-plane app running `npx --no-install autonomy-v2-control serve`.
-9. Run the local bridge with `npx autonomy-v2-control bridge`.
+7. Add hosted control-plane wiring in your deployment target with a `Procfile` or equivalent launcher and `APP_ROLE=control-plane`.
+8. Deploy one shared control-plane app running `npx --no-install autonomy-v2-control serve`.
+9. Run the local bridge with `npx autonomy-v2-control bridge` so the hosted app can discover this repo dynamically from `prompts/autonomous/v2/config/control-plane.json`.
 10. Run the local scheduler with `npx autonomy-v2-server serve --root .`.
-11. Submit PRDs in the hosted control plane and let the bridge import them into the local repo.
+11. Submit PRDs in `/manager` or `/project/<repoId>` on the hosted control plane and let the bridge import them into the local repo.
 
 ## GitHub auth setup
 
