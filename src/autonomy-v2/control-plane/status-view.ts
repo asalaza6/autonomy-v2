@@ -28,7 +28,22 @@ function selectQueuedPrds(prds: any[] = []) {
 
 function describePrd(prd: any) {
   const status = String(prd && prd.status || 'queued');
-  const plannedTaskCount = Array.isArray(prd && prd.plannedTaskIds) ? prd.plannedTaskIds.length : 0;
+  const plannedTaskCount = Array.isArray(prd && prd.plannedTaskIds)
+    ? prd.plannedTaskIds.length
+    : Array.isArray(prd && prd.tasks)
+      ? prd.tasks.length
+      : 0;
+  const completedTaskCount = Array.isArray(prd && prd.completedTaskSpecIds)
+    ? prd.completedTaskSpecIds.length
+    : status === 'completed'
+      ? plannedTaskCount
+      : 0;
+  const remainingTaskCount = Math.max(plannedTaskCount - completedTaskCount, 0);
+  const progressPercent = plannedTaskCount > 0
+    ? Math.max(0, Math.min(100, Math.round((completedTaskCount / plannedTaskCount) * 100)))
+    : status === 'completed'
+      ? 100
+      : 0;
   const requirementCount = Array.isArray(prd && prd.requirements) ? prd.requirements.length : 0;
   const details = [];
   let stateLabel = formatStatusLabel(status);
@@ -48,6 +63,9 @@ function describePrd(prd: any) {
   if (plannedTaskCount > 0) {
     details.push(`${plannedTaskCount} planned task${plannedTaskCount === 1 ? '' : 's'}`);
   }
+  if (completedTaskCount > 0 || plannedTaskCount > 0) {
+    details.push(`${completedTaskCount}/${plannedTaskCount} tasks done`);
+  }
   if (requirementCount > 0) {
     details.push(`${requirementCount} requirement${requirementCount === 1 ? '' : 's'}`);
   }
@@ -65,6 +83,9 @@ function describePrd(prd: any) {
     stateLabel,
     detail: details.join(' | '),
     plannedTaskCount,
+    completedTaskCount,
+    remainingTaskCount,
+    progressPercent,
     requirementCount,
     updatedAt: prd && prd.updatedAt ? String(prd.updatedAt) : null,
     isQueued: prd && prd.isQueued === true,

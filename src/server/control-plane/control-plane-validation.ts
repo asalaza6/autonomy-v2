@@ -4,6 +4,7 @@ import type {
   ControlPlanePrdAddPayload,
   ControlPlaneRepoRecord,
 } from '../../types.js';
+import { randomBytes } from 'crypto';
 
 const DEFAULT_CONTROL_PLANE_CONFIG: ControlPlaneConfig = {
   schemaVersion: 1,
@@ -75,14 +76,6 @@ function validatePrdAddSubmission(
   submission: Partial<ControlPlanePrdAddPayload> = {}
 ) {
   const repo = resolveRepoById(repos, submission.repoId || '');
-  const id = String(submission.id || '').trim();
-  const title = String(submission.title || '').trim();
-  if (!id) {
-    throw new Error('Missing PRD id.');
-  }
-  if (!title) {
-    throw new Error('Missing PRD title.');
-  }
   const specification = String(submission.specification || '').trim();
   const requirements = Array.isArray(submission.requirements)
     ? submission.requirements.map((entry) => String(entry || '').trim()).filter(Boolean)
@@ -93,6 +86,12 @@ function validatePrdAddSubmission(
   if (!specification && requirements.length === 0 && taskSpecs.length === 0) {
     throw new Error('Provide a specification, at least one requirement, or at least one task spec.');
   }
+  const title = String(submission.title || '').trim() || generatePrdTitle({
+    specification,
+    requirements,
+    taskSpecs,
+  });
+  const id = String(submission.id || '').trim() || generatePrdId(title);
 
   return {
     repo,
@@ -146,6 +145,41 @@ function normalizeTaskSpec(taskSpec: Record<string, unknown> | null | undefined,
       : undefined,
     sprintId: String(taskSpec && taskSpec.sprintId || '').trim() || undefined,
   };
+}
+
+function generatePrdTitle(input: {
+  specification?: string;
+  requirements?: string[];
+  taskSpecs?: Array<Record<string, unknown>>;
+}) {
+  const titleSource = [
+    String(input.specification || '').trim(),
+    Array.isArray(input.requirements) ? input.requirements.join(' ') : '',
+    Array.isArray(input.taskSpecs)
+      ? input.taskSpecs
+        .map((taskSpec) => String(taskSpec && (taskSpec.title || taskSpec.description) || '').trim())
+        .filter(Boolean)
+        .join(' ')
+      : '',
+  ].find((entry) => extractWords(entry).length > 0) || '';
+  const words = extractWords(titleSource).slice(0, 10);
+  return words.length > 0 ? words.join(' ') : 'Untitled PRD';
+}
+
+function generatePrdId(title: string) {
+  const words = extractWords(title)
+    .slice(0, 4)
+    .map((word) => word.toLowerCase());
+  const slug = words.length > 0 ? words.join('-') : 'prd';
+  const suffix = randomBytes(3).toString('hex');
+  return `prd-${slug}-${suffix}`;
+}
+
+function extractWords(value: string) {
+  return String(value || '')
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ''))
+    .filter(Boolean);
 }
 
 export {

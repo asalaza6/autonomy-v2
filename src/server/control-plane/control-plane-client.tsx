@@ -25,6 +25,10 @@ type PrdSummary = {
   title?: string;
   stateLabel?: string;
   detail?: string;
+  plannedTaskCount?: number;
+  completedTaskCount?: number;
+  remainingTaskCount?: number;
+  progressPercent?: number;
   updatedAt?: string | null;
 };
 
@@ -149,8 +153,21 @@ const rawDashboardEl = document.getElementById('raw-dashboard');
 const rawJobsEl = document.getElementById('raw-jobs');
 const rawReposEl = document.getElementById('raw-repos');
 const fixedRepoIdEl = document.getElementById('fixed-repo-id');
+const mainHeroActionLabelEl = document.getElementById('main-hero-action-label');
+const mainProgressTitleEl = document.getElementById('main-progress-title');
+const mainProgressDetailEl = document.getElementById('main-progress-detail');
+const mainProgressStatsEl = document.getElementById('main-progress-stats');
+const mainProgressFillEl = document.getElementById('main-progress-fill');
+const mainDeployActionsEl = document.getElementById('main-deploy-actions');
+const openPrdModalButton = document.getElementById('open-prd-modal');
+const closePrdModalButton = document.getElementById('close-prd-modal');
+const prdModalEl = document.getElementById('prd-modal');
+const quickPrdForm = document.getElementById('quick-prd-form') as HTMLFormElement | null;
+const quickPrdSpecEl = document.getElementById('quick-prd-spec') as HTMLTextAreaElement | null;
+const quickFormMessageEl = document.getElementById('quick-form-message');
 const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-tab]'));
 const panels: Record<string, HTMLElement | null> = {
+  main: document.getElementById('main-panel'),
   dashboard: document.getElementById('dashboard-panel'),
   submit: document.getElementById('submit-panel'),
   advanced: document.getElementById('advanced-panel'),
@@ -175,6 +192,9 @@ function mountControlPlane() {
   if (form) {
     form.addEventListener('submit', handleSubmit);
   }
+  if (quickPrdForm) {
+    quickPrdForm.addEventListener('submit', handleQuickSubmit);
+  }
   if (refreshButton) {
     refreshButton.addEventListener('click', () => refresh().catch((error: unknown) => {
       if (messageEl) {
@@ -182,7 +202,7 @@ function mountControlPlane() {
       }
     }));
   }
-  dashboardReposEl.addEventListener('click', (event) => {
+  document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
     const button = target ? target.closest<HTMLButtonElement>('[data-action="deploy"]') : null;
     if (!button) {
@@ -198,9 +218,27 @@ function mountControlPlane() {
       }
     });
   });
+  if (openPrdModalButton) {
+    openPrdModalButton.addEventListener('click', () => openPrdModal());
+  }
+  if (closePrdModalButton) {
+    closePrdModalButton.addEventListener('click', () => closePrdModal());
+  }
+  if (prdModalEl) {
+    prdModalEl.addEventListener('click', (event) => {
+      if (event.target === prdModalEl) {
+        closePrdModal();
+      }
+    });
+  }
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closePrdModal();
+    }
+  });
 
   tabs.forEach((tab) => {
-    tab.addEventListener('click', () => setActiveTab(String(tab.dataset.tab || 'dashboard')));
+    tab.addEventListener('click', () => setActiveTab(String(tab.dataset.tab || 'main')));
   });
 
   refresh().catch((error: unknown) => {
@@ -225,35 +263,46 @@ async function handleSubmit(event: SubmitEvent) {
   messageEl.textContent = 'Queueing...';
 
   try {
-    const taskSpecsRaw = (document.getElementById('prd-task-specs') as HTMLTextAreaElement | null)?.value.trim() || '';
-    const targetRepoId = entranceContext.entrance === 'project'
-      ? entranceContext.repoId
-      : String(repoSelect && repoSelect.value || '').trim();
-    if (!targetRepoId) {
-      throw new Error('No repo selected.');
-    }
-    const body = {
-      repoId: targetRepoId,
-      id: (document.getElementById('prd-id') as HTMLInputElement | null)?.value.trim() || '',
-      title: (document.getElementById('prd-title') as HTMLInputElement | null)?.value.trim() || '',
+    const job = await submitPrd({
       specification: (document.getElementById('prd-spec') as HTMLTextAreaElement | null)?.value.trim() || '',
       requirements: ((document.getElementById('prd-req') as HTMLTextAreaElement | null)?.value || '')
         .split('\n')
         .map((value) => value.trim())
         .filter(Boolean),
       sprintId: (document.getElementById('prd-sprint') as HTMLInputElement | null)?.value.trim() || '',
-      taskSpecs: taskSpecsRaw ? JSON.parse(taskSpecsRaw) : [],
-    };
-
-    await requestJson('/api/jobs', {
-      method: 'POST',
-      body: JSON.stringify(body),
+      taskSpecsRaw: (document.getElementById('prd-task-specs') as HTMLTextAreaElement | null)?.value.trim() || '',
     });
     form.reset();
-    await refresh();
-    messageEl.textContent = 'Queued.';
+    messageEl.textContent = buildQueuedMessage(job);
   } catch (error) {
     messageEl.textContent = getErrorMessage(error);
+  }
+}
+
+async function handleQuickSubmit(event: SubmitEvent) {
+  event.preventDefault();
+
+  if (!quickFormMessageEl || !quickPrdSpecEl) {
+    return;
+  }
+
+  quickFormMessageEl.textContent = 'Queueing...';
+
+  try {
+    const job = await submitPrd({
+      specification: quickPrdSpecEl.value.trim(),
+      requirements: [],
+      sprintId: '',
+      taskSpecsRaw: '',
+    });
+    quickPrdForm?.reset();
+    quickFormMessageEl.textContent = buildQueuedMessage(job);
+    closePrdModal();
+    if (messageEl) {
+      messageEl.textContent = buildQueuedMessage(job);
+    }
+  } catch (error) {
+    quickFormMessageEl.textContent = getErrorMessage(error);
   }
 }
 
@@ -272,11 +321,44 @@ async function refresh() {
   renderRepos(repos.repos || []);
   renderDashboard(state.dashboard || {});
   renderControlPlaneHeartbeats(state.dashboard || {});
+  renderProjectMain(state.dashboard || {});
   renderAdvanced(state);
 
   if (lastUpdatedEl) {
     lastUpdatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
+}
+
+async function submitPrd({
+  specification,
+  requirements,
+  sprintId,
+  taskSpecsRaw,
+}: {
+  specification: string;
+  requirements: string[];
+  sprintId: string;
+  taskSpecsRaw: string;
+}) {
+  const targetRepoId = entranceContext.entrance === 'project'
+    ? entranceContext.repoId
+    : String(repoSelect && repoSelect.value || '').trim();
+  if (!targetRepoId) {
+    throw new Error('No repo selected.');
+  }
+  const body = {
+    repoId: targetRepoId,
+    specification,
+    requirements,
+    sprintId,
+    taskSpecs: taskSpecsRaw ? JSON.parse(taskSpecsRaw) : [],
+  };
+  const job = await requestJson<{ payload?: { id?: string; title?: string } }>('/api/jobs', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  await refresh();
+  return job;
 }
 
 async function handleDeploy(repoId: string) {
@@ -411,6 +493,35 @@ function renderControlPlaneHeartbeats(dashboard: DashboardSummary) {
   );
 }
 
+function renderProjectMain(dashboard: DashboardSummary) {
+  if (entranceContext.entrance !== 'project') {
+    return;
+  }
+
+  const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
+  const repoLabel = String(repo && (repo.label || repo.repoId) || entranceContext.repoId || 'this repo');
+  if (mainHeroActionLabelEl) {
+    mainHeroActionLabelEl.textContent = `Make a change to ${repoLabel}`;
+  }
+
+  const progress = resolveProjectProgress(repo);
+  if (mainProgressTitleEl) {
+    mainProgressTitleEl.textContent = progress.title;
+  }
+  if (mainProgressDetailEl) {
+    mainProgressDetailEl.textContent = progress.detail;
+  }
+  if (mainProgressStatsEl) {
+    mainProgressStatsEl.textContent = progress.stats;
+  }
+  if (mainProgressFillEl) {
+    mainProgressFillEl.style.width = `${progress.percent}%`;
+  }
+  if (mainDeployActionsEl) {
+    mainDeployActionsEl.innerHTML = renderToHtml(<ProjectMainDeployActions repo={repo} />);
+  }
+}
+
 function renderAdvanced(state: StateSnapshot) {
   if (!rawStateEl || !rawDashboardEl || !rawJobsEl || !rawReposEl) {
     return;
@@ -443,6 +554,88 @@ function setActiveTab(tabName: string) {
       panel.classList.toggle('active', name === tabName);
     }
   });
+}
+
+function resolveProjectProgress(repo: RepoSummary | null) {
+  const activePrd = repo && repo.activePrd ? repo.activePrd : null;
+  if (activePrd) {
+    const totalTasks = Number(activePrd.plannedTaskCount || 0);
+    const completedTasks = Math.min(totalTasks, Number(activePrd.completedTaskCount || 0));
+    const remainingTasks = Math.max(0, Number(
+      typeof activePrd.remainingTaskCount === 'number'
+        ? activePrd.remainingTaskCount
+        : totalTasks - completedTasks
+    ));
+    const percent = Math.max(
+      0,
+      Math.min(100, Number(
+        typeof activePrd.progressPercent === 'number'
+          ? activePrd.progressPercent
+          : totalTasks > 0
+            ? Math.round((completedTasks / totalTasks) * 100)
+            : 0
+      ))
+    );
+    return {
+      title: activePrd.title || 'Current run',
+      detail: activePrd.stateLabel || 'In progress',
+      stats: totalTasks > 0
+        ? `${completedTasks} complete · ${remainingTasks} remaining`
+        : 'Waiting for planned tasks',
+      percent,
+    };
+  }
+
+  if (repo && repo.queuedPrds && repo.queuedPrds.length > 0) {
+    return {
+      title: repo.queuedPrds[0].title || 'Queued PRD',
+      detail: 'Queued and waiting to start',
+      stats: `${repo.queuedPrds.length} PRD${repo.queuedPrds.length === 1 ? '' : 's'} in queue`,
+      percent: 0,
+    };
+  }
+
+  return {
+    title: 'Ready for a new run',
+    detail: 'No active PRD is working through tasks right now.',
+    stats: '0 complete · 0 remaining',
+    percent: 0,
+  };
+}
+
+function ProjectMainDeployActions({ repo }: { repo: RepoSummary | null }) {
+  const deployment = repo && repo.deployment ? repo.deployment : null;
+  const deployJobPending = ['queued', 'claimed', 'running'].includes(String(repo && repo.deployJob && repo.deployJob.status || ''));
+  const showDeployButton = Boolean(repo && repo.repoId && deployment && deployment.hasChanges);
+  const deployButtonLabel = deployJobPending
+    ? 'Deploy queued'
+    : `Deploy ${deployment && deployment.sourceBranch ? deployment.sourceBranch : 'dev'} to ${deployment && deployment.targetBranch ? deployment.targetBranch : 'main'}`;
+
+  return (
+    <>
+      {showDeployButton ? (
+        <button
+          type="button"
+          className="primary"
+          data-action="deploy"
+          data-repo-id={repo && repo.repoId ? repo.repoId : ''}
+          disabled={deployJobPending || deployingRepoIds.has(String(repo && repo.repoId || ''))}
+        >
+          {deployingRepoIds.has(String(repo && repo.repoId || '')) ? 'Queueing deploy...' : deployButtonLabel}
+        </button>
+      ) : null}
+      {repo && repo.deploymentUrl ? (
+        <a
+          className="action-link"
+          href={repo.deploymentUrl}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {repo.deploymentLabel || 'Deployment site'}
+        </a>
+      ) : null}
+    </>
+  );
 }
 
 function RepoOptions({ repos }: { repos: RepoRecord[] }) {
@@ -487,6 +680,15 @@ function HeartbeatStrip({
 }) {
   const server = controlPlane.server || {};
   const bridge = controlPlane.bridge || {};
+  if (entranceContext.entrance === 'project') {
+    const aggregate = resolveProjectHeartbeat(controlPlane);
+    return (
+      <div className={`status-chip ${statusClass(aggregate.status)}`}>
+        <span className="status-dot" />
+        <span>{aggregate.label}</span>
+      </div>
+    );
+  }
   return (
     <>
       <div className={`status-chip ${statusClass(controlPlane.overallStatus)}`}>
@@ -505,6 +707,48 @@ function HeartbeatStrip({
       </div>
     </>
   );
+}
+
+function buildQueuedMessage(job: { payload?: { id?: string; title?: string } } | null | undefined) {
+  const generatedTitle = String(job && job.payload && job.payload.title || '').trim();
+  const generatedId = String(job && job.payload && job.payload.id || '').trim();
+  return generatedTitle || generatedId
+    ? `Queued ${generatedTitle || 'PRD'}${generatedId ? ` (${generatedId})` : ''}.`
+    : 'Queued.';
+}
+
+function openPrdModal() {
+  if (!prdModalEl) {
+    return;
+  }
+  prdModalEl.hidden = false;
+  if (quickFormMessageEl) {
+    quickFormMessageEl.textContent = '';
+  }
+  window.setTimeout(() => {
+    quickPrdSpecEl?.focus();
+  }, 0);
+}
+
+function closePrdModal() {
+  if (!prdModalEl) {
+    return;
+  }
+  prdModalEl.hidden = true;
+}
+
+function resolveProjectHeartbeat(controlPlane: ControlPlaneHeartbeatSummary) {
+  const statuses = [
+    String(controlPlane.server && controlPlane.server.status || 'offline'),
+    String(controlPlane.bridge && controlPlane.bridge.status || 'offline'),
+  ];
+  if (statuses.every((status) => status === 'online')) {
+    return { status: 'online', label: 'Online' };
+  }
+  if (statuses.includes('stale')) {
+    return { status: 'stale', label: 'Stale' };
+  }
+  return { status: 'offline', label: 'Offline' };
 }
 
 function statusClass(status?: string) {

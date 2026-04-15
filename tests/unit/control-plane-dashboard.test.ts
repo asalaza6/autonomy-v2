@@ -46,7 +46,8 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
                 status: 'planned',
                 isQueued: false,
                 requirements: ['one', 'two'],
-                plannedTaskIds: ['task-1'],
+                plannedTaskIds: ['task-1', 'task-2', 'task-3'],
+                completedTaskSpecIds: ['task-1'],
                 updatedAt: '2026-04-01T12:08:00.000Z',
               },
               {
@@ -116,6 +117,10 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   assert.match(dashboard.repos[0].overview, /Active PRD/);
   assert.match(dashboard.repos[0].overview, /queued PRD/i);
   assert.equal(dashboard.repos[0].activePrd.title, 'Active PRD');
+  assert.equal(dashboard.repos[0].activePrd.plannedTaskCount, 3);
+  assert.equal(dashboard.repos[0].activePrd.completedTaskCount, 1);
+  assert.equal(dashboard.repos[0].activePrd.remainingTaskCount, 2);
+  assert.equal(dashboard.repos[0].activePrd.progressPercent, 33);
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
   assert.equal(dashboard.repos[0].freshnessStatus, 'stale');
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);

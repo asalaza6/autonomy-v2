@@ -106,9 +106,16 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     assert.notEqual(stateAfterQueue.dashboard.bridgeHeartbeat.status, 'offline');
 
     const projectHtml = await (await fetch(`http://127.0.0.1:${port}/project/default`)).text();
-    assert.match(projectHtml, /Repository-scoped control plane/);
-    assert.match(projectHtml, /Submit PRD/);
+    assert.match(projectHtml, />Main</);
     assert.match(projectHtml, /Advanced/);
+    assert.match(projectHtml, /Make a change to default/);
+    assert.match(projectHtml, /main-progress-fill/);
+    assert.match(projectHtml, /Status dashboard/);
+    assert.match(projectHtml, /New PRD/);
+    assert.doesNotMatch(projectHtml, /data-tab="dashboard"/);
+    assert.doesNotMatch(projectHtml, /data-tab="submit"/);
+    assert.match(projectHtml, /data-tab="main"/);
+    assert.match(projectHtml, /data-tab="advanced"/);
     assert.doesNotMatch(projectHtml, /<select id="repo-id"/);
 
     const unknownProjectResponse = await fetch(`http://127.0.0.1:${port}/project/testadfasdf`);

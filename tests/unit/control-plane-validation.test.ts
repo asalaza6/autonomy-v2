@@ -55,13 +55,6 @@ test('prd submission validation enforces discovered repo registration and requir
     specification: 'Spec text',
   }));
 
-  assert.throws(() => validatePrdAddSubmission(repos, {
-    repoId: 'alpha',
-    id: '',
-    title: 'Example',
-    specification: 'Spec text',
-  }));
-
   const { payload } = validatePrdAddSubmission(repos, {
     repoId: 'alpha',
     id: 'prd-1',
@@ -72,6 +65,23 @@ test('prd submission validation enforces discovered repo registration and requir
   assert.equal(payload.repoId, 'alpha');
   assert.equal(payload.id, 'prd-1');
   assert.deepEqual(payload.requirements, ['First requirement']);
+});
+
+test('prd submission validation autogenerates title and id when omitted', () => {
+  const repos = [
+    {
+      repoId: 'alpha',
+      label: 'Alpha',
+    },
+  ];
+
+  const { payload } = validatePrdAddSubmission(repos, {
+    repoId: 'alpha',
+    specification: 'Build a better admin dashboard for pool service scheduling and payments',
+  });
+
+  assert.equal(payload.title, 'Build a better admin dashboard for pool service scheduling and');
+  assert.match(payload.id, /^prd-build-a-better-admin-[a-f0-9]{6}$/);
 });
 
 test('deploy submission validation enforces discovered repo registration', () => {

@@ -399,8 +399,160 @@ const styles = `
   }
   .action-link:hover { transform: translateY(-1px); }
 
+  .main-panel {
+    display: grid;
+    gap: 18px;
+  }
+
+  .main-stage {
+    display: grid;
+    gap: 18px;
+    padding: 22px;
+    border-radius: 26px;
+    background:
+      linear-gradient(135deg, rgba(36, 91, 117, 0.96), rgba(27, 52, 77, 0.92)),
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.14), transparent 32%);
+    color: white;
+    box-shadow: 0 22px 55px rgba(27, 52, 77, 0.28);
+  }
+
+  .main-stage .muted {
+    color: rgba(255, 255, 255, 0.72);
+  }
+
+  .main-stage-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .main-stage-cta {
+    display: grid;
+    gap: 10px;
+    max-width: 720px;
+  }
+
+  .main-stage-button {
+    min-height: 58px;
+    padding: 16px 20px;
+    border-radius: 18px;
+    border: none;
+    background: linear-gradient(135deg, #fff2d6, #ffd18c);
+    color: #352516;
+    font-size: 1.05rem;
+    font-weight: 750;
+    box-shadow: 0 16px 32px rgba(16, 22, 31, 0.24);
+    cursor: pointer;
+  }
+
+  .main-stage-button:hover {
+    transform: translateY(-1px);
+  }
+
+  .main-stage-deploy {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .main-stage-deploy .action-link {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: white;
+  }
+
+  .progress-shell {
+    display: grid;
+    gap: 12px;
+  }
+
+  .progress-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: end;
+    flex-wrap: wrap;
+  }
+
+  .progress-headline {
+    display: grid;
+    gap: 6px;
+  }
+
+  .progress-title {
+    font-size: clamp(1.3rem, 3vw, 1.9rem);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+  }
+
+  .progress-track {
+    position: relative;
+    height: 16px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+  }
+
+  .progress-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #ffd889, #ff9d5c 55%, #ff6f61);
+    box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.24);
+    transition: width 240ms ease;
+  }
+
+  .progress-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 0.95rem;
+  }
+
+  .modal-shell[hidden] {
+    display: none;
+  }
+
+  .modal-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(16, 22, 31, 0.38);
+    backdrop-filter: blur(8px);
+  }
+
+  .modal-card {
+    width: min(680px, 100%);
+    display: grid;
+    gap: 16px;
+    padding: 22px;
+    border-radius: 24px;
+    background: rgba(255, 253, 248, 0.98);
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    box-shadow: 0 28px 70px rgba(16, 22, 31, 0.24);
+  }
+
+  .modal-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: start;
+  }
+
   @media (max-width: 980px) {
     .metric-grid, .raw-grid, .grid { grid-template-columns: 1fr; }
+    .main-stage-actions, .progress-head, .progress-foot { align-items: start; }
   }
 `;
 
@@ -415,7 +567,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
       : 'Repository Control Plane';
   const shellLede = isManager
     ? 'Browse discovered repos and inspect their current status from the shared hosted control plane.'
-    : `Repository-scoped control plane for ${repoId || 'this repo'}. Dashboard, queue, and PRD submission stay pinned to this route.`;
+    : '';
   return (
     <html lang="en">
       <head>
@@ -435,7 +587,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
             <div>
               <div className="eyebrow">Autonomy v2</div>
               <h1>{shellTitle}</h1>
-              <p className="lede muted">{shellLede}</p>
+              {shellLede ? <p className="lede muted">{shellLede}</p> : null}
             </div>
             <div className="heartbeat-strip">
               <div id="control-plane-heartbeats" className="heartbeat-strip" aria-live="polite" />
@@ -448,29 +600,72 @@ function ControlPlanePage(props: ControlPlanePageProps) {
 
           {isManager ? null : (
             <nav className="tabs" role="tablist" aria-label="Control plane views">
-              <button type="button" className="tab-button active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
-              <button type="button" className="tab-button" data-tab="submit" role="tab" aria-selected="false">Submit PRD</button>
+              <button type="button" className="tab-button active" data-tab="main" role="tab" aria-selected="true">Main</button>
               <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
             </nav>
           )}
 
-          <section id="dashboard-panel" className="tabs-panel active" role="tabpanel">
-            <article className="surface">
-              <div className="surface-head">
-                <div>
-                  <h2>Status dashboard</h2>
-                  <p className="muted">
-                    {isManager
-                      ? 'Available repos and their current status.'
-                      : 'Active PRDs, queued PRDs, agent status, and the bridge queue in plain language.'}
-                  </p>
+          {isManager ? (
+            <section id="dashboard-panel" className="tabs-panel active" role="tabpanel">
+              <article className="surface">
+                <div className="surface-head">
+                  <div>
+                    <h2>Status dashboard</h2>
+                    <p className="muted">Available repos and their current status.</p>
+                  </div>
+                  <div className="muted" id="dashboard-summary-note" />
                 </div>
-                <div className="muted" id="dashboard-summary-note" />
-              </div>
-              {isManager ? null : <div id="dashboard-metrics" className="metric-grid" aria-live="polite" />}
-              <div id="dashboard-repos" className="repo-stack" />
-              {isManager ? null : (
-                <>
+                <div id="dashboard-repos" className="repo-stack" />
+              </article>
+            </section>
+          ) : null}
+
+          {isManager ? null : (
+            <>
+              <section id="main-panel" className="tabs-panel active" role="tabpanel">
+                <div className="main-panel">
+                  <article className="main-stage">
+                    <div className="main-stage-actions">
+                      <div className="main-stage-cta">
+                        <button type="button" className="main-stage-button" id="open-prd-modal">
+                          <span id="main-hero-action-label">{`Make a change to ${repoId || 'this repo'}`}</span>
+                        </button>
+                        <p className="muted">Start a new change request from one action, then watch task progress move forward here.</p>
+                      </div>
+                      <div id="main-deploy-actions" className="main-stage-deploy" />
+                    </div>
+
+                    <div className="progress-shell">
+                      <div className="progress-head">
+                        <div className="progress-headline">
+                          <h2 id="main-progress-title" className="progress-title">Ready for a new run</h2>
+                          <p id="main-progress-detail" className="muted">No active PRD is working through tasks right now.</p>
+                        </div>
+                        <div id="main-progress-stats">0 complete · 0 remaining</div>
+                      </div>
+                      <div className="progress-track" aria-hidden="true">
+                        <div id="main-progress-fill" className="progress-fill" />
+                      </div>
+                      <div className="progress-foot">
+                        <span>Progress moves as planned tasks complete.</span>
+                        <span>Queued PRDs stay in Advanced.</span>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </section>
+
+              <section id="advanced-panel" className="tabs-panel" role="tabpanel">
+                <article className="surface">
+                  <div className="surface-head">
+                    <div>
+                      <h2>Status dashboard</h2>
+                      <p className="muted">Active PRDs, queued PRDs, agent status, and the bridge queue in plain language.</p>
+                    </div>
+                    <div className="muted" id="dashboard-summary-note" />
+                  </div>
+                  <div id="dashboard-metrics" className="metric-grid" aria-live="polite" />
+                  <div id="dashboard-repos" className="repo-stack" />
                   <div className="section-divider" />
                   <div className="surface-head">
                     <div>
@@ -479,20 +674,14 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                     </div>
                   </div>
                   <div id="dashboard-jobs" className="job-stack" />
-                </>
-              )}
-            </article>
-          </section>
+                </article>
 
-          {isManager ? null : (
-            <>
-              <section id="submit-panel" className="tabs-panel" role="tabpanel">
                 <section className="grid">
                   <article className="surface">
                     <div className="surface-head">
                       <div>
                         <h2>New PRD</h2>
-                        <p className="muted">Queue a PRD with plain-text fields. Advanced fields stay hidden unless you open them.</p>
+                        <p className="muted">Write the PRD content. The system generates the PRD title and id automatically.</p>
                       </div>
                     </div>
                     <form id="prd-form">
@@ -507,33 +696,21 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                           <div className="muted body-note" id="fixed-repo-id">{repoId || 'Unknown repo'}</div>
                         </div>
                       )}
-                      <div className="row">
-                        <label>
-                          PRD ID
-                          <input id="prd-id" name="id" placeholder="prd-123" />
-                        </label>
-                        <label>
-                          Title
-                          <input id="prd-title" name="title" placeholder="New capability" />
-                        </label>
-                      </div>
                       <label>
                         Specification
                         <textarea id="prd-spec" name="specification" placeholder="Describe the product requirement here." />
                       </label>
-                      <label>
-                        Requirements, one per line
-                        <textarea id="prd-req" name="requirements" placeholder="First requirement&#10;Second requirement" />
-                      </label>
-                      <div className="row">
+                      <details className="subtle-box">
+                        <summary>Advanced PRD fields</summary>
+                        <div className="muted body-note">Optional fields for requirements, sprint routing, and task generation. PRD id and title are autogenerated on submit.</div>
+                        <label>
+                          Requirements, one per line
+                          <textarea id="prd-req" name="requirements" placeholder="First requirement&#10;Second requirement" />
+                        </label>
                         <label>
                           Sprint ID
                           <input id="prd-sprint" name="sprintId" placeholder="optional" />
                         </label>
-                      </div>
-                      <details className="subtle-box">
-                        <summary>Advanced PRD fields</summary>
-                        <div className="muted body-note">Optional JSON payload used for task generation. Hidden by default.</div>
                         <label>
                           Task Specs JSON
                           <textarea id="prd-task-specs" name="taskSpecs" placeholder='[{"id":"...","title":"...","agentId":"..."}]' />
@@ -562,9 +739,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                     </div>
                   </article>
                 </section>
-              </section>
 
-              <section id="advanced-panel" className="tabs-panel" role="tabpanel">
                 <article className="surface">
                   <div className="surface-head">
                     <div>
@@ -595,6 +770,31 @@ function ControlPlanePage(props: ControlPlanePageProps) {
             </>
           )}
         </main>
+
+        {isManager ? null : (
+          <div id="prd-modal" className="modal-shell" hidden>
+            <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="quick-prd-title">
+              <div className="modal-head">
+                <div>
+                  <div className="eyebrow">New change</div>
+                  <h2 id="quick-prd-title">{`Make a change to ${repoId || 'this repo'}`}</h2>
+                  <p className="lede muted">Add the specification only. The PRD title and id are generated on submit.</p>
+                </div>
+                <button type="button" className="secondary" id="close-prd-modal">Close</button>
+              </div>
+              <form id="quick-prd-form">
+                <label>
+                  Specification
+                  <textarea id="quick-prd-spec" name="specification" placeholder="Describe the change you want to make." />
+                </label>
+                <div className="row body-note">
+                  <button type="submit" className="primary">Queue PRD</button>
+                </div>
+                <div className="muted body-note" id="quick-form-message" />
+              </form>
+            </div>
+          </div>
+        )}
 
         <script type="module" src="/control-plane-client.js" />
       </body>
