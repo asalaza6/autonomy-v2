@@ -1,4 +1,4 @@
-import { h } from './control-plane-jsx-runtime/jsx-runtime.js';
+import { Fragment, h } from './control-plane-jsx-runtime/jsx-runtime.js';
 
 interface ControlPlanePageProps {
   entrance: 'manager' | 'project';
@@ -414,7 +414,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
       ? `${repoId} Control Plane`
       : 'Repository Control Plane';
   const shellLede = isManager
-    ? 'Browse all discovered repos, inspect health, and submit work from the single hosted control plane.'
+    ? 'Browse discovered repos and inspect their current status from the shared hosted control plane.'
     : `Repository-scoped control plane for ${repoId || 'this repo'}. Dashboard, queue, and PRD submission stay pinned to this route.`;
   return (
     <html lang="en">
@@ -446,140 +446,154 @@ function ControlPlanePage(props: ControlPlanePageProps) {
             </div>
           </header>
 
-          <nav className="tabs" role="tablist" aria-label="Control plane views">
-            <button type="button" className="tab-button active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
-            <button type="button" className="tab-button" data-tab="submit" role="tab" aria-selected="false">Submit PRD</button>
-            <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
-          </nav>
+          {isManager ? null : (
+            <nav className="tabs" role="tablist" aria-label="Control plane views">
+              <button type="button" className="tab-button active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+              <button type="button" className="tab-button" data-tab="submit" role="tab" aria-selected="false">Submit PRD</button>
+              <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
+            </nav>
+          )}
 
           <section id="dashboard-panel" className="tabs-panel active" role="tabpanel">
             <article className="surface">
               <div className="surface-head">
                 <div>
                   <h2>Status dashboard</h2>
-                  <p className="muted">Active PRDs, queued PRDs, agent status, and the bridge queue in plain language.</p>
+                  <p className="muted">
+                    {isManager
+                      ? 'Available repos and their current status.'
+                      : 'Active PRDs, queued PRDs, agent status, and the bridge queue in plain language.'}
+                  </p>
                 </div>
                 <div className="muted" id="dashboard-summary-note" />
               </div>
-              <div id="dashboard-metrics" className="metric-grid" aria-live="polite" />
+              {isManager ? null : <div id="dashboard-metrics" className="metric-grid" aria-live="polite" />}
               <div id="dashboard-repos" className="repo-stack" />
-              <div className="section-divider" />
-              <div className="surface-head">
-                <div>
-                  <h3>Bridge queue</h3>
-                  <p className="muted">Jobs waiting to be claimed, running, or completed by the local bridge.</p>
-                </div>
-              </div>
-              <div id="dashboard-jobs" className="job-stack" />
-            </article>
-          </section>
-
-          <section id="submit-panel" className="tabs-panel" role="tabpanel">
-            <section className="grid">
-              <article className="surface">
-                <div className="surface-head">
-                  <div>
-                    <h2>New PRD</h2>
-                    <p className="muted">Queue a PRD with plain-text fields. Advanced fields stay hidden unless you open them.</p>
-                  </div>
-                </div>
-                <form id="prd-form">
-                  {isManager ? (
-                    <label id="repo-select-field">
-                      Repo
-                      <select id="repo-id" name="repoId" />
-                    </label>
-                  ) : (
-                    <div className="subtle-box">
-                      <h3 style={{ marginBottom: '8px' }}>Target repo</h3>
-                      <div className="muted body-note" id="fixed-repo-id">{repoId || 'Unknown repo'}</div>
+              {isManager ? null : (
+                <>
+                  <div className="section-divider" />
+                  <div className="surface-head">
+                    <div>
+                      <h3>Bridge queue</h3>
+                      <p className="muted">Jobs waiting to be claimed, running, or completed by the local bridge.</p>
                     </div>
-                  )}
-                  <div className="row">
-                    <label>
-                      PRD ID
-                      <input id="prd-id" name="id" placeholder="prd-123" />
-                    </label>
-                    <label>
-                      Title
-                      <input id="prd-title" name="title" placeholder="New capability" />
-                    </label>
                   </div>
-                  <label>
-                    Specification
-                    <textarea id="prd-spec" name="specification" placeholder="Describe the product requirement here." />
-                  </label>
-                  <label>
-                    Requirements, one per line
-                    <textarea id="prd-req" name="requirements" placeholder="First requirement&#10;Second requirement" />
-                  </label>
-                  <div className="row">
-                    <label>
-                      Sprint ID
-                      <input id="prd-sprint" name="sprintId" placeholder="optional" />
-                    </label>
-                  </div>
-                  <details className="subtle-box">
-                    <summary>Advanced PRD fields</summary>
-                    <div className="muted body-note">Optional JSON payload used for task generation. Hidden by default.</div>
-                    <label>
-                      Task Specs JSON
-                      <textarea id="prd-task-specs" name="taskSpecs" placeholder='[{"id":"...","title":"...","agentId":"..."}]' />
-                    </label>
-                  </details>
-                  <div className="row body-note">
-                    <button type="submit" className="primary">Queue PRD</button>
-                    <button type="button" className="secondary" id="refresh-button">Refresh</button>
-                  </div>
-                  <div className="muted body-note" id="form-message" />
-                </form>
-              </article>
-
-              <article className="surface">
-                <div className="surface-head">
-                  <div>
-                    <h2>Submission notes</h2>
-                    <p className="muted">The bridge still executes the same <code>prd:add</code> payload. This view only changes presentation.</p>
-                  </div>
-                </div>
-                <div className="subtle-box">
-                  <h3 style={{ marginBottom: '8px' }}>What stays the same</h3>
-                  <div className="list-note">• repo-local PRD payload validation</div>
-                  <div className="list-note">• bridge claim / complete execution flow</div>
-                  <div className="list-note">• PRD commit semantics inside the local repo</div>
-                </div>
-              </article>
-            </section>
-          </section>
-
-          <section id="advanced-panel" className="tabs-panel" role="tabpanel">
-            <article className="surface">
-              <div className="surface-head">
-                <div>
-                  <h2>Advanced</h2>
-                  <p className="muted">Debug and raw state view for queue records, repo snapshots, and the rendered dashboard model.</p>
-                </div>
-              </div>
-              <div className="raw-grid">
-                <div className="advanced-block">
-                  <h3>State JSON</h3>
-                  <pre id="raw-state" />
-                </div>
-                <div className="advanced-block">
-                  <h3>Dashboard JSON</h3>
-                  <pre id="raw-dashboard" />
-                </div>
-                <div className="advanced-block">
-                  <h3>Jobs JSON</h3>
-                  <pre id="raw-jobs" />
-                </div>
-                <div className="advanced-block">
-                  <h3>Repo status JSON</h3>
-                  <pre id="raw-repos" />
-                </div>
-              </div>
+                  <div id="dashboard-jobs" className="job-stack" />
+                </>
+              )}
             </article>
           </section>
+
+          {isManager ? null : (
+            <>
+              <section id="submit-panel" className="tabs-panel" role="tabpanel">
+                <section className="grid">
+                  <article className="surface">
+                    <div className="surface-head">
+                      <div>
+                        <h2>New PRD</h2>
+                        <p className="muted">Queue a PRD with plain-text fields. Advanced fields stay hidden unless you open them.</p>
+                      </div>
+                    </div>
+                    <form id="prd-form">
+                      {isManager ? (
+                        <label id="repo-select-field">
+                          Repo
+                          <select id="repo-id" name="repoId" />
+                        </label>
+                      ) : (
+                        <div className="subtle-box">
+                          <h3 style={{ marginBottom: '8px' }}>Target repo</h3>
+                          <div className="muted body-note" id="fixed-repo-id">{repoId || 'Unknown repo'}</div>
+                        </div>
+                      )}
+                      <div className="row">
+                        <label>
+                          PRD ID
+                          <input id="prd-id" name="id" placeholder="prd-123" />
+                        </label>
+                        <label>
+                          Title
+                          <input id="prd-title" name="title" placeholder="New capability" />
+                        </label>
+                      </div>
+                      <label>
+                        Specification
+                        <textarea id="prd-spec" name="specification" placeholder="Describe the product requirement here." />
+                      </label>
+                      <label>
+                        Requirements, one per line
+                        <textarea id="prd-req" name="requirements" placeholder="First requirement&#10;Second requirement" />
+                      </label>
+                      <div className="row">
+                        <label>
+                          Sprint ID
+                          <input id="prd-sprint" name="sprintId" placeholder="optional" />
+                        </label>
+                      </div>
+                      <details className="subtle-box">
+                        <summary>Advanced PRD fields</summary>
+                        <div className="muted body-note">Optional JSON payload used for task generation. Hidden by default.</div>
+                        <label>
+                          Task Specs JSON
+                          <textarea id="prd-task-specs" name="taskSpecs" placeholder='[{"id":"...","title":"...","agentId":"..."}]' />
+                        </label>
+                      </details>
+                      <div className="row body-note">
+                        <button type="submit" className="primary">Queue PRD</button>
+                        <button type="button" className="secondary" id="refresh-button">Refresh</button>
+                      </div>
+                      <div className="muted body-note" id="form-message" />
+                    </form>
+                  </article>
+
+                  <article className="surface">
+                    <div className="surface-head">
+                      <div>
+                        <h2>Submission notes</h2>
+                        <p className="muted">The bridge still executes the same <code>prd:add</code> payload. This view only changes presentation.</p>
+                      </div>
+                    </div>
+                    <div className="subtle-box">
+                      <h3 style={{ marginBottom: '8px' }}>What stays the same</h3>
+                      <div className="list-note">• repo-local PRD payload validation</div>
+                      <div className="list-note">• bridge claim / complete execution flow</div>
+                      <div className="list-note">• PRD commit semantics inside the local repo</div>
+                    </div>
+                  </article>
+                </section>
+              </section>
+
+              <section id="advanced-panel" className="tabs-panel" role="tabpanel">
+                <article className="surface">
+                  <div className="surface-head">
+                    <div>
+                      <h2>Advanced</h2>
+                      <p className="muted">Debug and raw state view for queue records, repo snapshots, and the rendered dashboard model.</p>
+                    </div>
+                  </div>
+                  <div className="raw-grid">
+                    <div className="advanced-block">
+                      <h3>State JSON</h3>
+                      <pre id="raw-state" />
+                    </div>
+                    <div className="advanced-block">
+                      <h3>Dashboard JSON</h3>
+                      <pre id="raw-dashboard" />
+                    </div>
+                    <div className="advanced-block">
+                      <h3>Jobs JSON</h3>
+                      <pre id="raw-jobs" />
+                    </div>
+                    <div className="advanced-block">
+                      <h3>Repo status JSON</h3>
+                      <pre id="raw-repos" />
+                    </div>
+                  </div>
+                </article>
+              </section>
+            </>
+          )}
         </main>
 
         <script type="module" src="/control-plane-client.js" />
@@ -602,8 +616,8 @@ function ControlPlaneMissingEntrancePage() {
         <main>
           <article className="surface">
             <div className="eyebrow">Autonomy v2</div>
-            <h1>Missing Control Panel Entrance</h1>
-            <p className="lede muted">Use <code>/manager</code> for the aggregate view or <code>/project/&lt;repoId&gt;</code> for a repo-specific entrance.</p>
+            <h1>404</h1>
+            <p className="lede muted">Page not found.</p>
           </article>
         </main>
       </body>

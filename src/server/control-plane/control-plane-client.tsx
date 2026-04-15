@@ -7,6 +7,7 @@ declare global {
   interface Window {
     __AUTONOMY_CONTROL_PLANE_DEV__?: boolean;
     __AUTONOMY_CONTROL_PLANE_DEV_TOKEN__?: string;
+    __AUTONOMY_CONTROL_PLANE_API_BASE_URL__?: string;
   }
 }
 
@@ -82,6 +83,9 @@ type RepoSummary = {
   default?: boolean;
   updatedAt?: string | null;
   overview?: string;
+  freshnessStatus?: string;
+  freshnessStatusLabel?: string;
+  freshnessDetail?: string;
   activePrd?: PrdSummary | null;
   queuedPrds?: PrdSummary[];
   agentStatuses?: AgentSummary[];
@@ -152,6 +156,7 @@ const panels: Record<string, HTMLElement | null> = {
   advanced: document.getElementById('advanced-panel'),
 };
 const entranceContext = readEntranceContext();
+const apiBaseUrl = String(window.__AUTONOMY_CONTROL_PLANE_API_BASE_URL__ || '').trim().replace(/\/+$/, '');
 
 let latestRepos: RepoRecord[] = [];
 let deployingRepoIds = new Set<string>();
@@ -159,28 +164,24 @@ let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 
 function mountControlPlane() {
   if (
-    (entranceContext.entrance === 'manager' && !repoSelect)
-    || !lastUpdatedEl
-    || !messageEl
-    || !form
-    || !refreshButton
-    || !dashboardMetricsEl
+    !lastUpdatedEl
     || !dashboardReposEl
-    || !dashboardJobsEl
     || !dashboardSummaryNoteEl
     || !controlPlaneHeartbeatsEl
-    || !rawStateEl
-    || !rawDashboardEl
-    || !rawJobsEl
-    || !rawReposEl
   ) {
     return;
   }
 
-  form.addEventListener('submit', handleSubmit);
-  refreshButton.addEventListener('click', () => refresh().catch((error: unknown) => {
-    messageEl.textContent = getErrorMessage(error);
-  }));
+  if (form) {
+    form.addEventListener('submit', handleSubmit);
+  }
+  if (refreshButton) {
+    refreshButton.addEventListener('click', () => refresh().catch((error: unknown) => {
+      if (messageEl) {
+        messageEl.textContent = getErrorMessage(error);
+      }
+    }));
+  }
   dashboardReposEl.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
     const button = target ? target.closest<HTMLButtonElement>('[data-action="deploy"]') : null;
@@ -203,7 +204,9 @@ function mountControlPlane() {
   });
 
   refresh().catch((error: unknown) => {
-    messageEl.textContent = getErrorMessage(error);
+    if (messageEl) {
+      messageEl.textContent = getErrorMessage(error);
+    }
   });
 
   window.setInterval(() => refresh().catch(() => {}), 5000);
@@ -303,7 +306,7 @@ async function handleDeploy(repoId: string) {
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetch(resolveApiUrl(url), {
     ...init,
     headers: {
       'content-type': 'application/json',
@@ -320,7 +323,9 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 async function checkForUiReload() {
-  const payload = await requestJson<{ devMode?: boolean; devToken?: string }>('/api/dev-meta');
+  const payload = await requestJson<{ devMode?: boolean; devToken?: string }>('/api/dev-meta', {
+    headers: {},
+  });
   if (payload.devMode !== true) {
     return;
   }
@@ -358,18 +363,24 @@ function renderRepos(repos: RepoRecord[]) {
 }
 
 function renderDashboard(dashboard: DashboardSummary) {
-  if (!dashboardMetricsEl || !dashboardReposEl || !dashboardJobsEl || !dashboardSummaryNoteEl) {
+  if (!dashboardReposEl || !dashboardSummaryNoteEl) {
     return;
   }
 
   const deployableRepoCount = resolveDeployableRepoCount(dashboard);
   const deployableRepoLabel = `${deployableRepoCount} deployable repo${deployableRepoCount === 1 ? '' : 's'}`;
-  dashboardMetricsEl.innerHTML = renderToHtml(<MetricGrid dashboard={dashboard} />);
-  dashboardSummaryNoteEl.textContent = dashboard.repoCount && dashboard.repoCount > 0
-    ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} visible · ${deployableRepoLabel}`
-    : entranceContext.entrance === 'project'
-      ? `Repo ${entranceContext.repoId || ''} is not registered yet.`
-      : 'No repo snapshots yet';
+  if (dashboardMetricsEl) {
+    dashboardMetricsEl.innerHTML = renderToHtml(<MetricGrid dashboard={dashboard} />);
+  }
+  dashboardSummaryNoteEl.textContent = entranceContext.entrance === 'manager'
+    ? (
+      dashboard.repoCount && dashboard.repoCount > 0
+        ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} visible`
+        : 'No repo snapshots yet'
+    )
+    : dashboard.repoCount && dashboard.repoCount > 0
+      ? `${dashboard.repoCount} repo${dashboard.repoCount === 1 ? '' : 's'} visible · ${deployableRepoLabel}`
+      : `Repo ${entranceContext.repoId || ''} is not registered yet.`;
   dashboardReposEl.innerHTML = renderToHtml(
     <RepoStack
       repos={dashboard.repos || []}
@@ -378,7 +389,9 @@ function renderDashboard(dashboard: DashboardSummary) {
         : 'No repository snapshots yet.'}
     />
   );
-  dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
+  if (dashboardJobsEl) {
+    dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
+  }
 }
 
 function renderControlPlaneHeartbeats(dashboard: DashboardSummary) {
@@ -509,6 +522,20 @@ function countDeployableRepos(repos: RepoSummary[]) {
   return repos.filter((repo) => Boolean(repo && repo.deployment && (repo.deployment.hasChanges || repo.deployment.deployable))).length;
 }
 
+function resolveApiUrl(pathname: string) {
+  const normalizedPath = String(pathname || '').trim();
+  if (!normalizedPath) {
+    return normalizedPath;
+  }
+  if (/^https?:\/\//i.test(normalizedPath)) {
+    return normalizedPath;
+  }
+  if (normalizedPath === '/api/dev-meta') {
+    return normalizedPath;
+  }
+  return apiBaseUrl ? `${apiBaseUrl}${normalizedPath}` : normalizedPath;
+}
+
 function RepoStack({ repos, emptyMessage }: { repos: RepoSummary[]; emptyMessage: string }) {
   if (!repos.length) {
     return <div className="muted">{emptyMessage}</div>;
@@ -517,13 +544,71 @@ function RepoStack({ repos, emptyMessage }: { repos: RepoSummary[]; emptyMessage
   return (
     <>
       {repos.map((repo) => (
-        <RepoCard repo={repo} />
+        entranceContext.entrance === 'manager'
+          ? <ManagerRepoCard repo={repo} />
+          : <ProjectRepoCard repo={repo} />
       ))}
     </>
   );
 }
 
-function RepoCard({ repo }: { repo: RepoSummary }) {
+function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
+  const updated = repo.updatedAt ? `Updated ${formatTimestamp(repo.updatedAt)}` : 'No status snapshot yet';
+  const freshnessStatus = String(repo.freshnessStatus || 'offline');
+  const freshnessLabel = repo.freshnessStatusLabel || 'Offline';
+  const deployment = repo.deployment || null;
+  const projectUrl = repo.repoId ? `/project/${encodeURIComponent(repo.repoId)}` : '';
+
+  return (
+    <article className="repo">
+      <div className="repo-head">
+        <div>
+          <h3>{repo.label || repo.repoId || 'Repository'}</h3>
+          <div className="muted">{repo.description || repo.repoId || ''}</div>
+        </div>
+        <div className="row" style={{ justifyContent: 'flex-end', flex: '0 0 auto' }}>
+          <div className={`status-chip ${statusClass(freshnessStatus)}`}>
+            <span className="status-dot" />
+            <span>{freshnessLabel}</span>
+          </div>
+          <span className="pill">{updated}</span>
+        </div>
+      </div>
+      <p className="overview">{repo.freshnessDetail || repo.overview || 'No status snapshot yet'}</p>
+      <div className="section-row">
+        <RepoSection title="Repo">
+          <div className="list-note">ID: {repo.repoId || 'unknown'}</div>
+          {projectUrl ? (
+            <a className="action-link" href={projectUrl}>
+              Open repo control page
+            </a>
+          ) : null}
+        </RepoSection>
+        <RepoSection title="Deployment">
+          <div className={`status-chip ${statusClass(deployment && deployment.status)}`}>
+            <span className="status-dot" />
+            <span>{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deployment status unavailable'}</span>
+          </div>
+          <div className="list-note" style={{ marginTop: '8px' }}>
+            {deployment && deployment.detail ? deployment.detail : 'No deployment status snapshot yet.'}
+          </div>
+          {repo.deploymentUrl ? (
+            <a
+              className="action-link"
+              href={repo.deploymentUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {repo.deploymentLabel || 'Deployment site'}
+            </a>
+          ) : null}
+        </RepoSection>
+      </div>
+    </article>
+  );
+}
+
+function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
   const updated = repo.updatedAt ? `Updated ${formatTimestamp(repo.updatedAt)}` : 'No status snapshot yet';
   const deployment = repo.deployment || null;
   const deployJobPending = ['queued', 'claimed', 'running'].includes(String(repo.deployJob && repo.deployJob.status || ''));

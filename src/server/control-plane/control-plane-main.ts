@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
+import { execFile } from 'child_process';
 import http from 'http';
 import { readFile } from 'fs/promises';
 import { resolve } from 'path';
+import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import type { ControlPlaneState } from '../../types.js';
 import { loadAutonomyEnv } from '../../env/env-main.js';
@@ -29,6 +31,7 @@ import { validateDeploySubmission, validatePrdAddSubmission } from './control-pl
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
 const controlPlaneAssetCache = new Map<string, string>();
 const controlPlaneDevToken = new Date().toISOString();
+const execFileAsync = promisify(execFile);
 
 async function main(argv: string[] = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
@@ -65,6 +68,8 @@ async function main(argv: string[] = process.argv.slice(2)) {
   }
 
   const devMode = options.dev === true || process.env.AUTONOMY_CONTROL_PLANE_DEV === '1';
+  const apiBaseUrl = String(options['api-base-url'] || process.env.AUTONOMY_CONTROL_PLANE_API_BASE_URL || '').trim() || undefined;
+  const proxyUrl = String(options['proxy-url'] || process.env.AUTONOMY_CONTROL_PLANE_PROXY_URL || '').trim() || undefined;
   const port = Number(options.port || process.env.PORT || process.env.AUTONOMY_CONTROL_PLANE_PORT || '3333');
   const host = String(
     options.host ||
@@ -79,7 +84,11 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   const server = http.createServer(async (req, res) => {
     try {
-      await handleRequest(rootDir, req, res, { devMode });
+      await handleRequest(rootDir, req, res, {
+        devMode,
+        apiBaseUrl,
+        proxyUrl,
+      });
     } catch (error) {
       sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
     }
@@ -97,7 +106,12 @@ async function main(argv: string[] = process.argv.slice(2)) {
   process.on('SIGTERM', shutdown);
 }
 
-async function handleRequest(rootDir: string, req: http.IncomingMessage, res: http.ServerResponse, options: { devMode?: boolean } = {}) {
+async function handleRequest(
+  rootDir: string,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  options: { devMode?: boolean; apiBaseUrl?: string; proxyUrl?: string } = {}
+) {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   const entrance = resolveControlPlaneEntrance(url.pathname);
   applyCors(res, req.method || 'GET');
@@ -114,6 +128,12 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
     });
     return;
   }
+
+  if (options.proxyUrl && url.pathname.startsWith('/api/')) {
+    await proxyControlPlaneApiRequest(req, res, url, options.proxyUrl);
+    return;
+  }
+
   if (url.pathname === '/control-plane-client.js' && req.method === 'GET') {
     await sendControlPlaneAsset(res, 'control-plane-client.js', 'application/javascript; charset=utf-8');
     return;
@@ -130,6 +150,15 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
     return;
   }
 
+  if (entrance.kind === 'project' && req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+    const projectExists = await hasKnownControlPlaneRepo(rootDir, entrance.repoId, options);
+    if (!projectExists) {
+      res.writeHead(404, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(buildControlPlaneMissingEntranceHtml());
+      return;
+    }
+  }
+
   if ((entrance.kind === 'manager' || entrance.kind === 'project') && req.method === 'GET' && !url.pathname.startsWith('/api/')) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(buildControlPlaneHtml(entrance.kind === 'project'
@@ -138,11 +167,13 @@ async function handleRequest(rootDir: string, req: http.IncomingMessage, res: ht
         repoId: entrance.repoId,
         devMode: options.devMode === true,
         devToken: controlPlaneDevToken,
+        apiBaseUrl: options.apiBaseUrl,
       }
       : {
         entrance: 'manager',
         devMode: options.devMode === true,
         devToken: controlPlaneDevToken,
+        apiBaseUrl: options.apiBaseUrl,
       }));
     return;
   }
@@ -376,6 +407,8 @@ Options:
   --port <port>      Server port for serve (default: PORT or 3333)
   --host <host>      Server host for serve (default: HOST, 0.0.0.0 on Heroku, otherwise 127.0.0.1)
   --dev              Enable local UI dev mode with browser auto-reload after watch rebuilds
+  --api-base-url <url> Browser-facing API base URL for direct remote control-plane calls
+  --proxy-url <url>  Forward /api/* to a hosted control plane while serving local UI/assets
   --server-url <url> Bridge API base URL (default: AUTONOMY_CONTROL_PLANE_SERVER_URL or http://127.0.0.1:3333)
   --repo-map <map>   Optional repo roots in the form /local/path,... or repoId=/local/path,...
   --poll-ms <ms>     Bridge poll interval in milliseconds (default: 2000)
@@ -433,12 +466,16 @@ async function sendControlPlaneAsset(
 }
 
 async function readJsonBody(req: http.IncomingMessage) {
+  const raw = await readRequestBody(req);
+  return raw ? JSON.parse(raw) : {};
+}
+
+async function readRequestBody(req: http.IncomingMessage) {
   const chunks: Uint8Array[] = [];
   for await (const chunk of req) {
     chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
   }
-  const raw = Buffer.concat(chunks).toString('utf8').trim();
-  return raw ? JSON.parse(raw) : {};
+  return Buffer.concat(chunks).toString('utf8').trim();
 }
 
 function sendJson(res: http.ServerResponse, statusCode: number, payload: unknown) {
@@ -453,6 +490,122 @@ function applyCors(res: http.ServerResponse, method: string) {
   res.setHeader('access-control-allow-headers', 'content-type');
   if (method === 'OPTIONS') {
     res.setHeader('access-control-max-age', '86400');
+  }
+}
+
+async function proxyControlPlaneApiRequest(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  requestUrl: URL,
+  proxyUrl: string
+) {
+  const targetUrl = buildProxyTargetUrl(proxyUrl, requestUrl);
+  const method = String(req.method || 'GET').toUpperCase();
+  const body = method === 'GET' || method === 'HEAD'
+    ? undefined
+    : await readRequestBody(req);
+  const response = await fetch(targetUrl, {
+    method,
+    headers: {
+      'content-type': String(req.headers['content-type'] || 'application/json'),
+      accept: String(req.headers.accept || 'application/json'),
+    },
+    body,
+  });
+
+  res.statusCode = response.status;
+  copyProxyResponseHeaders(res, response);
+  const responseBody = Buffer.from(await response.arrayBuffer());
+  res.end(responseBody);
+}
+
+function buildProxyTargetUrl(proxyUrl: string, requestUrl: URL) {
+  const proxyBase = new URL(proxyUrl);
+  const basePath = proxyBase.pathname.replace(/\/$/, '');
+  return new URL(
+    `${basePath}${requestUrl.pathname}${requestUrl.search}`,
+    `${proxyBase.protocol}//${proxyBase.host}`
+  ).toString();
+}
+
+function copyProxyResponseHeaders(res: http.ServerResponse, response: Response) {
+  response.headers.forEach((value, key) => {
+    const normalizedKey = key.toLowerCase();
+    if (
+      normalizedKey === 'connection'
+      || normalizedKey === 'content-length'
+      || normalizedKey === 'transfer-encoding'
+    ) {
+      return;
+    }
+    res.setHeader(key, value);
+  });
+}
+
+async function hasKnownControlPlaneRepo(
+  rootDir: string,
+  repoId: string,
+  options: { apiBaseUrl?: string; proxyUrl?: string }
+) {
+  const normalizedRepoId = String(repoId || '').trim();
+  if (!normalizedRepoId) {
+    return false;
+  }
+
+  const localRepo = listDiscoveredRepos(rootDir).some((repo) => String(repo.repoId || '').trim() === normalizedRepoId);
+  if (localRepo) {
+    return true;
+  }
+
+  const remoteBaseUrl = String(options.proxyUrl || options.apiBaseUrl || '').trim();
+  if (!remoteBaseUrl) {
+    return false;
+  }
+
+  try {
+    const remoteReposUrl = buildRemoteControlPlaneApiUrl(
+      remoteBaseUrl,
+      '/api/repos',
+      `?repoId=${encodeURIComponent(normalizedRepoId)}`
+    );
+    const payload = await requestRemoteRepoRegistry(remoteReposUrl);
+    const repos = Array.isArray(payload.repos) ? payload.repos : [];
+    return repos.some((repo) => String(repo && repo.repoId || '').trim() === normalizedRepoId);
+  } catch (_) {
+    return false;
+  }
+}
+
+function buildRemoteControlPlaneApiUrl(baseUrl: string, pathname: string, search = '') {
+  const base = new URL(baseUrl);
+  const normalizedBasePath = base.pathname.replace(/\/+$/, '');
+  return new URL(
+    `${normalizedBasePath}${pathname}${search}`,
+    `${base.protocol}//${base.host}`
+  ).toString();
+}
+
+async function requestRemoteRepoRegistry(url: string) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.json() as { repos?: Array<{ repoId?: string }> };
+  } catch (_) {
+    const { stdout } = await execFileAsync('curl', [
+      '--fail',
+      '--silent',
+      '--show-error',
+      '--header',
+      'accept: application/json',
+      url,
+    ]);
+    return JSON.parse(stdout) as { repos?: Array<{ repoId?: string }> };
   }
 }
 

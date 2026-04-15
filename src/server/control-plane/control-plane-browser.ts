@@ -6,10 +6,12 @@ function buildControlPlaneHtml(props: {
   repoId?: string;
   devMode?: boolean;
   devToken?: string;
+  apiBaseUrl?: string;
 }) {
   const devMode = props.devMode === true;
   const devToken = JSON.stringify(String(props.devToken || ''));
-  const devBootstrap = `<script>window.__AUTONOMY_CONTROL_PLANE_DEV__=${devMode ? 'true' : 'false'};window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__=${devToken};</script>`;
+  const apiBaseUrl = JSON.stringify(String(props.apiBaseUrl || '').trim().replace(/\/+$/, ''));
+  const devBootstrap = `<script>window.__AUTONOMY_CONTROL_PLANE_DEV__=${devMode ? 'true' : 'false'};window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__=${devToken};window.__AUTONOMY_CONTROL_PLANE_API_BASE_URL__=${apiBaseUrl};</script>`;
   return `<!doctype html>${renderToHtml(ControlPlanePage(props)).replace('</head>', `${devBootstrap}</head>`)}`;
 }
 
