@@ -37,10 +37,6 @@
       "prId": "pr-prd-add-a-change-to-d64b61-architecture-agent",
       "sourceTaskId": "prd-add-a-change-to-d64b61-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-17T07:00:33.513Z",
-      "updatedAt": "2026-04-17T07:00:33.513Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-add-a-change-to-d64b61-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -49,9 +45,12 @@
         "When no newer deploy-created version is available, the manager still displays the current version number without showing the new-version indication.",
         "Automated coverage is added or updated for the manager version display covering both new-version and non-new-version states, and the relevant test or typecheck command passes on the dev-targeted workflow."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-17T07:00:37.708Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-17T07:00:33.513Z",
+      "updatedAt": "2026-04-17T07:00:56.397Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-17T07:00:37.708Z"
     }
   ]
 }
