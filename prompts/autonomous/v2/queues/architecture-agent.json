@@ -31,6 +31,31 @@
       "completedAt": "2026-04-17T06:32:12.732Z",
       "completionMode": "code",
       "commitSha": "6b89faebca0899356b02b40101a0cb9ed1e13957"
+    },
+    {
+      "id": "prd-add-a-change-to-d64b61-architecture-agent-1",
+      "title": "Show deploy version status in the manager",
+      "description": "Update the manager surface so it reads the version created during the deploy phase, displays that version number, and clearly indicates when the displayed version is newly created.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-a-change-to-d64b61",
+      "laneKey": "prd-add-a-change-to-d64b61:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "The manager displays a version number sourced from the version data produced during the deploy phase rather than a hardcoded value.",
+        "When the deploy phase creates a version that is newer than the manager's previously known version, the manager shows a clear new-version indication next to or with that version number.",
+        "When no newer deploy-created version is available, the manager still displays the current version number without showing the new-version indication.",
+        "Automated coverage is added or updated for the manager version display covering both new-version and non-new-version states, and the relevant test or typecheck command passes on the dev-targeted workflow."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-17T06:47:33.501Z",
+      "updatedAt": "2026-04-17T06:47:33.501Z"
     }
   ]
 }

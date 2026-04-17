@@ -3,5 +3,20 @@
   "id": "prd-add-a-change-to-d64b61",
   "title": "Add a change to the manager so that it shows",
   "createdAt": "2026-04-17T06:46:47.052Z",
-  "specification": "Add a change to the manager so that it shows a version number which indicates if it is a new version. New versions are created during the deploy phase."
+  "specification": "Add a change to the manager so that it shows a version number which indicates if it is a new version. New versions are created during the deploy phase.",
+  "tasks": [
+    {
+      "id": "prd-add-a-change-to-d64b61-architecture-agent-1",
+      "title": "Show deploy version status in the manager",
+      "agentId": "architecture-agent",
+      "description": "Update the manager surface so it reads the version created during the deploy phase, displays that version number, and clearly indicates when the displayed version is newly created.",
+      "acceptance": [
+        "The manager displays a version number sourced from the version data produced during the deploy phase rather than a hardcoded value.",
+        "When the deploy phase creates a version that is newer than the manager's previously known version, the manager shows a clear new-version indication next to or with that version number.",
+        "When no newer deploy-created version is available, the manager still displays the current version number without showing the new-version indication.",
+        "Automated coverage is added or updated for the manager version display covering both new-version and non-new-version states, and the relevant test or typecheck command passes on the dev-targeted workflow."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
+  ]
 }
