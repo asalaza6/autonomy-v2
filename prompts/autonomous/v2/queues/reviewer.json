@@ -12,7 +12,7 @@
       "sourceTaskId": "prd-make-the-title-of-04ec93-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-17T06:32:13.782Z",
       "updatedAt": "2026-04-17T06:32:13.782Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-the-title-of-04ec93-architecture-agent",
@@ -22,7 +22,9 @@
         "prompts/autonomous/v2/config/control-plane.json contains a non-empty description for the control-plane metadata without removing existing required fields.",
         "The repository config validation or typecheck command used by the architecture-agent passes after the metadata update."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-17T06:32:17.594Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
