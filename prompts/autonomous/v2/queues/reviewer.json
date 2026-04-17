@@ -1,5 +1,28 @@
 {
   "agentId": "reviewer",
   "role": "review",
-  "tasks": []
+  "tasks": [
+    {
+      "id": "review-pr-prd-make-the-title-of-04ec93-architecture-agent",
+      "title": "Review [architecture-agent] Update control-plane config display metadata",
+      "description": "Review pr-prd-make-the-title-of-04ec93-architecture-agent for Update control-plane config display metadata",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-make-the-title-of-04ec93-architecture-agent",
+      "sourceTaskId": "prd-make-the-title-of-04ec93-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-17T06:32:13.782Z",
+      "updatedAt": "2026-04-17T06:32:13.782Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-the-title-of-04ec93-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "prompts/autonomous/v2/config/control-plane.json exposes Autonomy-V2 as the configured display title using the repo's established title or label field.",
+        "prompts/autonomous/v2/config/control-plane.json contains a non-empty description for the control-plane metadata without removing existing required fields.",
+        "The repository config validation or typecheck command used by the architecture-agent passes after the metadata update."
+      ],
+      "scopeViolations": []
+    }
+  ]
 }
