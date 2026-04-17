@@ -47,8 +47,13 @@ test('status snapshots include the current runtime and PRD state', () => {
 test('status snapshots include deployment branch comparison details', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-deploy-');
   initAutonomyRepo(repoDir);
+  fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ version: '1.0.0' }, null, 2) + '\n', 'utf8');
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'add package version']);
+  git(repoDir, ['branch', '-f', 'dev', 'main']);
 
   git(repoDir, ['checkout', 'dev']);
+  fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ version: '1.1.0' }, null, 2) + '\n', 'utf8');
   fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'deploy.js'), 'export const deploy = true;\n', 'utf8');
   git(repoDir, ['add', '.']);
   git(repoDir, ['commit', '-m', 'advance dev']);
@@ -60,4 +65,8 @@ test('status snapshots include deployment branch comparison details', () => {
   assert.equal(snapshot.deployment.hasChanges, true);
   assert.equal(snapshot.deployment.sourceAheadBy > 0, true);
   assert.match(snapshot.deployment.detail, /ahead of main/);
+  assert.equal(snapshot.deployment.version.currentVersion, '1.0.0');
+  assert.equal(snapshot.deployment.version.sourceVersion, '1.1.0');
+  assert.equal(snapshot.deployment.version.targetVersion, '1.0.0');
+  assert.equal(snapshot.deployment.version.isNewVersion, false);
 });

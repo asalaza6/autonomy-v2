@@ -83,6 +83,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           commitSha: execution.sha || null,
           pushed: execution.pushed,
           pushMessage: execution.pushMessage || null,
+          version: execution.version || null,
         };
       } else {
         const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));

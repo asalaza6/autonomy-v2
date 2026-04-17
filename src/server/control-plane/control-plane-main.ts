@@ -139,6 +139,11 @@ async function handleRequest(
     return;
   }
 
+  if (url.pathname === '/control-plane-version-view.js' && req.method === 'GET') {
+    await sendControlPlaneAsset(res, 'control-plane-version-view.js', 'application/javascript; charset=utf-8');
+    return;
+  }
+
   if (url.pathname === '/control-plane-jsx-runtime/jsx-runtime.js' && req.method === 'GET') {
     await sendControlPlaneAsset(res, 'control-plane-jsx-runtime/jsx-runtime.js', 'application/javascript; charset=utf-8');
     return;

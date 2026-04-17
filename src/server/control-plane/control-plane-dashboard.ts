@@ -5,6 +5,7 @@ import {
   summarizeControlPlaneJob,
   summarizeRepoStatus,
 } from '../../autonomy-v2/control-plane/status-view.js';
+import { isVersionNewer, normalizeVersionString } from '../../autonomy-v2/commands/deploy-version.js';
 
 interface ControlPlaneDashboard {
   repoCount: number;
@@ -114,7 +115,56 @@ function buildRepoDashboard(
     deploymentUrl: String(repoConfig?.deploymentUrl || '').trim() || null,
     deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
     deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
+    versionStatus: buildRepoVersionStatus(repoId, repoStatus, jobs),
   };
+}
+
+function buildRepoVersionStatus(repoId: string, repoStatus: AnyRecord | null, jobs: AnyRecord[]) {
+  const latestDeployVersion = selectLatestDeployVersion(repoId, jobs);
+  if (latestDeployVersion && latestDeployVersion.currentVersion) {
+    const version = normalizeVersionString(latestDeployVersion.currentVersion);
+    const previousVersion = normalizeVersionString(latestDeployVersion.previousVersion);
+    const isNew = latestDeployVersion.isNewVersion === true || isVersionNewer(version, previousVersion);
+    return {
+      version,
+      previousVersion,
+      isNew,
+      source: 'deploy',
+      detail: isNew && previousVersion
+        ? `Created during deploy from ${previousVersion}`
+        : 'Current deploy version',
+    };
+  }
+
+  const snapshotVersion = normalizeVersionString(
+    repoStatus
+      && repoStatus.snapshot
+      && repoStatus.snapshot.deployment
+      && repoStatus.snapshot.deployment.version
+      && repoStatus.snapshot.deployment.version.currentVersion
+  );
+  return {
+    version: snapshotVersion,
+    previousVersion: null,
+    isNew: false,
+    source: snapshotVersion ? 'snapshot' : 'unavailable',
+    detail: snapshotVersion ? 'Current version' : 'Version unavailable',
+  };
+}
+
+function selectLatestDeployVersion(repoId: string, jobs: AnyRecord[]) {
+  const deployJobs = jobs
+    .filter((job) => (
+      String(job && job.repoId || '') === repoId
+      && String(job && job.type || '') === 'deploy'
+      && String(job && job.status || '') === 'completed'
+      && job
+      && job.result
+      && job.result.version
+    ))
+    .slice()
+    .sort(compareJobsByUpdatedTime);
+  return deployJobs.length > 0 ? deployJobs[0].result.version : null;
 }
 
 function labelForRepo(repoId: string, repoConfigById: Map<string, ControlPlaneRepoRecord>) {
@@ -130,6 +180,15 @@ function compareJobsByFreshness(left: AnyRecord, right: AnyRecord) {
 
   const leftTime = Date.parse(String(left.updatedAt || left.createdAt || '')) || 0;
   const rightTime = Date.parse(String(right.updatedAt || right.createdAt || '')) || 0;
+  if (leftTime !== rightTime) {
+    return rightTime - leftTime;
+  }
+  return String(left.id || '').localeCompare(String(right.id || ''));
+}
+
+function compareJobsByUpdatedTime(left: AnyRecord, right: AnyRecord) {
+  const leftTime = Date.parse(String(left.updatedAt || left.completedAt || left.createdAt || '')) || 0;
+  const rightTime = Date.parse(String(right.updatedAt || right.completedAt || right.createdAt || '')) || 0;
   if (leftTime !== rightTime) {
     return rightTime - leftTime;
   }
