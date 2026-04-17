@@ -46,11 +46,13 @@
         "Automated coverage is added or updated for the manager version display covering both new-version and non-new-version states, and the relevant test or typecheck command passes on the dev-targeted workflow."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-17T07:00:33.513Z",
-      "updatedAt": "2026-04-17T07:03:28.758Z",
+      "updatedAt": "2026-04-17T07:03:42.109Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-17T07:00:37.708Z"
+      "dispatchedAt": "2026-04-17T07:00:37.708Z",
+      "reviewedAt": "2026-04-17T07:03:42.109Z",
+      "lastDecision": "approved"
     }
   ]
 }
