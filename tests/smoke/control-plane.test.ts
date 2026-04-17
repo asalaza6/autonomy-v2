@@ -59,6 +59,9 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     assert.doesNotMatch(html, /Submit PRD/);
     assert.doesNotMatch(html, /Advanced/);
     assert.doesNotMatch(html, /Bridge queue/);
+    const versionViewAsset = await fetch(`http://127.0.0.1:${port}/control-plane-version-view.js`);
+    assert.equal(versionViewAsset.status, 200);
+    assert.match(await versionViewAsset.text(), /VersionStatus/);
 
     runNode(CONTROL_BIN, [
       'bridge',

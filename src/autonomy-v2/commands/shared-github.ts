@@ -4,6 +4,7 @@ import fs from 'fs';
 import { execFileSync } from 'child_process';
 import type { AnyRecord } from '../autonomy-types.js';
 import { buildMergeCommitTitle, ensureDir, slugify } from './shared-core.js';
+import { buildDeployCreatedVersionData } from './deploy-version.js';
 import { extractExecError, gitRefExists, resolveBaseRef, runGitQuiet, runGitRead, runGitWorktreeAdd } from './shared-repo.js';
 import { gitAuthArgs, gitIsAncestor, gitRemoteExists, gitWorkingTreeClean } from '../../sync/git-shared.js';
 
@@ -177,6 +178,7 @@ function performLocalDeploy(rootDir, config) {
     }
 
     const sha = runGitRead(rootDir, ['rev-parse', sourceRef]).trim();
+    const version = buildDeployCreatedVersionData(rootDir, sourceRef, targetRef);
     runGitQuiet(rootDir, ['update-ref', `refs/heads/${targetBranch}`, sha]);
     if (syncRootWorktree) {
       syncCheckedOutBranchWorktree(rootDir);
@@ -201,6 +203,7 @@ function performLocalDeploy(rootDir, config) {
       targetBranch,
       pushed,
       pushMessage,
+      version,
     };
   } catch (error) {
     return { ok: false, message: extractExecError(error) };

@@ -99,6 +99,13 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
             status: 'pending',
             statusLabel: 'Deploy available',
             detail: 'dev is 2 commits ahead of main',
+            version: {
+              currentVersion: '1.4.44',
+              previousVersion: null,
+              sourceVersion: '1.4.45',
+              targetVersion: '1.4.44',
+              isNewVersion: false,
+            },
           },
           branchLockCount: 1,
         },
@@ -126,6 +133,8 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);
   assert.equal(dashboard.repos[0].pullRequestStatuses[0].url, 'https://github.com/asalaza6/autonomy-v2/pull/7');
   assert.equal(dashboard.repos[0].deployment.statusLabel, 'Deploy available');
+  assert.equal(dashboard.repos[0].versionStatus.version, '1.4.44');
+  assert.equal(dashboard.repos[0].versionStatus.isNew, false);
   assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
@@ -157,4 +166,115 @@ test('control plane dashboard retains offline repos that were previously discove
   assert.equal(dashboard.repos[0].label, 'Beta');
   assert.equal(dashboard.repos[0].freshnessStatus, 'offline');
   assert.match(dashboard.repos[0].overview, /No active PRD yet/);
+});
+
+test('control plane dashboard marks deploy-created versions that are newer than the known version', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [
+      {
+        id: 'job-deploy-completed',
+        type: 'deploy',
+        repoId: 'alpha',
+        payload: {
+          repoId: 'alpha',
+        },
+        status: 'completed',
+        createdAt: '2026-04-01T12:00:00.000Z',
+        updatedAt: '2026-04-01T12:02:00.000Z',
+        result: {
+          sourceBranch: 'dev',
+          targetBranch: 'main',
+          version: {
+            currentVersion: '1.4.45',
+            previousVersion: '1.4.44',
+            sourceVersion: '1.4.45',
+            targetVersion: '1.4.44',
+            isNewVersion: true,
+          },
+        },
+      },
+    ],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: new Date().toISOString(),
+        snapshot: {
+          prds: { prds: [] },
+          deployment: {
+            status: 'aligned',
+            statusLabel: 'Ready',
+            version: {
+              currentVersion: '1.4.44',
+              previousVersion: null,
+              sourceVersion: '1.4.44',
+              targetVersion: '1.4.44',
+              isNewVersion: false,
+            },
+          },
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repos[0].versionStatus.version, '1.4.45');
+  assert.equal(dashboard.repos[0].versionStatus.previousVersion, '1.4.44');
+  assert.equal(dashboard.repos[0].versionStatus.isNew, true);
+  assert.equal(dashboard.repos[0].versionStatus.source, 'deploy');
+});
+
+test('control plane dashboard displays current version without a new marker when deploy version is not newer', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [
+      {
+        id: 'job-deploy-same-version',
+        type: 'deploy',
+        repoId: 'alpha',
+        payload: {
+          repoId: 'alpha',
+        },
+        status: 'completed',
+        createdAt: '2026-04-01T12:00:00.000Z',
+        updatedAt: '2026-04-01T12:02:00.000Z',
+        result: {
+          version: {
+            currentVersion: '1.4.44',
+            previousVersion: '1.4.44',
+            sourceVersion: '1.4.44',
+            targetVersion: '1.4.44',
+            isNewVersion: false,
+          },
+        },
+      },
+    ],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: new Date().toISOString(),
+        snapshot: {
+          prds: { prds: [] },
+          deployment: {
+            status: 'aligned',
+            statusLabel: 'Ready',
+            version: {
+              currentVersion: '1.4.44',
+              previousVersion: null,
+              sourceVersion: '1.4.44',
+              targetVersion: '1.4.44',
+              isNewVersion: false,
+            },
+          },
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repos[0].versionStatus.version, '1.4.44');
+  assert.equal(dashboard.repos[0].versionStatus.isNew, false);
+  assert.equal(dashboard.repos[0].versionStatus.source, 'deploy');
 });

@@ -52,10 +52,15 @@
         "When no newer deploy-created version is available, the manager still displays the current version number without showing the new-version indication.",
         "Automated coverage is added or updated for the manager version display covering both new-version and non-new-version states, and the relevant test or typecheck command passes on the dev-targeted workflow."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-17T06:47:33.501Z",
-      "updatedAt": "2026-04-17T06:47:33.501Z"
+      "updatedAt": "2026-04-17T07:00:32.447Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-a-change-to-d64b61-architecture-agent",
+      "startedAt": "2026-04-17T06:47:51.621Z",
+      "completedAt": "2026-04-17T07:00:32.383Z",
+      "completionMode": "code",
+      "commitSha": "6c270b2261c69ae1479762da39389bc2ab3b5067"
     }
   ]
 }

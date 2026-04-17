@@ -2,6 +2,8 @@
 /// <reference lib="dom.iterable" />
 
 import { Fragment, h, renderToHtml } from './control-plane-jsx-runtime/jsx-runtime.js';
+import { VersionStatus } from './control-plane-version-view.js';
+import type { VersionStatusSummary } from './control-plane-version-view.js';
 
 declare global {
   interface Window {
@@ -109,6 +111,7 @@ type RepoSummary = {
   deploymentUrl?: string | null;
   deploymentLabel?: string | null;
   deployJob?: JobSummary | null;
+  versionStatus?: VersionStatusSummary | null;
 };
 
 type DashboardSummary = {
@@ -827,6 +830,9 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
               Open repo control page
             </a>
           ) : null}
+        </RepoSection>
+        <RepoSection title="Version">
+          <VersionStatus versionStatus={repo.versionStatus || null} />
         </RepoSection>
         <RepoSection title="Deployment">
           <div className={`status-chip ${statusClass(deployment && deployment.status)}`}>

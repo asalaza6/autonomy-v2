@@ -6,6 +6,7 @@ import { buildPullRequestStatusSummaries } from '../commands/shared-pr-status.js
 import { gitRefExists, resolveBaseRef, runGitRead } from '../commands/shared-repo.js';
 import { loadAllState, loadTrackedPrds } from '../commands/shared-prds.js';
 import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
+import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapshot } from '../commands/deploy-version.js';
 
 function buildStatusSnapshot(rootDir) {
   ensureInitialized(rootDir);
@@ -98,6 +99,7 @@ function buildDeploymentSnapshot(rootDir, config) {
       detail: `Deploy source and target branches must differ. Received ${sourceBranch}.`,
       sourceSha: null,
       targetSha: null,
+      version: buildUnavailableDeploymentVersionSnapshot(rootDir),
     };
   }
 
@@ -110,6 +112,7 @@ function buildDeploymentSnapshot(rootDir, config) {
     const sourceAheadBy = Number(sourceAheadRaw || 0);
     const sourceSha = runGitRead(rootDir, ['rev-parse', sourceRef]).trim() || null;
     const targetSha = runGitRead(rootDir, ['rev-parse', targetRef]).trim() || null;
+    const version = buildDeploymentVersionSnapshot(rootDir, sourceRef, targetRef);
     const branchesAligned = targetAheadBy === 0 && sourceAheadBy === 0;
     const hasChanges = !branchesAligned;
     const deployable = hasChanges;
@@ -143,6 +146,7 @@ function buildDeploymentSnapshot(rootDir, config) {
       detail,
       sourceSha,
       targetSha,
+      version,
     };
   } catch (error) {
     return {
@@ -158,6 +162,7 @@ function buildDeploymentSnapshot(rootDir, config) {
       detail: error instanceof Error ? error.message : String(error),
       sourceSha: null,
       targetSha: null,
+      version: buildUnavailableDeploymentVersionSnapshot(rootDir),
     };
   }
 }

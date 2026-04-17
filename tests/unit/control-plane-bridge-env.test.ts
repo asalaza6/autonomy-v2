@@ -57,12 +57,15 @@ test('bridge loads repo env during its startup cycle', async (t) => {
 test('bridge executes deploy jobs for mapped repos', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-deploy-bridge-');
   initAutonomyRepo(repoDir);
+  fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ version: '1.0.0' }, null, 2) + '\n', 'utf8');
   git(repoDir, ['add', '.']);
   git(repoDir, ['commit', '-m', 'initialize autonomy']);
   git(repoDir, ['branch', '-f', 'dev', 'main']);
   git(repoDir, ['switch', 'dev']);
+  fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ version: '1.1.0' }, null, 2) + '\n', 'utf8');
   fs.appendFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'index.js'), '\nexport const bridgeDeploy = true;\n', 'utf8');
   git(repoDir, ['add', 'src/apps/fixture/index.js']);
+  git(repoDir, ['add', 'package.json']);
   git(repoDir, ['commit', '-m', 'bridge deploy change']);
   git(repoDir, ['switch', 'main']);
 
@@ -70,7 +73,7 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   let heartbeatCount = 0;
   let completedJob: any = null;
 
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     if (req.url === '/api/jobs?status=queued&repoIds=default') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
@@ -98,7 +101,7 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
     }
 
     if (req.url === '/api/jobs/job-deploy-1/complete' && req.method === 'POST') {
-      completedJob = true;
+      completedJob = JSON.parse(await readRequestText(req));
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ id: 'job-deploy-1', status: 'completed' }));
       return;
@@ -135,6 +138,9 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
 
   assert.equal(heartbeatCount, 1);
   assert.equal(Boolean(completedJob), true);
+  assert.equal(completedJob.result.version.currentVersion, '1.1.0');
+  assert.equal(completedJob.result.version.previousVersion, '1.0.0');
+  assert.equal(completedJob.result.version.isNewVersion, true);
   assert.notEqual(git(repoDir, ['rev-parse', 'main']), mainBefore);
   assert.equal(git(repoDir, ['rev-parse', 'main']), git(repoDir, ['rev-parse', 'dev']));
 });
@@ -158,6 +164,15 @@ function listen(server: http.Server): Promise<string> {
       }
       resolve(`http://127.0.0.1:${address.port}`);
     });
+  });
+}
+
+function readRequestText(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    req.on('error', reject);
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
   });
 }
 
