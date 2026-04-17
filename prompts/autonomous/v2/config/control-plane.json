@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "repoId": "default",
+  "repoId": "autonomy-v2",
   "label": "Autonomy-V2",
   "description": "Control-plane display metadata for Autonomy-V2.",
   "deploymentUrl": "https://example.com",
