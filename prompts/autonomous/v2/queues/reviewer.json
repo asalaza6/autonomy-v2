@@ -19,11 +19,13 @@
         "The repository config validation or typecheck command used by the architecture-agent passes after the metadata update."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-17T06:32:13.782Z",
-      "updatedAt": "2026-04-17T06:32:52.528Z",
+      "updatedAt": "2026-04-17T06:33:22.152Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-17T06:32:17.594Z"
+      "dispatchedAt": "2026-04-17T06:32:17.594Z",
+      "reviewedAt": "2026-04-17T06:33:22.152Z",
+      "lastDecision": "approved"
     }
   ]
 }
