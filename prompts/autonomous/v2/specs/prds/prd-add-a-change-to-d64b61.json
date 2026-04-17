@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-add-a-change-to-d64b61",
+  "title": "Add a change to the manager so that it shows",
+  "createdAt": "2026-04-17T06:46:47.052Z",
+  "specification": "Add a change to the manager so that it shows a version number which indicates if it is a new version. New versions are created during the deploy phase."
+}
