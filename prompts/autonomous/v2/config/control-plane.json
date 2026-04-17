@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repoId": "default",
-  "label": "Current workspace",
-  "description": "Repo identity and display metadata for the hosted control plane.",
+  "label": "Autonomy-V2",
+  "description": "Control-plane display metadata for Autonomy-V2.",
   "deploymentUrl": "https://example.com",
   "deploymentLabel": "Production site"
 }

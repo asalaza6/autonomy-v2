@@ -22,10 +22,15 @@
         "prompts/autonomous/v2/config/control-plane.json contains a non-empty description for the control-plane metadata without removing existing required fields.",
         "The repository config validation or typecheck command used by the architecture-agent passes after the metadata update."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-17T06:31:07.889Z",
-      "updatedAt": "2026-04-17T06:31:07.889Z"
+      "updatedAt": "2026-04-17T06:32:12.789Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-the-title-of-04ec93-architecture-agent",
+      "startedAt": "2026-04-17T06:31:26.979Z",
+      "completedAt": "2026-04-17T06:32:12.732Z",
+      "completionMode": "code",
+      "commitSha": "6b89faebca0899356b02b40101a0cb9ed1e13957"
     }
   ]
 }
