@@ -21,21 +21,32 @@ function run(rootDir, options) {
       getAutonomyPaths,
     });
     ensureDir(path.dirname(targetPath));
+    const templateContent = getTemplateContent(relativeFile, {
+      generatedTemplateFiles: GENERATED_TEMPLATE_FILES,
+      templateRoot: TEMPLATE_ROOT,
+    });
+    if (relativeFile === '.gitignore') {
+      const gitignoreResult = mergeGitignore(targetPath, templateContent);
+      if (gitignoreResult === 'created') {
+        created.push(relativeFile);
+      } else if (gitignoreResult === 'updated') {
+        updated.push(relativeFile);
+      } else {
+        skipped.push(relativeFile);
+      }
+      continue;
+    }
+
     const preserveIfExists = relativeFile === '.env.autonomy'
       || relativeFile === 'config/agents.json'
       || relativeFile === 'config/sprint.json';
-    const isBootstrapRootFile = relativeFile === '.gitignore';
     const shouldSkipExisting = fs.existsSync(targetPath)
-      && (preserveIfExists || (!isBootstrapRootFile && options.force !== true));
+      && (preserveIfExists || options.force !== true);
     if (shouldSkipExisting) {
       skipped.push(relativeFile);
       continue;
     }
 
-    const templateContent = getTemplateContent(relativeFile, {
-      generatedTemplateFiles: GENERATED_TEMPLATE_FILES,
-      templateRoot: TEMPLATE_ROOT,
-    });
     fs.writeFileSync(targetPath, templateContent, 'utf8');
     created.push(relativeFile);
   }
@@ -113,6 +124,34 @@ function removeListEntry(list, value) {
   if (index >= 0) {
     list.splice(index, 1);
   }
+}
+
+function mergeGitignore(targetPath, templateContent) {
+  if (!fs.existsSync(targetPath)) {
+    fs.writeFileSync(targetPath, templateContent, 'utf8');
+    return 'created';
+  }
+
+  const currentContent = fs.readFileSync(targetPath, 'utf8');
+  const existingLines = new Set(
+    currentContent
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  );
+  const missingLines = templateContent
+    .split(/\r?\n/)
+    .filter((line) => line.trim() && !existingLines.has(line.trim()));
+
+  if (missingLines.length === 0) {
+    return 'skipped';
+  }
+
+  const separator = currentContent.endsWith('\n')
+    ? currentContent.endsWith('\n\n') ? '' : '\n'
+    : '\n\n';
+  fs.writeFileSync(targetPath, `${currentContent}${separator}${missingLines.join('\n')}\n`, 'utf8');
+  return 'updated';
 }
 
 export { run };

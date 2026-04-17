@@ -146,6 +146,27 @@ test('init preserves an existing .env.autonomy file', () => {
   assert.equal(fs.readFileSync(envPath, 'utf8'), 'CUSTOM_AUTONOMY_ENV=1\n');
 });
 
+test('init appends missing .gitignore entries without replacing existing content', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-init-merge-gitignore-');
+  const gitignorePath = path.join(repoDir, '.gitignore');
+  fs.writeFileSync(gitignorePath, 'custom-local-artifact\n.env\n', 'utf8');
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+  const initializedGitignore = fs.readFileSync(gitignorePath, 'utf8');
+  assert.match(initializedGitignore, /^custom-local-artifact$/m);
+  assert.match(initializedGitignore, /^\.env$/m);
+  assert.match(initializedGitignore, /^\.env\.publish$/m);
+  assert.match(initializedGitignore, /^\.env\.publish\.local$/m);
+  assert.match(initializedGitignore, /^\.tooling\/$/m);
+  assert.match(initializedGitignore, /^docs\/export-graph\.\*$/m);
+  assert.equal((initializedGitignore.match(/^\.env$/gm) || []).length, 1);
+
+  runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
+  const forcedGitignore = fs.readFileSync(gitignorePath, 'utf8');
+  assert.match(forcedGitignore, /^custom-local-artifact$/m);
+  assert.equal((forcedGitignore.match(/^docs\/export-graph\.\*$/gm) || []).length, 1);
+});
+
 test('task:finish refuses to mutate dev for claimed implementation lanes', () => {
   const repoDir = createFixtureRepo('autonomy-v2-task-finish-guard-');
   initAutonomyRepo(repoDir);

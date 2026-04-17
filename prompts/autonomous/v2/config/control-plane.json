@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "repoId": "default",
+  "label": "Current workspace",
+  "description": "Repo identity and display metadata for the hosted control plane.",
+  "deploymentUrl": "https://example.com",
+  "deploymentLabel": "Production site"
+}

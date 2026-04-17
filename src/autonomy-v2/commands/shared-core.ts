@@ -35,12 +35,18 @@ const DEFAULT_GITIGNORE = [
   '.env.local',
   '.env.development',
   '.env.production',
+  '.env.publish',
+  '.env.publish.local',
   '',
   '# Autonomy runtime state',
   '.autonomy/',
+  '.tooling/',
   '',
   '# Autonomy local environment placeholder',
   '.env.autonomy',
+  '',
+  '# Generated export graph artifacts',
+  'docs/export-graph.*',
   '',
 ].join('\n');
 const GENERATED_TEMPLATE_FILES = {
