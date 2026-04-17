@@ -2,5 +2,30 @@
   "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
-  "tasks": []
+  "tasks": [
+    {
+      "id": "prd-make-the-title-of-04ec93-architecture-agent-1",
+      "title": "Update control-plane config display metadata",
+      "description": "Update the control-plane configuration JSON so the config display title is Autonomy-V2 and the control JSON carries the requested description metadata.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-the-title-of-04ec93",
+      "laneKey": "prd-make-the-title-of-04ec93:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "prompts/autonomous/v2/config/control-plane.json exposes Autonomy-V2 as the configured display title using the repo's established title or label field.",
+        "prompts/autonomous/v2/config/control-plane.json contains a non-empty description for the control-plane metadata without removing existing required fields.",
+        "The repository config validation or typecheck command used by the architecture-agent passes after the metadata update."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-17T06:31:07.889Z",
+      "updatedAt": "2026-04-17T06:31:07.889Z"
+    }
+  ]
 }
