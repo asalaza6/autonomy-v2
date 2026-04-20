@@ -54,6 +54,26 @@
       "reviewedAt": "2026-04-17T07:03:42.109Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-17T07:03:47.343Z"
+    },
+    {
+      "id": "review-pr-prd-when-you-click-deploy-f6748b-architecture-agent",
+      "title": "Review [architecture-agent] Implement When you click deploy it will check a custom command",
+      "description": "Review pr-prd-when-you-click-deploy-f6748b-architecture-agent for Implement When you click deploy it will check a custom command",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-when-you-click-deploy-f6748b-architecture-agent",
+      "sourceTaskId": "prd-when-you-click-deploy-f6748b-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-20T03:13:37.884Z",
+      "updatedAt": "2026-04-20T03:13:37.884Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-when-you-click-deploy-f6748b-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-when-you-click-deploy-f6748b-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
