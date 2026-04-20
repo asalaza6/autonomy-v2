@@ -110,6 +110,29 @@
       "updatedAt": "2026-04-20T03:16:52.720Z",
       "startedAt": "2026-04-20T03:16:52.720Z",
       "prId": "pr-prd-when-you-click-deploy-f6748b-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-when-you-click-deploy-f6748b-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement When you click deploy it will check a custom command",
+      "description": "The required deterministic wrapper check (`npm run typecheck`) passed and the current diff remains in scope, but the PR still does not complete the repo-specific deploy wiring requested by the task.\nBlocking: `src/autonomy-v2/commands/deploy.ts:20` only runs a deploy hook when `deployCommand` is present in `control-plane.json` or `agents.json`, but this branch still leaves `prompts/autonomous/v2/config/control-plane.json:1` and `prompts/autonomous/v2/config/agents.json:1` without any `deployCommand`. As a result, clicking Deploy in this repo will still only fast-forward/push `main`; it will not call the requested Heroku deploy command.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-you-click-deploy-f6748b",
+      "laneKey": "prd-when-you-click-deploy-f6748b:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The required deterministic wrapper check (`npm run typecheck`) passed and the current diff remains in scope, but the PR still does not complete the repo-specific deploy wiring requested by the task.\nBlocking: `src/autonomy-v2/commands/deploy.ts:20` only runs a deploy hook when `deployCommand` is present in `control-plane.json` or `agents.json`, but this branch still leaves `prompts/autonomous/v2/config/control-plane.json:1` and `prompts/autonomous/v2/config/agents.json:1` without any `deployCommand`. As a result, clicking Deploy in this repo will still only fast-forward/push `main`; it will not call the requested Heroku deploy command."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-you-click-deploy-f6748b-architecture-agent",
+      "createdAt": "2026-04-20T03:19:50.514Z",
+      "updatedAt": "2026-04-20T03:19:50.514Z",
+      "startedAt": null,
+      "prId": "pr-prd-when-you-click-deploy-f6748b-architecture-agent"
     }
   ],
   "schemaVersion": 1
