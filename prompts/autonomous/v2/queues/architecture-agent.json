@@ -61,6 +61,28 @@
       "completedAt": "2026-04-17T07:00:32.383Z",
       "completionMode": "code",
       "commitSha": "6c270b2261c69ae1479762da39389bc2ab3b5067"
+    },
+    {
+      "id": "prd-when-you-click-deploy-f6748b-architecture-agent-1",
+      "title": "Implement When you click deploy it will check a custom command",
+      "description": "When you click deploy it will check a custom command in the config and call it if it exists, for this repo hook it up to be the heroku plane for this project as well as merging to main",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-you-click-deploy-f6748b",
+      "laneKey": "prd-when-you-click-deploy-f6748b:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Task `prd-when-you-click-deploy-f6748b-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-20T02:57:55.958Z",
+      "updatedAt": "2026-04-20T02:57:55.958Z"
     }
   ]
 }
