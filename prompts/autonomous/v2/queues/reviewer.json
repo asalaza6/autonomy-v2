@@ -70,9 +70,9 @@
         "Task `prd-when-you-click-deploy-f6748b-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 3,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-20T03:13:37.884Z",
-      "updatedAt": "2026-04-20T03:20:18.299Z",
+      "updatedAt": "2026-04-20T03:20:48.533Z",
       "reviewedAt": "2026-04-20T03:19:50.514Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
