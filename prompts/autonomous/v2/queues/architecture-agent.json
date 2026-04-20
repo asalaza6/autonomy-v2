@@ -134,11 +134,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-you-click-deploy-f6748b-architecture-agent",
       "createdAt": "2026-04-20T03:19:50.514Z",
-      "updatedAt": "2026-04-20T03:21:43.640Z",
+      "updatedAt": "2026-04-20T03:21:43.692Z",
       "startedAt": "2026-04-20T03:19:52.224Z",
       "prId": "pr-prd-when-you-click-deploy-f6748b-architecture-agent",
       "completedAt": "2026-04-20T03:21:43.640Z",
-      "completionMode": "noop"
+      "completionMode": "noop",
+      "commitSha": "b28f43d73bc0a170ad307d18dd3d2f1412767268"
     }
   ]
 }
