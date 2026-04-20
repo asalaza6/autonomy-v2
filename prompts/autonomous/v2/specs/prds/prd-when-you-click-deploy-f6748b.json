@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-when-you-click-deploy-f6748b",
+  "title": "When you click deploy it will check a custom command",
+  "createdAt": "2026-04-20T02:56:38.349Z",
+  "specification": "When you click deploy it will check a custom command in the config and call it if it exists, for this repo hook it up to be the heroku plane for this project as well as merging to main"
+}
