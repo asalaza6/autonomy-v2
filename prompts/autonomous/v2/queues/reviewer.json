@@ -69,14 +69,14 @@
       "acceptance": [
         "Task `prd-when-you-click-deploy-f6748b-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "reviewRound": 1,
-      "status": "changes_requested",
+      "reviewRound": 2,
+      "status": "queued",
       "createdAt": "2026-04-20T03:13:37.884Z",
-      "updatedAt": "2026-04-20T03:16:52.720Z",
-      "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-20T03:13:41.391Z",
+      "updatedAt": "2026-04-20T03:17:16.310Z",
       "reviewedAt": "2026-04-20T03:16:52.720Z",
-      "lastDecision": "changes_requested"
+      "lastDecision": "changes_requested",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-20T03:13:41.391Z"
     }
   ]
 }
