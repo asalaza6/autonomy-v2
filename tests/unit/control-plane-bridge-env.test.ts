@@ -57,6 +57,13 @@ test('bridge loads repo env during its startup cycle', async (t) => {
 test('bridge executes deploy jobs for mapped repos', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-deploy-bridge-');
   initAutonomyRepo(repoDir);
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.deployCommand = {
+    command: process.execPath,
+    args: ['-e', "console.log('bridge custom deploy hook')"],
+  };
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
   fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ version: '1.0.0' }, null, 2) + '\n', 'utf8');
   git(repoDir, ['add', '.']);
   git(repoDir, ['commit', '-m', 'initialize autonomy']);
@@ -141,6 +148,7 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   assert.equal(completedJob.result.version.currentVersion, '1.1.0');
   assert.equal(completedJob.result.version.previousVersion, '1.0.0');
   assert.equal(completedJob.result.version.isNewVersion, true);
+  assert.equal(completedJob.result.deployCommand.output, 'bridge custom deploy hook');
   assert.notEqual(git(repoDir, ['rev-parse', 'main']), mainBefore);
   assert.equal(git(repoDir, ['rev-parse', 'main']), git(repoDir, ['rev-parse', 'dev']));
 });

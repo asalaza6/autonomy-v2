@@ -1,12 +1,15 @@
 import https from 'https';
 import path from 'path';
 import fs from 'fs';
-import { execFileSync } from 'child_process';
-import type { AnyRecord } from '../autonomy-types.js';
+import { execFileSync, spawnSync } from 'child_process';
+import type { AnyRecord, DeployCommandConfig } from '../autonomy-types.js';
 import { buildMergeCommitTitle, ensureDir, slugify } from './shared-core.js';
 import { buildDeployCreatedVersionData } from './deploy-version.js';
 import { extractExecError, gitRefExists, resolveBaseRef, runGitQuiet, runGitRead, runGitWorktreeAdd } from './shared-repo.js';
 import { gitAuthArgs, gitIsAncestor, gitRemoteExists, gitWorkingTreeClean } from '../../sync/git-shared.js';
+
+const DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_DEPLOY_COMMAND_OUTPUT_LENGTH = 4000;
 
 function resolveGithubRepo(rootDir) {
   const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
@@ -170,6 +173,7 @@ function performLocalDeploy(rootDir, config) {
   try {
     const targetRef = gitRefExists(rootDir, targetBranch) ? targetBranch : resolveBaseRef(rootDir, targetBranch);
     const sourceRef = gitRefExists(rootDir, sourceBranch) ? sourceBranch : resolveBaseRef(rootDir, sourceBranch);
+    const deployCommandConfig = normalizeDeployCommandConfig(config.deployCommand, rootDir);
     if (!gitIsAncestor(rootDir, targetRef, sourceRef)) {
       return {
         ok: false,
@@ -196,6 +200,14 @@ function performLocalDeploy(rootDir, config) {
         throw new Error(`Failed to push deploy to origin/${targetBranch}: ${pushMessage}`);
       }
     }
+    const deployCommand = deployCommandConfig
+      ? runDeployCommand(deployCommandConfig, {
+        rootDir,
+        sourceBranch,
+        targetBranch,
+        sha,
+      })
+      : null;
     return {
       ok: true,
       sha,
@@ -204,10 +216,147 @@ function performLocalDeploy(rootDir, config) {
       pushed,
       pushMessage,
       version,
+      deployCommand,
     };
   } catch (error) {
     return { ok: false, message: extractExecError(error) };
   }
+}
+
+function normalizeDeployCommandConfig(value: DeployCommandConfig | null | undefined, rootDir: string) {
+  if (typeof value === 'undefined' || value === null) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const command = value.trim();
+    return command
+      ? {
+        command,
+        args: [] as string[],
+        cwd: rootDir,
+        displayCommand: command,
+        env: {} as Record<string, string>,
+        shell: true,
+      }
+      : null;
+  }
+
+  if (Array.isArray(value)) {
+    const [rawCommand, ...rawArgs] = value;
+    const command = String(rawCommand || '').trim();
+    return command
+      ? {
+        command,
+        args: rawArgs.map((arg) => String(arg)),
+        cwd: rootDir,
+        displayCommand: formatDeployCommand(command, rawArgs.map((arg) => String(arg))),
+        env: {} as Record<string, string>,
+        shell: false,
+      }
+      : null;
+  }
+
+  if (typeof value !== 'object') {
+    throw new Error('deployCommand must be a string, an array, or an object.');
+  }
+
+  const command = String((value as AnyRecord).command || '').trim();
+  if (!command) {
+    return null;
+  }
+  const args = Array.isArray((value as AnyRecord).args)
+    ? (value as AnyRecord).args.map((arg) => String(arg))
+    : [];
+  return {
+    command,
+    args,
+    cwd: resolveDeployCommandCwd(rootDir, (value as AnyRecord).cwd),
+    displayCommand: formatDeployCommand(command, args),
+    env: normalizeDeployCommandEnv((value as AnyRecord).env),
+    shell: (value as AnyRecord).shell === true,
+  };
+}
+
+function resolveDeployCommandCwd(rootDir: string, value: unknown) {
+  const cwd = String(value || '').trim();
+  if (!cwd) {
+    return rootDir;
+  }
+  return path.isAbsolute(cwd) ? cwd : path.resolve(rootDir, cwd);
+}
+
+function normalizeDeployCommandEnv(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return Object.entries(value as Record<string, unknown>).reduce((env, [key, entry]) => {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey || typeof entry === 'undefined' || entry === null) {
+      return env;
+    }
+    env[normalizedKey] = String(entry);
+    return env;
+  }, {} as Record<string, string>);
+}
+
+function runDeployCommand(commandConfig: ReturnType<typeof normalizeDeployCommandConfig>, context: {
+  rootDir: string;
+  sourceBranch: string;
+  targetBranch: string;
+  sha: string;
+}) {
+  if (!commandConfig) {
+    return null;
+  }
+  const result = spawnSync(commandConfig.command, commandConfig.args, {
+    cwd: commandConfig.cwd,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      AUTONOMY_DEPLOY_SOURCE_BRANCH: context.sourceBranch,
+      AUTONOMY_DEPLOY_TARGET_BRANCH: context.targetBranch,
+      AUTONOMY_DEPLOY_SHA: context.sha,
+      ...commandConfig.env,
+    },
+    shell: commandConfig.shell,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS,
+  });
+  const output = truncateDeployCommandOutput(collectDeployCommandOutput(result.stdout, result.stderr));
+  if (result.error) {
+    throw new Error(`Deploy command "${commandConfig.displayCommand}" failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const detail = output || result.signal || 'no output';
+    throw new Error(`Deploy command "${commandConfig.displayCommand}" failed with exit code ${result.status}: ${detail}`);
+  }
+  return {
+    command: commandConfig.displayCommand,
+    cwd: path.relative(context.rootDir, commandConfig.cwd) || '.',
+    exitCode: result.status,
+    output: output || null,
+  };
+}
+
+function collectDeployCommandOutput(...parts: unknown[]) {
+  return parts
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function truncateDeployCommandOutput(value: string) {
+  if (value.length <= MAX_DEPLOY_COMMAND_OUTPUT_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, MAX_DEPLOY_COMMAND_OUTPUT_LENGTH)}\n[deploy command output truncated]`;
+}
+
+function formatDeployCommand(command: string, args: string[]) {
+  return [command, ...args].map((part) => {
+    return /\s/.test(part) ? JSON.stringify(part) : part;
+  }).join(' ');
 }
 
 function cleanupWorktree(rootDir, worktreePath) {
