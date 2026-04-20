@@ -84,6 +84,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           pushed: execution.pushed,
           pushMessage: execution.pushMessage || null,
           version: execution.version || null,
+          deployCommand: execution.deployCommand || null,
         };
       } else {
         const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));

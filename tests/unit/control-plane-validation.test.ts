@@ -21,11 +21,13 @@ test('control plane config preserves optional deployment metadata', () => {
   const config = normalizeControlPlaneConfig({
     repoId: 'alpha',
     label: 'Alpha',
+    deployCommand: ['git', 'push', 'heroku', 'main'],
     deploymentUrl: ' https://deploy.example.com/app ',
     deploymentLabel: ' Live app ',
   });
 
   assert.equal(config.repoId, 'alpha');
+  assert.deepEqual(config.deployCommand, ['git', 'push', 'heroku', 'main']);
   assert.equal(config.deploymentUrl, 'https://deploy.example.com/app');
   assert.equal(config.deploymentLabel, 'Live app');
 });

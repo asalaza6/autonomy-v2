@@ -79,10 +79,67 @@
       "acceptance": [
         "Task `prd-when-you-click-deploy-f6748b-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-20T02:57:55.958Z",
-      "updatedAt": "2026-04-20T02:57:55.958Z"
+      "updatedAt": "2026-04-20T03:13:36.856Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-you-click-deploy-f6748b-architecture-agent",
+      "startedAt": "2026-04-20T02:58:14.300Z",
+      "completedAt": "2026-04-20T03:13:36.795Z",
+      "completionMode": "code",
+      "commitSha": "be6de26df84eefc78dbc898f312aabb160eaba30"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-when-you-click-deploy-f6748b-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement When you click deploy it will check a custom command",
+      "description": "The required deterministic wrapper check (`npm run typecheck`) passed, and the branch appears mergeable with `origin/dev`. The implementation adds deploy-hook support, but it does not complete the repo-specific deploy wiring requested by the task.\nBlocking: the deploy hook only runs when `deployCommand` is present in config (`src/autonomy-v2/commands/deploy.ts:20`), but this branch does not add a `deployCommand` to this repo's config. `prompts/autonomous/v2/config/control-plane.json:1` still only contains repo metadata and deployment labels, and `prompts/autonomous/v2/config/agents.json:1` has no fallback `deployCommand` either. As a result, clicking Deploy in this repo will still only fast-forward/push `main`; it will not call the requested Heroku deploy command.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-you-click-deploy-f6748b",
+      "laneKey": "prd-when-you-click-deploy-f6748b:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The required deterministic wrapper check (`npm run typecheck`) passed, and the branch appears mergeable with `origin/dev`. The implementation adds deploy-hook support, but it does not complete the repo-specific deploy wiring requested by the task.\nBlocking: the deploy hook only runs when `deployCommand` is present in config (`src/autonomy-v2/commands/deploy.ts:20`), but this branch does not add a `deployCommand` to this repo's config. `prompts/autonomous/v2/config/control-plane.json:1` still only contains repo metadata and deployment labels, and `prompts/autonomous/v2/config/agents.json:1` has no fallback `deployCommand` either. As a result, clicking Deploy in this repo will still only fast-forward/push `main`; it will not call the requested Heroku deploy command."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-you-click-deploy-f6748b-architecture-agent",
+      "createdAt": "2026-04-20T03:16:52.720Z",
+      "updatedAt": "2026-04-20T03:19:52.277Z",
+      "startedAt": "2026-04-20T03:16:52.720Z",
+      "prId": "pr-prd-when-you-click-deploy-f6748b-architecture-agent",
+      "completedAt": "2026-04-20T03:19:52.224Z",
+      "completionMode": "code",
+      "commitSha": "177069773e8ebe833977f4288a614f1927478e7e"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-when-you-click-deploy-f6748b-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement When you click deploy it will check a custom command",
+      "description": "The required deterministic wrapper check (`npm run typecheck`) passed and the current diff remains in scope, but the PR still does not complete the repo-specific deploy wiring requested by the task.\nBlocking: `src/autonomy-v2/commands/deploy.ts:20` only runs a deploy hook when `deployCommand` is present in `control-plane.json` or `agents.json`, but this branch still leaves `prompts/autonomous/v2/config/control-plane.json:1` and `prompts/autonomous/v2/config/agents.json:1` without any `deployCommand`. As a result, clicking Deploy in this repo will still only fast-forward/push `main`; it will not call the requested Heroku deploy command.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-you-click-deploy-f6748b",
+      "laneKey": "prd-when-you-click-deploy-f6748b:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The required deterministic wrapper check (`npm run typecheck`) passed and the current diff remains in scope, but the PR still does not complete the repo-specific deploy wiring requested by the task.\nBlocking: `src/autonomy-v2/commands/deploy.ts:20` only runs a deploy hook when `deployCommand` is present in `control-plane.json` or `agents.json`, but this branch still leaves `prompts/autonomous/v2/config/control-plane.json:1` and `prompts/autonomous/v2/config/agents.json:1` without any `deployCommand`. As a result, clicking Deploy in this repo will still only fast-forward/push `main`; it will not call the requested Heroku deploy command."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-you-click-deploy-f6748b-architecture-agent",
+      "createdAt": "2026-04-20T03:19:50.514Z",
+      "updatedAt": "2026-04-20T03:21:43.692Z",
+      "startedAt": "2026-04-20T03:19:52.224Z",
+      "prId": "pr-prd-when-you-click-deploy-f6748b-architecture-agent",
+      "completedAt": "2026-04-20T03:21:43.640Z",
+      "completionMode": "noop",
+      "commitSha": "b28f43d73bc0a170ad307d18dd3d2f1412767268"
     }
   ]
 }

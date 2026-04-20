@@ -8,6 +8,14 @@ export interface GitIdentity extends AnyRecord {
   email: string;
 }
 
+export type DeployCommandConfig = string | string[] | {
+  command: string;
+  args?: string[];
+  cwd?: string;
+  env?: Record<string, string | number | boolean | null | undefined>;
+  shell?: boolean;
+};
+
 export interface AgentConfig extends AnyRecord {
   id: string;
   role: string;
@@ -23,6 +31,7 @@ export interface AgentConfig extends AnyRecord {
 export interface AutonomyConfig extends AnyRecord {
   schemaVersion?: number;
   agents: AgentConfig[];
+  deployCommand?: DeployCommandConfig;
   mergeActors?: string[];
   integrationBranch?: string;
   mergeStrategy?: string;
@@ -122,6 +131,7 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   label?: string;
   description?: string;
   default?: boolean;
+  deployCommand?: DeployCommandConfig;
   deploymentUrl?: string;
   deploymentLabel?: string;
 }

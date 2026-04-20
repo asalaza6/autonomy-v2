@@ -27,6 +27,7 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     label: repo.label,
     description: repo.description,
     default: repo.default,
+    deployCommand: repo.deployCommand,
     deploymentUrl: repo.deploymentUrl,
     deploymentLabel: repo.deploymentLabel,
   };
@@ -48,6 +49,7 @@ function normalizeRepoRecord(
     label: String((repo as Record<string, unknown>).label || repoId).trim(),
     description: String((repo as Record<string, unknown>).description || '').trim() || undefined,
     default: (repo as Record<string, unknown>).default === true,
+    deployCommand: (repo as ControlPlaneRepoRecord).deployCommand,
     deploymentUrl: String((repo as Record<string, unknown>).deploymentUrl || '').trim() || undefined,
     deploymentLabel: String((repo as Record<string, unknown>).deploymentLabel || '').trim() || undefined,
   } as ControlPlaneRepoRecord;
