@@ -82,11 +82,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-20T02:57:55.958Z",
-      "updatedAt": "2026-04-20T03:13:36.795Z",
+      "updatedAt": "2026-04-20T03:13:36.856Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-you-click-deploy-f6748b-architecture-agent",
       "startedAt": "2026-04-20T02:58:14.300Z",
       "completedAt": "2026-04-20T03:13:36.795Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "be6de26df84eefc78dbc898f312aabb160eaba30"
     }
   ]
 }
