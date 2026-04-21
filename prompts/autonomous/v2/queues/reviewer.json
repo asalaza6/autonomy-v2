@@ -411,9 +411,11 @@
         "Control panel should expose separate buttons/actions for Update and Restart."
       ],
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T22:05:51.784Z",
-      "updatedAt": "2026-04-21T22:05:55.600Z"
+      "updatedAt": "2026-04-21T22:05:55.600Z",
+      "dispatchedAt": "2026-04-21T22:05:57.387Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
