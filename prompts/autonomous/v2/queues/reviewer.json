@@ -355,7 +355,7 @@
       "sourceTaskId": "prd-continue-source-chat-from-8fed29-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T20:37:26.535Z",
       "updatedAt": "2026-04-21T20:37:26.535Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-continue-source-chat-from-8fed29-architecture-agent",
@@ -380,7 +380,9 @@
         "Do not store full transcripts in PRD history; reuse existing persisted chat conversations only.",
         "Keep normal History selection and Chat behavior unchanged for PRDs without source chat metadata."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-21T20:37:30.346Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
