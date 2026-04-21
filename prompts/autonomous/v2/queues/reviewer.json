@@ -395,10 +395,6 @@
       "prId": "pr-prd-separate-package-update-and-997e0b-architecture-agent",
       "sourceTaskId": "prd-separate-package-update-and-997e0b-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "queued",
-      "createdAt": "2026-04-21T22:05:51.784Z",
-      "updatedAt": "2026-04-21T22:05:51.784Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -414,7 +410,10 @@
         "or launched/deferred statuses clearly.",
         "Control panel should expose separate buttons/actions for Update and Restart."
       ],
-      "scopeViolations": []
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T22:05:51.784Z",
+      "updatedAt": "2026-04-21T22:05:55.600Z"
     }
   ]
 }
