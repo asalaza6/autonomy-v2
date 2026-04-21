@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -208,13 +209,15 @@
       "acceptance": [
         "The required wrapper check `npm run typecheck` passed and the branch merge-tree against `origin/dev` showed no conflicts, but the prior blocking issue is still present. The latest commit only queues the review follow-up; it does not correct the PRD step logic.\n`src/autonomy-v2/control-plane/status-view.ts:158` still returns `reviewing` whenever any pull request status exists, before checking whether the active PRD has remaining tasks or whether the PR belongs to that PRD. This keeps partially implemented PRDs from showing the `implementing` step accurately.\n`tests/unit/control-plane-dashboard.test.ts:152` still asserts `prdRun.currentStepId` is `reviewing` for an active PRD with 1 of 3 tasks complete, codifying the incorrect behavior. Expected correction: keep PRDs with remaining implementation tasks in `implementing`; only move to `reviewing` once the active PRD's implementation work is complete or the active review PR is specifically for that PRD, and add focused coverage for the partial-PRD-with-active-PR case."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
       "createdAt": "2026-04-21T06:14:20.318Z",
-      "updatedAt": "2026-04-21T06:18:34.984Z",
+      "updatedAt": "2026-04-21T06:20:29.558Z",
       "startedAt": "2026-04-21T06:18:34.984Z",
-      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
+      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent",
+      "completedAt": "2026-04-21T06:20:29.558Z",
+      "completionMode": "noop"
     },
     {
       "id": "architecture-agent-followup-pr-prd-when-prds-run-the-d8bef0-architecture-agent-3",
@@ -231,14 +234,13 @@
       "acceptance": [
         "The wrapper check `npm run typecheck` passed and the branch merge-tree against `origin/dev` showed no conflicts, but the PR is not safe to approve because the actual branch HEAD still does not include the follow-up fix. The worktree has unstaged changes in the PRD step logic and tests; merging the branch would omit them.\nBlocking merge-safety issue: `src/autonomy-v2/commands/shared-pr-status.ts`, `src/autonomy-v2/control-plane/status-view.ts`, and `tests/unit/control-plane-dashboard.test.ts` are modified only in the worktree. Commit these changes onto the PR branch before review/merge.\nAt committed HEAD, the prior blocker remains: `src/autonomy-v2/control-plane/status-view.ts` still moves to `reviewing` whenever any active PR exists, and `tests/unit/control-plane-dashboard.test.ts` still codifies that behavior for a partially complete PRD. The unstaged worktree changes appear to address this, and the focused built test passed, but those fixes are not mergeable until committed."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
       "createdAt": "2026-04-21T06:19:01.886Z",
-      "updatedAt": "2026-04-21T06:19:01.886Z",
-      "startedAt": null,
+      "updatedAt": "2026-04-21T06:20:29.558Z",
+      "startedAt": "2026-04-21T06:20:29.558Z",
       "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
