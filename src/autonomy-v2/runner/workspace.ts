@@ -92,6 +92,10 @@ function markImplementationTaskComplete(worktreePath, config, task, branch, comp
   currentTask.updatedAt = now;
   currentTask.completedAt = now;
   currentTask.completionMode = completionMode;
+  const implementationConversationId = getImplementationConversationId(task);
+  if (implementationConversationId) {
+    currentTask.implementationConversationId = implementationConversationId;
+  }
   delete currentTask.lastError;
 
   if (!tasks.some((candidate) => candidate.id !== task.id && getImplementationTaskState(candidate) === 'active')) {
@@ -131,6 +135,10 @@ function recordImplementationTaskCommitSha(worktreePath, config, task, commitSha
   currentTask.updatedAt = new Date().toISOString();
   writeJson(queuePath, buildTaskQueueState(agent, tasks));
   return { queuePath, relativePath, changed: true };
+}
+
+function getImplementationConversationId(task) {
+  return String(task && task.implementationConversationId || '').trim();
 }
 
 function listChangedFiles(worktreePath) {

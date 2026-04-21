@@ -289,21 +289,24 @@ class ImplementationAgentDefinition extends AgentDefinition {
       completedLaneTasks,
     });
     context.scm.ensureCheckEnvironment?.(worktreePath, checkCommands);
-    const codexResult = context.codex.executeTask
-      ? await context.codex.executeTask({
-          rootDir: context.rootDir,
-          agent,
-          task,
-          laneTasks,
-          pr: existingPr,
-          branch,
-          worktreePath,
-        })
-      : { status: 'noop' };
+    const codexResult = await this.executeCodexTask(context, {
+      rootDir: context.rootDir,
+      agent,
+      task,
+      laneTasks,
+      pr: existingPr,
+      branch,
+      worktreePath,
+    });
+    const implementationConversationId = this.resolveReturnedImplementationConversationId(codexResult);
+    if (implementationConversationId) {
+      task.implementationConversationId = implementationConversationId;
+    }
     context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'codex'), {
       taskId: task.id,
       status: codexResult.status,
       summary: this.summarizeText(codexResult.summary || codexResult.notes),
+      implementationConversationId: task.implementationConversationId || null,
     });
 
     const changedFiles = context.scm.listChangedFiles ? context.scm.listChangedFiles(worktreePath) : [];
@@ -649,6 +652,51 @@ class ImplementationAgentDefinition extends AgentDefinition {
       ]);
     }
     return this.uniqueStrings(task.checks || []);
+  }
+
+  private async executeCodexTask(context: AgentExecutionContext, input: AnyRecord): Promise<AnyRecord> {
+    if (!context.codex.executeTask) {
+      return { status: 'noop' };
+    }
+
+    const resumeConversationId = this.getTaskImplementationConversationId(input.task);
+    if (!resumeConversationId) {
+      return context.codex.executeTask(input);
+    }
+
+    try {
+      return await context.codex.executeTask({
+        ...input,
+        resumeConversationId,
+      });
+    } catch (error) {
+      context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'resume-fallback'), {
+        taskId: input.task.id,
+        implementationConversationId: resumeConversationId,
+        reason: this.summarizeText(error && error.message),
+      });
+      return context.codex.executeTask({
+        ...input,
+        resumeConversationId: '',
+        disableConversationResume: true,
+      });
+    }
+  }
+
+  private getTaskImplementationConversationId(value: AnyRecord | null | undefined): string {
+    return String(value && value.implementationConversationId || '').trim();
+  }
+
+  private resolveReturnedImplementationConversationId(value: AnyRecord | null | undefined): string {
+    const source = value && (
+      value.implementationConversationId
+      || value.implementationSessionId
+      || value.conversationId
+      || value.conversation_id
+      || value.sessionId
+      || value.session_id
+    );
+    return String(source || '').trim();
   }
 
   private summarizeText(value: unknown): string {

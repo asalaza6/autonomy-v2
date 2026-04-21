@@ -45,6 +45,7 @@ async function run(rootDir, options) {
   const task = findTask(state.taskQueues, pr.taskId);
   const implementationAgent = getAgent(state.config, pr.agentId);
   const usesTrackedImplementationQueue = isImplementationRole(implementationAgent.role);
+  const implementationConversationId = String(task && task.implementationConversationId || '').trim();
   let followupTask = null;
   const followupPatch = decision === 'changes_requested'
     ? {
@@ -55,6 +56,7 @@ async function run(rootDir, options) {
         source: 'review_followup',
         createdAt: decisionRecord.reviewedAt,
         updatedAt: decisionRecord.reviewedAt,
+        implementationConversationId: implementationConversationId || undefined,
       }
     : null;
   if (decision === 'changes_requested' && usesTrackedImplementationQueue) {

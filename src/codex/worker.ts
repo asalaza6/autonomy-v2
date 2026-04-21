@@ -2,8 +2,25 @@ import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel } from '../agents/role-cat
 import { runCodexExec, runCodexStructured } from './cli.js';
 import { readOptionalFile } from './codex-shared.js';
 
-async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branch, worktreePath }) {
+function normalizeImplementationConversationId(value) {
+  return String(value || '').trim();
+}
+
+async function executeTaskWithCodex({
+  rootDir,
+  agent,
+  task,
+  laneTasks,
+  pr,
+  branch,
+  worktreePath,
+  resumeConversationId,
+  disableConversationResume,
+}) {
   const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);
+  const conversationId = disableConversationResume === true
+    ? ''
+    : normalizeImplementationConversationId(resumeConversationId || (task && task.implementationConversationId));
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
     `You are executing a ${laneLabel} lane inside the assigned git worktree.`,
@@ -47,14 +64,18 @@ async function executeTaskWithCodex({ rootDir, agent, task, laneTasks, pr, branc
     'Make the requested changes directly in the worktree. No structured response is required.',
   ].join('\n');
 
-  await runCodexExec({
+  const result = await runCodexExec({
     cwd: worktreePath,
     prompt,
     readOnly: false,
+    resumeSessionId: conversationId,
+    captureConversationId: true,
   });
 
   return {
     status: 'completed',
+    implementationConversationId: result.conversationId || conversationId || '',
+    resumedConversation: Boolean(conversationId),
     summary: '',
     notes: '',
   };

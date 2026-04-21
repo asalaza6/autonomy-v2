@@ -220,7 +220,7 @@ function recordLaneTaskCompletion(rootDir, task, branch, worktreePath, scopeResu
 }
 
 function buildTaskSnapshot(task, scopeResult) {
-  return {
+  const snapshot: AnyRecord = {
     id: task.id,
     title: task.title,
     description: task.description || '',
@@ -235,6 +235,11 @@ function buildTaskSnapshot(task, scopeResult) {
     scopeViolations: uniqueScopeViolations(scopeResult && scopeResult.violations),
     completedAt: new Date().toISOString(),
   };
+  const implementationConversationId = String(task && task.implementationConversationId || '').trim();
+  if (implementationConversationId) {
+    snapshot.implementationConversationId = implementationConversationId;
+  }
+  return snapshot;
 }
 
 function findBranchLock(branchLocks, agentId, laneKey) {
