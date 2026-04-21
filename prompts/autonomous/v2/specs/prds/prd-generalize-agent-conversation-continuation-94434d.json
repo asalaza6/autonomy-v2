@@ -24,5 +24,35 @@
     "Update reviewer task records",
     "queue metadata",
     "or PR review state as needed so reviewer continuation survives normal task lifecycle transitions."
+  ],
+  "tasks": [
+    {
+      "id": "prd-generalize-agent-conversation-continuation-94434d-architecture-agent-1",
+      "title": "Implement Generalize agent conversation continuation for implementation and review agents",
+      "agentId": "architecture-agent",
+      "description": "# PRD: Generalize agent conversation continuation for implementation and review agents\n\nPriority: High\n\n## Problem\nConversation continuation is currently implementation-agent specific. Implementation follow-ups can resume the original Codex session, but review agents for the same task/PR only receive prompt context such as review round and prior reviews, so reviewer reasoning continuity is not preserved across review rounds.\n\n## Goal\nIntroduce a generalized per-agent conversation continuation model so implementation and review agents can each resume their own prior Codex conversation when handling the same task/PR, while keeping conversations isolated by role and falling back safely when continuation is unavailable.\n\n## Requirements\n- Introduce a generalized conversation reference model for task/PR agent runs, keyed by agent role or agent ID, instead of relying only on `implementationConversationId`.\n- Preserve backward compatibility with existing implementation conversation IDs, including migration or compatibility mapping where needed.\n- Persist Codex session IDs returned from implementation runs and reviewer runs when available.\n- When implementation follow-up tasks are created after `changes_requested`, continue carrying the original implementation agent conversation reference.\n- When reviewer tasks run for the same task/PR, attempt to resume the prior reviewer conversation for that same review agent before starting a fresh reviewer session.\n- Keep implementation and reviewer conversation references separate; never reuse reviewer sessions for implementation or implementation sessions for review.\n- If resume fails, the conversation is expired, or no prior session exists, fall back to the existing explicit task/PR/diff/prior-review prompt context.\n- Do not add durable transcript/history UI or store full conversation transcripts as part of this change.\n- Update reviewer task records, queue metadata, or PR review state as needed so reviewer continuation survives normal task lifecycle transitions.\n\n## Acceptance Criteria\n- Implementation behavior from the completed PRD still works with the generalized model.\n- Reviewer runs for the same task/PR record a reviewer conversation ID when available.\n- A subsequent reviewer run for the same task/PR attempts to resume the prior reviewer conversation.\n- Reviewer resume failure falls back to the existing reviewer prompt flow without blocking review execution.\n- Implementation and reviewer session IDs are stored and resumed independently.\n- Existing task records with `implementationConversationId` continue to work or are mapped into the new generalized structure.\n- Tests cover persistence, lookup, role isolation, resume success, and fallback behavior for both implementation and review agents.\n\n## Verification\n- Add or update unit tests for generalized conversation reference persistence and backward compatibility with `implementationConversationId`.\n- Add unit tests proving implementation follow-up tasks still carry and resume the implementation conversation reference.\n- Add unit tests proving reviewer tasks store and resume reviewer conversation references for the same task/PR.\n- Add unit tests proving reviewer and implementation conversation IDs are never cross-used.\n- Add runner tests for resume success and resume unavailable fallback for reviewer runs.\n- Run `npm run typecheck` and the relevant task runner, reviewer runner, and queue lifecycle tests.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1776800338127_478f7c868d4dc\nManager message: msg_1776800563297_ee4fa88bea175\nAgent message: msg_1776800563297_827caefa9c9a7\nCreated: 2026-04-21T19:43:12.997Z",
+      "acceptance": [
+        "Introduce a generalized conversation reference model for task/PR agent runs",
+        "keyed by agent role or agent ID",
+        "instead of relying only on `implementationConversationId`.",
+        "Preserve backward compatibility with existing implementation conversation IDs",
+        "including migration or compatibility mapping where needed.",
+        "Persist Codex session IDs returned from implementation runs and reviewer runs when available.",
+        "When implementation follow-up tasks are created after `changes_requested`",
+        "continue carrying the original implementation agent conversation reference.",
+        "When reviewer tasks run for the same task/PR",
+        "attempt to resume the prior reviewer conversation for that same review agent before starting a fresh reviewer session.",
+        "Keep implementation and reviewer conversation references separate; never reuse reviewer sessions for implementation or implementation sessions for review.",
+        "If resume fails",
+        "the conversation is expired",
+        "or no prior session exists",
+        "fall back to the existing explicit task/PR/diff/prior-review prompt context.",
+        "Do not add durable transcript/history UI or store full conversation transcripts as part of this change.",
+        "Update reviewer task records",
+        "queue metadata",
+        "or PR review state as needed so reviewer continuation survives normal task lifecycle transitions."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }

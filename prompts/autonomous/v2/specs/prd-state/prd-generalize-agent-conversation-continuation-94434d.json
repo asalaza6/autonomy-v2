@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-generalize-agent-conversation-continuation-94434d",
+  "status": "planned",
+  "createdAt": "2026-04-21T19:45:44.017Z",
+  "updatedAt": "2026-04-21T19:45:44.017Z",
+  "plannedTaskIds": [
+    "prd-generalize-agent-conversation-continuation-94434d-architecture-agent-1"
+  ]
+}
