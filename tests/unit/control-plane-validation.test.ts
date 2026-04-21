@@ -23,6 +23,7 @@ import {
   enqueueJob,
   listJobs,
 } from '../../src/server/control-plane/control-plane-store.js';
+import { loadControlPlaneConfig } from '../../src/server/control-plane/control-plane-config.js';
 
 test('control plane config normalizes a repo-local identity record', () => {
   const config = normalizeControlPlaneConfig();
@@ -50,6 +51,13 @@ test('control plane config preserves optional deployment metadata', () => {
   assert.equal(config.serverRestartCommand, 'systemctl restart autonomy-v2-server');
   assert.equal(config.deploymentUrl, 'https://deploy.example.com/app');
   assert.equal(config.deploymentLabel, 'Live app');
+});
+
+test('repo-local autonomy-v2 control plane config uses release patch package update command', () => {
+  const config = loadControlPlaneConfig(process.cwd());
+
+  assert.equal(config.repoId, 'autonomy-v2');
+  assert.equal(config.packageUpdateCommand, 'npm run release:patch');
 });
 
 test('repo record normalization accepts legacy id fields for compatibility', () => {
