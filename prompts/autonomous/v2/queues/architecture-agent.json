@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -394,13 +395,15 @@
       "acceptance": [
         "Blocked on a correctness regression in PRD proposal detection. The wrapper reported `npm run typecheck` passed, and the current base advancement appears limited to reviewer queue metadata, but the PR does not satisfy the non-PRD chat acceptance criterion.\n`src/server/control-plane/control-plane-prd-proposal.ts:65` and `src/server/control-plane/control-plane-prd-proposal.ts:178` parse any direct JSON or fenced `json` block with `title` plus `requirements`/`problem`/`goal` as a PRD proposal. That means a normal chat answer that shows an existing PRD/status object as JSON can create a draft PRD, violating “Non-PRD chat responses do not create draft PRDs.” Require an explicit proposal marker for answer-text extraction, such as `kind: \"prd-proposal\"`, `prdProposal`, `prd_proposal`, `proposal`, or an `autonomy-prd-proposal`/`prd-proposal` fence/comment, while still accepting the structured `prdProposal` field from the model output. Add a focused negative test with a normal JSON status/PRD summary containing `title` and `requirements` to prove it is ignored."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
       "createdAt": "2026-04-21T08:18:53.428Z",
-      "updatedAt": "2026-04-21T08:18:53.428Z",
+      "updatedAt": "2026-04-21T08:23:05.301Z",
       "startedAt": "2026-04-21T08:18:53.428Z",
-      "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent"
+      "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent",
+      "completedAt": "2026-04-21T08:23:05.301Z",
+      "completionMode": "code"
     },
     {
       "id": "architecture-agent-followup-pr-prd-i-can-t-add-it-d62eb2-architecture-agent-2",
@@ -417,12 +420,12 @@
       "acceptance": [
         "Blocked: the prior correctness issue is still present. The deterministic wrapper reports `npm run typecheck` passed, and the branch appears mergeable against the available `origin/dev`, but the PR still violates the non-PRD chat acceptance criterion.\n`src/server/control-plane/control-plane-prd-proposal.ts:65` and `src/server/control-plane/control-plane-prd-proposal.ts:178` still let `extractPrdProposalFromText` treat any direct JSON object with `title` plus `requirements`/`problem`/`goal` as a PRD proposal. `src/server/control-plane/control-plane-prd-proposal.ts:8` and `:77` also allow generic ```json fences, so a normal chat response showing an existing PRD/status JSON object can still create a draft PRD. Require an explicit answer-text proposal marker, such as `kind: \"prd-proposal\"`, `prdProposal`, `prd_proposal`, `proposal`, or an `autonomy-prd-proposal`/`prd-proposal` fence/comment, while still accepting the structured `prdProposal` field from model output.\n`tests/unit/control-plane-chat.test.ts:69` only covers normal prose. Add the requested focused negative test with a normal JSON status/PRD summary containing `title` and `requirements` and assert it is ignored by answer-text extraction."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
       "createdAt": "2026-04-21T08:20:37.737Z",
-      "updatedAt": "2026-04-21T08:20:37.737Z",
-      "startedAt": null,
+      "updatedAt": "2026-04-21T08:23:05.301Z",
+      "startedAt": "2026-04-21T08:23:05.301Z",
       "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent"
     },
     {
@@ -448,6 +451,5 @@
       "startedAt": null,
       "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

@@ -5,14 +5,23 @@ import type {
 } from '../../types.js';
 
 const PRD_PROPOSAL_KIND = 'prd-proposal';
-const PRD_PROPOSAL_FENCE_RE = /```(?:json|autonomy-prd-proposal|prd-proposal)?\s*([\s\S]*?)```/gi;
-const PRD_PROPOSAL_COMMENT_RE = /<!--\s*autonomy-prd-proposal\s*([\s\S]*?)\s*-->/gi;
+const PRD_PROPOSAL_FENCE_RE = /```([A-Za-z0-9_-]+)?[^\S\r\n]*(?:\r?\n)?([\s\S]*?)```/g;
+const PRD_PROPOSAL_COMMENT_RE = /<!--\s*(autonomy-prd-proposal|prd-proposal)\s*([\s\S]*?)\s*-->/gi;
+const PRD_PROPOSAL_MARKERS = new Set([
+  PRD_PROPOSAL_KIND,
+  'autonomy-prd-proposal',
+]);
+
+type NormalizePrdProposalOptions = {
+  requireExplicitMarker?: boolean;
+};
 
 function normalizePrdProposal(
   value: unknown,
-  source: Partial<ControlPlanePrdProposalSource> = {}
+  source: Partial<ControlPlanePrdProposalSource> = {},
+  options: NormalizePrdProposalOptions = {}
 ): ControlPlanePrdProposal | null {
-  const candidate = selectPrdProposalCandidate(value);
+  const candidate = selectPrdProposalCandidate(value, options);
   if (!candidate) {
     return null;
   }
@@ -62,20 +71,22 @@ function extractPrdProposalFromText(
     return null;
   }
 
-  const direct = parsePrdProposalCandidate(rawText, source);
+  const direct = parsePrdProposalCandidate(rawText, source, { requireExplicitMarker: true });
   if (direct) {
     return direct;
   }
 
-  for (const block of extractRegexBlocks(rawText, PRD_PROPOSAL_COMMENT_RE)) {
+  for (const block of extractCommentBlocks(rawText)) {
     const proposal = parsePrdProposalCandidate(block, source);
     if (proposal) {
       return proposal;
     }
   }
 
-  for (const block of extractRegexBlocks(rawText, PRD_PROPOSAL_FENCE_RE)) {
-    const proposal = parsePrdProposalCandidate(block, source);
+  for (const block of extractFenceBlocks(rawText)) {
+    const proposal = parsePrdProposalCandidate(block.body, source, {
+      requireExplicitMarker: !isPrdProposalMarker(block.marker),
+    });
     if (proposal) {
       return proposal;
     }
@@ -155,7 +166,10 @@ function getPrdProposalStableKey(proposal: ControlPlanePrdProposal, fallback = '
   return `proposal:${stableHash(`${fallback}:${JSON.stringify(normalized)}`)}`;
 }
 
-function selectPrdProposalCandidate(value: unknown): Record<string, unknown> | null {
+function selectPrdProposalCandidate(
+  value: unknown,
+  options: NormalizePrdProposalOptions = {}
+): Record<string, unknown> | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -171,8 +185,12 @@ function selectPrdProposalCandidate(value: unknown): Record<string, unknown> | n
   }
 
   const kind = String(value.kind || value.type || '').trim().toLowerCase();
-  if (kind === PRD_PROPOSAL_KIND || kind === 'autonomy-prd-proposal') {
+  if (isPrdProposalMarker(kind)) {
     return value;
+  }
+
+  if (options.requireExplicitMarker) {
+    return null;
   }
 
   const hasProposalFields = Boolean(
@@ -191,24 +209,43 @@ function selectPrdProposalCandidate(value: unknown): Record<string, unknown> | n
 
 function parsePrdProposalCandidate(
   rawJson: string,
-  source: Partial<ControlPlanePrdProposalSource>
+  source: Partial<ControlPlanePrdProposalSource>,
+  options: NormalizePrdProposalOptions = {}
 ) {
   try {
-    return normalizePrdProposal(JSON.parse(rawJson), source);
+    return normalizePrdProposal(JSON.parse(rawJson), source, options);
   } catch {
     return null;
   }
 }
 
-function extractRegexBlocks(text: string, pattern: RegExp) {
+function extractCommentBlocks(text: string) {
   const blocks: string[] = [];
-  pattern.lastIndex = 0;
-  let match = pattern.exec(text);
+  PRD_PROPOSAL_COMMENT_RE.lastIndex = 0;
+  let match = PRD_PROPOSAL_COMMENT_RE.exec(text);
   while (match) {
-    blocks.push(String(match[1] || '').trim());
-    match = pattern.exec(text);
+    blocks.push(String(match[2] || '').trim());
+    match = PRD_PROPOSAL_COMMENT_RE.exec(text);
   }
   return blocks;
+}
+
+function extractFenceBlocks(text: string) {
+  const blocks: Array<{ marker: string; body: string }> = [];
+  PRD_PROPOSAL_FENCE_RE.lastIndex = 0;
+  let match = PRD_PROPOSAL_FENCE_RE.exec(text);
+  while (match) {
+    blocks.push({
+      marker: String(match[1] || '').trim().toLowerCase(),
+      body: String(match[2] || '').trim(),
+    });
+    match = PRD_PROPOSAL_FENCE_RE.exec(text);
+  }
+  return blocks;
+}
+
+function isPrdProposalMarker(value: unknown) {
+  return PRD_PROPOSAL_MARKERS.has(String(value || '').trim().toLowerCase());
 }
 
 function normalizeStringList(value: unknown) {

@@ -78,7 +78,6 @@ Here is the draft I recommend.
 
 \`\`\`autonomy-prd-proposal
 {
-  "kind": "prd-proposal",
   "title": "Add chat-generated PRD drafts",
   "problem": "The manager manually copies recommendations.",
   "goal": "Populate a draft in the control plane.",
@@ -100,6 +99,27 @@ Here is the draft I recommend.
   assert.equal(submission.title, 'Add chat-generated PRD drafts');
   assert.match(submission.specification || '', /## Problem/);
   assert.match(submission.specification || '', /Source Chat Message/);
+});
+
+test('control plane chat ignores unmarked PRD-shaped JSON status summaries in answer text', () => {
+  const statusSummary = {
+    title: 'Existing PRD: Add chat-generated PRD drafts',
+    status: 'active',
+    requirements: ['Render a review state', 'Keep manual submission'],
+    updatedAt: '2026-04-21T08:00:00.000Z',
+  };
+
+  assert.equal(extractPrdProposalFromText(JSON.stringify(statusSummary)), null);
+  assert.equal(
+    extractPrdProposalFromText(`
+The current PRD state is:
+
+\`\`\`json
+${JSON.stringify(statusSummary, null, 2)}
+\`\`\`
+`),
+    null
+  );
 });
 
 test('control plane chat persists conversation messages and bridge replies', () => {
