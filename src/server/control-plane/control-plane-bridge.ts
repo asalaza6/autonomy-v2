@@ -4,6 +4,10 @@ import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-serv
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
+import {
+  executeControlPlanePackageUpdate,
+  runDeferredPackageUpdateRestartCommands,
+} from './control-plane-package-update.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -40,6 +44,11 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     : { jobs: [] };
   const jobs = Array.isArray(queuedJobs.jobs) ? queuedJobs.jobs : [];
   const processed = [];
+  const deferredPackageUpdateRestarts: Array<{
+    jobId: string;
+    repoId: string;
+    commands: Parameters<typeof runDeferredPackageUpdateRestartCommands>[0];
+  }> = [];
   if (jobs.length > 0) {
     logBridgeEvent('bridge:jobs:found', {
       count: jobs.length,
@@ -98,6 +107,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         },
       });
       let result: Record<string, unknown>;
+      let deferredRestartCommandsForJob: Parameters<typeof runDeferredPackageUpdateRestartCommands>[0] = [];
       if (job.type === 'agent:chat') {
         logBridgeEvent('bridge:agent:chat:start', {
           jobId: job.id,
@@ -140,6 +150,29 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           version: execution.version || null,
           deployCommand: execution.deployCommand || null,
         };
+      } else if (job.type === 'package:update') {
+        logBridgeEvent('bridge:package:update:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          root: repoRoot,
+        });
+        const execution = executeControlPlanePackageUpdate(repoRoot);
+        await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+          method: 'POST',
+          body: {
+            repo: registration.repo,
+            snapshot: execution.snapshot,
+          },
+        });
+        logBridgeEvent('bridge:package:update:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          packageManager: execution.packageManager,
+          installedVersion: execution.installedVersion || '-',
+          restart: execution.restartStatus.status,
+        });
+        deferredRestartCommandsForJob = execution.deferredRestartCommands;
+        result = execution.result;
       } else {
         logBridgeEvent('bridge:prd:add:start', {
           jobId: job.id,
@@ -158,20 +191,42 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           queueCommitSha: execution.queueCommit ? execution.queueCommit.commitSha : null,
         };
       }
+      let completionError: string | null = null;
       const completed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
         body: {
           status: 'completed',
           result,
         },
-      }).catch(() => null);
+      }).catch((error) => {
+        completionError = formatErrorMessage(error);
+        return null;
+      });
+      const completionResponseStatus = getResponseStatus(completed);
+      const completionAcknowledged = isCompletedJobResponse(completed, job.id);
+      const completedStatus = completionAcknowledged ? completionResponseStatus : '';
       logBridgeEvent('bridge:job:completed', {
         jobId: job.id,
         repoId: job.repoId,
         type: job.type || 'prd:add',
-        status: completed && completed.status || 'completed',
+        status: completedStatus || 'unacknowledged',
       });
-      processed.push({ jobId: job.id, status: completed && completed.status });
+      if (isCompletedJobResponse(completed, job.id) && deferredRestartCommandsForJob.length > 0) {
+        deferredPackageUpdateRestarts.push({
+          jobId: job.id,
+          repoId: job.repoId,
+          commands: deferredRestartCommandsForJob,
+        });
+      } else if (deferredRestartCommandsForJob.length > 0) {
+        logBridgeEvent('bridge:package:update:deferred-restart-skipped', {
+          jobId: job.id,
+          repoId: job.repoId,
+          reason: completionError ? 'completion-failed' : 'completion-not-acknowledged',
+          status: completionResponseStatus || '',
+          error: completionError || '',
+        });
+      }
+      processed.push({ jobId: job.id, status: completedStatus });
     } catch (error) {
       const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
@@ -214,6 +269,20 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       note: 'bridge poll completed',
     },
   }).catch(() => null);
+
+  for (const restart of deferredPackageUpdateRestarts) {
+    const results = await runDeferredPackageUpdateRestartCommands(restart.commands);
+    results.forEach((result) => {
+      logBridgeEvent('bridge:package:update:deferred-restart', {
+        jobId: restart.jobId,
+        repoId: restart.repoId,
+        target: result.target,
+        status: result.status,
+        command: result.command,
+        error: result.error || '',
+      });
+    });
+  }
 
   return {
     processed,
@@ -296,6 +365,22 @@ function shouldRetryRequestError(error: unknown) {
     || message.includes('etimedout')
     || message.includes('eai_again')
   );
+}
+
+function getResponseStatus(value: unknown) {
+  return value && typeof value === 'object' && 'status' in value
+    ? String((value as { status?: unknown }).status || '')
+    : '';
+}
+
+function getResponseId(value: unknown) {
+  return value && typeof value === 'object' && 'id' in value
+    ? String((value as { id?: unknown }).id || '')
+    : '';
+}
+
+function isCompletedJobResponse(value: unknown, jobId: string) {
+  return getResponseStatus(value) === 'completed' && getResponseId(value) === jobId;
 }
 
 function logBridgeEvent(event: string, fields: Record<string, unknown> = {}) {

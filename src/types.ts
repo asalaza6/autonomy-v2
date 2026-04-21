@@ -132,6 +132,8 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   description?: string;
   default?: boolean;
   deployCommand?: DeployCommandConfig;
+  controlBridgeRestartCommand?: DeployCommandConfig;
+  serverRestartCommand?: DeployCommandConfig;
   deploymentUrl?: string;
   deploymentLabel?: string;
 }
@@ -151,6 +153,10 @@ export interface ControlPlanePrdAddPayload extends AnyRecord {
 }
 
 export interface ControlPlaneDeployPayload extends AnyRecord {
+  repoId: string;
+}
+
+export interface ControlPlanePackageUpdatePayload extends AnyRecord {
   repoId: string;
 }
 
@@ -207,9 +213,9 @@ export interface ControlPlaneConversationRecord extends AnyRecord {
 
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add' | 'deploy' | 'agent:chat';
+  type: 'prd:add' | 'deploy' | 'agent:chat' | 'package:update';
   repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload;
+  payload: ControlPlanePrdAddPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;

@@ -129,6 +129,12 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
               isNewVersion: false,
             },
           },
+          autonomyPackage: {
+            packageName: '@asalaza6/autonomy-v2',
+            packageManager: 'npm',
+            declaredVersion: '^1.4.45',
+            installedVersion: '1.4.45',
+          },
           branchLockCount: 1,
         },
       },
@@ -165,6 +171,9 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   assert.equal(dashboard.repos[0].deployment.statusLabel, 'Deploy available');
   assert.equal(dashboard.repos[0].versionStatus.version, '1.4.44');
   assert.equal(dashboard.repos[0].versionStatus.isNew, false);
+  assert.equal(dashboard.repos[0].packageStatus.installedVersion, '1.4.45');
+  assert.equal(dashboard.repos[0].packageStatus.declaredVersion, '^1.4.45');
+  assert.equal(dashboard.repos[0].packageStatus.packageManager, 'npm');
   assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');

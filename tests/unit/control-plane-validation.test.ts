@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import {
   assertControlPlaneRepoId,
@@ -7,9 +10,17 @@ import {
   normalizeRepoRecord,
   validateAgentChatSubmission,
   validateDeploySubmission,
+  validatePackageUpdateSubmission,
   validatePrdAddSubmission,
 } from '../../src/server/control-plane/control-plane-validation.js';
 import { parseRepoRoots } from '../../src/server/control-plane/control-plane-main.js';
+import {
+  claimJob,
+  completeJob,
+  createControlPlanePackageUpdateJob,
+  enqueueJob,
+  listJobs,
+} from '../../src/server/control-plane/control-plane-store.js';
 
 test('control plane config normalizes a repo-local identity record', () => {
   const config = normalizeControlPlaneConfig();
@@ -23,12 +34,16 @@ test('control plane config preserves optional deployment metadata', () => {
     repoId: 'alpha',
     label: 'Alpha',
     deployCommand: ['git', 'push', 'heroku', 'main'],
+    controlBridgeRestartCommand: ['pm2', 'restart', 'autonomy-v2-control-bridge'],
+    serverRestartCommand: 'systemctl restart autonomy-v2-server',
     deploymentUrl: ' https://deploy.example.com/app ',
     deploymentLabel: ' Live app ',
   });
 
   assert.equal(config.repoId, 'alpha');
   assert.deepEqual(config.deployCommand, ['git', 'push', 'heroku', 'main']);
+  assert.deepEqual(config.controlBridgeRestartCommand, ['pm2', 'restart', 'autonomy-v2-control-bridge']);
+  assert.equal(config.serverRestartCommand, 'systemctl restart autonomy-v2-server');
   assert.equal(config.deploymentUrl, 'https://deploy.example.com/app');
   assert.equal(config.deploymentLabel, 'Live app');
 });
@@ -104,6 +119,45 @@ test('deploy submission validation enforces discovered repo registration', () =>
   });
 
   assert.equal(payload.repoId, 'alpha');
+});
+
+test('package update jobs validate, queue, claim, and complete for one repo', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-package-update-'));
+  const repos = [
+    {
+      repoId: 'alpha',
+      label: 'Alpha',
+    },
+  ];
+
+  assert.throws(() => validatePackageUpdateSubmission(repos, {
+    repoId: 'missing',
+  }));
+
+  const { payload } = validatePackageUpdateSubmission(repos, {
+    repoId: 'alpha',
+  });
+  const job = enqueueJob(rootDir, createControlPlanePackageUpdateJob(payload));
+
+  assert.equal(job.type, 'package:update');
+  assert.equal(job.repoId, 'alpha');
+  assert.equal(listJobs(rootDir, { type: 'package:update' as any }).length, 1);
+  assert.equal(claimJob(rootDir, job.id, { repoIds: ['beta'] }), null);
+
+  const claimed = claimJob(rootDir, job.id, { repoIds: ['alpha'] });
+  assert.equal(claimed?.status, 'claimed');
+  const completed = completeJob(rootDir, job.id, {
+    status: 'completed',
+    result: {
+      installedVersion: '1.4.45',
+      restartStatus: {
+        status: 'skipped',
+      },
+    },
+  });
+
+  assert.equal(completed?.status, 'completed');
+  assert.equal(completed?.result?.installedVersion, '1.4.45');
 });
 
 test('agent chat submission validation enforces discovered repos and message content', () => {

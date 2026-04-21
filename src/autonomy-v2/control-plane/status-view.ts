@@ -285,19 +285,7 @@ function formatPrdRunStepLabel(stepId: string) {
 function summarizeControlPlaneJob(job: any, repoLabel = '') {
   const status = String(job && job.status || 'queued');
   const jobType = String(job && job.type || 'prd:add');
-  const statusLabelMap: Record<string, string> = jobType === 'agent:chat' ? {
-    queued: 'Waiting for bridge reply',
-    claimed: 'Bridge is drafting reply',
-    running: 'Bridge is drafting reply',
-    completed: 'Reply delivered',
-    failed: 'Failed',
-  } : {
-    queued: 'Waiting to be claimed',
-    claimed: 'Claimed by the bridge',
-    running: 'Running on the local repo',
-    completed: jobType === 'deploy' ? 'Deploy completed' : 'Completed and committed',
-    failed: 'Failed',
-  };
+  const statusLabelMap: Record<string, string> = buildJobStatusLabelMap(jobType);
   const details = [];
   if (repoLabel) {
     details.push(repoLabel);
@@ -308,6 +296,8 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     details.push('agent replied');
   } else if (status === 'completed' && jobType === 'deploy' && job && job.result) {
     details.push(`merged ${job.result.sourceBranch || 'dev'} into ${job.result.targetBranch || 'main'}`);
+  } else if (status === 'completed' && jobType === 'package:update' && job && job.result) {
+    details.push(`installed ${job.result.installedVersion || job.result.newDeclaredVersion || 'latest'}`);
   } else if (status === 'completed' && job && job.result && job.result.prdId) {
     details.push(`PRD ${job.result.prdId} committed`);
   } else if (job && job.claimedAt) {
@@ -318,6 +308,7 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
 
   return {
     id: String(job && job.id || ''),
+    type: jobType,
     repoId: String(job && job.repoId || ''),
     repoLabel: repoLabel || String(job && job.repoId || ''),
     title: formatControlPlaneJobTitle(job, jobType),
@@ -329,9 +320,40 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
   };
 }
 
+function buildJobStatusLabelMap(jobType: string): Record<string, string> {
+  if (jobType === 'agent:chat') {
+    return {
+      queued: 'Waiting for bridge reply',
+      claimed: 'Bridge is drafting reply',
+      running: 'Bridge is drafting reply',
+      completed: 'Reply delivered',
+      failed: 'Failed',
+    };
+  }
+  if (jobType === 'package:update') {
+    return {
+      queued: 'Waiting to update',
+      claimed: 'Update claimed by bridge',
+      running: 'Updating package',
+      completed: 'Package updated',
+      failed: 'Update failed',
+    };
+  }
+  return {
+    queued: 'Waiting to be claimed',
+    claimed: 'Claimed by the bridge',
+    running: 'Running on the local repo',
+    completed: jobType === 'deploy' ? 'Deploy completed' : 'Completed and committed',
+    failed: 'Failed',
+  };
+}
+
 function formatControlPlaneJobTitle(job: any, jobType: string) {
   if (jobType === 'deploy') {
     return `Deploy ${String(job && job.result && job.result.sourceBranch || job && job.payload && job.payload.sourceBranch || 'dev')} to ${String(job && job.result && job.result.targetBranch || job && job.payload && job.payload.targetBranch || 'main')}`;
+  }
+  if (jobType === 'package:update') {
+    return 'Update Autonomy v2 package';
   }
   if (jobType === 'agent:chat') {
     return `Repo chat: ${summarizeText(job && job.payload && job.payload.prompt || job && job.id || 'message')}`;

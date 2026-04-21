@@ -7,6 +7,7 @@ import { gitRefExists, resolveBaseRef, runGitRead } from '../commands/shared-rep
 import { loadAllState, loadTrackedPrdHistory, loadTrackedPrds } from '../commands/shared-prds.js';
 import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
 import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapshot } from '../commands/deploy-version.js';
+import { readAutonomyPackageStatus } from '../commands/update.js';
 import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../sync/review-reconciliation.js';
 
 function buildStatusSnapshot(rootDir) {
@@ -68,6 +69,7 @@ function buildStatusSnapshot(rootDir) {
     pullRequestStatuses,
     branchLockCount: branchLocks.locks.length,
     deployment: buildDeploymentSnapshot(rootDir, config),
+    autonomyPackage: readAutonomyPackageStatus(rootDir),
     runtime,
     prds,
     prdHistory,
