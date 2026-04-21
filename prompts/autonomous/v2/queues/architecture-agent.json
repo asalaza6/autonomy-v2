@@ -663,11 +663,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T18:56:27.338Z",
-      "updatedAt": "2026-04-21T19:00:04.632Z",
+      "updatedAt": "2026-04-21T19:00:04.695Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-i-talk-in-b2b937-architecture-agent",
       "startedAt": "2026-04-21T18:56:46.401Z",
       "completedAt": "2026-04-21T19:00:04.632Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "6e5dfd2411510aa3c8d358c50fcd774de35fd053"
     }
   ]
 }
