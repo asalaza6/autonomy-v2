@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-prd-continue-original-agent-fc326d",
+  "status": "planned",
+  "createdAt": "2026-04-21T09:23:08.495Z",
+  "updatedAt": "2026-04-21T09:23:08.495Z",
+  "plannedTaskIds": [
+    "prd-prd-continue-original-agent-fc326d-architecture-agent-1"
+  ]
+}
