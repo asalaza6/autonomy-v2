@@ -478,11 +478,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T08:29:39.559Z",
-      "updatedAt": "2026-04-21T08:48:38.710Z",
+      "updatedAt": "2026-04-21T08:48:38.788Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
       "startedAt": "2026-04-21T08:29:58.401Z",
       "completedAt": "2026-04-21T08:48:38.710Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "ff8d18c013520371a2d9ab2e70a70097597b6c8e"
     }
   ]
 }
