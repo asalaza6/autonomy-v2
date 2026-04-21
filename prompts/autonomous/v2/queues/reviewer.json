@@ -94,13 +94,13 @@
         "Task `prd-when-prds-run-the-d8bef0-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 5,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T06:09:07.751Z",
       "updatedAt": "2026-04-21T06:23:19.606Z",
       "reviewedAt": "2026-04-21T06:23:01.354Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T06:19:17.733Z"
+      "dispatchedAt": "2026-04-21T06:23:21.256Z"
     }
   ]
 }
