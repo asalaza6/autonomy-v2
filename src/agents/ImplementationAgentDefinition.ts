@@ -1,5 +1,10 @@
 import { AgentDefinition } from './AgentDefinition.js';
 import { AGENT_ROLES, TASK_TYPES, buildRoleEventName, getRoleLabel } from './role-catalog.js';
+import {
+  getAgentConversationId,
+  resolveReturnedConversationId,
+  setAgentConversationReference,
+} from './conversation-references.js';
 import type { AgentConfig, AutonomyConfig, PullRequestRecord, QueueState, TaskRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedTaskWork, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
 
@@ -300,7 +305,10 @@ class ImplementationAgentDefinition extends AgentDefinition {
     });
     const implementationConversationId = this.resolveReturnedImplementationConversationId(codexResult);
     if (implementationConversationId) {
-      task.implementationConversationId = implementationConversationId;
+      setAgentConversationReference(task, {
+        agentId: agent.id,
+        role: AGENT_ROLES.IMPLEMENTATION,
+      }, implementationConversationId, context.clock.now());
     }
     context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'codex'), {
       taskId: task.id,
@@ -659,7 +667,7 @@ class ImplementationAgentDefinition extends AgentDefinition {
       return { status: 'noop' };
     }
 
-    const resumeConversationId = this.getTaskImplementationConversationId(input.task);
+    const resumeConversationId = this.getTaskImplementationConversationId(input.task, input.agent || context.agent);
     if (!resumeConversationId) {
       return context.codex.executeTask(input);
     }
@@ -683,20 +691,15 @@ class ImplementationAgentDefinition extends AgentDefinition {
     }
   }
 
-  private getTaskImplementationConversationId(value: AnyRecord | null | undefined): string {
-    return String(value && value.implementationConversationId || '').trim();
+  private getTaskImplementationConversationId(value: AnyRecord | null | undefined, agent?: AgentConfig): string {
+    return getAgentConversationId(value, {
+      agentId: agent && agent.id || value && value.agentId,
+      role: AGENT_ROLES.IMPLEMENTATION,
+    });
   }
 
   private resolveReturnedImplementationConversationId(value: AnyRecord | null | undefined): string {
-    const source = value && (
-      value.implementationConversationId
-      || value.implementationSessionId
-      || value.conversationId
-      || value.conversation_id
-      || value.sessionId
-      || value.session_id
-    );
-    return String(source || '').trim();
+    return resolveReturnedConversationId(value);
   }
 
   private summarizeText(value: unknown): string {

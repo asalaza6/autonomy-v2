@@ -13,7 +13,7 @@ import {
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
 const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 10 * 60 * 1000;
 
-async function runCodexStructured({ cwd, prompt, schema, readOnly }) {
+async function runCodexStructured({ cwd, prompt, schema, readOnly, resumeSessionId = '', captureConversationId = false }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
   const schemaPath = path.join(tempDir, 'schema.json');
@@ -22,16 +22,20 @@ async function runCodexStructured({ cwd, prompt, schema, readOnly }) {
 
   try {
     fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
-    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly });
+    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId, captureConversationId });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
-    await runCodexCommand({
+    const result = await runCodexCommand({
       binary: codexBin,
       args,
       cwd,
       input: prompt,
       streamOutput,
     });
-    return readCodexOutput(outputPath, streamOutput);
+    const output = readCodexOutput(outputPath, streamOutput);
+    const conversationId = extractCodexConversationId(result.stdout);
+    return captureConversationId === true || resumeSessionId
+      ? { ...output, conversationId }
+      : output;
   } catch (error) {
     logCodexFailure(error, streamOutput);
     throw new Error(`Codex CLI failed: ${extractExecError(error)}`);
@@ -85,7 +89,7 @@ function runCodexExecSync({ cwd, prompt, readOnly, resumeSessionId = '', capture
   }
 }
 
-function runCodexStructuredSync({ cwd, prompt, schema, readOnly }) {
+function runCodexStructuredSync({ cwd, prompt, schema, readOnly, resumeSessionId = '', captureConversationId = false }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
   const schemaPath = path.join(tempDir, 'schema.json');
@@ -94,16 +98,20 @@ function runCodexStructuredSync({ cwd, prompt, schema, readOnly }) {
 
   try {
     fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
-    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly });
+    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId, captureConversationId });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
-    runCodexCommandSync({
+    const result = runCodexCommandSync({
       binary: codexBin,
       args,
       cwd,
       input: prompt,
       streamOutput,
     });
-    return readCodexOutput(outputPath, streamOutput);
+    const output = readCodexOutput(outputPath, streamOutput);
+    const conversationId = extractCodexConversationId(result.stdout);
+    return captureConversationId === true || resumeSessionId
+      ? { ...output, conversationId }
+      : output;
   } catch (error) {
     logCodexFailure(error, streamOutput);
     throw new Error(`Codex CLI failed: ${extractExecError(error)}`);
@@ -112,7 +120,7 @@ function runCodexStructuredSync({ cwd, prompt, schema, readOnly }) {
   }
 }
 
-function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly }) {
+function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId = '', captureConversationId = false }) {
   const args = ['--ask-for-approval', 'never', 'exec'];
   args.push('--sandbox', readOnly ? 'read-only' : 'danger-full-access');
 
@@ -126,18 +134,28 @@ function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly }) {
     args.push('-p', profile);
   }
 
+  const normalizedResumeSessionId = String(resumeSessionId || '').trim();
+  const persistConversation = captureConversationId === true || Boolean(normalizedResumeSessionId);
+
   args.push(
     '--cd',
     cwd,
-    '--ephemeral',
+    ...(persistConversation ? [] : ['--ephemeral']),
     '--color',
     'never',
     '--output-schema',
     schemaPath,
     '--output-last-message',
-    outputPath,
-    '-'
+    outputPath
   );
+  if (persistConversation) {
+    args.push('--json');
+  }
+  if (normalizedResumeSessionId) {
+    args.push('resume', normalizedResumeSessionId, '-');
+  } else {
+    args.push('-');
+  }
   return args;
 }
 

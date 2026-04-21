@@ -41,11 +41,19 @@ test('derived reviewer task requeues when a completed review follow-up updates t
     reviewedAt: '2026-04-07T07:11:52.503Z',
     lastDecision: 'changes_requested',
     updatedAt: '2026-04-07T07:11:52.503Z',
+    conversationReferences: {
+      'agent:reviewer': {
+        conversationId: 'review-session-original',
+        agentId: 'reviewer',
+        role: 'review',
+      },
+    },
   } as any, []);
 
   assert.equal(reviewerTask.status, 'queued');
   assert.equal(reviewerTask.reviewRound, 2);
   assert.equal(reviewerTask.sourceTaskId, 'architecture-agent-followup-pr-mobile-size1-architecture-agent-1');
+  assert.equal(reviewerTask.conversationReferences['agent:reviewer'].conversationId, 'review-session-original');
 });
 
 test('review reconciliation resolves stale changes-requested tasks when PR changes are already applied', () => {

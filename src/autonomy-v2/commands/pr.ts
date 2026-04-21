@@ -9,6 +9,10 @@ import { queueReviewerTask } from './shared-worktrees.js';
 import { resolvePrRecordTask } from './shared-lanes.js';
 import { writeTaskQueues } from './shared-queues.js';
 import {
+  getAgentConversationId,
+  setAgentConversationReference,
+} from '../../agents/conversation-references.js';
+import {
   AGENT_ROLES,
   TASK_TYPES,
   buildRoleEventName,
@@ -130,6 +134,19 @@ async function run(rootDir, options) {
 
   record.title = buildPersonaPrTitle(agent, record.sourceTitle);
   record.body = buildPersonaPrBody(agent, task, state.sprint, record.sourceBody);
+  const implementationConversationId = [
+    task,
+    ...completedLaneTasks,
+  ].map((candidate) => getAgentConversationId(candidate, {
+    agentId: task.agentId,
+    role: AGENT_ROLES.IMPLEMENTATION,
+  })).find(Boolean) || '';
+  if (implementationConversationId) {
+    setAgentConversationReference(record, {
+      agentId: task.agentId,
+      role: AGENT_ROLES.IMPLEMENTATION,
+    }, implementationConversationId, now);
+  }
 
   if (options.publish === true && (!record.remote || !record.remote.number)) {
     const repo = resolveGithubRepo(rootDir);

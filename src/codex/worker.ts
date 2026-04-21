@@ -1,8 +1,9 @@
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel } from '../agents/role-catalog.js';
+import { getAgentConversationId } from '../agents/conversation-references.js';
 import { runCodexExec, runCodexStructured } from './cli.js';
 import { readOptionalFile } from './codex-shared.js';
 
-function normalizeImplementationConversationId(value) {
+function normalizeConversationId(value) {
   return String(value || '').trim();
 }
 
@@ -20,7 +21,11 @@ async function executeTaskWithCodex({
   const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);
   const conversationId = disableConversationResume === true
     ? ''
-    : normalizeImplementationConversationId(resumeConversationId || (task && task.implementationConversationId));
+    : normalizeConversationId(resumeConversationId)
+      || getAgentConversationId(task, {
+        agentId: agent && agent.id,
+        role: AGENT_ROLES.IMPLEMENTATION,
+      });
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
     `You are executing a ${laneLabel} lane inside the assigned git worktree.`,
@@ -75,14 +80,38 @@ async function executeTaskWithCodex({
   return {
     status: 'completed',
     implementationConversationId: result.conversationId || conversationId || '',
+    conversationId: result.conversationId || conversationId || '',
     resumedConversation: Boolean(conversationId),
     summary: '',
     notes: '',
   };
 }
 
-async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, worktreePath, checkResults, diffFiles, scopeResult }) {
+async function reviewPrWithCodex({
+  rootDir,
+  agent,
+  reviewTask,
+  pr,
+  branch,
+  worktreePath,
+  checkResults,
+  diffFiles,
+  scopeResult,
+  resumeConversationId,
+  disableConversationResume,
+}) {
   const laneLabel = getRoleLabel(AGENT_ROLES.IMPLEMENTATION);
+  const conversationId = disableConversationResume === true
+    ? ''
+    : normalizeConversationId(resumeConversationId)
+      || getAgentConversationId(reviewTask, {
+        agentId: agent && agent.id,
+        role: AGENT_ROLES.REVIEW,
+      })
+      || getAgentConversationId(pr, {
+        agentId: agent && agent.id,
+        role: AGENT_ROLES.REVIEW,
+      });
   const prompt = [
     readOptionalFile(rootDir, agent.systemPrompt),
     `You are reviewing a ${laneLabel} branch for merge into dev.`,
@@ -140,6 +169,8 @@ async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, workt
     cwd: worktreePath,
     prompt,
     readOnly: true,
+    resumeSessionId: conversationId,
+    captureConversationId: true,
     schema: {
       type: 'object',
       additionalProperties: false,
@@ -168,6 +199,9 @@ async function reviewPrWithCodex({ rootDir, agent, reviewTask, pr, branch, workt
     decision: output.decision,
     summary: String(output.summary || '').trim(),
     concerns,
+    conversationId: output.conversationId || conversationId || '',
+    reviewConversationId: output.conversationId || conversationId || '',
+    resumedConversation: Boolean(conversationId),
   };
 }
 

@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole } from '../../agents/role-catalog.js';
+import {
+  copyAgentConversationReference,
+  getAgentConversationId,
+  setAgentConversationReference,
+} from '../../agents/conversation-references.js';
 import type { AnyRecord, AutonomyConfig, BranchLocksState, PullRequestRecord, TaskRecord } from '../autonomy-types.js';
 import { ensureDir, getAgent, getAutonomyPaths, readJson, writeJson } from './shared-core.js';
 import {
@@ -134,6 +139,7 @@ function ensureReviewerTask(taskQueues, config, pr, sourceTask, now) {
 }
 
 function queueReviewerTask(taskQueues, config, pr, sourceTask, now) {
+  const reviewer = getPrimaryReviewer(config);
   const reviewerTask = ensureReviewerTask(taskQueues, config, pr, sourceTask, now);
   reviewerTask.title = `Review ${pr.title}`;
   reviewerTask.description = `Review ${pr.id} for ${sourceTask.title}`;
@@ -146,6 +152,10 @@ function queueReviewerTask(taskQueues, config, pr, sourceTask, now) {
   reviewerTask.reviewRound = (pr.reviews || []).length + 1;
   reviewerTask.status = 'queued';
   reviewerTask.updatedAt = now;
+  copyAgentConversationReference(reviewerTask, pr, {
+    agentId: reviewer.id,
+    role: AGENT_ROLES.REVIEW,
+  }, now);
   return reviewerTask;
 }
 
@@ -158,24 +168,27 @@ function getReviewerTask(taskQueues, config, pr) {
   return reviewerQueue.tasks.find((candidate) => candidate.id === `${getRoleLabel(AGENT_ROLES.REVIEW)}-${pr.id}`) || null;
 }
 
-function getImplementationConversationId(record) {
-  return String(record && record.implementationConversationId || '').trim();
+function getImplementationConversationId(record, agentId = '') {
+  return getAgentConversationId(record, {
+    agentId: agentId || record && record.agentId,
+    role: AGENT_ROLES.IMPLEMENTATION,
+  });
 }
 
 function resolveFollowupImplementationConversationId(patch, pr, tasks: TaskRecord[] = []) {
-  const patchConversationId = getImplementationConversationId(patch);
+  const patchConversationId = getImplementationConversationId(patch, pr && pr.agentId);
   if (patchConversationId) {
     return patchConversationId;
   }
   for (const candidate of tasks || []) {
     const isSourceTask = candidate.id === pr.taskId
       || (Array.isArray(pr.completedTaskIds) && pr.completedTaskIds.includes(candidate.id));
-    const conversationId = isSourceTask ? getImplementationConversationId(candidate) : '';
+    const conversationId = isSourceTask ? getImplementationConversationId(candidate, pr && pr.agentId) : '';
     if (conversationId) {
       return conversationId;
     }
   }
-  return '';
+  return getImplementationConversationId(pr, pr && pr.agentId);
 }
 
 function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
@@ -207,7 +220,10 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
       prId: pr.id,
     };
     if (implementationConversationId) {
-      task.implementationConversationId = implementationConversationId;
+      setAgentConversationReference(task, {
+        agentId: pr.agentId,
+        role: AGENT_ROLES.IMPLEMENTATION,
+      }, implementationConversationId, task.updatedAt);
     }
     if (!task.prdId) {
       delete task.prdId;
@@ -224,7 +240,10 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
   task.updatedAt = patch.updatedAt || new Date().toISOString();
   task.prId = pr.id;
   if (implementationConversationId) {
-    task.implementationConversationId = implementationConversationId;
+    setAgentConversationReference(task, {
+      agentId: pr.agentId,
+      role: AGENT_ROLES.IMPLEMENTATION,
+    }, implementationConversationId, task.updatedAt);
   }
   return task;
 }
@@ -354,7 +373,10 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
       prId: pr.id,
     };
     if (implementationConversationId) {
-      task.implementationConversationId = implementationConversationId;
+      setAgentConversationReference(task, {
+        agentId: pr.agentId,
+        role: AGENT_ROLES.IMPLEMENTATION,
+      }, implementationConversationId, task.updatedAt);
     }
     if (!task.prdId) {
       delete task.prdId;
@@ -369,7 +391,10 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
     task.updatedAt = patch.updatedAt || new Date().toISOString();
     task.prId = pr.id;
     if (implementationConversationId) {
-      task.implementationConversationId = implementationConversationId;
+      setAgentConversationReference(task, {
+        agentId: pr.agentId,
+        role: AGENT_ROLES.IMPLEMENTATION,
+      }, implementationConversationId, task.updatedAt);
     }
     if (!tasks.some((candidate) => candidate.id !== task.id && getImplementationTaskState(candidate) === 'active')) {
       task.state = 'active';

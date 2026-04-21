@@ -125,7 +125,7 @@ function createReviewRunnerExecutionContext(params: AnyRecord, deps: AnyRecord):
     },
     prStore: {
       getPr: bindArgs(deps.getPr, rootDir),
-      recordReviewDecision({ prId, reviewerId, decision, summary, publish }) {
+      recordReviewDecision({ prId, reviewerId, decision, summary, conversationId, publish }) {
         const args = [
           deps.CLI_PATH,
           deps.buildRoleEventName(deps.AGENT_ROLES.REVIEW, 'record'),
@@ -140,6 +140,9 @@ function createReviewRunnerExecutionContext(params: AnyRecord, deps: AnyRecord):
           '--summary',
           summary,
         ];
+        if (conversationId) {
+          args.push('--conversation-id', conversationId);
+        }
         if (publish) {
           args.push('--publish');
         }

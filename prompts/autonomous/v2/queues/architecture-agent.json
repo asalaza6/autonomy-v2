@@ -705,10 +705,14 @@
         "queue metadata",
         "or PR review state as needed so reviewer continuation survives normal task lifecycle transitions."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T19:45:43.975Z",
-      "updatedAt": "2026-04-21T19:45:43.975Z"
+      "updatedAt": "2026-04-21T20:04:43.256Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-generalize-agent-conversation-continuation-94434d-architecture-agent",
+      "startedAt": "2026-04-21T19:46:03.072Z",
+      "completedAt": "2026-04-21T20:04:43.256Z",
+      "completionMode": "code"
     }
   ]
 }

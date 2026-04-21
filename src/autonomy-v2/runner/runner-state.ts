@@ -3,6 +3,11 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel, isImplementationRole, isReviewRole } from '../../agents/role-catalog.js';
+import {
+  getAgentConversationId,
+  normalizeConversationReferences,
+  setAgentConversationReference,
+} from '../../agents/conversation-references.js';
 import type { AnyRecord, AutonomyConfig, QueueMap, QueueState, TaskRecord } from '../autonomy-types.js';
 import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
 import { AUTONOMY_SEGMENTS, RUNTIME_SEGMENTS } from './runner-constants.js';
@@ -235,9 +240,19 @@ function buildTaskSnapshot(task, scopeResult) {
     scopeViolations: uniqueScopeViolations(scopeResult && scopeResult.violations),
     completedAt: new Date().toISOString(),
   };
-  const implementationConversationId = String(task && task.implementationConversationId || '').trim();
+  const conversationReferences = normalizeConversationReferences(task && task.conversationReferences);
+  if (Object.keys(conversationReferences).length > 0) {
+    snapshot.conversationReferences = conversationReferences;
+  }
+  const implementationConversationId = getAgentConversationId(task, {
+    agentId: task && task.agentId,
+    role: AGENT_ROLES.IMPLEMENTATION,
+  });
   if (implementationConversationId) {
-    snapshot.implementationConversationId = implementationConversationId;
+    setAgentConversationReference(snapshot, {
+      agentId: task && task.agentId,
+      role: AGENT_ROLES.IMPLEMENTATION,
+    }, implementationConversationId);
   }
   return snapshot;
 }

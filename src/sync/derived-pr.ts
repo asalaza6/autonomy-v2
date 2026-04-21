@@ -1,4 +1,8 @@
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel } from '../agents/role-catalog.js';
+import {
+  copyAgentConversationReference,
+  normalizeConversationReferences,
+} from '../agents/conversation-references.js';
 import type { PullRequestRecord, TaskRecord } from './sync-types.js';
 import { isPullRequestResolved, pullRequestChangesAlreadyApplied } from './review-reconciliation.js';
 
@@ -243,6 +247,14 @@ function buildDerivedReviewerTask(pr: PullRequestRecord, sourceTask: TaskRecord,
   if (existingTask && Number.isFinite(Number(existingTask.reviewedCommitCount))) {
     record.reviewedCommitCount = Number(existingTask.reviewedCommitCount);
   }
+  const existingConversationReferences = normalizeConversationReferences(existingTask && existingTask.conversationReferences);
+  if (Object.keys(existingConversationReferences).length > 0) {
+    record.conversationReferences = existingConversationReferences;
+  }
+  copyAgentConversationReference(record, pr, {
+    agentId: 'reviewer',
+    role: AGENT_ROLES.REVIEW,
+  }, now);
   return record;
 }
 
@@ -352,6 +364,10 @@ function buildDerivedPullRequestRecord({
   }
   if (existingPr && existingPr.conflict) {
     record.conflict = { ...existingPr.conflict };
+  }
+  const conversationReferences = normalizeConversationReferences(existingPr && existingPr.conversationReferences);
+  if (Object.keys(conversationReferences).length > 0) {
+    record.conversationReferences = conversationReferences;
   }
   return record;
 }

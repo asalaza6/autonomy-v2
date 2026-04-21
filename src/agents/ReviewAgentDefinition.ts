@@ -1,5 +1,10 @@
 import { AgentDefinition } from './AgentDefinition.js';
 import { AGENT_ROLES, buildRoleEventName, getRoleAgentLabel, getRoleLabel } from './role-catalog.js';
+import {
+  getAgentConversationId,
+  resolveReturnedConversationId,
+  setAgentConversationReference,
+} from './conversation-references.js';
 import type { AgentConfig, AutonomyConfig, PullRequestRecord, TaskRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedReviewWork, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
 
@@ -268,7 +273,7 @@ class ReviewAgentDefinition extends AgentDefinition {
     context.scm.ensureCheckEnvironment?.(reviewContext.worktreePath, pr.checks || []);
     const checkResults = context.scm.runCheckCommands ? context.scm.runCheckCommands(reviewContext.worktreePath, pr.checks || []) : [];
     const codexReview = context.codex.reviewPr
-      ? await context.codex.reviewPr({
+      ? await this.executeCodexReview(context, {
           rootDir: context.rootDir,
           agent: context.agent,
           reviewTask: reviewerTask,
@@ -280,10 +285,23 @@ class ReviewAgentDefinition extends AgentDefinition {
           scopeResult,
         })
       : { decision: 'changes_requested', summary: '', concerns: [] };
+    const reviewConversationId = this.resolveReturnedReviewConversationId(codexReview);
+    if (reviewConversationId) {
+      const updatedAt = context.clock.now();
+      setAgentConversationReference(reviewerTask, {
+        agentId: context.agent.id,
+        role: AGENT_ROLES.REVIEW,
+      }, reviewConversationId, updatedAt);
+      setAgentConversationReference(pr, {
+        agentId: context.agent.id,
+        role: AGENT_ROLES.REVIEW,
+      }, reviewConversationId, updatedAt);
+    }
     context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.REVIEW, 'codex'), {
       reviewTaskId: work.reviewTaskId,
       decision: codexReview.decision,
       summary: this.summarizeText(codexReview.summary),
+      reviewConversationId: reviewConversationId || null,
     });
 
     const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
@@ -325,6 +343,7 @@ class ReviewAgentDefinition extends AgentDefinition {
       reviewerId: context.agent.id,
       decision,
       summary,
+      conversationId: reviewConversationId,
       publish: Boolean(pr.remote && pr.remote.number && context.reviewClient.hasGithubAuth?.()),
     });
 
@@ -467,6 +486,48 @@ class ReviewAgentDefinition extends AgentDefinition {
       mergeMessage,
       decision,
     };
+  }
+
+  private async executeCodexReview(context: AgentExecutionContext, input: AnyRecord): Promise<AnyRecord> {
+    if (!context.codex.reviewPr) {
+      return { decision: 'changes_requested', summary: '', concerns: [] };
+    }
+
+    const resumeConversationId = this.getTaskReviewConversationId(input.reviewTask, context.agent)
+      || this.getTaskReviewConversationId(input.pr, context.agent);
+    if (!resumeConversationId) {
+      return context.codex.reviewPr(input);
+    }
+
+    try {
+      return await context.codex.reviewPr({
+        ...input,
+        resumeConversationId,
+      });
+    } catch (error) {
+      context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.REVIEW, 'resume-fallback'), {
+        reviewTaskId: input.reviewTask && input.reviewTask.id,
+        prId: input.pr && input.pr.id,
+        reviewConversationId: resumeConversationId,
+        reason: this.summarizeText(error && error.message),
+      });
+      return context.codex.reviewPr({
+        ...input,
+        resumeConversationId: '',
+        disableConversationResume: true,
+      });
+    }
+  }
+
+  private getTaskReviewConversationId(value: AnyRecord | null | undefined, agent?: AgentConfig): string {
+    return getAgentConversationId(value, {
+      agentId: agent && agent.id || value && value.agentId,
+      role: AGENT_ROLES.REVIEW,
+    });
+  }
+
+  private resolveReturnedReviewConversationId(value: AnyRecord | null | undefined): string {
+    return resolveReturnedConversationId(value);
   }
 
   private latestReviewDecision(pr: PullRequestRecord): string {

@@ -100,11 +100,19 @@ test('runner persists reviewer task updates back to the tracked integration bran
   persistReviewerTaskState(rootDir, config, 'review-pr-fe-architecture-agent', {
     status: 'approved',
     updatedAt: '2026-03-28T19:45:19.000Z',
+    conversationReferences: {
+      'agent:reviewer': {
+        conversationId: 'review-session-1',
+        agentId: 'reviewer',
+        role: 'review',
+      },
+    },
   });
 
   const trackedQueue = JSON.parse(git(rootDir, ['show', 'dev:prompts/autonomous/v2/queues/reviewer.json']));
   assert.equal(trackedQueue.tasks[0].id, 'review-pr-fe-architecture-agent');
   assert.equal(trackedQueue.tasks[0].status, 'approved');
+  assert.equal(trackedQueue.tasks[0].conversationReferences['agent:reviewer'].conversationId, 'review-session-1');
 
   const workingTreeQueue = JSON.parse(fs.readFileSync(reviewerQueuePath, 'utf8'));
   assert.equal(workingTreeQueue.tasks.length, 0);
