@@ -246,11 +246,13 @@
         "Task `prd-prd-continue-original-agent-fc326d-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-21T09:40:26.394Z",
-      "updatedAt": "2026-04-21T09:45:29.984Z",
+      "updatedAt": "2026-04-21T09:45:45.940Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T09:40:30.312Z"
+      "dispatchedAt": "2026-04-21T09:40:30.312Z",
+      "reviewedAt": "2026-04-21T09:45:45.940Z",
+      "lastDecision": "approved"
     }
   ]
 }
