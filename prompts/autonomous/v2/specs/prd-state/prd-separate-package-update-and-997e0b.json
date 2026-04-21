@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-separate-package-update-and-997e0b",
+  "status": "planned",
+  "createdAt": "2026-04-21T21:50:07.331Z",
+  "updatedAt": "2026-04-21T21:50:07.331Z",
+  "plannedTaskIds": [
+    "prd-separate-package-update-and-997e0b-architecture-agent-1"
+  ]
+}
