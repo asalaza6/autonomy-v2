@@ -10,6 +10,7 @@ the bridge stays on the machine that has access to the target repos.
 - Claims one job at a time so two bridges do not run the same work.
 - Maps a control-plane repo id to a real local repo path.
 - Runs the repo-local `prd:add` flow in that repo.
+- Runs the repo-local `deploy` flow for queued deploy jobs.
 - Pushes a fresh status snapshot back to the server.
 - Marks the job completed or failed.
 
@@ -54,6 +55,12 @@ That means:
 4. The bridge runs `prd:add` inside the mapped repo.
 5. The bridge updates the server with the latest repo status.
 6. The existing repo-local Autonomy runtime continues from there.
+
+For deploys, the same queue boundary applies: clicking Deploy in the manager
+creates a deploy job, the bridge claims it, and the bridge runs the mapped
+repo's local `autonomy-v2 deploy` command. The deploy command can then
+fast-forward the production branch and run the repo's configured
+`deployCommand`.
 
 ## Practical notes
 

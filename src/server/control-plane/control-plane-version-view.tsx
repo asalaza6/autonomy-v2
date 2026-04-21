@@ -3,6 +3,7 @@ import { h } from './control-plane-jsx-runtime/jsx-runtime.js';
 type VersionStatusSummary = {
   version?: string | null;
   previousVersion?: string | null;
+  packageVersion?: string | null;
   isNew?: boolean;
   source?: string;
   detail?: string;
@@ -17,7 +18,7 @@ function VersionStatus({ versionStatus }: { versionStatus: VersionStatusSummary 
     <div className="queued-prd">
       <div className="item-head">
         <div>
-          <div className="pill">Version</div>
+          <div className="pill">Build</div>
           <div className="queue-title">{version}</div>
         </div>
         {versionStatus && versionStatus.isNew ? <span className="pill">New version</span> : null}

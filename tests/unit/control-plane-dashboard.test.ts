@@ -278,3 +278,56 @@ test('control plane dashboard displays current version without a new marker when
   assert.equal(dashboard.repos[0].versionStatus.isNew, false);
   assert.equal(dashboard.repos[0].versionStatus.source, 'deploy');
 });
+
+test('control plane dashboard marks same-package deploys as new when the build commit changes', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [
+      {
+        id: 'job-deploy-new-build',
+        type: 'deploy',
+        repoId: 'alpha',
+        payload: {
+          repoId: 'alpha',
+        },
+        status: 'completed',
+        createdAt: '2026-04-01T12:00:00.000Z',
+        updatedAt: '2026-04-01T12:02:00.000Z',
+        result: {
+          version: {
+            currentVersion: '1.4.44+build.109.abc123abc123',
+            previousVersion: '1.4.44+build.104.def456def456',
+            sourceVersion: '1.4.44+build.109.abc123abc123',
+            targetVersion: '1.4.44+build.104.def456def456',
+            packageVersion: '1.4.44',
+            previousPackageVersion: '1.4.44',
+            sourcePackageVersion: '1.4.44',
+            targetPackageVersion: '1.4.44',
+            isNewVersion: true,
+          },
+        },
+      },
+    ],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: new Date().toISOString(),
+        snapshot: {
+          prds: { prds: [] },
+          deployment: {
+            status: 'aligned',
+            statusLabel: 'Ready',
+          },
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repos[0].versionStatus.version, '1.4.44+build.109.abc123abc123');
+  assert.equal(dashboard.repos[0].versionStatus.previousVersion, '1.4.44+build.104.def456def456');
+  assert.equal(dashboard.repos[0].versionStatus.packageVersion, '1.4.44');
+  assert.equal(dashboard.repos[0].versionStatus.isNew, true);
+  assert.match(dashboard.repos[0].versionStatus.detail, /publish version 1\.4\.44/);
+});

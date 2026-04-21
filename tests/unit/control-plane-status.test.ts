@@ -65,8 +65,11 @@ test('status snapshots include deployment branch comparison details', () => {
   assert.equal(snapshot.deployment.hasChanges, true);
   assert.equal(snapshot.deployment.sourceAheadBy > 0, true);
   assert.match(snapshot.deployment.detail, /ahead of main/);
-  assert.equal(snapshot.deployment.version.currentVersion, '1.0.0');
-  assert.equal(snapshot.deployment.version.sourceVersion, '1.1.0');
-  assert.equal(snapshot.deployment.version.targetVersion, '1.0.0');
+  assert.match(snapshot.deployment.version.currentVersion, /^1\.0\.0\+build\.\d+\.[a-f0-9]+$/);
+  assert.match(snapshot.deployment.version.sourceVersion, /^1\.1\.0\+build\.\d+\.[a-f0-9]+$/);
+  assert.match(snapshot.deployment.version.targetVersion, /^1\.0\.0\+build\.\d+\.[a-f0-9]+$/);
+  assert.equal(snapshot.deployment.version.packageVersion, '1.0.0');
+  assert.equal(snapshot.deployment.version.sourcePackageVersion, '1.1.0');
+  assert.equal(snapshot.deployment.version.targetPackageVersion, '1.0.0');
   assert.equal(snapshot.deployment.version.isNewVersion, false);
 });

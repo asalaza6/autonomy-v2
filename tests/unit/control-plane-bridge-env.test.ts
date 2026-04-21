@@ -147,8 +147,10 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
 
   assert.equal(heartbeatCount, 1);
   assert.equal(Boolean(completedJob), true);
-  assert.equal(completedJob.result.version.currentVersion, '1.1.0');
-  assert.equal(completedJob.result.version.previousVersion, '1.0.0');
+  assert.match(completedJob.result.version.currentVersion, /^1\.1\.0\+build\.\d+\.[a-f0-9]+$/);
+  assert.match(completedJob.result.version.previousVersion, /^1\.0\.0\+build\.\d+\.[a-f0-9]+$/);
+  assert.equal(completedJob.result.version.packageVersion, '1.1.0');
+  assert.equal(completedJob.result.version.previousPackageVersion, '1.0.0');
   assert.equal(completedJob.result.version.isNewVersion, true);
   assert.equal(completedJob.result.deployCommand.output, 'bridge custom deploy hook');
   assert.match(logs.join('\n'), /bridge:deploy:start/);

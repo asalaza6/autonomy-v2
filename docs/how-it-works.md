@@ -187,7 +187,7 @@ command:
 5. updates the target branch ref to the source SHA
 6. pushes the target branch to `origin` when an origin remote exists
 7. runs an optional `deployCommand`
-8. records version information from `package.json` when available
+8. records build and publish version information when available
 
 `deploymentUrl` and `deploymentLabel` are display metadata only. They do not
 perform deployment. The deploy hook is `deployCommand`.
@@ -242,6 +242,20 @@ uses:
 
 So a deploy from the manager fast-forwards `main` from `dev`, pushes
 `origin/main`, then pushes `main` to the `heroku` remote.
+
+### Build and publish versions
+
+The manager's version display is a build identifier, not only the published
+package version. When git metadata is available, deploy snapshots use:
+
+```text
+<packageVersion>+build.<commitCount>.<shortSha>
+```
+
+For example, a repo whose `package.json` still says `1.4.44` can still show a
+new build such as `1.4.44+build.109.abc123abc123` when `dev` points at a newer
+commit. The publish version is kept separately as metadata, so package-version
+based releases remain supported without hiding newer commit-based builds.
 
 ## Hosted Control Plane Deployment
 

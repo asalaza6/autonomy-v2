@@ -124,15 +124,24 @@ function buildRepoVersionStatus(repoId: string, repoStatus: AnyRecord | null, jo
   if (latestDeployVersion && latestDeployVersion.currentVersion) {
     const version = normalizeVersionString(latestDeployVersion.currentVersion);
     const previousVersion = normalizeVersionString(latestDeployVersion.previousVersion);
-    const isNew = latestDeployVersion.isNewVersion === true || isVersionNewer(version, previousVersion);
+    const packageVersion = normalizeVersionString(
+      latestDeployVersion.packageVersion || latestDeployVersion.sourcePackageVersion
+    );
+    const isNew = latestDeployVersion.isNewVersion === true
+      || versionsDiffer(version, previousVersion)
+      || isVersionNewer(packageVersion || version, latestDeployVersion.previousPackageVersion || previousVersion);
     return {
       version,
       previousVersion,
       isNew,
       source: 'deploy',
-      detail: isNew && previousVersion
-        ? `Created during deploy from ${previousVersion}`
-        : 'Current deploy version',
+      packageVersion,
+      detail: buildVersionDetail({
+        isNew,
+        previousVersion,
+        packageVersion,
+        source: 'deploy',
+      }),
     };
   }
 
@@ -143,12 +152,27 @@ function buildRepoVersionStatus(repoId: string, repoStatus: AnyRecord | null, jo
       && repoStatus.snapshot.deployment.version
       && repoStatus.snapshot.deployment.version.currentVersion
   );
+  const snapshotPackageVersion = normalizeVersionString(
+    repoStatus
+      && repoStatus.snapshot
+      && repoStatus.snapshot.deployment
+      && repoStatus.snapshot.deployment.version
+      && repoStatus.snapshot.deployment.version.packageVersion
+  );
   return {
     version: snapshotVersion,
     previousVersion: null,
     isNew: false,
     source: snapshotVersion ? 'snapshot' : 'unavailable',
-    detail: snapshotVersion ? 'Current version' : 'Version unavailable',
+    packageVersion: snapshotPackageVersion,
+    detail: snapshotVersion
+      ? buildVersionDetail({
+        isNew: false,
+        previousVersion: null,
+        packageVersion: snapshotPackageVersion,
+        source: 'snapshot',
+      })
+      : 'Version unavailable',
   };
 }
 
@@ -210,6 +234,30 @@ function jobRank(job: AnyRecord) {
     return 3;
   }
   return 4;
+}
+
+function versionsDiffer(left: string | null, right: string | null) {
+  return Boolean(left && right && left !== right);
+}
+
+function buildVersionDetail({ isNew, previousVersion, packageVersion, source }: {
+  isNew: boolean;
+  previousVersion: string | null;
+  packageVersion: string | null;
+  source: string;
+}) {
+  const parts = [];
+  if (isNew && previousVersion) {
+    parts.push(`Created during deploy from ${previousVersion}`);
+  } else if (source === 'deploy') {
+    parts.push('Current deploy build');
+  } else {
+    parts.push('Current build');
+  }
+  if (packageVersion) {
+    parts.push(`publish version ${packageVersion}`);
+  }
+  return parts.join('; ');
 }
 
 function isRepoRecord(repo: ControlPlaneRepoRecord | null): repo is ControlPlaneRepoRecord {
