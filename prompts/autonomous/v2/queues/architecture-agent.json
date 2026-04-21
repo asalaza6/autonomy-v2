@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -821,6 +820,30 @@
       "completedAt": "2026-04-21T22:09:19.342Z",
       "completionMode": "noop",
       "commitSha": "6e5049ac4ca7c08c197c332b725347fefd5d5511"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-separate-package-update-and-997e0b-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement Separate Package Update and Restart Commands",
+      "description": "`npm run typecheck` passed and the branch appears mergeable against `origin/dev`, but the self-hosted `autonomy-v2` update path is still not configured correctly.\nBlocking: `prompts/autonomous/v2/config/control-plane.json` still has no `packageUpdateCommand` for repoId `autonomy-v2`. Because `executeControlPlanePackageUpdate` falls back to the default install flow when `config.packageUpdateCommand` is absent, clicking Update for this repo would still attempt the default `@asalaza6/autonomy-v2@latest` install instead of running `npm run release:patch`. Add the repo-level config and focused verification against the actual repo config, not only a fixture-mutated config.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-separate-package-update-and-997e0b",
+      "laneKey": "prd-separate-package-update-and-997e0b:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed and the branch appears mergeable against `origin/dev`, but the self-hosted `autonomy-v2` update path is still not configured correctly.\nBlocking: `prompts/autonomous/v2/config/control-plane.json` still has no `packageUpdateCommand` for repoId `autonomy-v2`. Because `executeControlPlanePackageUpdate` falls back to the default install flow when `config.packageUpdateCommand` is absent, clicking Update for this repo would still attempt the default `@asalaza6/autonomy-v2@latest` install instead of running `npm run release:patch`. Add the repo-level config and focused verification against the actual repo config, not only a fixture-mutated config."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
+      "createdAt": "2026-04-21T22:09:40.645Z",
+      "updatedAt": "2026-04-21T22:09:40.645Z",
+      "startedAt": "2026-04-21T22:09:40.645Z",
+      "prId": "pr-prd-separate-package-update-and-997e0b-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
