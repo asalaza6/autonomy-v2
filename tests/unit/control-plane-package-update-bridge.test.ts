@@ -106,11 +106,12 @@ test('bridge executes package update jobs and reports skipped restarts when comm
   assert.match(logs.join('\n'), /bridge:package:update:done/);
 });
 
-test('bridge reports configured package update restart command execution and failures', async (t) => {
+test('bridge defers control bridge package update restart until after completion', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-package-restart-');
   initAutonomyRepo(repoDir);
   writePackageUpdateManifest(repoDir, '1.0.0');
   const bridgeMarkerPath = path.join(os.tmpdir(), `autonomy-v2-bridge-restart-${Date.now()}.txt`);
+  fs.rmSync(bridgeMarkerPath, { force: true });
   const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
   const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
   controlPlaneConfig.controlBridgeRestartCommand = {
@@ -124,6 +125,8 @@ test('bridge reports configured package update restart command execution and fai
   fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
   const fakeBinDir = createFakePackageUpdateBin('9.9.10-test');
   let completedJob: any = null;
+  let markerExistedAtComplete = false;
+  let markerExistedAtHeartbeat = false;
 
   const originalPath = process.env.PATH;
   process.env.PATH = `${fakeBinDir}:${process.env.PATH || ''}`;
@@ -156,6 +159,7 @@ test('bridge reports configured package update restart command execution and fai
     }
 
     if (req.url === '/api/jobs/job-package-update-restart-1/complete' && req.method === 'POST') {
+      markerExistedAtComplete = fs.existsSync(bridgeMarkerPath);
       completedJob = JSON.parse(await readRequestText(req));
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ id: 'job-package-update-restart-1', status: 'completed' }));
@@ -169,6 +173,7 @@ test('bridge reports configured package update restart command execution and fai
     }
 
     if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      markerExistedAtHeartbeat = fs.existsSync(bridgeMarkerPath);
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
       return;
@@ -184,21 +189,27 @@ test('bridge reports configured package update restart command execution and fai
     restoreEnv('PATH', originalPath);
   });
 
-  await runControlPlaneBridgeOnce(repoDir, {
-    serverUrl,
-    repoRoots: {
-      default: repoDir,
-    },
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
   });
 
-  assert.equal(fs.readFileSync(bridgeMarkerPath, 'utf8'), 'bridge restarted\n');
+  assert.equal(markerExistedAtComplete, false);
+  assert.equal(markerExistedAtHeartbeat, false);
+  assert.equal(await waitForFileText(bridgeMarkerPath), 'bridge restarted\n');
   assert.equal(completedJob.status, 'completed');
   assert.equal(completedJob.result.installedVersion, '9.9.10-test');
   assert.equal(completedJob.result.restartStatus.status, 'failed');
-  assert.equal(completedJob.result.restartStatus.controlBridge.status, 'completed');
+  assert.equal(completedJob.result.restartStatus.controlBridge.status, 'deferred');
+  assert.equal(completedJob.result.restartStatus.controlBridge.reason, 'after-job-completion');
   assert.equal(completedJob.result.restartStatus.server.status, 'failed');
   assert.match(completedJob.result.restartStatus.server.error, /server restart failed/);
   assert.deepEqual(completedJob.result.errors, ['server restart failed']);
+  assert.match(logs.join('\n'), /bridge:package:update:deferred-restart/);
 });
 
 function writePackageUpdateManifest(repoDir: string, previousVersion: string) {
@@ -299,4 +310,15 @@ async function captureConsoleLogs(callback: () => Promise<void>) {
     console.log = originalLog;
   }
   return lines;
+}
+
+async function waitForFileText(filePath: string, timeoutMs = 2000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf8');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`Timed out waiting for ${filePath}.`);
 }

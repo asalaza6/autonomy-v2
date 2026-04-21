@@ -1,5 +1,5 @@
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { runPackageUpdate } from '../../autonomy-v2/commands/update.js';
 import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../types.js';
@@ -7,11 +7,36 @@ import { loadControlPlaneConfig } from './control-plane-config.js';
 
 const RESTART_COMMAND_TIMEOUT_MS = 30000;
 
+type RestartTarget = 'controlBridge' | 'server';
+
+interface NormalizedRestartCommandConfig {
+  command: string;
+  args: string[];
+  cwd: string;
+  displayCommand: string;
+  env: Record<string, string>;
+  shell: boolean;
+}
+
+interface DeferredRestartCommand {
+  target: RestartTarget;
+  commandConfig: NormalizedRestartCommandConfig;
+}
+
+interface DeferredRestartLaunchResult {
+  target: RestartTarget;
+  command: string;
+  cwd: string;
+  status: 'started' | 'failed';
+  error?: string;
+}
+
 function executeControlPlanePackageUpdate(rootDir: string) {
   const update = runPackageUpdate(rootDir, {});
   const snapshot = buildStatusSnapshot(rootDir);
   const restartConfig = loadControlPlaneConfig(rootDir);
-  const restartStatus = runPackageUpdateRestartCommands(rootDir, restartConfig);
+  const restartPlan = preparePackageUpdateRestartCommands(rootDir, restartConfig);
+  const restartStatus = restartPlan.restartStatus;
   const errors = [
     ...normalizeErrorList(update.errors),
     ...collectRestartErrors(restartStatus),
@@ -22,6 +47,7 @@ function executeControlPlanePackageUpdate(rootDir: string) {
     packageManager: update.packageManager,
     installedVersion: update.installedVersion,
     restartStatus,
+    deferredRestartCommands: restartPlan.deferredCommands,
     result: {
       packageName: update.packageName,
       packageManager: update.packageManager,
@@ -40,28 +66,36 @@ function executeControlPlanePackageUpdate(rootDir: string) {
   };
 }
 
-function runPackageUpdateRestartCommands(rootDir: string, config: ControlPlaneConfig) {
+function preparePackageUpdateRestartCommands(rootDir: string, config: ControlPlaneConfig) {
   const server = runRestartCommand(rootDir, 'server', config.serverRestartCommand);
-  const controlBridge = runRestartCommand(rootDir, 'controlBridge', config.controlBridgeRestartCommand);
+  const controlBridgePlan = deferRestartCommand(rootDir, 'controlBridge', config.controlBridgeRestartCommand);
+  const controlBridge = controlBridgePlan.status;
   const targetStatuses = [controlBridge.status, server.status];
   const status = targetStatuses.includes('failed')
     ? 'failed'
-    : targetStatuses.includes('completed')
+    : targetStatuses.includes('deferred')
+      ? 'deferred'
+      : targetStatuses.includes('completed')
       ? 'completed'
       : 'skipped';
   return {
-    status,
-    controlBridge,
-    server,
+    restartStatus: {
+      status,
+      controlBridge,
+      server,
+    },
+    deferredCommands: controlBridgePlan.deferredCommand
+      ? [controlBridgePlan.deferredCommand]
+      : [],
   };
 }
 
 function runRestartCommand(
   rootDir: string,
-  target: 'controlBridge' | 'server',
+  target: RestartTarget,
   value: DeployCommandConfig | null | undefined
 ) {
-  let commandConfig: ReturnType<typeof normalizeRestartCommandConfig>;
+  let commandConfig: NormalizedRestartCommandConfig | null;
   try {
     commandConfig = normalizeRestartCommandConfig(value, rootDir);
   } catch (error) {
@@ -116,6 +150,115 @@ function runRestartCommand(
     ...base,
     status: 'completed' as const,
   };
+}
+
+function deferRestartCommand(
+  rootDir: string,
+  target: RestartTarget,
+  value: DeployCommandConfig | null | undefined
+) {
+  let commandConfig: NormalizedRestartCommandConfig | null;
+  try {
+    commandConfig = normalizeRestartCommandConfig(value, rootDir);
+  } catch (error) {
+    return {
+      status: {
+        target,
+        status: 'failed' as const,
+        error: formatErrorMessage(error),
+      },
+      deferredCommand: null,
+    };
+  }
+  if (!commandConfig) {
+    return {
+      status: {
+        target,
+        status: 'skipped' as const,
+        reason: 'not-configured',
+      },
+      deferredCommand: null,
+    };
+  }
+
+  return {
+    status: {
+      target,
+      status: 'deferred' as const,
+      reason: 'after-job-completion',
+      command: commandConfig.displayCommand,
+      cwd: path.relative(rootDir, commandConfig.cwd) || '.',
+    },
+    deferredCommand: {
+      target,
+      commandConfig,
+    },
+  };
+}
+
+async function runDeferredPackageUpdateRestartCommands(
+  deferredCommands: DeferredRestartCommand[]
+): Promise<DeferredRestartLaunchResult[]> {
+  const results: DeferredRestartLaunchResult[] = [];
+  for (const deferredCommand of deferredCommands) {
+    results.push(await startDetachedRestartCommand(deferredCommand));
+  }
+  return results;
+}
+
+function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): Promise<DeferredRestartLaunchResult> {
+  const { target, commandConfig } = deferredCommand;
+  const base = {
+    target,
+    command: commandConfig.displayCommand,
+    cwd: commandConfig.cwd,
+  };
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (result: DeferredRestartLaunchResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(commandConfig.command, commandConfig.args, {
+        cwd: commandConfig.cwd,
+        detached: true,
+        env: {
+          ...process.env,
+          ...commandConfig.env,
+        },
+        shell: commandConfig.shell,
+        stdio: 'ignore',
+      });
+    } catch (error) {
+      settle({
+        ...base,
+        status: 'failed',
+        error: formatErrorMessage(error),
+      });
+      return;
+    }
+    child.once('spawn', () => {
+      child.unref();
+      settle({
+        ...base,
+        status: 'started',
+      });
+    });
+    child.once('error', (error) => {
+      settle({
+        ...base,
+        status: 'failed',
+        error: error.message,
+      });
+    });
+  });
 }
 
 function normalizeRestartCommandConfig(value: DeployCommandConfig | null | undefined, rootDir: string) {
@@ -228,4 +371,5 @@ function collectRestartErrors(restartStatus: {
 
 export {
   executeControlPlanePackageUpdate,
+  runDeferredPackageUpdateRestartCommands,
 };

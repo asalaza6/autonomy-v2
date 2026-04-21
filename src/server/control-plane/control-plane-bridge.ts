@@ -4,7 +4,10 @@ import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-serv
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
-import { executeControlPlanePackageUpdate } from './control-plane-package-update.js';
+import {
+  executeControlPlanePackageUpdate,
+  runDeferredPackageUpdateRestartCommands,
+} from './control-plane-package-update.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -41,6 +44,11 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     : { jobs: [] };
   const jobs = Array.isArray(queuedJobs.jobs) ? queuedJobs.jobs : [];
   const processed = [];
+  const deferredPackageUpdateRestarts: Array<{
+    jobId: string;
+    repoId: string;
+    commands: Parameters<typeof runDeferredPackageUpdateRestartCommands>[0];
+  }> = [];
   if (jobs.length > 0) {
     logBridgeEvent('bridge:jobs:found', {
       count: jobs.length,
@@ -99,6 +107,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         },
       });
       let result: Record<string, unknown>;
+      let deferredRestartCommandsForJob: Parameters<typeof runDeferredPackageUpdateRestartCommands>[0] = [];
       if (job.type === 'agent:chat') {
         logBridgeEvent('bridge:agent:chat:start', {
           jobId: job.id,
@@ -162,6 +171,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           installedVersion: execution.installedVersion || '-',
           restart: execution.restartStatus.status,
         });
+        deferredRestartCommandsForJob = execution.deferredRestartCommands;
         result = execution.result;
       } else {
         logBridgeEvent('bridge:prd:add:start', {
@@ -194,6 +204,13 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         type: job.type || 'prd:add',
         status: completed && completed.status || 'completed',
       });
+      if (completed && deferredRestartCommandsForJob.length > 0) {
+        deferredPackageUpdateRestarts.push({
+          jobId: job.id,
+          repoId: job.repoId,
+          commands: deferredRestartCommandsForJob,
+        });
+      }
       processed.push({ jobId: job.id, status: completed && completed.status });
     } catch (error) {
       const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
@@ -237,6 +254,20 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       note: 'bridge poll completed',
     },
   }).catch(() => null);
+
+  for (const restart of deferredPackageUpdateRestarts) {
+    const results = await runDeferredPackageUpdateRestartCommands(restart.commands);
+    results.forEach((result) => {
+      logBridgeEvent('bridge:package:update:deferred-restart', {
+        jobId: restart.jobId,
+        repoId: restart.repoId,
+        target: result.target,
+        status: result.status,
+        command: result.command,
+        error: result.error || '',
+      });
+    });
+  }
 
   return {
     processed,
