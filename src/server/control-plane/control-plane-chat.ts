@@ -8,7 +8,7 @@ import {
 const CHAT_RESPONSE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['answer'],
+  required: ['answer', 'prdProposal'],
   properties: {
     answer: {
       type: 'string',
@@ -18,14 +18,19 @@ const CHAT_RESPONSE_SCHEMA = {
         {
           type: 'object',
           additionalProperties: false,
-          required: ['title'],
+          required: [
+            'title',
+            'problem',
+            'goal',
+            'requirements',
+            'acceptanceCriteria',
+            'verification',
+            'priority',
+          ],
           properties: {
-            schemaVersion: { type: 'number' },
-            kind: { type: 'string' },
-            type: { type: 'string' },
             title: { type: 'string' },
-            problem: { type: 'string' },
-            goal: { type: 'string' },
+            problem: { type: ['string', 'null'] },
+            goal: { type: ['string', 'null'] },
             requirements: {
               type: 'array',
               items: { type: 'string' },
@@ -38,18 +43,7 @@ const CHAT_RESPONSE_SCHEMA = {
               type: 'array',
               items: { type: 'string' },
             },
-            priority: { type: 'string' },
-            source: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                repoId: { type: 'string' },
-                conversationId: { type: 'string' },
-                messageId: { type: 'string' },
-                responseMessageId: { type: 'string' },
-                createdAt: { type: 'string' },
-              },
-            },
+            priority: { type: ['string', 'null'] },
           },
         },
         { type: 'null' },
@@ -116,7 +110,7 @@ function buildAgentChatPrompt(
     'Current repo status summary:',
     JSON.stringify(buildRepoChatContext(snapshot), null, 2),
     '',
-    'Return JSON only with an answer field and optional prdProposal field.',
+    'Return JSON only with answer and prdProposal fields. Set prdProposal to null unless you are recommending a new PRD.',
   ].join('\n');
 }
 

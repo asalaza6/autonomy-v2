@@ -660,10 +660,14 @@
       "acceptance": [
         "Task `prd-when-i-talk-in-b2b937-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T18:56:27.338Z",
-      "updatedAt": "2026-04-21T18:56:27.338Z"
+      "updatedAt": "2026-04-21T19:00:04.632Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-i-talk-in-b2b937-architecture-agent",
+      "startedAt": "2026-04-21T18:56:46.401Z",
+      "completedAt": "2026-04-21T19:00:04.632Z",
+      "completionMode": "code"
     }
   ]
 }
