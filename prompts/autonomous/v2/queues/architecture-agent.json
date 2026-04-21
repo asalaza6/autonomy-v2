@@ -530,11 +530,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
       "createdAt": "2026-04-21T08:54:32.060Z",
-      "updatedAt": "2026-04-21T09:06:11.562Z",
+      "updatedAt": "2026-04-21T09:06:11.620Z",
       "startedAt": "2026-04-21T09:00:00.395Z",
       "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent",
       "completedAt": "2026-04-21T09:06:11.562Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "bbd3731524233aad16103653754b6d9ed94b5228"
     },
     {
       "id": "architecture-agent-followup-pr-prd-prd-control-plane-package-f7d2a3-architecture-agent-3",
