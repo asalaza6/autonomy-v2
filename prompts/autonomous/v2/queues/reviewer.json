@@ -78,6 +78,26 @@
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-20T03:20:19.885Z",
       "mergedAt": "2026-04-20T03:23:34.825Z"
+    },
+    {
+      "id": "review-pr-prd-when-prds-run-the-d8bef0-architecture-agent",
+      "title": "Review [architecture-agent] Implement When PRDs run The task bar should reflect in steps",
+      "description": "Review pr-prd-when-prds-run-the-d8bef0-architecture-agent for Implement When PRDs run The task bar should reflect in steps",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent",
+      "sourceTaskId": "prd-when-prds-run-the-d8bef0-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T06:09:07.751Z",
+      "updatedAt": "2026-04-21T06:09:07.751Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-when-prds-run-the-d8bef0-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
