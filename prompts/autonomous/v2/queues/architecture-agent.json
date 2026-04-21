@@ -708,11 +708,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T19:45:43.975Z",
-      "updatedAt": "2026-04-21T20:04:43.256Z",
+      "updatedAt": "2026-04-21T20:04:43.324Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-generalize-agent-conversation-continuation-94434d-architecture-agent",
       "startedAt": "2026-04-21T19:46:03.072Z",
       "completedAt": "2026-04-21T20:04:43.256Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "40c0f20d7456e4a3345ed3df0d8247aba8284d96"
     }
   ]
 }
