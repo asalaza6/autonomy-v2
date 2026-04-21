@@ -254,6 +254,26 @@
       "reviewedAt": "2026-04-21T09:45:45.940Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T09:45:51.409Z"
+    },
+    {
+      "id": "review-pr-prd-create-a-prd-proposal-c35a5e-architecture-agent",
+      "title": "Review [architecture-agent] Implement Create a PRD proposal for preserving chat scroll position during",
+      "description": "Review pr-prd-create-a-prd-proposal-c35a5e-architecture-agent for Implement Create a PRD proposal for preserving chat scroll position during",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-create-a-prd-proposal-c35a5e-architecture-agent",
+      "sourceTaskId": "prd-create-a-prd-proposal-c35a5e-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T09:53:58.065Z",
+      "updatedAt": "2026-04-21T09:53:58.065Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-create-a-prd-proposal-c35a5e-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-create-a-prd-proposal-c35a5e-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
