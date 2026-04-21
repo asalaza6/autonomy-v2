@@ -39,6 +39,12 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     : { jobs: [] };
   const jobs = Array.isArray(queuedJobs.jobs) ? queuedJobs.jobs : [];
   const processed = [];
+  if (jobs.length > 0) {
+    logBridgeEvent('bridge:jobs:found', {
+      count: jobs.length,
+      repoIds: registeredRepoIds.join(','),
+    });
+  }
 
   for (const job of jobs) {
     const claimed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/claim`, {
@@ -48,8 +54,18 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       },
     }).catch(() => null);
     if (!claimed) {
+      logBridgeEvent('bridge:job:claim-skipped', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type || 'prd:add',
+      });
       continue;
     }
+    logBridgeEvent('bridge:job:claimed', {
+      jobId: job.id,
+      repoId: job.repoId,
+      type: job.type || 'prd:add',
+    });
     const registration = registeredRepoRoots[job.repoId];
     const repoRoot = registration && registration.rootDir;
     if (!repoRoot) {
@@ -60,6 +76,12 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           error: `No local repo root configured for ${job.repoId}.`,
         },
       }).catch(() => null);
+      logBridgeEvent('bridge:job:failed', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type || 'prd:add',
+        reason: 'missing_repo_root',
+      });
       processed.push({ jobId: job.id, status: failure && failure.status });
       continue;
     }
@@ -76,7 +98,21 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       });
       let result: Record<string, unknown>;
       if (job.type === 'deploy') {
+        logBridgeEvent('bridge:deploy:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          root: repoRoot,
+        });
         const execution = runDeploy(repoRoot, {});
+        logBridgeEvent('bridge:deploy:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          source: execution.sourceBranch,
+          target: execution.targetBranch,
+          sha: execution.sha || '-',
+          pushed: execution.pushed ? 'yes' : 'no',
+          deployCommand: execution.deployCommand ? execution.deployCommand.command : 'none',
+        });
         result = {
           sourceBranch: execution.sourceBranch,
           targetBranch: execution.targetBranch,
@@ -87,7 +123,17 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           deployCommand: execution.deployCommand || null,
         };
       } else {
+        logBridgeEvent('bridge:prd:add:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+        });
         const execution = executePrdAdd(repoRoot, buildPrdAddCliOptions(job.payload));
+        logBridgeEvent('bridge:prd:add:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          prdId: execution.prdSpec.id,
+          commitSha: execution.commit.commitSha || '-',
+        });
         result = {
           prdId: execution.prdSpec.id,
           commitSha: execution.commit.commitSha || null,
@@ -101,6 +147,12 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           result,
         },
       }).catch(() => null);
+      logBridgeEvent('bridge:job:completed', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type || 'prd:add',
+        status: completed && completed.status || 'completed',
+      });
       processed.push({ jobId: job.id, status: completed && completed.status });
     } catch (error) {
       const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
@@ -110,6 +162,13 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           error: formatErrorMessage(error),
         },
       }).catch(() => null);
+      logBridgeEvent('bridge:job:failed', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type || 'prd:add',
+        status: failed && failed.status || 'failed',
+        message: formatErrorMessage(error),
+      });
       processed.push({ jobId: job.id, status: failed && failed.status });
     }
   }
@@ -221,6 +280,21 @@ function shouldRetryRequestError(error: unknown) {
   );
 }
 
+function logBridgeEvent(event: string, fields: Record<string, unknown> = {}) {
+  console.log(formatBridgeEventLine(event, fields));
+}
+
+function formatBridgeEventLine(event: string, fields: Record<string, unknown> = {}, timestamp = new Date().toISOString()) {
+  const parts = [`[${timestamp}]`, event];
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value === '' || value == null) {
+      return;
+    }
+    parts.push(`${key}=${value}`);
+  });
+  return parts.join(' | ');
+}
+
 function resolveRegisteredRepoRoots(repoRoots: Record<string, string>) {
   const registrations: Record<string, { rootDir: string; repo: ReturnType<typeof loadControlPlaneConfig> }> = {};
   Object.entries(repoRoots).forEach(([configuredRepoId, repoRoot]) => {
@@ -242,6 +316,7 @@ function resolveRegisteredRepoRoots(repoRoots: Record<string, string>) {
 }
 
 export {
+  formatBridgeEventLine,
   parseRepoMap,
   resolveRegisteredRepoRoots,
   runControlPlaneBridgeLoop,

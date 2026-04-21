@@ -225,6 +225,11 @@ async function handleRequest(
       const body = await readJsonBody(req);
       const { payload } = validatePrdAddSubmission(listDiscoveredRepos(rootDir), body);
       const job = enqueueJob(rootDir, createControlPlaneJob(payload));
+      logControlPlaneEvent('control-plane:job:queued', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type,
+      });
       sendJson(res, 201, job);
     } catch (error) {
       sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
@@ -266,6 +271,11 @@ async function handleRequest(
         repoId: String(body && body.repoId || repoId || '').trim(),
       });
       const job = enqueueJob(rootDir, createControlPlaneDeployJob(payload));
+      logControlPlaneEvent('control-plane:job:queued', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type,
+      });
       sendJson(res, 201, job);
     } catch (error) {
       sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
@@ -283,6 +293,11 @@ async function handleRequest(
       sendJson(res, 409, { error: 'Job is not available for claiming.' });
       return;
     }
+    logControlPlaneEvent('control-plane:job:claimed', {
+      jobId: job.id,
+      repoId: job.repoId,
+      type: job.type,
+    });
     sendJson(res, 200, job);
     return;
   }
@@ -295,6 +310,16 @@ async function handleRequest(
       sendJson(res, 404, { error: 'Unknown job.' });
       return;
     }
+    logControlPlaneEvent('control-plane:job:completed', {
+      jobId: job.id,
+      repoId: job.repoId,
+      type: job.type,
+      status: job.status,
+      commitSha: job.result && job.result.commitSha || '',
+      deployCommand: job.result && job.result.deployCommand
+        ? job.result.deployCommand.command || 'yes'
+        : '',
+    });
     sendJson(res, 200, job);
     return;
   }
@@ -498,6 +523,21 @@ function applyCors(res: http.ServerResponse, method: string) {
   }
 }
 
+function logControlPlaneEvent(event: string, fields: Record<string, unknown> = {}) {
+  console.log(formatControlPlaneEventLine(event, fields));
+}
+
+function formatControlPlaneEventLine(event: string, fields: Record<string, unknown> = {}, timestamp = new Date().toISOString()) {
+  const parts = [`[${timestamp}]`, event];
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value === '' || value == null) {
+      return;
+    }
+    parts.push(`${key}=${value}`);
+  });
+  return parts.join(' | ');
+}
+
 async function proxyControlPlaneApiRequest(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -622,6 +662,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
 }
 
 export {
+  formatControlPlaneEventLine,
   main,
   parseRepoRoots,
 };

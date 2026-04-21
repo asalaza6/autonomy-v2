@@ -136,11 +136,13 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
     await closeServer(server);
   });
 
-  await runControlPlaneBridgeOnce(repoDir, {
-    serverUrl,
-    repoRoots: {
-      default: repoDir,
-    },
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
   });
 
   assert.equal(heartbeatCount, 1);
@@ -149,6 +151,9 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   assert.equal(completedJob.result.version.previousVersion, '1.0.0');
   assert.equal(completedJob.result.version.isNewVersion, true);
   assert.equal(completedJob.result.deployCommand.output, 'bridge custom deploy hook');
+  assert.match(logs.join('\n'), /bridge:deploy:start/);
+  assert.match(logs.join('\n'), /bridge:deploy:done/);
+  assert.match(logs.join('\n'), /deployCommand=.*bridge custom deploy hook/);
   assert.notEqual(git(repoDir, ['rev-parse', 'main']), mainBefore);
   assert.equal(git(repoDir, ['rev-parse', 'main']), git(repoDir, ['rev-parse', 'dev']));
 });
@@ -188,4 +193,19 @@ function closeServer(server: http.Server): Promise<void> {
   return new Promise((resolve) => {
     server.close(() => resolve());
   });
+}
+
+async function captureConsoleLogs(callback: () => Promise<void>) {
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map((arg) => String(arg)).join(' '));
+    originalLog(...args);
+  };
+  try {
+    await callback();
+  } finally {
+    console.log = originalLog;
+  }
+  return lines;
 }
