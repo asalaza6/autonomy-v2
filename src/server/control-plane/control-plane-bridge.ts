@@ -5,8 +5,9 @@ import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
 import {
+  executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
-  runDeferredPackageUpdateRestartCommands,
+  runDeferredControlPlaneRestartCommands,
 } from './control-plane-package-update.js';
 
 function parseRepoMap(value: string | undefined) {
@@ -44,10 +45,10 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     : { jobs: [] };
   const jobs = Array.isArray(queuedJobs.jobs) ? queuedJobs.jobs : [];
   const processed = [];
-  const deferredPackageUpdateRestarts: Array<{
+  const deferredControlPlaneRestarts: Array<{
     jobId: string;
     repoId: string;
-    commands: Parameters<typeof runDeferredPackageUpdateRestartCommands>[0];
+    commands: Parameters<typeof runDeferredControlPlaneRestartCommands>[0];
   }> = [];
   if (jobs.length > 0) {
     logBridgeEvent('bridge:jobs:found', {
@@ -107,7 +108,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         },
       });
       let result: Record<string, unknown>;
-      let deferredRestartCommandsForJob: Parameters<typeof runDeferredPackageUpdateRestartCommands>[0] = [];
+      let deferredRestartCommandsForJob: Parameters<typeof runDeferredControlPlaneRestartCommands>[0] = [];
       if (job.type === 'agent:chat') {
         logBridgeEvent('bridge:agent:chat:start', {
           jobId: job.id,
@@ -169,6 +170,25 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           packageManager: execution.packageManager,
           installedVersion: execution.installedVersion || '-',
+        });
+        result = execution.result;
+      } else if (job.type === 'restart') {
+        logBridgeEvent('bridge:restart:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          root: repoRoot,
+        });
+        const execution = executeControlPlaneRestart(repoRoot);
+        await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+          method: 'POST',
+          body: {
+            repo: registration.repo,
+            snapshot: execution.snapshot,
+          },
+        });
+        logBridgeEvent('bridge:restart:done', {
+          jobId: job.id,
+          repoId: job.repoId,
           restart: execution.restartStatus.status,
         });
         deferredRestartCommandsForJob = execution.deferredRestartCommands;
@@ -212,13 +232,13 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         status: completedStatus || 'unacknowledged',
       });
       if (isCompletedJobResponse(completed, job.id) && deferredRestartCommandsForJob.length > 0) {
-        deferredPackageUpdateRestarts.push({
+        deferredControlPlaneRestarts.push({
           jobId: job.id,
           repoId: job.repoId,
           commands: deferredRestartCommandsForJob,
         });
       } else if (deferredRestartCommandsForJob.length > 0) {
-        logBridgeEvent('bridge:package:update:deferred-restart-skipped', {
+        logBridgeEvent('bridge:restart:deferred-skipped', {
           jobId: job.id,
           repoId: job.repoId,
           reason: completionError ? 'completion-failed' : 'completion-not-acknowledged',
@@ -270,10 +290,10 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     },
   }).catch(() => null);
 
-  for (const restart of deferredPackageUpdateRestarts) {
-    const results = await runDeferredPackageUpdateRestartCommands(restart.commands);
+  for (const restart of deferredControlPlaneRestarts) {
+    const results = await runDeferredControlPlaneRestartCommands(restart.commands);
     results.forEach((result) => {
-      logBridgeEvent('bridge:package:update:deferred-restart', {
+      logBridgeEvent('bridge:restart:deferred-launch', {
         jobId: restart.jobId,
         repoId: restart.repoId,
         target: result.target,

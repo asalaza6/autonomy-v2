@@ -786,10 +786,14 @@
         "or launched/deferred statuses clearly.",
         "Control panel should expose separate buttons/actions for Update and Restart."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T21:50:07.288Z",
-      "updatedAt": "2026-04-21T21:50:07.288Z"
+      "updatedAt": "2026-04-21T22:05:50.637Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
+      "startedAt": "2026-04-21T21:50:26.520Z",
+      "completedAt": "2026-04-21T22:05:50.637Z",
+      "completionMode": "code"
     }
   ]
 }

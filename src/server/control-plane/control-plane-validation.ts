@@ -4,6 +4,7 @@ import type {
   ControlPlaneDeployPayload,
   ControlPlanePackageUpdatePayload,
   ControlPlanePrdAddPayload,
+  ControlPlaneRestartPayload,
   ControlPlaneRepoRecord,
 } from '../../types.js';
 import { randomBytes } from 'crypto';
@@ -30,6 +31,7 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     description: repo.description,
     default: repo.default,
     deployCommand: repo.deployCommand,
+    packageUpdateCommand: repo.packageUpdateCommand,
     controlBridgeRestartCommand: repo.controlBridgeRestartCommand,
     serverRestartCommand: repo.serverRestartCommand,
     deploymentUrl: repo.deploymentUrl,
@@ -54,6 +56,7 @@ function normalizeRepoRecord(
     description: String((repo as Record<string, unknown>).description || '').trim() || undefined,
     default: (repo as Record<string, unknown>).default === true,
     deployCommand: (repo as ControlPlaneRepoRecord).deployCommand,
+    packageUpdateCommand: (repo as ControlPlaneRepoRecord).packageUpdateCommand,
     controlBridgeRestartCommand: (repo as ControlPlaneRepoRecord).controlBridgeRestartCommand,
     serverRestartCommand: (repo as ControlPlaneRepoRecord).serverRestartCommand,
     deploymentUrl: String((repo as Record<string, unknown>).deploymentUrl || '').trim() || undefined,
@@ -131,6 +134,19 @@ function validateDeploySubmission(
 function validatePackageUpdateSubmission(
   repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
   submission: Partial<ControlPlanePackageUpdatePayload> = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
+  return {
+    repo,
+    payload: {
+      repoId: repo.repoId,
+    },
+  };
+}
+
+function validateRestartSubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlaneRestartPayload> = {}
 ) {
   const repo = resolveRepoById(repos, submission.repoId || '');
   return {
@@ -232,4 +248,5 @@ export {
   validateDeploySubmission,
   validatePackageUpdateSubmission,
   validatePrdAddSubmission,
+  validateRestartSubmission,
 };

@@ -3,6 +3,7 @@
   "repoId": "default",
   "label": "Current workspace",
   "description": "Repo identity and display metadata for the hosted control plane.",
+  "packageUpdateCommand": "",
   "controlBridgeRestartCommand": "",
   "serverRestartCommand": "",
   "deploymentUrl": "https://example.com",
