@@ -289,7 +289,7 @@
       "sourceTaskId": "prd-when-i-talk-in-b2b937-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T19:00:05.849Z",
       "updatedAt": "2026-04-21T19:00:05.849Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-when-i-talk-in-b2b937-architecture-agent",
@@ -297,7 +297,9 @@
       "acceptance": [
         "Task `prd-when-i-talk-in-b2b937-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-21T19:00:10.194Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
