@@ -385,6 +385,36 @@
       "reviewedAt": "2026-04-21T20:42:09.073Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T20:42:14.183Z"
+    },
+    {
+      "id": "review-pr-prd-separate-package-update-and-997e0b-architecture-agent",
+      "title": "Review [architecture-agent] Implement Separate Package Update and Restart Commands",
+      "description": "Review pr-prd-separate-package-update-and-997e0b-architecture-agent for Implement Separate Package Update and Restart Commands",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-separate-package-update-and-997e0b-architecture-agent",
+      "sourceTaskId": "prd-separate-package-update-and-997e0b-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T22:05:51.784Z",
+      "updatedAt": "2026-04-21T22:05:51.784Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Keep existing default package update logic unchanged when no custom update command is configured.",
+        "Add repo-level custom update command configuration using the same command shape as restart commands where practical.",
+        "Run the custom update command in the managed repo root unless an explicit cwd is provided.",
+        "For `autonomy-v2`",
+        "allow the update command to be configured as `npm run release:patch`.",
+        "Remove automatic restart execution from the package update flow.",
+        "Add a separate restart command/job/action that restarts server and bridge according to existing restart command config.",
+        "Restart action should report skipped",
+        "failed",
+        "or launched/deferred statuses clearly.",
+        "Control panel should expose separate buttons/actions for Update and Restart."
+      ],
+      "scopeViolations": []
     }
   ]
 }
