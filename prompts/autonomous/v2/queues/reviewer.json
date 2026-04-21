@@ -93,10 +93,10 @@
       "acceptance": [
         "Task `prd-when-prds-run-the-d8bef0-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "reviewRound": 4,
-      "status": "changes_requested",
+      "reviewRound": 5,
+      "status": "queued",
       "createdAt": "2026-04-21T06:09:07.751Z",
-      "updatedAt": "2026-04-21T06:23:01.354Z",
+      "updatedAt": "2026-04-21T06:23:19.606Z",
       "reviewedAt": "2026-04-21T06:23:01.354Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
