@@ -9,9 +9,6 @@ const CHAT_RESPONSE_SCHEMA = {
     answer: {
       type: 'string',
     },
-    contextSummary: {
-      type: 'string',
-    },
   },
 };
 
@@ -40,7 +37,6 @@ async function answerControlPlaneAgentChat({
   const answer = String(output && output.answer || '').trim();
   return {
     answer: answer || 'I could not produce a useful answer for that repo question.',
-    contextSummary: String(output && output.contextSummary || '').trim() || undefined,
   };
 }
 
@@ -146,11 +142,11 @@ function buildStubAgentChatAnswer(
   ];
   return {
     answer: parts.join(' '),
-    contextSummary: `repo=${repoId}`,
   };
 }
 
 export {
+  CHAT_RESPONSE_SCHEMA,
   answerControlPlaneAgentChat,
   buildAgentChatPrompt,
   buildRepoChatContext,
