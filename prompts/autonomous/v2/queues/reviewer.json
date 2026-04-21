@@ -117,7 +117,7 @@
       "sourceTaskId": "prd-create-a-system-to-37e0e9-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T06:56:56.048Z",
       "updatedAt": "2026-04-21T06:56:56.048Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-create-a-system-to-37e0e9-architecture-agent",
@@ -125,7 +125,9 @@
       "acceptance": [
         "Task `prd-create-a-system-to-37e0e9-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-21T06:56:59.950Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
