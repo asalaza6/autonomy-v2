@@ -1,5 +1,6 @@
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/config-main.js';
+import { isPullRequestActive, isPullRequestResolved, pullRequestChangesAlreadyApplied } from '../../sync/review-reconciliation.js';
 import { buildPrdStateRelativePath } from '../../sync/sync-prd.js';
 import { commitTrackedFilesToIntegrationBranch, listArchivedPrdSpecs, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
 import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, QueueMap, TrackedPrdRecord } from '../autonomy-types.js';
@@ -35,7 +36,7 @@ function findArchivablePrdIds(prdIds: string[], { taskQueues, prs, prds }: { tas
   return Array.from(prdIdSet).filter((prdId) => {
     const linkedPullRequests = prsByPrdId.get(prdId) || [];
     if (linkedPullRequests.length > 0) {
-      return linkedPullRequests.every((pr) => String(pr.status || '') === 'merged');
+      return linkedPullRequests.every(isMergedPullRequest);
     }
 
     const linkedTasks = tasksByPrdId.get(prdId) || [];
@@ -60,11 +61,18 @@ function normalizeStringIds(value) {
 }
 
 function isMergedPullRequest(pr) {
-  return Boolean(
-    String(pr && pr.status || '') === 'merged'
-      || pr && pr.mergedAt
-      || pr && pr.remote && (pr.remote.mergedAt || pr.remote.merged_at)
-  );
+  return isPullRequestResolved(pr);
+}
+
+function isActiveLinkedPullRequest(pr, linkedTasks) {
+  if (!isPullRequestActive(pr)) {
+    return false;
+  }
+  if (String(pr && pr.status || '') === 'changes_requested'
+    && pullRequestChangesAlreadyApplied(pr, linkedTasks)) {
+    return false;
+  }
+  return true;
 }
 
 function deriveCompletedTaskSpecIds(plannedTaskIds, linkedTasks = [], linkedPullRequests = []) {
@@ -137,10 +145,27 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
         ? trackedState.plannedTaskIds.slice()
         : linkedTasks.map((task) => task.id);
       const completedTaskSpecIds = deriveCompletedTaskSpecIds(plannedTaskIds, linkedTasks, linkedPullRequests);
+      const plannedTaskIdSet = new Set(normalizeStringIds(plannedTaskIds));
+      const completedTaskSpecIdSet = new Set(completedTaskSpecIds);
+      const hasActivePullRequest = linkedPullRequests.some((pr) => isActiveLinkedPullRequest(pr, linkedTasks));
+      const hasPendingUncompletedTask = linkedTasks.some((task) => {
+        const taskId = String(task && task.id || '').trim();
+        if (!taskId || !plannedTaskIdSet.has(taskId) || completedTaskSpecIdSet.has(taskId)) {
+          return false;
+        }
+        return !isTerminalTaskStatus(String(task && (task.status || task.state) || ''));
+      });
       let status = 'queued';
       if (trackedState && (trackedState.status === 'planning' || trackedState.status === 'failed')) {
         status = trackedState.status;
-      } else if (linkedPullRequests.length > 0 && linkedPullRequests.every((pr) => String(pr.status || '') === 'merged')) {
+      } else if (
+        plannedTaskIds.length > 0
+        && completedTaskSpecIds.length >= plannedTaskIds.length
+        && !hasActivePullRequest
+        && !hasPendingUncompletedTask
+      ) {
+        status = 'completed';
+      } else if (linkedPullRequests.length > 0 && linkedPullRequests.every(isMergedPullRequest)) {
         status = 'completed';
       } else if ((trackedState && trackedState.status === 'planned') || plannedTaskIds.length > 0) {
         status = 'planned';

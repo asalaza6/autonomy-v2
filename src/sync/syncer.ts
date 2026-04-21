@@ -16,6 +16,7 @@ import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
 import { commitTrackedFilesToIntegrationBranch, fetchIntegrationBranch } from './sync-git.js';
 import { listTreeFiles, readGit, readJsonFromGitRef, readTreeFile } from './git-shared.js';
 import { AGENT_ROLES } from '../agents/role-catalog.js';
+import { reconcileReviewTaskRecord } from './review-reconciliation.js';
 
 function buildTrackedReviewQueueState(agent, tasks = []) {
   return {
@@ -25,8 +26,21 @@ function buildTrackedReviewQueueState(agent, tasks = []) {
   };
 }
 
-function syncTrackedReviewerQueues(rootDir: string, integrationBranch: string, config: AutonomyConfig, ref: string, derivedTasks: AnyRecord[] = []) {
+function syncTrackedReviewerQueues(rootDir: string, integrationBranch: string, config: AutonomyConfig, ref: string, derivedTasks: AnyRecord[] = [], options: AnyRecord = {}) {
   const updates = [];
+  const pullRequestsById = new Map<string, AnyRecord>(
+    ((options.pullRequests || []) as AnyRecord[])
+      .filter((pr) => pr && pr.id)
+      .map((pr) => [String(pr.id), pr])
+  );
+  const implementationTasks = Array.isArray(options.implementationTasks) ? options.implementationTasks : [];
+  const now = String(options.now || new Date().toISOString());
+  const derivedTaskIds = new Set((derivedTasks || []).map((task) => task && task.id).filter(Boolean));
+  const reconciledDerivedTasks = (derivedTasks || []).map((task) => reconcileReviewTaskRecord(task, {
+    pullRequestsById,
+    implementationTasks,
+    now,
+  }));
   (config.agents || []).forEach((agent) => {
     if (agent.role !== AGENT_ROLES.REVIEW) {
       return;
@@ -38,12 +52,16 @@ function syncTrackedReviewerQueues(rootDir: string, integrationBranch: string, c
     const existingQueue = readJsonFromGitRef(rootDir, ref, relativePath, buildTrackedReviewQueueState(agent, []));
     const retainedTasks = Array.isArray(existingQueue && existingQueue.tasks)
       ? existingQueue.tasks.filter((task) => {
-        return !derivedTasks.some((candidate) => candidate && candidate.id === task.id);
-      })
+        return !derivedTaskIds.has(task.id);
+      }).map((task) => reconcileReviewTaskRecord(task, {
+        pullRequestsById,
+        implementationTasks,
+        now,
+      }))
       : [];
     updates.push({
       relativePath,
-      content: buildTrackedReviewQueueState(agent, retainedTasks.concat(derivedTasks)),
+      content: buildTrackedReviewQueueState(agent, retainedTasks.concat(reconciledDerivedTasks)),
     });
   });
   if (updates.length === 0) {
@@ -86,6 +104,13 @@ function dedupeBranchLocksByOwnership(locks) {
       }
     });
   return deduped;
+}
+
+function flattenTrackedImplementationTasks(trackedImplementationTasksByPrd) {
+  if (!(trackedImplementationTasksByPrd instanceof Map)) {
+    return [];
+  }
+  return Array.from(trackedImplementationTasksByPrd.values()).flatMap((tasks) => Array.isArray(tasks) ? tasks : []);
 }
 
 function promoteQueuedPrdSpec(rootDir: string, integrationBranch: string, queuedSpec: AnyRecord) {
@@ -282,7 +307,11 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
       .concat(derived.branchLocks));
     writeJson(paths.prsState, { pullRequests: nextPrs });
     writeJson(paths.branchLocksState, { locks: nextBranchLocks });
-    syncTrackedReviewerQueues(rootDir, integrationBranch, config, ref, derived.tasks || []);
+    syncTrackedReviewerQueues(rootDir, integrationBranch, config, ref, derived.tasks || [], {
+      pullRequests: nextPrs,
+      implementationTasks: flattenTrackedImplementationTasks(trackedImplementationTasksByPrd),
+      now,
+    });
     emitSyncProgress(options, 'sync:state:written', {
       prs: nextPrs.length,
       branchLocks: nextBranchLocks.length,

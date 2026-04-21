@@ -1,4 +1,5 @@
 import { AGENT_ROLES, TASK_TYPES, getRoleAgentLabel, getRoleLabel } from '../../agents/role-catalog.js';
+import { isPullRequestActive, pullRequestChangesAlreadyApplied } from '../../sync/review-reconciliation.js';
 import { normalizeLaneKey } from './shared-core.js';
 import { isTerminalTaskStatus, getImplementationTaskState } from './shared-queues.js';
 
@@ -10,7 +11,8 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
       .filter(([laneKey]) => laneKey)
   );
   const tasksByPrId = new Map();
-  listTasks(taskQueues).forEach((task) => {
+  const allTasks = listTasks(taskQueues);
+  allTasks.forEach((task) => {
     if (!task || !task.prId) {
       return;
     }
@@ -20,7 +22,7 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
   });
 
   return ((prs && prs.pullRequests) || [])
-    .filter((pr) => isActivePullRequest(pr))
+    .filter((pr) => isActivePullRequest(pr, allTasks))
     .sort(comparePullRequestStatuses)
     .map((pr) => {
       const linkedTasks = tasksByPrId.get(pr.id) || [];
@@ -46,17 +48,12 @@ function listTasks(taskQueues) {
   return Object.values(taskQueues).flatMap((queue: any) => queue.tasks || []);
 }
 
-function isActivePullRequest(pr) {
-  if (!pr) {
+function isActivePullRequest(pr, tasks = []) {
+  if (!isPullRequestActive(pr)) {
     return false;
   }
-  if (String(pr.status || '') === 'merged') {
-    return false;
-  }
-  if (pr.mergedAt) {
-    return false;
-  }
-  if (pr.remote && pr.remote.mergedAt) {
+  if (String(pr && pr.status || '') === 'changes_requested'
+    && pullRequestChangesAlreadyApplied(pr, tasks)) {
     return false;
   }
   return true;
