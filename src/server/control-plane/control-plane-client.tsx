@@ -260,6 +260,7 @@ const chatConversationSelect = document.getElementById('chat-conversation-select
 const newChatButton = document.getElementById('new-chat-button');
 const chatRefreshButton = document.getElementById('chat-refresh-button');
 const chatThreadEl = document.getElementById('chat-thread');
+const chatJumpLatestButton = document.getElementById('chat-jump-latest') as HTMLButtonElement | null;
 const chatForm = document.getElementById('chat-form') as HTMLFormElement | null;
 const chatInputEl = document.getElementById('chat-input') as HTMLTextAreaElement | null;
 const chatMessageEl = document.getElementById('chat-message');
@@ -276,6 +277,7 @@ const entranceContext = readEntranceContext();
 const apiBaseUrl = String(window.__AUTONOMY_CONTROL_PLANE_API_BASE_URL__ || '').trim().replace(/\/+$/, '');
 const NEW_CHAT_VALUE = '__new__';
 const CHAT_PRD_DRAFT_STORAGE_PREFIX = 'autonomy.controlPlane.chatPrdDraft';
+const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 96;
 
 let latestRepos: RepoRecord[] = [];
 let latestDashboard: DashboardSummary = {};
@@ -286,6 +288,10 @@ let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedHistoryPrdId = '';
 let selectedChatConversationId = '';
 let activeChatPrdDraft: ChatPrdDraftState | null = null;
+let forceChatScrollToLatest = false;
+let chatJumpLatestVisible = false;
+let lastRenderedChatConversationId = '';
+let lastRenderedChatFingerprint = '';
 
 function mountControlPlane() {
   if (
@@ -310,15 +316,30 @@ function mountControlPlane() {
   if (chatForm) {
     chatForm.addEventListener('submit', handleChatSubmit);
   }
+  if (chatThreadEl) {
+    chatThreadEl.addEventListener('scroll', () => {
+      if (isChatNearBottom(chatThreadEl)) {
+        setChatJumpLatestVisible(false);
+      }
+    });
+  }
+  if (chatJumpLatestButton) {
+    chatJumpLatestButton.addEventListener('click', () => {
+      scrollChatToLatest();
+      setChatJumpLatestVisible(false);
+    });
+  }
   if (chatConversationSelect) {
     chatConversationSelect.addEventListener('change', () => {
       selectedChatConversationId = chatConversationSelect.value || NEW_CHAT_VALUE;
+      forceChatScrollToLatest = true;
       renderChat(latestConversations);
     });
   }
   if (newChatButton) {
     newChatButton.addEventListener('click', () => {
       selectedChatConversationId = NEW_CHAT_VALUE;
+      forceChatScrollToLatest = true;
       renderChat(latestConversations);
       window.setTimeout(() => chatInputEl?.focus(), 0);
     });
@@ -509,8 +530,10 @@ async function handleChatSubmit(event: SubmitEvent) {
     selectedChatConversationId = String(queued.conversation && queued.conversation.id || selectedChatConversationId || '');
     chatInputEl.value = '';
     chatMessageEl.textContent = 'Message queued for the bridge.';
+    forceChatScrollToLatest = true;
     await refresh();
   } catch (error) {
+    forceChatScrollToLatest = false;
     chatMessageEl.textContent = getErrorMessage(error);
   }
 }
@@ -1047,6 +1070,10 @@ function renderChat(conversations: ChatConversationSummary[]) {
     return;
   }
 
+  const scrollSnapshot = captureChatScrollSnapshot(chatThreadEl);
+  const previousConversationId = lastRenderedChatConversationId;
+  const previousFingerprint = lastRenderedChatFingerprint;
+
   latestConversations = Array.isArray(conversations) ? conversations.slice() : [];
   if (
     selectedChatConversationId !== NEW_CHAT_VALUE
@@ -1063,8 +1090,119 @@ function renderChat(conversations: ChatConversationSummary[]) {
   const selectedConversation = selectedChatConversationId === NEW_CHAT_VALUE
     ? null
     : latestConversations.find((conversation) => conversation.id === selectedChatConversationId) || null;
+  const nextConversationId = selectedConversation
+    ? String(selectedConversation.id || '')
+    : selectedChatConversationId || NEW_CHAT_VALUE;
+  const nextFingerprint = getChatConversationFingerprint(selectedConversation);
+  const scrollDecision = resolveChatScrollDecision(scrollSnapshot, {
+    forceScrollToLatest: forceChatScrollToLatest || previousConversationId !== nextConversationId,
+    previousFingerprint,
+    nextFingerprint,
+    keepJumpToLatestVisible: chatJumpLatestVisible,
+  });
+
   chatThreadEl.innerHTML = renderToHtml(<ChatThread conversation={selectedConversation} />);
+  applyChatScrollDecision(chatThreadEl, scrollDecision);
+  lastRenderedChatConversationId = nextConversationId;
+  lastRenderedChatFingerprint = nextFingerprint;
+  forceChatScrollToLatest = false;
+}
+
+type ChatScrollMetrics = {
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+};
+
+type ChatScrollSnapshot = ChatScrollMetrics & {
+  nearBottom: boolean;
+};
+
+type ChatScrollDecision = {
+  scrollToLatest: boolean;
+  preserveScrollTop: number;
+  showJumpToLatest: boolean;
+};
+
+function captureChatScrollSnapshot(element: ChatScrollMetrics): ChatScrollSnapshot {
+  return {
+    scrollTop: Math.max(0, Number(element.scrollTop) || 0),
+    scrollHeight: Math.max(0, Number(element.scrollHeight) || 0),
+    clientHeight: Math.max(0, Number(element.clientHeight) || 0),
+    nearBottom: isChatNearBottom(element),
+  };
+}
+
+function isChatNearBottom(element: ChatScrollMetrics, thresholdPx = CHAT_NEAR_BOTTOM_THRESHOLD_PX) {
+  const scrollHeight = Math.max(0, Number(element.scrollHeight) || 0);
+  const scrollTop = Math.max(0, Number(element.scrollTop) || 0);
+  const clientHeight = Math.max(0, Number(element.clientHeight) || 0);
+  const remaining = scrollHeight - scrollTop - clientHeight;
+  return remaining <= thresholdPx;
+}
+
+function resolveChatScrollDecision(
+  snapshot: ChatScrollSnapshot,
+  options: {
+    forceScrollToLatest?: boolean;
+    previousFingerprint?: string;
+    nextFingerprint?: string;
+    keepJumpToLatestVisible?: boolean;
+  }
+): ChatScrollDecision {
+  const previousFingerprint = String(options.previousFingerprint || '');
+  const nextFingerprint = String(options.nextFingerprint || '');
+  const contentChanged = previousFingerprint !== nextFingerprint && Boolean(previousFingerprint || nextFingerprint);
+  if (options.forceScrollToLatest || snapshot.nearBottom) {
+    return {
+      scrollToLatest: true,
+      preserveScrollTop: snapshot.scrollTop,
+      showJumpToLatest: false,
+    };
+  }
+
+  return {
+    scrollToLatest: false,
+    preserveScrollTop: snapshot.scrollTop,
+    showJumpToLatest: Boolean(options.keepJumpToLatestVisible || contentChanged),
+  };
+}
+
+function applyChatScrollDecision(element: HTMLElement, decision: ChatScrollDecision) {
+  if (decision.scrollToLatest) {
+    element.scrollTop = element.scrollHeight;
+  } else {
+    const maxScrollTop = Math.max(0, element.scrollHeight - element.clientHeight);
+    element.scrollTop = Math.min(Math.max(0, decision.preserveScrollTop), maxScrollTop);
+  }
+  setChatJumpLatestVisible(decision.showJumpToLatest);
+}
+
+function scrollChatToLatest() {
+  if (!chatThreadEl) {
+    return;
+  }
   chatThreadEl.scrollTop = chatThreadEl.scrollHeight;
+}
+
+function setChatJumpLatestVisible(visible: boolean) {
+  chatJumpLatestVisible = visible;
+  if (chatJumpLatestButton) {
+    chatJumpLatestButton.hidden = !visible;
+  }
+}
+
+function getChatConversationFingerprint(conversation: ChatConversationSummary | null) {
+  const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages : [];
+  return JSON.stringify(messages.map((message) => ({
+    id: message.id || '',
+    role: message.role || '',
+    status: message.status || '',
+    content: message.content || '',
+    updatedAt: message.updatedAt || '',
+    error: message.error || '',
+    prdProposal: message.prdProposal ? getPrdProposalStableKey(message.prdProposal, message.id || '') : '',
+  })));
 }
 
 function extractRepoConversations(state: StateSnapshot) {
@@ -2011,5 +2149,8 @@ export {
   ChatMessage,
   ChatPrdProposalCard,
   buildChatPrdDraftFormState,
+  captureChatScrollSnapshot,
+  isChatNearBottom,
   mountControlPlane,
+  resolveChatScrollDecision,
 };
