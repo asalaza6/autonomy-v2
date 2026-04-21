@@ -1,5 +1,9 @@
 import { runCodexStructured } from '../../codex/cli.js';
 import type { AnyRecord, ControlPlaneAgentChatMessagePayload } from '../../types.js';
+import {
+  extractPrdProposalFromText,
+  normalizePrdProposal,
+} from './control-plane-prd-proposal.js';
 
 const CHAT_RESPONSE_SCHEMA = {
   type: 'object',
@@ -8,6 +12,48 @@ const CHAT_RESPONSE_SCHEMA = {
   properties: {
     answer: {
       type: 'string',
+    },
+    prdProposal: {
+      anyOf: [
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['title'],
+          properties: {
+            schemaVersion: { type: 'number' },
+            kind: { type: 'string' },
+            type: { type: 'string' },
+            title: { type: 'string' },
+            problem: { type: 'string' },
+            goal: { type: 'string' },
+            requirements: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            acceptanceCriteria: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            verification: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            priority: { type: 'string' },
+            source: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                repoId: { type: 'string' },
+                conversationId: { type: 'string' },
+                messageId: { type: 'string' },
+                responseMessageId: { type: 'string' },
+                createdAt: { type: 'string' },
+              },
+            },
+          },
+        },
+        { type: 'null' },
+      ],
     },
   },
 };
@@ -35,8 +81,10 @@ async function answerControlPlaneAgentChat({
   });
 
   const answer = String(output && output.answer || '').trim();
+  const prdProposal = normalizeChatPrdProposal(output, answer, repoId, payload);
   return {
     answer: answer || 'I could not produce a useful answer for that repo question.',
+    ...(prdProposal ? { prdProposal } : {}),
   };
 }
 
@@ -53,6 +101,8 @@ function buildAgentChatPrompt(
     '- Maintain continuity with the conversation history.',
     '- Do not edit files, run long-lived commands, commit, push, deploy, or queue jobs.',
     '- If the manager asks you to change the repo, explain what change request or PRD should be queued instead.',
+    '- When you recommend queueing a repo change or PRD, include a prdProposal object with title, problem, goal, requirements, acceptanceCriteria, verification, and priority when known.',
+    '- Do not include prdProposal for normal status answers, explanations, or answers that do not recommend a new PRD.',
     '- Be concise and specific. Mention uncertainty when repo context is insufficient.',
     '',
     `Repo id: ${repoId}`,
@@ -66,7 +116,7 @@ function buildAgentChatPrompt(
     'Current repo status summary:',
     JSON.stringify(buildRepoChatContext(snapshot), null, 2),
     '',
-    'Return JSON only with an answer field.',
+    'Return JSON only with an answer field and optional prdProposal field.',
   ].join('\n');
 }
 
@@ -145,9 +195,26 @@ function buildStubAgentChatAnswer(
   };
 }
 
+function normalizeChatPrdProposal(
+  output: AnyRecord,
+  answer: string,
+  repoId: string,
+  payload: ControlPlaneAgentChatMessagePayload
+) {
+  const source = {
+    repoId,
+    conversationId: payload.conversationId,
+    messageId: payload.messageId,
+    responseMessageId: payload.responseMessageId,
+  };
+  return normalizePrdProposal(output && output.prdProposal, source)
+    || extractPrdProposalFromText(answer, source);
+}
+
 export {
   CHAT_RESPONSE_SCHEMA,
   answerControlPlaneAgentChat,
   buildAgentChatPrompt,
   buildRepoChatContext,
+  normalizeChatPrdProposal,
 };

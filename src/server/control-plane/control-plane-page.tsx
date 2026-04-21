@@ -797,6 +797,41 @@ const styles = `
     line-height: 1.5;
   }
 
+  .chat-prd-proposal {
+    display: grid;
+    gap: 10px;
+    margin-top: 4px;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(36, 91, 117, 0.2);
+    background: rgba(36, 91, 117, 0.08);
+  }
+
+  .chat-prd-proposal-title {
+    font-weight: 750;
+    line-height: 1.25;
+  }
+
+  .chat-prd-proposal-detail {
+    color: var(--muted);
+    line-height: 1.45;
+    font-size: 0.92rem;
+  }
+
+  .chat-prd-draft-panel[hidden] {
+    display: none;
+  }
+
+  .chat-prd-draft-panel {
+    display: grid;
+    gap: 10px;
+    border-radius: 16px;
+    border: 1px solid rgba(36, 91, 117, 0.2);
+    background: rgba(36, 91, 117, 0.08);
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
   .chat-form {
     display: grid;
     gap: 10px;
@@ -985,10 +1020,20 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                     <div className="surface-head">
                       <div>
                         <h2>New PRD</h2>
-                        <p className="muted">Write the PRD content. The system generates the PRD title and id automatically.</p>
+                        <p className="muted">Write or review PRD content. The system generates the PRD id automatically.</p>
                       </div>
                     </div>
                     <form id="prd-form">
+                      <div id="chat-prd-draft-panel" className="chat-prd-draft-panel" hidden>
+                        <div>
+                          <div className="pill">Chat PRD draft</div>
+                          <h3 id="chat-prd-draft-title" style={{ marginTop: '8px' }}>Review and submit</h3>
+                          <div id="chat-prd-draft-meta" className="chat-prd-proposal-detail" />
+                        </div>
+                        <div className="row body-note">
+                          <button type="button" className="secondary" id="discard-chat-prd-draft">Discard draft</button>
+                        </div>
+                      </div>
                       {isManager ? (
                         <label id="repo-select-field">
                           Repo
@@ -1000,6 +1045,10 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                           <div className="muted body-note" id="fixed-repo-id">{repoId || 'Unknown repo'}</div>
                         </div>
                       )}
+                      <label>
+                        Title
+                        <input id="prd-title" name="title" placeholder="Generated from the PRD content if left blank" />
+                      </label>
                       <label>
                         Specification
                         <textarea id="prd-spec" name="specification" placeholder="Describe the product requirement here." />

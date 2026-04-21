@@ -4,6 +4,13 @@
 import { Fragment, h, renderToHtml } from './control-plane-jsx-runtime/jsx-runtime.js';
 import { VersionStatus } from './control-plane-version-view.js';
 import type { VersionStatusSummary } from './control-plane-version-view.js';
+import {
+  buildPrdSubmissionFromProposal,
+  extractPrdProposalFromText,
+  getPrdProposalStableKey,
+  normalizePrdProposal,
+} from './control-plane-prd-proposal.js';
+import type { ControlPlanePrdProposal } from '../../types.js';
 
 declare global {
   interface Window {
@@ -106,6 +113,7 @@ type ChatMessageSummary = {
   status?: 'queued' | 'responding' | 'complete' | 'failed';
   jobId?: string;
   error?: string;
+  prdProposal?: ControlPlanePrdProposal;
 };
 
 type ChatConversationSummary = {
@@ -194,10 +202,30 @@ type EntranceContext = {
   repoId: string;
 };
 
+type ChatPrdDraftState = {
+  key: string;
+  proposal: ControlPlanePrdProposal;
+  title: string;
+  specification: string;
+  requirements: string[];
+  sprintId: string;
+  taskSpecsRaw: string;
+  updatedAt: string;
+};
+
 const repoSelect = document.getElementById('repo-id') as HTMLSelectElement | null;
 const lastUpdatedEl = document.getElementById('last-updated');
 const messageEl = document.getElementById('form-message');
 const form = document.getElementById('prd-form') as HTMLFormElement | null;
+const prdTitleEl = document.getElementById('prd-title') as HTMLInputElement | null;
+const prdSpecEl = document.getElementById('prd-spec') as HTMLTextAreaElement | null;
+const prdReqEl = document.getElementById('prd-req') as HTMLTextAreaElement | null;
+const prdSprintEl = document.getElementById('prd-sprint') as HTMLInputElement | null;
+const prdTaskSpecsEl = document.getElementById('prd-task-specs') as HTMLTextAreaElement | null;
+const chatPrdDraftPanelEl = document.getElementById('chat-prd-draft-panel');
+const chatPrdDraftTitleEl = document.getElementById('chat-prd-draft-title');
+const chatPrdDraftMetaEl = document.getElementById('chat-prd-draft-meta');
+const discardChatPrdDraftButton = document.getElementById('discard-chat-prd-draft');
 const refreshButton = document.getElementById('refresh-button');
 const dashboardMetricsEl = document.getElementById('dashboard-metrics');
 const dashboardReposEl = document.getElementById('dashboard-repos');
@@ -244,6 +272,7 @@ const panels: Record<string, HTMLElement | null> = {
 const entranceContext = readEntranceContext();
 const apiBaseUrl = String(window.__AUTONOMY_CONTROL_PLANE_API_BASE_URL__ || '').trim().replace(/\/+$/, '');
 const NEW_CHAT_VALUE = '__new__';
+const CHAT_PRD_DRAFT_STORAGE_PREFIX = 'autonomy.controlPlane.chatPrdDraft';
 
 let latestRepos: RepoRecord[] = [];
 let latestDashboard: DashboardSummary = {};
@@ -252,6 +281,7 @@ let deployingRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedHistoryPrdId = '';
 let selectedChatConversationId = '';
+let activeChatPrdDraft: ChatPrdDraftState | null = null;
 
 function mountControlPlane() {
   if (
@@ -265,6 +295,10 @@ function mountControlPlane() {
 
   if (form) {
     form.addEventListener('submit', handleSubmit);
+    form.addEventListener('input', () => persistActiveChatPrdDraftFromForm());
+  }
+  if (discardChatPrdDraftButton) {
+    discardChatPrdDraftButton.addEventListener('click', () => discardChatPrdDraft());
   }
   if (quickPrdForm) {
     quickPrdForm.addEventListener('submit', handleQuickSubmit);
@@ -319,6 +353,18 @@ function mountControlPlane() {
     if (historyButton) {
       selectedHistoryPrdId = String(historyButton.dataset.prdId || '').trim();
       renderPrdHistory(latestDashboard);
+      return;
+    }
+
+    const reviewChatPrdButton = target ? target.closest<HTMLButtonElement>('[data-action="review-chat-prd"]') : null;
+    if (reviewChatPrdButton) {
+      loadChatPrdDraftFromButton(reviewChatPrdButton);
+      return;
+    }
+
+    const discardChatPrdButton = target ? target.closest<HTMLButtonElement>('[data-action="discard-chat-prd"]') : null;
+    if (discardChatPrdButton) {
+      discardChatPrdDraft(String(discardChatPrdButton.dataset.proposalKey || '').trim());
     }
   });
   if (openPrdModalButton) {
@@ -344,6 +390,8 @@ function mountControlPlane() {
     tab.addEventListener('click', () => setActiveTab(String(tab.dataset.tab || 'main')));
   });
 
+  restoreActiveChatPrdDraft();
+
   refresh().catch((error: unknown) => {
     if (messageEl) {
       messageEl.textContent = getErrorMessage(error);
@@ -367,15 +415,18 @@ async function handleSubmit(event: SubmitEvent) {
 
   try {
     const job = await submitPrd({
-      specification: (document.getElementById('prd-spec') as HTMLTextAreaElement | null)?.value.trim() || '',
-      requirements: ((document.getElementById('prd-req') as HTMLTextAreaElement | null)?.value || '')
+      title: prdTitleEl?.value.trim() || '',
+      specification: prdSpecEl?.value.trim() || '',
+      requirements: (prdReqEl?.value || '')
         .split('\n')
         .map((value) => value.trim())
         .filter(Boolean),
-      sprintId: (document.getElementById('prd-sprint') as HTMLInputElement | null)?.value.trim() || '',
-      taskSpecsRaw: (document.getElementById('prd-task-specs') as HTMLTextAreaElement | null)?.value.trim() || '',
+      sprintId: prdSprintEl?.value.trim() || '',
+      taskSpecsRaw: prdTaskSpecsEl?.value.trim() || '',
     });
+    const submittedChatDraftKey = activeChatPrdDraft?.key || '';
     form.reset();
+    clearActiveChatPrdDraft(submittedChatDraftKey);
     messageEl.textContent = buildQueuedMessage(job);
   } catch (error) {
     messageEl.textContent = getErrorMessage(error);
@@ -393,6 +444,7 @@ async function handleQuickSubmit(event: SubmitEvent) {
 
   try {
     const job = await submitPrd({
+      title: '',
       specification: quickPrdSpecEl.value.trim(),
       requirements: [],
       sprintId: '',
@@ -470,11 +522,13 @@ async function refresh() {
 }
 
 async function submitPrd({
+  title,
   specification,
   requirements,
   sprintId,
   taskSpecsRaw,
 }: {
+  title: string;
   specification: string;
   requirements: string[];
   sprintId: string;
@@ -488,6 +542,7 @@ async function submitPrd({
   }
   const body = {
     repoId: targetRepoId,
+    title,
     specification,
     requirements,
     sprintId,
@@ -499,6 +554,252 @@ async function submitPrd({
   });
   await refresh();
   return job;
+}
+
+function loadChatPrdDraftFromButton(button: HTMLButtonElement) {
+  const proposal = readProposalFromButton(button);
+  if (!proposal) {
+    if (chatMessageEl) {
+      chatMessageEl.textContent = 'The chat PRD proposal could not be read.';
+    }
+    return;
+  }
+  const key = String(button.dataset.proposalKey || '').trim() || getPrdProposalStableKey(
+    proposal,
+    String(button.dataset.messageId || '')
+  );
+  const draft = buildChatPrdDraftFormState(key, proposal, entranceContext.repoId);
+  activeChatPrdDraft = draft;
+  writeChatPrdDraftToForm(draft);
+  saveActiveChatPrdDraft();
+  renderChatPrdDraftPanel();
+  setActiveTab('advanced');
+  (form?.querySelector('details') as HTMLDetailsElement | null)?.setAttribute('open', 'true');
+  form?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  if (messageEl) {
+    messageEl.textContent = 'Review the chat PRD draft, edit anything needed, then queue it.';
+  }
+}
+
+function readProposalFromButton(button: HTMLButtonElement) {
+  try {
+    return normalizePrdProposal(JSON.parse(String(button.dataset.prdProposal || '{}')), {
+      repoId: entranceContext.repoId,
+      responseMessageId: String(button.dataset.messageId || ''),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function buildChatPrdDraftFormState(
+  key: string,
+  proposal: ControlPlanePrdProposal,
+  repoId: string
+): ChatPrdDraftState {
+  const normalized = normalizePrdProposal(proposal, { repoId });
+  if (!normalized) {
+    throw new Error('Invalid chat PRD proposal.');
+  }
+  const submission = buildPrdSubmissionFromProposal(normalized, { repoId });
+  return {
+    key,
+    proposal: normalized,
+    title: String(submission.title || normalized.title || '').trim(),
+    specification: String(submission.specification || '').trim(),
+    requirements: Array.isArray(submission.requirements) ? submission.requirements : [],
+    sprintId: '',
+    taskSpecsRaw: '',
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function writeChatPrdDraftToForm(draft: ChatPrdDraftState) {
+  if (prdTitleEl) {
+    prdTitleEl.value = draft.title;
+  }
+  if (prdSpecEl) {
+    prdSpecEl.value = draft.specification;
+  }
+  if (prdReqEl) {
+    prdReqEl.value = draft.requirements.join('\n');
+  }
+  if (prdSprintEl) {
+    prdSprintEl.value = draft.sprintId;
+  }
+  if (prdTaskSpecsEl) {
+    prdTaskSpecsEl.value = draft.taskSpecsRaw;
+  }
+}
+
+function persistActiveChatPrdDraftFromForm() {
+  if (!activeChatPrdDraft) {
+    return;
+  }
+  activeChatPrdDraft = {
+    ...activeChatPrdDraft,
+    title: prdTitleEl ? prdTitleEl.value.trim() : activeChatPrdDraft.title,
+    specification: prdSpecEl?.value.trim() || '',
+    requirements: (prdReqEl?.value || '')
+      .split('\n')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+    sprintId: prdSprintEl?.value.trim() || '',
+    taskSpecsRaw: prdTaskSpecsEl?.value.trim() || '',
+    updatedAt: new Date().toISOString(),
+  };
+  saveActiveChatPrdDraft();
+  renderChatPrdDraftPanel();
+}
+
+function renderChatPrdDraftPanel() {
+  if (!chatPrdDraftPanelEl) {
+    return;
+  }
+  const draft = activeChatPrdDraft;
+  chatPrdDraftPanelEl.hidden = !draft;
+  if (!draft) {
+    return;
+  }
+  if (chatPrdDraftTitleEl) {
+    chatPrdDraftTitleEl.textContent = draft.title || 'Review and submit';
+  }
+  if (chatPrdDraftMetaEl) {
+    chatPrdDraftMetaEl.textContent = [
+      'Review and submit',
+      draft.proposal.source?.conversationId ? `conversation ${draft.proposal.source.conversationId}` : '',
+      draft.proposal.source?.responseMessageId ? `message ${draft.proposal.source.responseMessageId}` : '',
+    ].filter(Boolean).join(' | ');
+  }
+}
+
+function restoreActiveChatPrdDraft() {
+  const raw = safeLocalStorageGet(getActiveChatPrdDraftStorageKey());
+  if (!raw) {
+    renderChatPrdDraftPanel();
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw) as Partial<ChatPrdDraftState>;
+    const proposal = normalizePrdProposal(parsed.proposal, { repoId: entranceContext.repoId });
+    const key = String(parsed.key || '').trim();
+    if (!proposal || !key || isChatPrdProposalDismissed(key)) {
+      clearActiveChatPrdDraft(key);
+      return;
+    }
+    activeChatPrdDraft = {
+      key,
+      proposal,
+      title: String(hasOwn(parsed, 'title') ? parsed.title : proposal.title || '').trim(),
+      specification: String(hasOwn(parsed, 'specification') ? parsed.specification : buildPrdSubmissionFromProposal(proposal, {
+        repoId: entranceContext.repoId,
+      }).specification || '').trim(),
+      requirements: Array.isArray(parsed.requirements)
+        ? parsed.requirements.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : proposal.requirements,
+      sprintId: String(parsed.sprintId || '').trim(),
+      taskSpecsRaw: String(parsed.taskSpecsRaw || '').trim(),
+      updatedAt: String(parsed.updatedAt || new Date().toISOString()),
+    };
+    writeChatPrdDraftToForm(activeChatPrdDraft);
+  } catch {
+    activeChatPrdDraft = null;
+  }
+  renderChatPrdDraftPanel();
+}
+
+function discardChatPrdDraft(proposalKey = '') {
+  const key = proposalKey || activeChatPrdDraft?.key || '';
+  if (key) {
+    dismissChatPrdProposal(key);
+  }
+  if (!proposalKey || activeChatPrdDraft?.key === proposalKey) {
+    activeChatPrdDraft = null;
+    safeLocalStorageRemove(getActiveChatPrdDraftStorageKey());
+    form?.reset();
+    renderChatPrdDraftPanel();
+  }
+  renderChat(latestConversations);
+  if (messageEl) {
+    messageEl.textContent = 'Chat PRD draft discarded.';
+  }
+}
+
+function clearActiveChatPrdDraft(proposalKey = '') {
+  if (proposalKey) {
+    dismissChatPrdProposal(proposalKey);
+  }
+  activeChatPrdDraft = null;
+  safeLocalStorageRemove(getActiveChatPrdDraftStorageKey());
+  renderChatPrdDraftPanel();
+  renderChat(latestConversations);
+}
+
+function saveActiveChatPrdDraft() {
+  if (!activeChatPrdDraft) {
+    safeLocalStorageRemove(getActiveChatPrdDraftStorageKey());
+    return;
+  }
+  safeLocalStorageSet(getActiveChatPrdDraftStorageKey(), JSON.stringify(activeChatPrdDraft));
+}
+
+function getActiveChatPrdDraftStorageKey() {
+  return `${CHAT_PRD_DRAFT_STORAGE_PREFIX}.${entranceContext.repoId}.active`;
+}
+
+function getDismissedChatPrdDraftStorageKey() {
+  return `${CHAT_PRD_DRAFT_STORAGE_PREFIX}.${entranceContext.repoId}.dismissed`;
+}
+
+function isChatPrdProposalDismissed(proposalKey: string) {
+  return getDismissedChatPrdProposalKeys().has(proposalKey);
+}
+
+function dismissChatPrdProposal(proposalKey: string) {
+  if (!proposalKey) {
+    return;
+  }
+  const keys = getDismissedChatPrdProposalKeys();
+  keys.add(proposalKey);
+  safeLocalStorageSet(getDismissedChatPrdDraftStorageKey(), JSON.stringify(Array.from(keys)));
+}
+
+function getDismissedChatPrdProposalKeys() {
+  try {
+    const raw = safeLocalStorageGet(getDismissedChatPrdDraftStorageKey());
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map((entry) => String(entry || '').trim()).filter(Boolean) : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function safeLocalStorageGet(key: string) {
+  try {
+    return window.localStorage?.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+function safeLocalStorageSet(key: string, value: string) {
+  try {
+    window.localStorage?.setItem(key, value);
+  } catch {
+    // Ignore storage failures; the server-backed chat proposal still remains available.
+  }
+}
+
+function safeLocalStorageRemove(key: string) {
+  try {
+    window.localStorage?.removeItem(key);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function hasOwn(value: object, key: string) {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 async function handleDeploy(repoId: string) {
@@ -1024,6 +1325,9 @@ function ChatThread({ conversation }: { conversation: ChatConversationSummary | 
 function ChatMessage({ message }: { message: ChatMessageSummary }) {
   const role = message.role === 'agent' ? 'agent' : 'manager';
   const status = String(message.status || 'complete');
+  const proposal = role === 'agent' && status === 'complete' ? resolveMessagePrdProposal(message) : null;
+  const proposalKey = proposal ? getPrdProposalStableKey(proposal, message.id || '') : '';
+  const showProposal = Boolean(proposal && proposalKey && !isChatPrdProposalDismissed(proposalKey));
   const meta = [
     role === 'agent' ? 'Repo agent' : 'Manager',
     status === 'complete' ? '' : status,
@@ -1036,8 +1340,75 @@ function ChatMessage({ message }: { message: ChatMessageSummary }) {
         <span>{meta || (role === 'agent' ? 'Repo agent' : 'Manager')}</span>
       </div>
       <div className="chat-message-body">{message.content || ''}</div>
+      {showProposal && proposal ? (
+        <ChatPrdProposalCard
+          messageId={message.id || ''}
+          proposal={proposal}
+          proposalKey={proposalKey}
+        />
+      ) : null}
     </div>
   );
+}
+
+function ChatPrdProposalCard({
+  messageId,
+  proposal,
+  proposalKey,
+}: {
+  messageId: string;
+  proposal: ControlPlanePrdProposal;
+  proposalKey: string;
+}) {
+  const active = Boolean(activeChatPrdDraft && activeChatPrdDraft.key === proposalKey);
+  const detail = [
+    proposal.requirements.length ? `${proposal.requirements.length} requirement${proposal.requirements.length === 1 ? '' : 's'}` : '',
+    proposal.acceptanceCriteria.length ? `${proposal.acceptanceCriteria.length} acceptance item${proposal.acceptanceCriteria.length === 1 ? '' : 's'}` : '',
+    proposal.verification.length ? `${proposal.verification.length} verification step${proposal.verification.length === 1 ? '' : 's'}` : '',
+  ].filter(Boolean).join(' | ') || 'Structured PRD proposal';
+
+  return (
+    <div className="chat-prd-proposal">
+      <div>
+        <div className="pill">PRD proposal</div>
+        <div className="chat-prd-proposal-title">{proposal.title}</div>
+      </div>
+      <div className="chat-prd-proposal-detail">{detail}</div>
+      <div className="row">
+        <button
+          type="button"
+          className="primary"
+          data-action="review-chat-prd"
+          data-message-id={messageId}
+          data-proposal-key={proposalKey}
+          data-prd-proposal={JSON.stringify(proposal)}
+          disabled={active}
+        >
+          {active ? 'Draft loaded' : 'Review PRD draft'}
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          data-action="discard-chat-prd"
+          data-proposal-key={proposalKey}
+        >
+          Discard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function resolveMessagePrdProposal(message: ChatMessageSummary) {
+  return normalizePrdProposal(message.prdProposal, {
+    repoId: entranceContext.repoId,
+    responseMessageId: message.id,
+    createdAt: message.updatedAt || message.createdAt,
+  }) || extractPrdProposalFromText(String(message.content || ''), {
+    repoId: entranceContext.repoId,
+    responseMessageId: message.id,
+    createdAt: message.updatedAt || message.createdAt,
+  });
 }
 
 function MetricGrid({ dashboard }: { dashboard: DashboardSummary }) {
@@ -1525,5 +1896,8 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 }
 
 export {
+  ChatMessage,
+  ChatPrdProposalCard,
+  buildChatPrdDraftFormState,
   mountControlPlane,
 };

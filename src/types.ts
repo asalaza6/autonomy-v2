@@ -163,6 +163,27 @@ export interface ControlPlaneAgentChatMessagePayload extends AnyRecord {
   history?: Array<Pick<ControlPlaneChatMessageRecord, 'role' | 'content' | 'createdAt'>>;
 }
 
+export interface ControlPlanePrdProposalSource extends AnyRecord {
+  repoId?: string;
+  conversationId?: string;
+  messageId?: string;
+  responseMessageId?: string;
+  createdAt?: string;
+}
+
+export interface ControlPlanePrdProposal extends AnyRecord {
+  schemaVersion?: number;
+  kind: 'prd-proposal';
+  title: string;
+  problem?: string;
+  goal?: string;
+  requirements: string[];
+  acceptanceCriteria: string[];
+  verification: string[];
+  priority?: string;
+  source?: ControlPlanePrdProposalSource;
+}
+
 export interface ControlPlaneChatMessageRecord extends AnyRecord {
   id: string;
   role: 'manager' | 'agent';
@@ -172,6 +193,7 @@ export interface ControlPlaneChatMessageRecord extends AnyRecord {
   status?: 'queued' | 'responding' | 'complete' | 'failed';
   jobId?: string;
   error?: string;
+  prdProposal?: ControlPlanePrdProposal;
 }
 
 export interface ControlPlaneConversationRecord extends AnyRecord {
