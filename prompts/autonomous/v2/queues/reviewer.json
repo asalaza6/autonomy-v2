@@ -240,18 +240,17 @@
       "prId": "pr-prd-prd-continue-original-agent-fc326d-architecture-agent",
       "sourceTaskId": "prd-prd-continue-original-agent-fc326d-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-21T09:40:26.394Z",
-      "updatedAt": "2026-04-21T09:40:26.394Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-prd-continue-original-agent-fc326d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
         "Task `prd-prd-continue-original-agent-fc326d-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-21T09:40:30.312Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-21T09:40:26.394Z",
+      "updatedAt": "2026-04-21T09:40:55.011Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-21T09:40:30.312Z"
     }
   ]
 }
