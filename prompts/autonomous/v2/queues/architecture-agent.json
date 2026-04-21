@@ -752,11 +752,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T20:28:41.228Z",
-      "updatedAt": "2026-04-21T20:37:25.434Z",
+      "updatedAt": "2026-04-21T20:37:25.497Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-continue-source-chat-from-8fed29-architecture-agent",
       "startedAt": "2026-04-21T20:28:58.213Z",
       "completedAt": "2026-04-21T20:37:25.434Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "e5c41f587e6d99a4bd4079f995b83ad7af403f20"
     }
   ]
 }
