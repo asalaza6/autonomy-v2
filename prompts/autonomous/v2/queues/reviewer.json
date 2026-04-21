@@ -130,6 +130,26 @@
       "reviewedAt": "2026-04-21T07:01:52.891Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T07:01:57.897Z"
+    },
+    {
+      "id": "review-pr-prd-we-made-a-change-087d3e-architecture-agent",
+      "title": "Review [architecture-agent] Implement We made a change to add a custom chat agent",
+      "description": "Review pr-prd-we-made-a-change-087d3e-architecture-agent for Implement We made a change to add a custom chat agent",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-we-made-a-change-087d3e-architecture-agent",
+      "sourceTaskId": "prd-we-made-a-change-087d3e-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T07:19:42.856Z",
+      "updatedAt": "2026-04-21T07:19:42.856Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-we-made-a-change-087d3e-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-we-made-a-change-087d3e-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
