@@ -1,3 +1,5 @@
+import { extractPrdSourceChatMetadata } from './prd-source-chat.js';
+
 const HEARTBEAT_ONLINE_MS = 15000;
 const HEARTBEAT_OFFLINE_MS = 45000;
 const PRD_RUN_STEPS = [
@@ -94,6 +96,8 @@ function describePrd(prd: any) {
     details.push(`updated ${formatTimestamp(prd.updatedAt)}`);
   }
 
+  const sourceChat = extractPrdSourceChatMetadata(prd);
+
   return {
     id: String(prd && prd.id || ''),
     title: String(prd && prd.title || prd && prd.id || 'Untitled PRD'),
@@ -122,6 +126,7 @@ function describePrd(prd: any) {
     isQueued: prd && prd.isQueued === true,
     archived: prd && prd.archived === true,
     archivePath: prd && prd.archivePath ? String(prd.archivePath) : null,
+    ...(sourceChat ? { sourceChat } : {}),
   };
 }
 

@@ -699,6 +699,23 @@ const styles = `
     gap: 8px;
   }
 
+  .source-chat-block {
+    border-radius: 14px;
+    border: 1px solid rgba(36, 91, 117, 0.16);
+    background: rgba(36, 91, 117, 0.06);
+    padding: 12px;
+  }
+
+  .history-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .history-actions button {
+    width: fit-content;
+  }
+
   .history-block p {
     color: var(--muted);
     line-height: 1.5;
