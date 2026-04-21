@@ -319,11 +319,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T07:15:36.756Z",
-      "updatedAt": "2026-04-21T07:19:40.698Z",
+      "updatedAt": "2026-04-21T07:19:40.753Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-we-made-a-change-087d3e-architecture-agent",
       "startedAt": "2026-04-21T07:15:56.090Z",
       "completedAt": "2026-04-21T07:19:40.698Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "4fb2e397ec0dca705e1b5aaa4b3a16a67cef08bf"
     }
   ]
 }
