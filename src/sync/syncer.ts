@@ -15,6 +15,7 @@ import { buildImportedSpecState } from './lanes.js';
 import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
 import { commitTrackedFilesToIntegrationBranch, fetchIntegrationBranch } from './sync-git.js';
 import { listTreeFiles, readGit, readJsonFromGitRef, readTreeFile } from './git-shared.js';
+import { AGENT_ROLES } from '../agents/role-catalog.js';
 
 function buildTrackedReviewQueueState(agent, tasks = []) {
   return {
@@ -27,7 +28,7 @@ function buildTrackedReviewQueueState(agent, tasks = []) {
 function syncTrackedReviewerQueues(rootDir: string, integrationBranch: string, config: AutonomyConfig, ref: string, derivedTasks: AnyRecord[] = []) {
   const updates = [];
   (config.agents || []).forEach((agent) => {
-    if (agent.role !== 'review') {
+    if (agent.role !== AGENT_ROLES.REVIEW) {
       return;
     }
     const relativePath = agent.taskQueue;

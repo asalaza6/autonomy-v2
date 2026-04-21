@@ -47,6 +47,10 @@ The default setup ships with:
 - `architecture-agent`
 - `reviewer`
 
+The agent prompts all point at `prompts/autonomous/v2/project-context.md`.
+Update that file for the current project so agents can start from one known
+context document instead of rediscovering the repo every run.
+
 Other repos can add or remove implementation agents by editing `agents.json` and rerunning `init --force`.
 
 Implementation and review execution uses the packaged fixed runner at `src/autonomy-v2/runner/default-runner.js`.

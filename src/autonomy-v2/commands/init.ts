@@ -38,6 +38,7 @@ function run(rootDir, options) {
     }
 
     const preserveIfExists = relativeFile === '.env.autonomy'
+      || relativeFile === 'project-context.md'
       || relativeFile === 'config/agents.json'
       || relativeFile === 'config/sprint.json';
     const shouldSkipExisting = fs.existsSync(targetPath)

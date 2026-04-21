@@ -146,6 +146,18 @@ test('init preserves an existing .env.autonomy file', () => {
   assert.equal(fs.readFileSync(envPath, 'utf8'), 'CUSTOM_AUTONOMY_ENV=1\n');
 });
 
+test('init creates and preserves project context', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-init-project-context-');
+  const contextPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'project-context.md');
+
+  runNode(CLI_BIN, ['init', '--root', repoDir]);
+  assert.match(fs.readFileSync(contextPath, 'utf8'), /Project Context/);
+
+  fs.writeFileSync(contextPath, '# Project Context\n\nCustom project map.\n', 'utf8');
+  runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
+  assert.equal(fs.readFileSync(contextPath, 'utf8'), '# Project Context\n\nCustom project map.\n');
+});
+
 test('init appends missing .gitignore entries without replacing existing content', () => {
   const repoDir = createFixtureRepo('autonomy-v2-init-merge-gitignore-');
   const gitignorePath = path.join(repoDir, '.gitignore');

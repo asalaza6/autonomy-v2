@@ -61,6 +61,7 @@ const BASE_TEMPLATE_FILES = [
   '.env.autonomy',
   '.gitignore',
   'README.md',
+  'project-context.md',
   'config/agents.json',
   'config/control-plane.json',
   'config/sprint.json',

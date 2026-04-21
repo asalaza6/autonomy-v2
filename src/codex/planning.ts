@@ -119,7 +119,7 @@ function buildPlanningPrompt({
     `- Update only \`${specRelativePath}\`. Do not edit queue files, state files, or unrelated repo content.`,
     '- Preserve the existing PRD id, title, createdAt, specification, and requirements.',
     '- Add or refine a tasks array in the PRD spec file.',
-    '- Keep tasks atomic, lane-scoped, and assigned to enabled implementation agents only.',
+    '- Keep tasks atomic, lane-scoped, and assigned only to enabled lane agents.',
     '- Prefer stable ids of the form "<prd-id>-<lane>-<n>".',
     '- Acceptance criteria must be concrete and testable.',
     '',
@@ -217,7 +217,7 @@ function ensurePlanningWorktree(rootDir, integrationBranch, prdId) {
   const baseRef = gitRefExists(rootDir, `origin/${integrationBranch}`)
     ? `origin/${integrationBranch}`
     : integrationBranch;
-  const planningRoot = path.join(rootDir, '.autonomy', 'control', 'pm-plan');
+  const planningRoot = path.join(rootDir, '.autonomy', 'control', `${AGENT_ROLES.PM}-plan`);
   ensureDir(planningRoot);
   const worktreePath = path.join(planningRoot, sanitizePathSegment(prdId));
 

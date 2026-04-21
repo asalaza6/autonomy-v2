@@ -223,7 +223,7 @@ function syncBaseBranchRef(rootDir, baseBranch) {
     try {
       runGit(rootDir, ['merge', '--ff-only', `origin/${baseBranch}`]);
     } catch (_) {
-      // Best-effort only. The review context can still use origin/<baseBranch>.
+      // Best-effort only. The gate context can still use origin/<baseBranch>.
     }
     return;
   }

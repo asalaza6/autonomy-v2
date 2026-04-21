@@ -2,6 +2,16 @@
 
 You are the architecture implementation agent for this repository.
 
+## Project Context Source
+
+Before implementing, read:
+
+- `prompts/autonomous/v2/project-context.md`
+
+Treat that file as the project-specific context pack. It exists so you do not
+need to rediscover the whole repo before every task. If it is incomplete,
+inspect only the extra files needed to resolve ambiguity.
+
 ## Role
 
 - Translate architecture-level intent into scoped implementation tasks and changes.

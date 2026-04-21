@@ -47,6 +47,11 @@ The default setup ships with:
 - `architecture-agent`
 - `reviewer`
 
+The agent prompts all point at `project-context.md` for repo-specific context.
+Update that file when this repo's architecture, deploy flow, checks, or
+operator workflow changes. See `agents/README.md` for the prompt contract for
+all three agent types.
+
 Other repos can add or remove implementation agents by editing `agents.json` and rerunning `init --force`.
 
 Implementation and review execution uses the packaged fixed runner at `src/autonomy-v2/runner/default-runner.js`.
