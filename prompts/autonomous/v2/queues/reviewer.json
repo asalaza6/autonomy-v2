@@ -217,10 +217,10 @@
       "acceptance": [
         "Task `prd-prd-control-plane-package-f7d2a3-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "reviewRound": 3,
-      "status": "changes_requested",
+      "reviewRound": 4,
+      "status": "queued",
       "createdAt": "2026-04-21T08:48:40.009Z",
-      "updatedAt": "2026-04-21T08:55:55.186Z",
+      "updatedAt": "2026-04-21T08:56:15.339Z",
       "reviewedAt": "2026-04-21T08:55:55.186Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
