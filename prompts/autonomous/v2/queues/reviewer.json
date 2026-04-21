@@ -178,6 +178,26 @@
       "reviewedAt": "2026-04-21T07:57:57.607Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T07:58:02.429Z"
+    },
+    {
+      "id": "review-pr-prd-i-can-t-add-it-d62eb2-architecture-agent",
+      "title": "Review [architecture-agent] Implement I can’t add it directly from this read-only chat Queue",
+      "description": "Review pr-prd-i-can-t-add-it-d62eb2-architecture-agent for Implement I can’t add it directly from this read-only chat Queue",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent",
+      "sourceTaskId": "prd-i-can-t-add-it-d62eb2-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T08:14:06.581Z",
+      "updatedAt": "2026-04-21T08:14:06.581Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-i-can’t-add-it-d62eb2-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
