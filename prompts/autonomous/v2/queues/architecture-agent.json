@@ -292,11 +292,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T06:43:55.970Z",
-      "updatedAt": "2026-04-21T06:56:54.673Z",
+      "updatedAt": "2026-04-21T06:56:54.736Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-create-a-system-to-37e0e9-architecture-agent",
       "startedAt": "2026-04-21T06:44:15.851Z",
       "completedAt": "2026-04-21T06:56:54.673Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "4474a2fee09e5f7c93cd8df55f2fd46f9edb3b76"
     }
   ]
 }
