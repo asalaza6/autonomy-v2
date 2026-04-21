@@ -3,5 +3,17 @@
   "id": "prd-when-prds-run-the-d8bef0",
   "title": "When PRDs run The task bar should reflect in steps",
   "createdAt": "2026-04-21T05:54:35.806Z",
-  "specification": "When PRDs run:\n\nThe task bar should reflect in steps of the current PRD status, like planning, implementing and reviewing. \n\nIt should also have a history page that populates once the build is finished. Each item you can select to see all the prd info."
+  "specification": "When PRDs run:\n\nThe task bar should reflect in steps of the current PRD status, like planning, implementing and reviewing. \n\nIt should also have a history page that populates once the build is finished. Each item you can select to see all the prd info.",
+  "tasks": [
+    {
+      "id": "prd-when-prds-run-the-d8bef0-architecture-agent-1",
+      "title": "Implement When PRDs run The task bar should reflect in steps",
+      "agentId": "architecture-agent",
+      "description": "When PRDs run:\n\nThe task bar should reflect in steps of the current PRD status, like planning, implementing and reviewing. \n\nIt should also have a history page that populates once the build is finished. Each item you can select to see all the prd info.",
+      "acceptance": [
+        "Task `prd-when-prds-run-the-d8bef0-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
+  ]
 }

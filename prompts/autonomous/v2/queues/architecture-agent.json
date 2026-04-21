@@ -140,6 +140,28 @@
       "completedAt": "2026-04-20T03:21:43.640Z",
       "completionMode": "noop",
       "commitSha": "b28f43d73bc0a170ad307d18dd3d2f1412767268"
+    },
+    {
+      "id": "prd-when-prds-run-the-d8bef0-architecture-agent-1",
+      "title": "Implement When PRDs run The task bar should reflect in steps",
+      "description": "When PRDs run:\n\nThe task bar should reflect in steps of the current PRD status, like planning, implementing and reviewing. \n\nIt should also have a history page that populates once the build is finished. Each item you can select to see all the prd info.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-prds-run-the-d8bef0",
+      "laneKey": "prd-when-prds-run-the-d8bef0:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Task `prd-when-prds-run-the-d8bef0-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-21T05:55:47.555Z",
+      "updatedAt": "2026-04-21T05:55:47.555Z"
     }
   ]
 }
