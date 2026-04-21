@@ -82,6 +82,7 @@ export interface TaskRecord extends AnyRecord {
   updatedAt?: string;
   startedAt?: string | null;
   completedAt?: string;
+  implementationConversationId?: string;
   prId?: string;
   sourceTaskId?: string;
   sourceAgentId?: string;

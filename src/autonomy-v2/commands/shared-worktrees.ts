@@ -158,10 +158,31 @@ function getReviewerTask(taskQueues, config, pr) {
   return reviewerQueue.tasks.find((candidate) => candidate.id === `${getRoleLabel(AGENT_ROLES.REVIEW)}-${pr.id}`) || null;
 }
 
+function getImplementationConversationId(record) {
+  return String(record && record.implementationConversationId || '').trim();
+}
+
+function resolveFollowupImplementationConversationId(patch, pr, tasks: TaskRecord[] = []) {
+  const patchConversationId = getImplementationConversationId(patch);
+  if (patchConversationId) {
+    return patchConversationId;
+  }
+  for (const candidate of tasks || []) {
+    const isSourceTask = candidate.id === pr.taskId
+      || (Array.isArray(pr.completedTaskIds) && pr.completedTaskIds.includes(candidate.id));
+    const conversationId = isSourceTask ? getImplementationConversationId(candidate) : '';
+    if (conversationId) {
+      return conversationId;
+    }
+  }
+  return '';
+}
+
 function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
   const queue = getTaskQueue(taskQueues, config, pr.agentId);
   const taskId = patch.id;
   let task = queue.tasks.find((candidate) => candidate.id === taskId);
+  const implementationConversationId = resolveFollowupImplementationConversationId(patch, pr, queue.tasks || []);
   const nextDescription = String(
     patch.description
       || (task && task.description)
@@ -185,6 +206,9 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
       updatedAt: patch.updatedAt || new Date().toISOString(),
       prId: pr.id,
     };
+    if (implementationConversationId) {
+      task.implementationConversationId = implementationConversationId;
+    }
     if (!task.prdId) {
       delete task.prdId;
     }
@@ -199,6 +223,9 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
   task.status = 'queued';
   task.updatedAt = patch.updatedAt || new Date().toISOString();
   task.prId = pr.id;
+  if (implementationConversationId) {
+    task.implementationConversationId = implementationConversationId;
+  }
   return task;
 }
 
@@ -297,6 +324,7 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
     : buildTaskQueueState(agent, []);
   const tasks = Array.isArray(queueState.tasks) ? queueState.tasks : [];
   const taskId = patch.id;
+  const implementationConversationId = resolveFollowupImplementationConversationId(patch, pr, tasks);
   const nextDescription = String(
     patch.description
       || 'Address reviewer feedback'
@@ -325,6 +353,9 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
       startedAt: hasActiveTask ? null : (patch.updatedAt || new Date().toISOString()),
       prId: pr.id,
     };
+    if (implementationConversationId) {
+      task.implementationConversationId = implementationConversationId;
+    }
     if (!task.prdId) {
       delete task.prdId;
     }
@@ -337,6 +368,9 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
     task.acceptance = buildReviewFollowupAcceptance(pr, nextDescription, task.acceptance);
     task.updatedAt = patch.updatedAt || new Date().toISOString();
     task.prId = pr.id;
+    if (implementationConversationId) {
+      task.implementationConversationId = implementationConversationId;
+    }
     if (!tasks.some((candidate) => candidate.id !== task.id && getImplementationTaskState(candidate) === 'active')) {
       task.state = 'active';
       task.status = 'active';

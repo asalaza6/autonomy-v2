@@ -40,13 +40,13 @@ async function runCodexStructured({ cwd, prompt, schema, readOnly }) {
   }
 }
 
-async function runCodexExec({ cwd, prompt, readOnly }) {
+async function runCodexExec({ cwd, prompt, readOnly, resumeSessionId = '', captureConversationId = false }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const streamOutput = shouldStreamCodexOutput();
   try {
-    const args = buildCodexExecArgs({ cwd, readOnly });
+    const args = buildCodexExecArgs({ cwd, readOnly, resumeSessionId, captureConversationId });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
-    await runCodexCommand({
+    const result = await runCodexCommand({
       binary: codexBin,
       args,
       cwd,
@@ -54,25 +54,31 @@ async function runCodexExec({ cwd, prompt, readOnly }) {
       streamOutput,
       timeoutMs: resolveCodexExecTimeoutMs(),
     });
+    return {
+      conversationId: extractCodexConversationId(result.stdout),
+    };
   } catch (error) {
     logCodexFailure(error, streamOutput);
     throw new Error(`Codex CLI failed: ${extractExecError(error)}`);
   }
 }
 
-function runCodexExecSync({ cwd, prompt, readOnly }) {
+function runCodexExecSync({ cwd, prompt, readOnly, resumeSessionId = '', captureConversationId = false }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const streamOutput = shouldStreamCodexOutput();
   try {
-    const args = buildCodexExecArgs({ cwd, readOnly });
+    const args = buildCodexExecArgs({ cwd, readOnly, resumeSessionId, captureConversationId });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
-    runCodexCommandSync({
+    const result = runCodexCommandSync({
       binary: codexBin,
       args,
       cwd,
       input: prompt,
       streamOutput,
     });
+    return {
+      conversationId: extractCodexConversationId(result.stdout),
+    };
   } catch (error) {
     logCodexFailure(error, streamOutput);
     throw new Error(`Codex CLI failed: ${extractExecError(error)}`);
@@ -135,7 +141,7 @@ function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly }) {
   return args;
 }
 
-function buildCodexExecArgs({ cwd, readOnly }) {
+function buildCodexExecArgs({ cwd, readOnly, resumeSessionId = '', captureConversationId = false }) {
   const args = ['--ask-for-approval', 'never', 'exec'];
   args.push('--sandbox', readOnly ? 'read-only' : 'danger-full-access');
 
@@ -149,14 +155,24 @@ function buildCodexExecArgs({ cwd, readOnly }) {
     args.push('-p', profile);
   }
 
+  const normalizedResumeSessionId = String(resumeSessionId || '').trim();
+  const persistConversation = captureConversationId === true || Boolean(normalizedResumeSessionId);
+
   args.push(
     '--cd',
     cwd,
-    '--ephemeral',
+    ...(persistConversation ? [] : ['--ephemeral']),
     '--color',
-    'never',
-    '-'
+    'never'
   );
+  if (persistConversation) {
+    args.push('--json');
+  }
+  if (normalizedResumeSessionId) {
+    args.push('resume', normalizedResumeSessionId, '-');
+  } else {
+    args.push('-');
+  }
   return args;
 }
 
@@ -183,10 +199,14 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
       process.stderr.write(result.stderr);
     }
   }
+  return {
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+  };
 }
 
 function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0 }) {
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(binary, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -212,7 +232,10 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
       }
       settled = true;
       clearTimers();
-      resolve();
+      resolve({
+        stdout: stdoutCapture,
+        stderr: stderrCapture,
+      });
     };
 
     const clearTimers = () => {
@@ -285,6 +308,67 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
 
     child.stdin.end(input, 'utf8');
   });
+}
+
+function extractCodexConversationId(stdout) {
+  const lines = String(stdout || '').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    try {
+      const event = JSON.parse(trimmed);
+      const conversationId = findCodexConversationId(event);
+      if (conversationId) {
+        return conversationId;
+      }
+    } catch (_) {
+      // Non-JSON output is ignored. Codex emits JSONL only when --json is honored.
+    }
+  }
+  return '';
+}
+
+function findCodexConversationId(value) {
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+
+  const directKeys = [
+    'session_id',
+    'sessionId',
+    'conversation_id',
+    'conversationId',
+    'thread_id',
+    'threadId',
+  ];
+  for (const key of directKeys) {
+    const directValue = normalizeConversationId(value[key]);
+    if (directValue) {
+      return directValue;
+    }
+  }
+
+  const eventType = String(value.type || value.event || value.kind || '').toLowerCase();
+  if (/(session|conversation|thread)/.test(eventType)) {
+    const typedId = normalizeConversationId(value.id);
+    if (typedId) {
+      return typedId;
+    }
+  }
+
+  for (const nestedValue of Object.values(value)) {
+    const nestedId = findCodexConversationId(nestedValue);
+    if (nestedId) {
+      return nestedId;
+    }
+  }
+  return '';
+}
+
+function normalizeConversationId(value) {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function readCodexOutput(outputPath, streamOutput) {
