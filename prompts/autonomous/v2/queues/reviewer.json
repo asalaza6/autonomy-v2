@@ -302,6 +302,44 @@
       "reviewedAt": "2026-04-21T19:02:32.447Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T19:02:37.669Z"
+    },
+    {
+      "id": "review-pr-prd-generalize-agent-conversation-continuation-94434d-architecture-agent",
+      "title": "Review [architecture-agent] Implement Generalize agent conversation continuation for implementation and review agents",
+      "description": "Review pr-prd-generalize-agent-conversation-continuation-94434d-architecture-agent for Implement Generalize agent conversation continuation for implementation and review agents",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-generalize-agent-conversation-continuation-94434d-architecture-agent",
+      "sourceTaskId": "prd-generalize-agent-conversation-continuation-94434d-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T20:04:44.477Z",
+      "updatedAt": "2026-04-21T20:04:44.477Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-generalize-agent-conversation-continuation-94434d-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Introduce a generalized conversation reference model for task/PR agent runs",
+        "keyed by agent role or agent ID",
+        "instead of relying only on `implementationConversationId`.",
+        "Preserve backward compatibility with existing implementation conversation IDs",
+        "including migration or compatibility mapping where needed.",
+        "Persist Codex session IDs returned from implementation runs and reviewer runs when available.",
+        "When implementation follow-up tasks are created after `changes_requested`",
+        "continue carrying the original implementation agent conversation reference.",
+        "When reviewer tasks run for the same task/PR",
+        "attempt to resume the prior reviewer conversation for that same review agent before starting a fresh reviewer session.",
+        "Keep implementation and reviewer conversation references separate; never reuse reviewer sessions for implementation or implementation sessions for review.",
+        "If resume fails",
+        "the conversation is expired",
+        "or no prior session exists",
+        "fall back to the existing explicit task/PR/diff/prior-review prompt context.",
+        "Do not add durable transcript/history UI or store full conversation transcripts as part of this change.",
+        "Update reviewer task records",
+        "queue metadata",
+        "or PR review state as needed so reviewer continuation survives normal task lifecycle transitions."
+      ],
+      "scopeViolations": []
     }
   ]
 }
