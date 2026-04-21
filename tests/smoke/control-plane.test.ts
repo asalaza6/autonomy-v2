@@ -69,6 +69,10 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     assert.match(clientSource, /deploy-spinner/);
     assert.match(clientSource, /select-prd-history/);
     assert.match(clientSource, /conversations/);
+    assert.match(clientSource, /control-plane-prd-proposal/);
+    const prdProposalAsset = await fetch(`http://127.0.0.1:${port}/control-plane-prd-proposal.js`);
+    assert.equal(prdProposalAsset.status, 200);
+    assert.match(await prdProposalAsset.text(), /normalizePrdProposal/);
 
     runNode(CONTROL_BIN, [
       'bridge',

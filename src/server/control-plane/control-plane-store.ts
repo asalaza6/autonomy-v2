@@ -14,6 +14,10 @@ import type {
   ControlPlaneState,
 } from '../../types.js';
 import { normalizeRepoRecord } from './control-plane-validation.js';
+import {
+  extractPrdProposalFromText,
+  normalizePrdProposal,
+} from './control-plane-prd-proposal.js';
 
 const DEFAULT_CONTROL_PLANE_STATE: ControlPlaneState = {
   schemaVersion: 1,
@@ -130,6 +134,12 @@ function normalizeChatMessageRecord(message: ControlPlaneChatMessageRecord | nul
     jobId: normalizeOptionalString(message.jobId),
     error: normalizeOptionalString(message.error),
   };
+  const prdProposal = normalizePrdProposal(message.prdProposal);
+  if (prdProposal) {
+    normalized.prdProposal = prdProposal;
+  } else {
+    delete normalized.prdProposal;
+  }
   return normalized;
 }
 
@@ -574,9 +584,24 @@ function applyAgentChatJobCompletion(state: ControlPlaneState, job: ControlPlane
   const now = job.updatedAt || new Date().toISOString();
   if (job.status === 'completed') {
     const answer = String(job.result && (job.result.answer || job.result.message) || '').trim();
+    const payload = job.payload as ControlPlaneAgentChatMessagePayload;
+    const prdProposal = normalizePrdProposal(job.result && job.result.prdProposal, {
+      repoId: job.repoId || payload.repoId,
+      conversationId: payload.conversationId,
+      messageId: payload.messageId,
+      responseMessageId: payload.responseMessageId,
+      createdAt: now,
+    }) || extractPrdProposalFromText(answer, {
+      repoId: job.repoId || payload.repoId,
+      conversationId: payload.conversationId,
+      messageId: payload.messageId,
+      responseMessageId: payload.responseMessageId,
+      createdAt: now,
+    });
     updateAgentChatResponseMessage(state, job, {
       status: 'complete',
       content: answer || 'The repo agent completed without returning a message.',
+      ...(prdProposal ? { prdProposal } : {}),
       updatedAt: now,
     });
     return;
@@ -631,6 +656,14 @@ function updateAgentChatResponseMessage(
   }
   if (typeof patch.error !== 'undefined') {
     message.error = normalizeOptionalString(patch.error);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'prdProposal')) {
+    const prdProposal = normalizePrdProposal(patch.prdProposal);
+    if (prdProposal) {
+      message.prdProposal = prdProposal;
+    } else {
+      delete message.prdProposal;
+    }
   }
   message.updatedAt = String(patch.updatedAt || new Date().toISOString());
   conversation.updatedAt = message.updatedAt;
