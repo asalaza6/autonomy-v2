@@ -67,6 +67,7 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     const clientSource = await clientAsset.text();
     assert.match(clientSource, /Deploying\.\.\./);
     assert.match(clientSource, /deploy-spinner/);
+    assert.match(clientSource, /select-prd-history/);
 
     runNode(CONTROL_BIN, [
       'bridge',
@@ -115,14 +116,18 @@ test('control plane queues a browser PRD and the bridge executes it on the local
 
     const projectHtml = await (await fetch(`http://127.0.0.1:${port}/project/default`)).text();
     assert.match(projectHtml, />Main</);
+    assert.match(projectHtml, /History/);
     assert.match(projectHtml, /Advanced/);
     assert.match(projectHtml, /Make a change to default/);
     assert.match(projectHtml, /main-progress-fill/);
+    assert.match(projectHtml, /main-progress-steps/);
+    assert.match(projectHtml, /PRD History/);
     assert.match(projectHtml, /Status dashboard/);
     assert.match(projectHtml, /New PRD/);
     assert.doesNotMatch(projectHtml, /data-tab="dashboard"/);
     assert.doesNotMatch(projectHtml, /data-tab="submit"/);
     assert.match(projectHtml, /data-tab="main"/);
+    assert.match(projectHtml, /data-tab="history"/);
     assert.match(projectHtml, /data-tab="advanced"/);
     assert.doesNotMatch(projectHtml, /<select id="repo-id"/);
 

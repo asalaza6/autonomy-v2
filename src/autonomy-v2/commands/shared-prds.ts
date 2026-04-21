@@ -1,7 +1,7 @@
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/config-main.js';
 import { buildPrdStateRelativePath } from '../../sync/sync-prd.js';
-import { commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
+import { commitTrackedFilesToIntegrationBranch, listArchivedPrdSpecs, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
 import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, QueueMap, TrackedPrdRecord } from '../autonomy-types.js';
 import { getAutonomyPaths, readJson } from './shared-core.js';
 import { isTerminalTaskStatus, listTasks, readTaskQueues } from './shared-queues.js';
@@ -48,6 +48,62 @@ function findArchivablePrdIds(prdIds: string[], { taskQueues, prs, prds }: { tas
   });
 }
 
+function normalizeStringIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return Array.from(new Set(
+    value
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean)
+  ));
+}
+
+function isMergedPullRequest(pr) {
+  return Boolean(
+    String(pr && pr.status || '') === 'merged'
+      || pr && pr.mergedAt
+      || pr && pr.remote && (pr.remote.mergedAt || pr.remote.merged_at)
+  );
+}
+
+function deriveCompletedTaskSpecIds(plannedTaskIds, linkedTasks = [], linkedPullRequests = []) {
+  const plannedIds = normalizeStringIds(plannedTaskIds);
+  if (plannedIds.length === 0) {
+    return [];
+  }
+
+  const plannedIdSet = new Set(plannedIds);
+  const completedIds = new Set();
+
+  linkedTasks.forEach((task) => {
+    const taskId = String(task && task.id || '').trim();
+    const status = String(task && (task.status || task.state) || '').trim();
+    if (taskId && plannedIdSet.has(taskId) && isTerminalTaskStatus(status)) {
+      completedIds.add(taskId);
+    }
+  });
+
+  linkedPullRequests.forEach((pr) => {
+    const pendingIds = new Set(normalizeStringIds(pr && pr.pendingTaskIds));
+    normalizeStringIds(pr && pr.completedTaskIds).forEach((taskId) => {
+      if (plannedIdSet.has(taskId) && !pendingIds.has(taskId)) {
+        completedIds.add(taskId);
+      }
+    });
+
+    if (isMergedPullRequest(pr) || Array.isArray(pr && pr.pendingTaskIds)) {
+      normalizeStringIds(pr && pr.taskIds).forEach((taskId) => {
+        if (plannedIdSet.has(taskId) && !pendingIds.has(taskId)) {
+          completedIds.add(taskId);
+        }
+      });
+    }
+  });
+
+  return plannedIds.filter((taskId) => completedIds.has(taskId));
+}
+
 function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRecord = {}): { prds: TrackedPrdRecord[] } {
   const taskQueues = (options.taskQueues as QueueMap) || readTaskQueues(rootDir, config);
   const prs = (options.prs as PrState) || readJson<PrState>(getAutonomyPaths(rootDir).prsState);
@@ -80,6 +136,7 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
       const plannedTaskIds = trackedState && Array.isArray(trackedState.plannedTaskIds) && trackedState.plannedTaskIds.length > 0
         ? trackedState.plannedTaskIds.slice()
         : linkedTasks.map((task) => task.id);
+      const completedTaskSpecIds = deriveCompletedTaskSpecIds(plannedTaskIds, linkedTasks, linkedPullRequests);
       let status = 'queued';
       if (trackedState && (trackedState.status === 'planning' || trackedState.status === 'failed')) {
         status = trackedState.status;
@@ -95,9 +152,41 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
         isQueued: entry.isQueued === true,
         status,
         plannedTaskIds: plannedTaskIds.length > 0 ? plannedTaskIds : undefined,
+        completedTaskSpecIds: completedTaskSpecIds.length > 0 ? completedTaskSpecIds : undefined,
         lastError: trackedState && trackedState.lastError ? trackedState.lastError : undefined,
         updatedAt: trackedState && trackedState.updatedAt ? trackedState.updatedAt : entry.spec.createdAt,
       };
+    }),
+  };
+}
+
+function loadTrackedPrdHistory(rootDir: string, config: AutonomyConfig, options: AnyRecord = {}): { prds: TrackedPrdRecord[] } {
+  const activePrds = ((options.prds && Array.isArray(options.prds.prds)) ? options.prds.prds : [])
+    .filter((prd) => prd && String(prd.status || '') === 'completed')
+    .map((prd) => ({
+      ...prd,
+      status: 'completed',
+      isQueued: false,
+    }));
+  const archivedPrds = listArchivedPrdSpecs(rootDir, config.integrationBranch).map((entry) => ({
+    ...entry.spec,
+    isQueued: false,
+    status: 'completed',
+    updatedAt: entry.spec.createdAt,
+    archived: true,
+    archivePath: entry.relativePath,
+  }));
+  const historyById = new Map<string, TrackedPrdRecord>();
+  [...activePrds, ...archivedPrds].forEach((prd) => {
+    if (!prd || !prd.id || historyById.has(prd.id)) {
+      return;
+    }
+    historyById.set(prd.id, prd);
+  });
+  return {
+    prds: Array.from(historyById.values()).sort((left, right) => {
+      return (Date.parse(String(right.updatedAt || right.createdAt || '')) || 0)
+        - (Date.parse(String(left.updatedAt || left.createdAt || '')) || 0);
     }),
   };
 }
@@ -171,5 +260,6 @@ function loadAllState(rootDir: string): {
 export {
   archiveCompletedPrdSpecs,
   loadAllState,
+  loadTrackedPrdHistory,
   loadTrackedPrds,
 };

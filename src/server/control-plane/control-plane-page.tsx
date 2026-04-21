@@ -539,6 +539,66 @@ const styles = `
     transition: width 240ms ease;
   }
 
+  .progress-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .progress-step {
+    min-height: 84px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .progress-step.done {
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  .progress-step.active {
+    background: rgba(255, 216, 137, 0.24);
+    border-color: rgba(255, 216, 137, 0.45);
+  }
+
+  .progress-step-marker {
+    width: 12px;
+    height: 12px;
+    margin-top: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.36);
+  }
+
+  .progress-step.done .progress-step-marker {
+    background: #9ee2bd;
+  }
+
+  .progress-step.active .progress-step-marker {
+    background: #ffd889;
+    box-shadow: 0 0 0 5px rgba(255, 216, 137, 0.16);
+  }
+
+  .progress-step-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .progress-step-copy strong {
+    line-height: 1.1;
+  }
+
+  .progress-step-copy span {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.88rem;
+    line-height: 1.35;
+  }
+
   .progress-foot {
     display: flex;
     justify-content: space-between;
@@ -581,8 +641,96 @@ const styles = `
     align-items: start;
   }
 
+  .history-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.36fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .history-list-panel, .history-detail-panel {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+
+  .history-item {
+    width: 100%;
+    min-height: 74px;
+    display: grid;
+    gap: 5px;
+    text-align: left;
+    border-radius: 14px;
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    background: rgba(255, 255, 255, 0.76);
+    cursor: pointer;
+  }
+
+  .history-item.selected {
+    border-color: rgba(36, 91, 117, 0.38);
+    background: rgba(36, 91, 117, 0.1);
+  }
+
+  .history-item-title {
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  .history-item-meta {
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  .history-detail-card {
+    display: grid;
+    gap: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    background: rgba(255, 255, 255, 0.76);
+    padding: 14px;
+  }
+
+  .history-detail-title {
+    margin-top: 8px;
+    font-size: 1.15rem;
+  }
+
+  .history-block {
+    display: grid;
+    gap: 8px;
+  }
+
+  .history-block p {
+    color: var(--muted);
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .history-list {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .history-task-stack {
+    display: grid;
+    gap: 10px;
+  }
+
+  .history-task {
+    display: grid;
+    gap: 6px;
+    border-top: 1px solid rgba(31, 26, 21, 0.08);
+    padding-top: 10px;
+  }
+
+  .history-task:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
   @media (max-width: 980px) {
-    .metric-grid, .raw-grid, .grid { grid-template-columns: 1fr; }
+    .metric-grid, .raw-grid, .grid, .history-layout, .progress-steps { grid-template-columns: 1fr; }
     .main-stage-actions, .progress-head, .progress-foot { align-items: start; }
   }
 `;
@@ -632,6 +780,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
           {isManager ? null : (
             <nav className="tabs" role="tablist" aria-label="Control plane views">
               <button type="button" className="tab-button active" data-tab="main" role="tab" aria-selected="true">Main</button>
+              <button type="button" className="tab-button" data-tab="history" role="tab" aria-selected="false">History</button>
               <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
             </nav>
           )}
@@ -677,13 +826,30 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                       <div className="progress-track" aria-hidden="true">
                         <div id="main-progress-fill" className="progress-fill" />
                       </div>
+                      <div id="main-progress-steps" className="progress-steps" aria-live="polite" />
                       <div className="progress-foot">
                         <span>Progress moves as planned tasks complete.</span>
-                        <span>Queued PRDs stay in Advanced.</span>
+                        <span>Finished PRDs move into History.</span>
                       </div>
                     </div>
                   </article>
                 </div>
+              </section>
+
+              <section id="history-panel" className="tabs-panel" role="tabpanel">
+                <article className="surface">
+                  <div className="surface-head">
+                    <div>
+                      <h2>PRD History</h2>
+                      <p className="muted">Finished PRDs appear here with their full specification, requirements, tasks, and raw record.</p>
+                    </div>
+                    <div className="muted" id="prd-history-summary">History populates after a PRD finishes.</div>
+                  </div>
+                  <div className="history-layout">
+                    <div id="prd-history-list" className="history-list-panel" />
+                    <div id="prd-history-detail" className="history-detail-panel" />
+                  </div>
+                </article>
               </section>
 
               <section id="advanced-panel" className="tabs-panel" role="tabpanel">

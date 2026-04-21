@@ -417,6 +417,32 @@ function listTrackedPrdSpecs(rootDir, integrationBranch) {
   return specs;
 }
 
+function listArchivedPrdSpecs(rootDir, integrationBranch) {
+  const ref = resolveTrackedRef(rootDir, integrationBranch);
+  if (!ref) {
+    return [];
+  }
+
+  const archiveSpecFiles = listTreeFiles(rootDir, ref, PRD_ARCHIVE_DIR)
+    .filter((filePath) => filePath.endsWith('.json'));
+  const specs = [];
+  const seenPrdIds = new Set();
+  archiveSpecFiles.forEach((filePath) => {
+    const spec = parsePrdSpec(readTreeFile(rootDir, ref, filePath), filePath);
+    if (seenPrdIds.has(spec.id)) {
+      return;
+    }
+    seenPrdIds.add(spec.id);
+    specs.push({
+      spec,
+      isQueued: false,
+      relativePath: filePath,
+      ref,
+    });
+  });
+  return specs;
+}
+
 function readTrackedPrdStateMap(rootDir, integrationBranch) {
   const ref = resolveTrackedRef(rootDir, integrationBranch);
   const states = new Map();
@@ -449,6 +475,7 @@ export {
   fetchIntegrationBranch,
   hasActivePrdSpecInIntegrationBranch,
   hasPrdSpecInIntegrationBranch,
+  listArchivedPrdSpecs,
   listTrackedPrdSpecs,
   readTrackedPrdStateMap,
   

@@ -25,13 +25,43 @@ type RepoRecord = {
 type PrdSummary = {
   id?: string;
   title?: string;
+  status?: string;
   stateLabel?: string;
   detail?: string;
+  specification?: string;
+  requirements?: string[];
+  tasks?: PrdTaskSummary[];
   plannedTaskCount?: number;
   completedTaskCount?: number;
   remainingTaskCount?: number;
   progressPercent?: number;
+  createdAt?: string | null;
   updatedAt?: string | null;
+  archived?: boolean;
+  archivePath?: string | null;
+};
+
+type PrdTaskSummary = {
+  id?: string;
+  title?: string;
+  agentId?: string;
+  description?: string;
+  acceptance?: string[];
+  sprintId?: string;
+};
+
+type PrdRunStep = {
+  id?: string;
+  label?: string;
+  state?: string;
+  detail?: string;
+};
+
+type PrdRunSummary = {
+  currentStepId?: string;
+  currentStepLabel?: string;
+  detail?: string;
+  steps?: PrdRunStep[];
 };
 
 type AgentSummary = {
@@ -94,6 +124,8 @@ type RepoSummary = {
   freshnessDetail?: string;
   activePrd?: PrdSummary | null;
   queuedPrds?: PrdSummary[];
+  prdRun?: PrdRunSummary | null;
+  prdHistory?: PrdSummary[];
   agentStatuses?: AgentSummary[];
   pullRequestStatuses?: PullRequestSummary[];
   deployment?: {
@@ -161,7 +193,11 @@ const mainProgressTitleEl = document.getElementById('main-progress-title');
 const mainProgressDetailEl = document.getElementById('main-progress-detail');
 const mainProgressStatsEl = document.getElementById('main-progress-stats');
 const mainProgressFillEl = document.getElementById('main-progress-fill');
+const mainProgressStepsEl = document.getElementById('main-progress-steps');
 const mainDeployActionsEl = document.getElementById('main-deploy-actions');
+const prdHistorySummaryEl = document.getElementById('prd-history-summary');
+const prdHistoryListEl = document.getElementById('prd-history-list');
+const prdHistoryDetailEl = document.getElementById('prd-history-detail');
 const openPrdModalButton = document.getElementById('open-prd-modal');
 const closePrdModalButton = document.getElementById('close-prd-modal');
 const prdModalEl = document.getElementById('prd-modal');
@@ -171,6 +207,7 @@ const quickFormMessageEl = document.getElementById('quick-form-message');
 const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-tab]'));
 const panels: Record<string, HTMLElement | null> = {
   main: document.getElementById('main-panel'),
+  history: document.getElementById('history-panel'),
   dashboard: document.getElementById('dashboard-panel'),
   submit: document.getElementById('submit-panel'),
   advanced: document.getElementById('advanced-panel'),
@@ -179,8 +216,10 @@ const entranceContext = readEntranceContext();
 const apiBaseUrl = String(window.__AUTONOMY_CONTROL_PLANE_API_BASE_URL__ || '').trim().replace(/\/+$/, '');
 
 let latestRepos: RepoRecord[] = [];
+let latestDashboard: DashboardSummary = {};
 let deployingRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
+let selectedHistoryPrdId = '';
 
 function mountControlPlane() {
   if (
@@ -208,18 +247,24 @@ function mountControlPlane() {
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
     const button = target ? target.closest<HTMLButtonElement>('[data-action="deploy"]') : null;
-    if (!button) {
-      return;
-    }
-    const repoId = String(button.dataset.repoId || '').trim();
-    if (!repoId) {
-      return;
-    }
-    handleDeploy(repoId).catch((error: unknown) => {
-      if (messageEl) {
-        messageEl.textContent = getErrorMessage(error);
+    if (button) {
+      const repoId = String(button.dataset.repoId || '').trim();
+      if (!repoId) {
+        return;
       }
-    });
+      handleDeploy(repoId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
+    const historyButton = target ? target.closest<HTMLButtonElement>('[data-action="select-prd-history"]') : null;
+    if (historyButton) {
+      selectedHistoryPrdId = String(historyButton.dataset.prdId || '').trim();
+      renderPrdHistory(latestDashboard);
+    }
   });
   if (openPrdModalButton) {
     openPrdModalButton.addEventListener('click', () => openPrdModal());
@@ -448,6 +493,7 @@ function renderRepos(repos: RepoRecord[]) {
 }
 
 function renderDashboard(dashboard: DashboardSummary) {
+  latestDashboard = dashboard || {};
   if (!dashboardReposEl || !dashboardSummaryNoteEl) {
     return;
   }
@@ -477,6 +523,7 @@ function renderDashboard(dashboard: DashboardSummary) {
   if (dashboardJobsEl) {
     dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
   }
+  renderPrdHistory(dashboard);
 }
 
 function renderControlPlaneHeartbeats(dashboard: DashboardSummary) {
@@ -520,9 +567,38 @@ function renderProjectMain(dashboard: DashboardSummary) {
   if (mainProgressFillEl) {
     mainProgressFillEl.style.width = `${progress.percent}%`;
   }
+  if (mainProgressStepsEl) {
+    mainProgressStepsEl.innerHTML = renderToHtml(<PrdRunSteps run={repo && repo.prdRun ? repo.prdRun : null} />);
+  }
   if (mainDeployActionsEl) {
     mainDeployActionsEl.innerHTML = renderToHtml(<ProjectMainDeployActions repo={repo} />);
   }
+}
+
+function renderPrdHistory(dashboard: DashboardSummary) {
+  if (
+    entranceContext.entrance !== 'project'
+    || !prdHistorySummaryEl
+    || !prdHistoryListEl
+    || !prdHistoryDetailEl
+  ) {
+    return;
+  }
+
+  const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
+  const history = repo && Array.isArray(repo.prdHistory) ? repo.prdHistory : [];
+  if (!selectedHistoryPrdId || !history.some((prd) => String(prd.id || '') === selectedHistoryPrdId)) {
+    selectedHistoryPrdId = history.length > 0 ? String(history[0].id || '') : '';
+  }
+  const selectedPrd = history.find((prd) => String(prd.id || '') === selectedHistoryPrdId) || null;
+
+  prdHistorySummaryEl.textContent = history.length > 0
+    ? `${history.length} finished PRD${history.length === 1 ? '' : 's'}`
+    : 'History populates after a PRD finishes.';
+  prdHistoryListEl.innerHTML = renderToHtml(
+    <PrdHistoryList history={history} selectedPrdId={selectedHistoryPrdId} />
+  );
+  prdHistoryDetailEl.innerHTML = renderToHtml(<PrdHistoryDetail prd={selectedPrd} />);
 }
 
 function renderAdvanced(state: StateSnapshot) {
@@ -561,6 +637,7 @@ function setActiveTab(tabName: string) {
 
 function resolveProjectProgress(repo: RepoSummary | null) {
   const activePrd = repo && repo.activePrd ? repo.activePrd : null;
+  const prdRun = repo && repo.prdRun ? repo.prdRun : null;
   if (activePrd) {
     const totalTasks = Number(activePrd.plannedTaskCount || 0);
     const completedTasks = Math.min(totalTasks, Number(activePrd.completedTaskCount || 0));
@@ -581,7 +658,9 @@ function resolveProjectProgress(repo: RepoSummary | null) {
     );
     return {
       title: activePrd.title || 'Current run',
-      detail: activePrd.stateLabel || 'In progress',
+      detail: prdRun && prdRun.currentStepLabel
+        ? `${prdRun.currentStepLabel}: ${prdRun.detail || activePrd.stateLabel || 'In progress'}`
+        : activePrd.stateLabel || 'In progress',
       stats: totalTasks > 0
         ? `${completedTasks} complete · ${remainingTasks} remaining`
         : 'Waiting for planned tasks',
@@ -592,7 +671,7 @@ function resolveProjectProgress(repo: RepoSummary | null) {
   if (repo && repo.queuedPrds && repo.queuedPrds.length > 0) {
     return {
       title: repo.queuedPrds[0].title || 'Queued PRD',
-      detail: 'Queued and waiting to start',
+      detail: prdRun && prdRun.detail ? prdRun.detail : 'Queued and waiting to start',
       stats: `${repo.queuedPrds.length} PRD${repo.queuedPrds.length === 1 ? '' : 's'} in queue`,
       percent: 0,
     };
@@ -637,6 +716,129 @@ function ProjectMainDeployActions({ repo }: { repo: RepoSummary | null }) {
         </a>
       ) : null}
     </>
+  );
+}
+
+function PrdRunSteps({ run }: { run: PrdRunSummary | null }) {
+  const steps = run && Array.isArray(run.steps) && run.steps.length > 0
+    ? run.steps
+    : [
+        { id: 'planning', label: 'Planning', state: 'pending', detail: 'Waiting' },
+        { id: 'implementing', label: 'Implementing', state: 'pending', detail: 'Waiting' },
+        { id: 'reviewing', label: 'Reviewing', state: 'pending', detail: 'Waiting' },
+      ];
+
+  return (
+    <>
+      {steps.map((step) => (
+        <div className={`progress-step ${step.state || 'pending'}`}>
+          <div className="progress-step-marker" aria-hidden="true" />
+          <div className="progress-step-copy">
+            <strong>{step.label || step.id || 'Step'}</strong>
+            <span>{step.detail || 'Waiting'}</span>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function PrdHistoryList({ history, selectedPrdId }: { history: PrdSummary[]; selectedPrdId: string }) {
+  if (!history.length) {
+    return <div className="muted">No finished PRDs yet.</div>;
+  }
+
+  return (
+    <>
+      {history.map((prd) => {
+        const prdId = String(prd.id || '');
+        const selected = prdId === selectedPrdId;
+        return (
+          <button
+            type="button"
+            className={`history-item${selected ? ' selected' : ''}`}
+            data-action="select-prd-history"
+            data-prd-id={prdId}
+            aria-pressed={selected ? 'true' : 'false'}
+          >
+            <span className="history-item-title">{prd.title || prd.id || 'Untitled PRD'}</span>
+            <span className="history-item-meta">
+              {prd.updatedAt || prd.createdAt ? formatTimestamp(prd.updatedAt || prd.createdAt) : 'Finished PRD'}
+            </span>
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
+function PrdHistoryDetail({ prd }: { prd: PrdSummary | null }) {
+  if (!prd) {
+    return <div className="muted">Select a finished PRD to inspect its details.</div>;
+  }
+
+  const requirements = Array.isArray(prd.requirements) ? prd.requirements.filter(Boolean) : [];
+  const tasks = Array.isArray(prd.tasks) ? prd.tasks : [];
+  const timestamps = [
+    prd.createdAt ? `Created ${formatTimestamp(prd.createdAt)}` : '',
+    prd.updatedAt ? `Updated ${formatTimestamp(prd.updatedAt)}` : '',
+    prd.archivePath ? `Archived at ${prd.archivePath}` : '',
+  ].filter(Boolean).join(' | ');
+
+  return (
+    <div className="history-detail-card">
+      <div className="item-head">
+        <div>
+          <div className="pill">{prd.stateLabel || 'Completed'}</div>
+          <h3 className="history-detail-title">{prd.title || prd.id || 'Untitled PRD'}</h3>
+        </div>
+      </div>
+      <div className="queue-detail">{prd.id || 'unknown PRD'}{timestamps ? ` | ${timestamps}` : ''}</div>
+      {prd.specification ? (
+        <div className="history-block">
+          <h4>Specification</h4>
+          <p>{prd.specification}</p>
+        </div>
+      ) : null}
+      <div className="history-block">
+        <h4>Requirements</h4>
+        {requirements.length > 0 ? (
+          <ul className="history-list">
+            {requirements.map((requirement) => <li>{requirement}</li>)}
+          </ul>
+        ) : <div className="list-note">No requirements recorded.</div>}
+      </div>
+      <div className="history-block">
+        <h4>Tasks</h4>
+        {tasks.length > 0 ? (
+          <div className="history-task-stack">
+            {tasks.map((task) => <PrdHistoryTask task={task} />)}
+          </div>
+        ) : <div className="list-note">No task specs recorded.</div>}
+      </div>
+      <div className="history-block">
+        <h4>Raw PRD Info</h4>
+        <pre>{JSON.stringify(prd, null, 2)}</pre>
+      </div>
+    </div>
+  );
+}
+
+function PrdHistoryTask({ task }: { task: PrdTaskSummary }) {
+  const acceptance = Array.isArray(task.acceptance) ? task.acceptance.filter(Boolean) : [];
+  const meta = [task.agentId, task.sprintId ? `sprint ${task.sprintId}` : ''].filter(Boolean).join(' | ');
+
+  return (
+    <div className="history-task">
+      <div className="queue-title">{task.title || task.id || 'Untitled task'}</div>
+      {meta ? <div className="queue-detail">{meta}</div> : null}
+      {task.description ? <div className="queue-detail">{task.description}</div> : null}
+      {acceptance.length > 0 ? (
+        <ul className="history-list">
+          {acceptance.map((item) => <li>{item}</li>)}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 

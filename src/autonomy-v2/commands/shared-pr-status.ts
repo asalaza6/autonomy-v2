@@ -30,6 +30,7 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
       );
       return {
         prId: pr.id,
+        prdId: pr.prdId || null,
         number: pr.remote && pr.remote.number ? Number(pr.remote.number) : null,
         title: pr.title || pr.id,
         status: String(pr.status || 'open'),
