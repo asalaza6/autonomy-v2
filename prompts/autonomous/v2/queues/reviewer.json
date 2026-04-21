@@ -294,13 +294,14 @@
         "Task `prd-when-i-talk-in-b2b937-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 1,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-21T19:00:05.849Z",
-      "updatedAt": "2026-04-21T19:02:32.447Z",
+      "updatedAt": "2026-04-21T19:02:37.669Z",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T19:00:10.194Z",
       "reviewedAt": "2026-04-21T19:02:32.447Z",
-      "lastDecision": "approved"
+      "lastDecision": "approved",
+      "mergedAt": "2026-04-21T19:02:37.669Z"
     }
   ]
 }
