@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-create-a-system-to-37e0e9",
+  "status": "planned",
+  "createdAt": "2026-04-21T06:43:56.000Z",
+  "updatedAt": "2026-04-21T06:43:56.000Z",
+  "plannedTaskIds": [
+    "prd-create-a-system-to-37e0e9-architecture-agent-1"
+  ]
+}
