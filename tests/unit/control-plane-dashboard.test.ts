@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
+import { summarizeRepoStatus } from '../../src/autonomy-v2/control-plane/status-view.js';
 
 test('control plane dashboard summarizes discovered repos, jobs, and metadata in plain language', () => {
   const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
@@ -66,7 +67,14 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
                 id: 'prd-finished-001',
                 title: 'Finished PRD',
                 status: 'completed',
-                specification: 'Ship the completed workflow.',
+                specification: `Ship the completed workflow.
+
+## Source Chat Message
+Repo: alpha
+Conversation: chat-1
+Manager message: msg-manager
+Agent message: msg-agent
+Created: 2026-04-01T11:59:00.000Z`,
                 requirements: ['record the PRD'],
                 tasks: [
                   {
@@ -163,7 +171,14 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   );
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
   assert.equal(dashboard.repos[0].prdHistory[0].title, 'Finished PRD');
-  assert.equal(dashboard.repos[0].prdHistory[0].specification, 'Ship the completed workflow.');
+  assert.match(dashboard.repos[0].prdHistory[0].specification, /Ship the completed workflow/);
+  assert.deepEqual(dashboard.repos[0].prdHistory[0].sourceChat, {
+    repoId: 'alpha',
+    conversationId: 'chat-1',
+    managerMessageId: 'msg-manager',
+    agentMessageId: 'msg-agent',
+    createdAt: '2026-04-01T11:59:00.000Z',
+  });
   assert.equal(dashboard.repos[0].prdHistory[0].tasks[0].title, 'Build history');
   assert.equal(dashboard.repos[0].freshnessStatus, 'stale');
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);
@@ -178,6 +193,44 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
   assert.match(dashboard.jobs[0].detail, /created/);
+});
+
+test('status-view summaries normalize source chat metadata for PRD history', () => {
+  const summary = summarizeRepoStatus({
+    repoId: 'alpha',
+    updatedAt: '2026-04-01T12:00:00.000Z',
+    snapshot: {
+      prds: {
+        prds: [],
+      },
+      prdHistory: {
+        prds: [
+          {
+            id: 'prd-history-source-001',
+            title: 'Archived chat PRD',
+            status: 'completed',
+            specification: `
+## Source Chat Message
+- Repo: alpha
+- Conversation: chat-archived
+- Manager message: msg-manager-archived
+- Agent message: msg-agent-archived
+- Created: 2026-04-01T10:00:00.000Z
+`,
+            createdAt: '2026-04-01T11:00:00.000Z',
+          },
+        ],
+      },
+    },
+  }, 'Alpha');
+
+  assert.deepEqual(summary.prdHistory[0].sourceChat, {
+    repoId: 'alpha',
+    conversationId: 'chat-archived',
+    managerMessageId: 'msg-manager-archived',
+    agentMessageId: 'msg-agent-archived',
+    createdAt: '2026-04-01T10:00:00.000Z',
+  });
 });
 
 test('control plane dashboard keeps partially completed PRDs in implementing while their PR is active', () => {

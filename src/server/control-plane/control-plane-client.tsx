@@ -10,7 +10,7 @@ import {
   getPrdProposalStableKey,
   normalizePrdProposal,
 } from './control-plane-prd-proposal.js';
-import type { ControlPlanePrdProposal } from '../../types.js';
+import type { ControlPlanePrdProposal, ControlPlanePrdSourceChat } from '../../types.js';
 
 declare global {
   interface Window {
@@ -46,7 +46,10 @@ type PrdSummary = {
   updatedAt?: string | null;
   archived?: boolean;
   archivePath?: string | null;
+  sourceChat?: PrdSourceChatSummary | null;
 };
+
+type PrdSourceChatSummary = ControlPlanePrdSourceChat;
 
 type PrdTaskSummary = {
   id?: string;
@@ -286,6 +289,8 @@ let deployingRepoIds = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedHistoryPrdId = '';
+let prdHistoryContinueMessagePrdId = '';
+let prdHistoryContinueMessage = '';
 let selectedChatConversationId = '';
 let activeChatPrdDraft: ChatPrdDraftState | null = null;
 let forceChatScrollToLatest = false;
@@ -391,7 +396,17 @@ function mountControlPlane() {
     const historyButton = target ? target.closest<HTMLButtonElement>('[data-action="select-prd-history"]') : null;
     if (historyButton) {
       selectedHistoryPrdId = String(historyButton.dataset.prdId || '').trim();
+      prdHistoryContinueMessagePrdId = '';
+      prdHistoryContinueMessage = '';
       renderPrdHistory(latestDashboard);
+      return;
+    }
+
+    const continueSourceChatButton = target ? target.closest<HTMLButtonElement>('[data-action="continue-prd-source-chat"]') : null;
+    if (continueSourceChatButton) {
+      const prdId = String(continueSourceChatButton.dataset.prdId || selectedHistoryPrdId || '').trim();
+      const prd = findHistoryPrdById(latestDashboard, prdId);
+      continueSourceChatFromPrd(prd, latestConversations);
       return;
     }
 
@@ -1058,7 +1073,101 @@ function renderPrdHistory(dashboard: DashboardSummary) {
   prdHistoryListEl.innerHTML = renderToHtml(
     <PrdHistoryList history={history} selectedPrdId={selectedHistoryPrdId} />
   );
-  prdHistoryDetailEl.innerHTML = renderToHtml(<PrdHistoryDetail prd={selectedPrd} />);
+  const continueChatMessage = selectedPrd
+    && prdHistoryContinueMessagePrdId === String(selectedPrd.id || '')
+    ? prdHistoryContinueMessage
+    : '';
+  prdHistoryDetailEl.innerHTML = renderToHtml(
+    <PrdHistoryDetail prd={selectedPrd} continueChatMessage={continueChatMessage} />
+  );
+}
+
+function findHistoryPrdById(dashboard: DashboardSummary, prdId: string) {
+  const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
+  const history = repo && Array.isArray(repo.prdHistory) ? repo.prdHistory : [];
+  return history.find((prd) => String(prd.id || '') === prdId) || null;
+}
+
+function continueSourceChatFromPrd(
+  prd: PrdSummary | null,
+  conversations: ChatConversationSummary[] = latestConversations
+) {
+  const result = resolvePrdHistoryContinueChat(prd, conversations, entranceContext.repoId);
+  if (!result.conversation) {
+    prdHistoryContinueMessagePrdId = String(prd && prd.id || selectedHistoryPrdId || '');
+    prdHistoryContinueMessage = 'chat not available';
+    renderPrdHistory(latestDashboard);
+    return result;
+  }
+
+  selectedChatConversationId = String(result.conversation.id || '');
+  prdHistoryContinueMessagePrdId = '';
+  prdHistoryContinueMessage = '';
+  forceChatScrollToLatest = true;
+  renderChat(conversations);
+  setActiveTab('chat');
+  window.setTimeout(() => {
+    scrollChatToLatest();
+    chatInputEl?.focus();
+  }, 0);
+  return result;
+}
+
+function resolvePrdHistoryContinueChat(
+  prd: PrdSummary | null,
+  conversations: ChatConversationSummary[],
+  repoId = entranceContext.repoId
+) {
+  const sourceChat = normalizePrdSourceChatSummary(prd && prd.sourceChat);
+  const conversationId = String(sourceChat && sourceChat.conversationId || '').trim();
+  if (!conversationId) {
+    return {
+      status: 'unavailable',
+      message: 'chat not available',
+      sourceChat,
+      conversation: null,
+    };
+  }
+
+  const conversation = (conversations || []).find((entry) => {
+    const entryId = String(entry && entry.id || '').trim();
+    const entryRepoId = String(entry && entry.repoId || '').trim();
+    return entryId === conversationId && (!entryRepoId || !repoId || entryRepoId === repoId);
+  }) || null;
+
+  if (!conversation) {
+    return {
+      status: 'unavailable',
+      message: 'chat not available',
+      sourceChat,
+      conversation: null,
+    };
+  }
+
+  return {
+    status: 'available',
+    message: '',
+    sourceChat,
+    conversation,
+  };
+}
+
+function normalizePrdSourceChatSummary(value: unknown): PrdSourceChatSummary | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as PrdSourceChatSummary;
+  const sourceChat: PrdSourceChatSummary = {
+    repoId: String(record.repoId || '').trim(),
+    conversationId: String(record.conversationId || '').trim(),
+    managerMessageId: String(record.managerMessageId || '').trim(),
+    agentMessageId: String(record.agentMessageId || '').trim(),
+    createdAt: String(record.createdAt || '').trim(),
+  };
+  const normalized = Object.fromEntries(
+    Object.entries(sourceChat).filter(([, entry]) => entry)
+  ) as PrdSourceChatSummary;
+  return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
 function renderChat(conversations: ChatConversationSummary[]) {
@@ -1394,13 +1503,27 @@ function PrdHistoryList({ history, selectedPrdId }: { history: PrdSummary[]; sel
   );
 }
 
-function PrdHistoryDetail({ prd }: { prd: PrdSummary | null }) {
+function PrdHistoryDetail({
+  prd,
+  continueChatMessage = '',
+}: {
+  prd: PrdSummary | null;
+  continueChatMessage?: string;
+}) {
   if (!prd) {
     return <div className="muted">Select a finished PRD to inspect its details.</div>;
   }
 
   const requirements = Array.isArray(prd.requirements) ? prd.requirements.filter(Boolean) : [];
   const tasks = Array.isArray(prd.tasks) ? prd.tasks : [];
+  const sourceChat = normalizePrdSourceChatSummary(prd.sourceChat);
+  const sourceChatDetail = sourceChat ? [
+    sourceChat.repoId ? `Repo ${sourceChat.repoId}` : '',
+    sourceChat.conversationId ? `Conversation ${sourceChat.conversationId}` : '',
+    sourceChat.managerMessageId ? `Manager message ${sourceChat.managerMessageId}` : '',
+    sourceChat.agentMessageId ? `Agent message ${sourceChat.agentMessageId}` : '',
+    sourceChat.createdAt ? `Created ${formatTimestamp(sourceChat.createdAt)}` : '',
+  ].filter(Boolean).join(' | ') : '';
   const timestamps = [
     prd.createdAt ? `Created ${formatTimestamp(prd.createdAt)}` : '',
     prd.updatedAt ? `Updated ${formatTimestamp(prd.updatedAt)}` : '',
@@ -1416,6 +1539,26 @@ function PrdHistoryDetail({ prd }: { prd: PrdSummary | null }) {
         </div>
       </div>
       <div className="queue-detail">{prd.id || 'unknown PRD'}{timestamps ? ` | ${timestamps}` : ''}</div>
+      {sourceChat ? (
+        <div className="history-block source-chat-block">
+          <h4>Source Chat</h4>
+          {sourceChatDetail ? <div className="queue-detail">{sourceChatDetail}</div> : null}
+          <div className="history-actions">
+            <button
+              type="button"
+              className="secondary"
+              data-action="continue-prd-source-chat"
+              data-prd-id={prd.id || ''}
+              data-conversation-id={sourceChat.conversationId || ''}
+            >
+              Continue source chat
+            </button>
+          </div>
+          {continueChatMessage ? (
+            <div className="list-note" role="status">{continueChatMessage}</div>
+          ) : null}
+        </div>
+      ) : null}
       {prd.specification ? (
         <div className="history-block">
           <h4>Specification</h4>
@@ -2148,9 +2291,12 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 export {
   ChatMessage,
   ChatPrdProposalCard,
+  PrdHistoryDetail,
   buildChatPrdDraftFormState,
   captureChatScrollSnapshot,
+  continueSourceChatFromPrd,
   isChatNearBottom,
   mountControlPlane,
   resolveChatScrollDecision,
+  resolvePrdHistoryContinueChat,
 };

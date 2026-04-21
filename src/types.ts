@@ -180,6 +180,14 @@ export interface ControlPlanePrdProposalSource extends AnyRecord {
   createdAt?: string;
 }
 
+export interface ControlPlanePrdSourceChat extends AnyRecord {
+  repoId?: string;
+  conversationId?: string;
+  managerMessageId?: string;
+  agentMessageId?: string;
+  createdAt?: string;
+}
+
 export interface ControlPlanePrdProposal extends AnyRecord {
   schemaVersion?: number;
   kind: 'prd-proposal';

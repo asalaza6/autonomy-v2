@@ -54,6 +54,96 @@ test('chat PRD proposal card renders review and discard actions', async () => {
   assert.match(html, /data-action="discard-chat-prd"/);
 });
 
+test('history detail renders continue source chat action for source chat metadata', async () => {
+  installBrowserStubs();
+  const { PrdHistoryDetail } = await import('../../src/server/control-plane/control-plane-client.js');
+
+  const html = renderToHtml(h(PrdHistoryDetail as any, {
+    prd: {
+      id: 'prd-chat-history',
+      title: 'Chat generated PRD',
+      stateLabel: 'Completed',
+      specification: 'Completed from chat.',
+      sourceChat: {
+        repoId: 'alpha',
+        conversationId: 'chat-1',
+        managerMessageId: 'msg-manager',
+        agentMessageId: 'msg-agent',
+        createdAt: '2026-04-21T20:00:00.000Z',
+      },
+    },
+  }));
+
+  assert.match(html, /Source Chat/);
+  assert.match(html, /Continue source chat/);
+  assert.match(html, /data-action="continue-prd-source-chat"/);
+  assert.match(html, /data-conversation-id="chat-1"/);
+
+  const fallbackHtml = renderToHtml(h(PrdHistoryDetail as any, {
+    prd: {
+      id: 'prd-chat-history',
+      title: 'Chat generated PRD',
+      sourceChat: {
+        repoId: 'alpha',
+        conversationId: 'chat-missing',
+      },
+    },
+    continueChatMessage: 'chat not available',
+  }));
+  assert.match(fallbackHtml, /chat not available/);
+
+  const normalHtml = renderToHtml(h(PrdHistoryDetail as any, {
+    prd: {
+      id: 'prd-normal-history',
+      title: 'Normal PRD',
+      stateLabel: 'Completed',
+      specification: 'Completed outside chat.',
+    },
+  }));
+  assert.doesNotMatch(normalHtml, /data-action="continue-prd-source-chat"/);
+});
+
+test('history continue chat resolves existing conversations and unavailable fallback', async () => {
+  installBrowserStubs();
+  const { resolvePrdHistoryContinueChat } = await import('../../src/server/control-plane/control-plane-client.js');
+
+  const existing = resolvePrdHistoryContinueChat({
+    id: 'prd-chat-history',
+    sourceChat: {
+      repoId: 'alpha',
+      conversationId: 'chat-1',
+    },
+  }, [
+    {
+      id: 'chat-1',
+      repoId: 'alpha',
+      title: 'Existing source chat',
+      messages: [],
+    },
+  ], 'alpha');
+  const missing = resolvePrdHistoryContinueChat({
+    id: 'prd-chat-history',
+    sourceChat: {
+      repoId: 'alpha',
+      conversationId: 'chat-missing',
+    },
+  }, [], 'alpha');
+  const absentConversationId = resolvePrdHistoryContinueChat({
+    id: 'prd-chat-history',
+    sourceChat: {
+      repoId: 'alpha',
+      managerMessageId: 'msg-manager',
+    },
+  }, [], 'alpha');
+
+  assert.equal(existing.status, 'available');
+  assert.equal(existing.conversation.id, 'chat-1');
+  assert.equal(missing.status, 'unavailable');
+  assert.equal(missing.message, 'chat not available');
+  assert.equal(absentConversationId.status, 'unavailable');
+  assert.equal(absentConversationId.message, 'chat not available');
+});
+
 test('chat PRD draft state can be edited before normal PRD submission validation', async () => {
   installBrowserStubs();
   const { buildChatPrdDraftFormState } = await import('../../src/server/control-plane/control-plane-client.js');
