@@ -1,11 +1,9 @@
 import path from 'path';
-import { spawn, spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { runPackageUpdate } from '../../autonomy-v2/commands/update.js';
 import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../types.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
-
-const RESTART_COMMAND_TIMEOUT_MS = 30000;
 
 type RestartTarget = 'controlBridge' | 'server';
 
@@ -67,16 +65,15 @@ function executeControlPlanePackageUpdate(rootDir: string) {
 }
 
 function preparePackageUpdateRestartCommands(rootDir: string, config: ControlPlaneConfig) {
-  const server = runRestartCommand(rootDir, 'server', config.serverRestartCommand);
   const controlBridgePlan = deferRestartCommand(rootDir, 'controlBridge', config.controlBridgeRestartCommand);
   const controlBridge = controlBridgePlan.status;
+  const serverPlan = deferRestartCommand(rootDir, 'server', config.serverRestartCommand);
+  const server = serverPlan.status;
   const targetStatuses = [controlBridge.status, server.status];
   const status = targetStatuses.includes('failed')
     ? 'failed'
     : targetStatuses.includes('deferred')
       ? 'deferred'
-      : targetStatuses.includes('completed')
-      ? 'completed'
       : 'skipped';
   return {
     restartStatus: {
@@ -84,71 +81,8 @@ function preparePackageUpdateRestartCommands(rootDir: string, config: ControlPla
       controlBridge,
       server,
     },
-    deferredCommands: controlBridgePlan.deferredCommand
-      ? [controlBridgePlan.deferredCommand]
-      : [],
-  };
-}
-
-function runRestartCommand(
-  rootDir: string,
-  target: RestartTarget,
-  value: DeployCommandConfig | null | undefined
-) {
-  let commandConfig: NormalizedRestartCommandConfig | null;
-  try {
-    commandConfig = normalizeRestartCommandConfig(value, rootDir);
-  } catch (error) {
-    return {
-      target,
-      status: 'failed' as const,
-      error: formatErrorMessage(error),
-    };
-  }
-  if (!commandConfig) {
-    return {
-      target,
-      status: 'skipped' as const,
-      reason: 'not-configured',
-    };
-  }
-
-  const result = spawnSync(commandConfig.command, commandConfig.args, {
-    cwd: commandConfig.cwd,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      ...commandConfig.env,
-    },
-    shell: commandConfig.shell,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: RESTART_COMMAND_TIMEOUT_MS,
-  });
-  const output = collectCommandOutput(result.stdout, result.stderr);
-  const base = {
-    target,
-    command: commandConfig.displayCommand,
-    cwd: path.relative(rootDir, commandConfig.cwd) || '.',
-    exitCode: typeof result.status === 'number' ? result.status : null,
-    output: output || null,
-  };
-  if (result.error) {
-    return {
-      ...base,
-      status: 'failed' as const,
-      error: result.error.message,
-    };
-  }
-  if (result.status !== 0) {
-    return {
-      ...base,
-      status: 'failed' as const,
-      error: output || result.signal || `exit code ${result.status}`,
-    };
-  }
-  return {
-    ...base,
-    status: 'completed' as const,
+    deferredCommands: [serverPlan.deferredCommand, controlBridgePlan.deferredCommand]
+      .filter((command): command is DeferredRestartCommand => Boolean(command)),
   };
 }
 
@@ -337,13 +271,6 @@ function normalizeCommandEnv(value: unknown) {
     env[normalizedKey] = String(entry);
     return env;
   }, {} as Record<string, string>);
-}
-
-function collectCommandOutput(...parts: unknown[]) {
-  return parts
-    .map((part) => String(part || '').trim())
-    .filter(Boolean)
-    .join('\n');
 }
 
 function formatErrorMessage(error: unknown) {

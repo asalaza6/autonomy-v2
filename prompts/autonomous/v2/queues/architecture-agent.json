@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -525,13 +526,15 @@
       "acceptance": [
         "`npm run typecheck` passed in the deterministic wrapper and the diff is lane-scoped, but the round-1 blocker is still present. The package update path still executes restart commands before the bridge posts the updated status and `/complete` result, so a real bridge self-restart can terminate the current bridge process and leave the job stuck as claimed.\nBlocking: `src/server/control-plane/control-plane-package-update.ts:10` calls `runPackageUpdateRestartCommands` inside `executeControlPlanePackageUpdate`, and `src/server/control-plane/control-plane-bridge.ts:150` only posts repo status and `/complete` after that function returns. Defer or detach `controlBridgeRestartCommand` until after the status update and job completion are durably posted, or otherwise make completion durable before restarting the current bridge process.\nMissing focused verification: `tests/unit/control-plane-package-update-bridge.test.ts:109` uses a harmless child process restart command, so it proves command execution but not the self-restart ordering hazard. Add coverage that asserts job completion/status reporting happens before any bridge self-restart command can stop the running bridge."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
       "createdAt": "2026-04-21T08:54:32.060Z",
-      "updatedAt": "2026-04-21T09:00:00.395Z",
+      "updatedAt": "2026-04-21T09:06:11.562Z",
       "startedAt": "2026-04-21T09:00:00.395Z",
-      "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
+      "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent",
+      "completedAt": "2026-04-21T09:06:11.562Z",
+      "completionMode": "code"
     },
     {
       "id": "architecture-agent-followup-pr-prd-prd-control-plane-package-f7d2a3-architecture-agent-3",
@@ -548,12 +551,12 @@
       "acceptance": [
         "`npm run typecheck` passed in the deterministic wrapper and the diff remains lane-scoped, but the prior blocking restart-ordering issue is still present, so this is not safe to merge.\nBlocking: `executeControlPlanePackageUpdate` still runs restart commands before the bridge posts the updated repo status and `/complete` result. `src/server/control-plane/control-plane-package-update.ts:10-15` calls `runPackageUpdateRestartCommands`, while `src/server/control-plane/control-plane-bridge.ts:150-184` only posts status and completes the job after that call returns. A real `controlBridgeRestartCommand` can terminate/restart the running bridge before completion is durably reported, leaving the job stuck as claimed and violating the package update completion requirement. Defer/detach the bridge self-restart until after status and job completion are posted, or otherwise make completion durable before restarting the current bridge process.\nMissing focused verification: `tests/unit/control-plane-package-update-bridge.test.ts:109-124` still uses harmless child-process commands, so it verifies command execution but not the self-restart ordering hazard. Add coverage that proves status reporting and job completion occur before any bridge restart command that could stop the active bridge process."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
       "createdAt": "2026-04-21T08:55:55.186Z",
-      "updatedAt": "2026-04-21T08:55:55.186Z",
-      "startedAt": null,
+      "updatedAt": "2026-04-21T09:06:11.562Z",
+      "startedAt": "2026-04-21T09:06:11.562Z",
       "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
     },
     {
@@ -579,6 +582,5 @@
       "startedAt": null,
       "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

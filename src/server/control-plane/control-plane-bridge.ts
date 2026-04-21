@@ -191,27 +191,40 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           queueCommitSha: execution.queueCommit ? execution.queueCommit.commitSha : null,
         };
       }
+      let completionError: string | null = null;
       const completed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
         body: {
           status: 'completed',
           result,
         },
-      }).catch(() => null);
+      }).catch((error) => {
+        completionError = formatErrorMessage(error);
+        return null;
+      });
+      const completedStatus = getResponseStatus(completed);
       logBridgeEvent('bridge:job:completed', {
         jobId: job.id,
         repoId: job.repoId,
         type: job.type || 'prd:add',
-        status: completed && completed.status || 'completed',
+        status: completedStatus || 'unacknowledged',
       });
-      if (completed && deferredRestartCommandsForJob.length > 0) {
+      if (isCompletedJobResponse(completed) && deferredRestartCommandsForJob.length > 0) {
         deferredPackageUpdateRestarts.push({
           jobId: job.id,
           repoId: job.repoId,
           commands: deferredRestartCommandsForJob,
         });
+      } else if (deferredRestartCommandsForJob.length > 0) {
+        logBridgeEvent('bridge:package:update:deferred-restart-skipped', {
+          jobId: job.id,
+          repoId: job.repoId,
+          reason: completionError ? 'completion-failed' : 'completion-not-acknowledged',
+          status: completedStatus || '',
+          error: completionError || '',
+        });
       }
-      processed.push({ jobId: job.id, status: completed && completed.status });
+      processed.push({ jobId: job.id, status: completedStatus });
     } catch (error) {
       const failed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/complete`, {
         method: 'POST',
@@ -350,6 +363,16 @@ function shouldRetryRequestError(error: unknown) {
     || message.includes('etimedout')
     || message.includes('eai_again')
   );
+}
+
+function getResponseStatus(value: unknown) {
+  return value && typeof value === 'object' && 'status' in value
+    ? String((value as { status?: unknown }).status || '')
+    : '';
+}
+
+function isCompletedJobResponse(value: unknown) {
+  return getResponseStatus(value) === 'completed';
 }
 
 function logBridgeEvent(event: string, fields: Record<string, unknown> = {}) {
