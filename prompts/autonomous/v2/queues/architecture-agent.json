@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -216,6 +215,30 @@
       "updatedAt": "2026-04-21T06:18:34.984Z",
       "startedAt": "2026-04-21T06:18:34.984Z",
       "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-when-prds-run-the-d8bef0-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Implement When PRDs run The task bar should reflect in steps",
+      "description": "The wrapper check `npm run typecheck` passed and the branch merge-tree against `origin/dev` showed no conflicts, but the PR is not safe to approve because the actual branch HEAD still does not include the follow-up fix. The worktree has unstaged changes in the PRD step logic and tests; merging the branch would omit them.\nBlocking merge-safety issue: `src/autonomy-v2/commands/shared-pr-status.ts`, `src/autonomy-v2/control-plane/status-view.ts`, and `tests/unit/control-plane-dashboard.test.ts` are modified only in the worktree. Commit these changes onto the PR branch before review/merge.\nAt committed HEAD, the prior blocker remains: `src/autonomy-v2/control-plane/status-view.ts` still moves to `reviewing` whenever any active PR exists, and `tests/unit/control-plane-dashboard.test.ts` still codifies that behavior for a partially complete PRD. The unstaged worktree changes appear to address this, and the focused built test passed, but those fixes are not mergeable until committed.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-prds-run-the-d8bef0",
+      "laneKey": "prd-when-prds-run-the-d8bef0:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The wrapper check `npm run typecheck` passed and the branch merge-tree against `origin/dev` showed no conflicts, but the PR is not safe to approve because the actual branch HEAD still does not include the follow-up fix. The worktree has unstaged changes in the PRD step logic and tests; merging the branch would omit them.\nBlocking merge-safety issue: `src/autonomy-v2/commands/shared-pr-status.ts`, `src/autonomy-v2/control-plane/status-view.ts`, and `tests/unit/control-plane-dashboard.test.ts` are modified only in the worktree. Commit these changes onto the PR branch before review/merge.\nAt committed HEAD, the prior blocker remains: `src/autonomy-v2/control-plane/status-view.ts` still moves to `reviewing` whenever any active PR exists, and `tests/unit/control-plane-dashboard.test.ts` still codifies that behavior for a partially complete PRD. The unstaged worktree changes appear to address this, and the focused built test passed, but those fixes are not mergeable until committed."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
+      "createdAt": "2026-04-21T06:19:01.886Z",
+      "updatedAt": "2026-04-21T06:19:01.886Z",
+      "startedAt": null,
+      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
