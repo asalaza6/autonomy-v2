@@ -23,5 +23,34 @@
     "display `chat not available` without creating a new conversation.",
     "Do not store full transcripts in PRD history; reuse existing persisted chat conversations only.",
     "Keep normal History selection and Chat behavior unchanged for PRDs without source chat metadata."
+  ],
+  "tasks": [
+    {
+      "id": "prd-continue-source-chat-from-8fed29-architecture-agent-1",
+      "title": "Implement Continue Source Chat from PRD History",
+      "agentId": "architecture-agent",
+      "description": "# PRD: Continue Source Chat from PRD History\n\nPriority: Medium\n\n## Problem\nPRD History items can show completed PRDs that originated from repo chat, but the manager cannot jump back into the originating chat context from the History tab. The source conversation ID may exist in the PRD specification, but it is not surfaced or used by the UI.\n\n## Goal\nAllow managers to click a History item and continue the source repo chat when the originating conversation is still available, while clearly showing `chat not available` when it is missing.\n\n## Requirements\n- Extract source chat metadata for PRD history summaries, including repo ID, conversation ID, manager message ID, agent message ID, and created timestamp when present.\n- Preserve compatibility with existing archived PRDs that only contain a `## Source Chat Message` section in `specification`.\n- Add a History detail action to continue the source chat when a source conversation ID is present.\n- When clicked, verify the conversation exists in the current repo's persisted conversations, select it in the Chat tab, switch to Chat, scroll to latest, and focus the input.\n- If the PRD has no source conversation ID or the referenced conversation is not present, display `chat not available` without creating a new conversation.\n- Do not store full transcripts in PRD history; reuse existing persisted chat conversations only.\n- Keep normal History selection and Chat behavior unchanged for PRDs without source chat metadata.\n\n## Acceptance Criteria\n- A History item created from a chat-generated PRD shows a continue-chat action when it has source chat metadata.\n- Clicking the action opens the Chat tab on the referenced conversation when it exists.\n- Clicking the action shows `chat not available` when the conversation ID is absent or not found.\n- Archived PRDs with the existing `Source Chat Message` specification block are supported.\n- History items without chat source metadata continue to render normally.\n- No new chat conversation is created by using the History continue action.\n\n## Verification\n- Add unit coverage for parsing source chat metadata from PRD specifications.\n- Add dashboard/status-view coverage proving PRD history summaries include normalized source chat metadata.\n- Add UI tests for continue-chat success and `chat not available` fallback.\n- Run `npm run typecheck` and relevant control-plane chat, dashboard, and UI tests.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1776803047254_7360afb3bd09d8\nManager message: msg_1776803047254_5078a396cd95d\nAgent message: msg_1776803047254_6b212890726a58\nCreated: 2026-04-21T20:26:10.668Z",
+      "acceptance": [
+        "Extract source chat metadata for PRD history summaries",
+        "including repo ID",
+        "conversation ID",
+        "manager message ID",
+        "agent message ID",
+        "and created timestamp when present.",
+        "Preserve compatibility with existing archived PRDs that only contain a `## Source Chat Message` section in `specification`.",
+        "Add a History detail action to continue the source chat when a source conversation ID is present.",
+        "When clicked",
+        "verify the conversation exists in the current repo's persisted conversations",
+        "select it in the Chat tab",
+        "switch to Chat",
+        "scroll to latest",
+        "and focus the input.",
+        "If the PRD has no source conversation ID or the referenced conversation is not present",
+        "display `chat not available` without creating a new conversation.",
+        "Do not store full transcripts in PRD history; reuse existing persisted chat conversations only.",
+        "Keep normal History selection and Chat behavior unchanged for PRDs without source chat metadata."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
