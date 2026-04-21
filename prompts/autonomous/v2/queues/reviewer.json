@@ -154,6 +154,26 @@
       "reviewedAt": "2026-04-21T07:19:56.692Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T07:20:01.889Z"
+    },
+    {
+      "id": "review-pr-prd-prd-reconcile-manually-merged-f904f9-architecture-agent",
+      "title": "Review [architecture-agent] Implement PRD Reconcile manually merged review queue state Problem A PRD",
+      "description": "Review pr-prd-prd-reconcile-manually-merged-f904f9-architecture-agent for Implement PRD Reconcile manually merged review queue state Problem A PRD",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-prd-reconcile-manually-merged-f904f9-architecture-agent",
+      "sourceTaskId": "prd-prd-reconcile-manually-merged-f904f9-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T07:51:31.452Z",
+      "updatedAt": "2026-04-21T07:51:31.452Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-prd-reconcile-manually-merged-f904f9-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-prd-reconcile-manually-merged-f904f9-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
