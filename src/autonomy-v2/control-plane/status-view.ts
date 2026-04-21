@@ -1,5 +1,10 @@
 const HEARTBEAT_ONLINE_MS = 15000;
 const HEARTBEAT_OFFLINE_MS = 45000;
+const PRD_RUN_STEPS = [
+  { id: 'planning', label: 'Planning' },
+  { id: 'implementing', label: 'Implementing' },
+  { id: 'reviewing', label: 'Reviewing' },
+];
 
 function selectActivePrd(prds: any[] = []) {
   const candidates = (prds || [])
@@ -24,6 +29,19 @@ function selectQueuedPrds(prds: any[] = []) {
     .filter((prd) => prd && (prd.isQueued === true || String(prd.status || '') === 'queued'))
     .slice()
     .sort((left, right) => compareTimestamps(left.createdAt || left.updatedAt || '', right.createdAt || right.updatedAt || ''));
+}
+
+function selectPrdHistory(snapshot: any, prds: any[] = []) {
+  const historyPrds = Array.isArray(snapshot && snapshot.prdHistory && snapshot.prdHistory.prds)
+    ? snapshot.prdHistory.prds
+    : (prds || []).filter((prd) => prd && String(prd.status || '') === 'completed');
+  return historyPrds
+    .slice()
+    .sort((left, right) => {
+      const leftTime = String(left && (left.updatedAt || left.createdAt) || '');
+      const rightTime = String(right && (right.updatedAt || right.createdAt) || '');
+      return compareTimestamps(rightTime, leftTime);
+    });
 }
 
 function describePrd(prd: any) {
@@ -82,14 +100,156 @@ function describePrd(prd: any) {
     status,
     stateLabel,
     detail: details.join(' | '),
+    specification: prd && prd.specification ? String(prd.specification) : '',
+    requirements: Array.isArray(prd && prd.requirements) ? prd.requirements.map((entry) => String(entry || '')) : [],
+    tasks: Array.isArray(prd && prd.tasks)
+      ? prd.tasks.map((task) => ({
+        id: String(task && task.id || ''),
+        title: String(task && task.title || task && task.id || 'Untitled task'),
+        agentId: String(task && task.agentId || ''),
+        description: task && task.description ? String(task.description) : '',
+        acceptance: Array.isArray(task && task.acceptance) ? task.acceptance.map((entry) => String(entry || '')) : [],
+        sprintId: task && task.sprintId ? String(task.sprintId) : '',
+      }))
+      : [],
     plannedTaskCount,
     completedTaskCount,
     remainingTaskCount,
     progressPercent,
     requirementCount,
+    createdAt: prd && prd.createdAt ? String(prd.createdAt) : null,
     updatedAt: prd && prd.updatedAt ? String(prd.updatedAt) : null,
     isQueued: prd && prd.isQueued === true,
+    archived: prd && prd.archived === true,
+    archivePath: prd && prd.archivePath ? String(prd.archivePath) : null,
   };
+}
+
+function buildPrdRunSummary(activePrd: any, queuedPrds: any[] = [], pullRequestStatuses: any[] = []) {
+  const currentStepId = resolvePrdRunStep(activePrd, queuedPrds, pullRequestStatuses);
+  const currentStepIndex = PRD_RUN_STEPS.findIndex((step) => step.id === currentStepId);
+  const steps = PRD_RUN_STEPS.map((step, index) => ({
+    ...step,
+    state: resolvePrdStepState(currentStepId, currentStepIndex, index),
+    detail: describePrdRunStep(step.id, activePrd, pullRequestStatuses),
+  }));
+  return {
+    currentStepId,
+    currentStepLabel: formatPrdRunStepLabel(currentStepId),
+    detail: describePrdRun(activePrd, queuedPrds, pullRequestStatuses),
+    steps,
+  };
+}
+
+function resolvePrdRunStep(activePrd: any, queuedPrds: any[] = [], pullRequestStatuses: any[] = []) {
+  if (!activePrd) {
+    return queuedPrds.length > 0 ? 'queued' : 'idle';
+  }
+  const status = String(activePrd.status || '');
+  if (status === 'planning') {
+    return 'planning';
+  }
+  if (status === 'completed') {
+    return 'finished';
+  }
+  if (status === 'failed') {
+    return Number(activePrd.plannedTaskCount || 0) > 0 ? 'implementing' : 'planning';
+  }
+  if (pullRequestStatuses.length > 0) {
+    return 'reviewing';
+  }
+  const plannedTaskCount = Number(activePrd.plannedTaskCount || 0);
+  const completedTaskCount = Number(activePrd.completedTaskCount || 0);
+  if (plannedTaskCount > 0 && completedTaskCount >= plannedTaskCount) {
+    return 'reviewing';
+  }
+  if (status === 'planned' || plannedTaskCount > 0) {
+    return 'implementing';
+  }
+  return 'planning';
+}
+
+function resolvePrdStepState(currentStepId: string, currentStepIndex: number, stepIndex: number) {
+  if (currentStepId === 'finished') {
+    return 'done';
+  }
+  if (currentStepIndex < 0) {
+    return 'pending';
+  }
+  if (stepIndex < currentStepIndex) {
+    return 'done';
+  }
+  if (stepIndex === currentStepIndex) {
+    return 'active';
+  }
+  return 'pending';
+}
+
+function describePrdRun(activePrd: any, queuedPrds: any[] = [], pullRequestStatuses: any[] = []) {
+  if (!activePrd) {
+    if (queuedPrds.length > 0) {
+      return `${queuedPrds.length} PRD${queuedPrds.length === 1 ? '' : 's'} waiting to start.`;
+    }
+    return 'No active PRD is working through tasks right now.';
+  }
+  const currentStepId = resolvePrdRunStep(activePrd, queuedPrds, pullRequestStatuses);
+  if (currentStepId === 'planning') {
+    return 'Planning is turning the PRD into implementation tasks.';
+  }
+  if (currentStepId === 'implementing') {
+    const totalTasks = Number(activePrd.plannedTaskCount || 0);
+    const completedTasks = Number(activePrd.completedTaskCount || 0);
+    return totalTasks > 0
+      ? `Implementation is running: ${completedTasks}/${totalTasks} tasks complete.`
+      : 'Implementation is waiting for planned tasks.';
+  }
+  if (currentStepId === 'reviewing') {
+    return pullRequestStatuses.length > 0
+      ? `Review is active on ${pullRequestStatuses.length} pull request${pullRequestStatuses.length === 1 ? '' : 's'}.`
+      : 'Implementation tasks are complete and review is next.';
+  }
+  if (currentStepId === 'finished') {
+    return 'This PRD finished and is ready for history.';
+  }
+  return activePrd.detail || activePrd.stateLabel || 'PRD status is unavailable.';
+}
+
+function describePrdRunStep(stepId: string, activePrd: any, pullRequestStatuses: any[] = []) {
+  if (stepId === 'planning') {
+    if (activePrd && String(activePrd.status || '') === 'planning') {
+      return 'In progress';
+    }
+    return activePrd ? 'Complete' : 'Waiting';
+  }
+  if (stepId === 'implementing') {
+    const totalTasks = Number(activePrd && activePrd.plannedTaskCount || 0);
+    const completedTasks = Number(activePrd && activePrd.completedTaskCount || 0);
+    if (totalTasks > 0) {
+      return `${completedTasks}/${totalTasks} tasks`;
+    }
+    return activePrd ? 'Waiting for tasks' : 'Waiting';
+  }
+  if (stepId === 'reviewing') {
+    if (pullRequestStatuses.length > 0) {
+      return `${pullRequestStatuses.length} active PR${pullRequestStatuses.length === 1 ? '' : 's'}`;
+    }
+    return activePrd && String(activePrd.status || '') === 'completed' ? 'Complete' : 'Waiting';
+  }
+  return '';
+}
+
+function formatPrdRunStepLabel(stepId: string) {
+  if (stepId === 'queued') {
+    return 'Queued';
+  }
+  if (stepId === 'idle') {
+    return 'Idle';
+  }
+  if (stepId === 'finished') {
+    return 'Finished';
+  }
+  const step = PRD_RUN_STEPS.find((entry) => entry.id === stepId);
+  return step ? step.label : formatStatusLabel(stepId);
 }
 
 function summarizeControlPlaneJob(job: any, repoLabel = '') {
@@ -208,7 +368,9 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const snapshot = (repoStatus && repoStatus.snapshot) || {};
   const prds = Array.isArray(snapshot.prds && snapshot.prds.prds) ? snapshot.prds.prds : [];
   const activePrd = selectActivePrd(prds);
+  const activePrdSummary = activePrd ? describePrd(activePrd) : null;
   const queuedPrds = selectQueuedPrds(prds).map(describePrd);
+  const prdHistory = selectPrdHistory(snapshot, prds).map(describePrd);
   const agentStatuses = Array.isArray(snapshot.agentStatuses) ? snapshot.agentStatuses : [];
   const pullRequestStatuses = Array.isArray(snapshot.pullRequestStatuses) ? snapshot.pullRequestStatuses : [];
   const runningAgents = agentStatuses.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
@@ -236,8 +398,10 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     description: '',
     updatedAt: repoStatus && repoStatus.updatedAt ? String(repoStatus.updatedAt) : null,
     overview: overviewParts.join(' | '),
-    activePrd: activePrd ? describePrd(activePrd) : null,
+    activePrd: activePrdSummary,
     queuedPrds,
+    prdRun: buildPrdRunSummary(activePrdSummary, queuedPrds, pullRequestStatuses),
+    prdHistory,
     agentStatuses,
     pullRequestStatuses,
     deployment,

@@ -60,6 +60,27 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
               },
             ],
           },
+          prdHistory: {
+            prds: [
+              {
+                id: 'prd-finished-001',
+                title: 'Finished PRD',
+                status: 'completed',
+                specification: 'Ship the completed workflow.',
+                requirements: ['record the PRD'],
+                tasks: [
+                  {
+                    id: 'task-history-1',
+                    title: 'Build history',
+                    agentId: 'architecture-agent',
+                    acceptance: ['History renders completed PRDs.'],
+                  },
+                ],
+                createdAt: '2026-03-31T12:00:00.000Z',
+                updatedAt: '2026-04-01T12:10:00.000Z',
+              },
+            ],
+          },
           agentStatuses: [
             {
               agentId: 'planner',
@@ -128,7 +149,15 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   assert.equal(dashboard.repos[0].activePrd.completedTaskCount, 1);
   assert.equal(dashboard.repos[0].activePrd.remainingTaskCount, 2);
   assert.equal(dashboard.repos[0].activePrd.progressPercent, 33);
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'reviewing');
+  assert.deepEqual(
+    dashboard.repos[0].prdRun.steps.map((step) => step.state),
+    ['done', 'done', 'active']
+  );
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
+  assert.equal(dashboard.repos[0].prdHistory[0].title, 'Finished PRD');
+  assert.equal(dashboard.repos[0].prdHistory[0].specification, 'Ship the completed workflow.');
+  assert.equal(dashboard.repos[0].prdHistory[0].tasks[0].title, 'Build history');
   assert.equal(dashboard.repos[0].freshnessStatus, 'stale');
   assert.match(dashboard.repos[0].agentStatuses[0].detail, /planning backlog/);
   assert.equal(dashboard.repos[0].pullRequestStatuses[0].url, 'https://github.com/asalaza6/autonomy-v2/pull/7');

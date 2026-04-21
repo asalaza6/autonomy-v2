@@ -158,10 +158,14 @@
       "acceptance": [
         "Task `prd-when-prds-run-the-d8bef0-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T05:55:47.555Z",
-      "updatedAt": "2026-04-21T05:55:47.555Z"
+      "updatedAt": "2026-04-21T06:09:06.626Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
+      "startedAt": "2026-04-21T05:56:05.534Z",
+      "completedAt": "2026-04-21T06:09:06.626Z",
+      "completionMode": "code"
     }
   ]
 }

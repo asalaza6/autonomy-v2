@@ -4,7 +4,7 @@ import { countBy, ensureInitialized, getAutonomyPaths, readJson } from '../comma
 import { buildAgentStatusSummaries } from '../commands/shared-agent-status.js';
 import { buildPullRequestStatusSummaries } from '../commands/shared-pr-status.js';
 import { gitRefExists, resolveBaseRef, runGitRead } from '../commands/shared-repo.js';
-import { loadAllState, loadTrackedPrds } from '../commands/shared-prds.js';
+import { loadAllState, loadTrackedPrdHistory, loadTrackedPrds } from '../commands/shared-prds.js';
 import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
 import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapshot } from '../commands/deploy-version.js';
 
@@ -18,6 +18,9 @@ function buildStatusSnapshot(rootDir) {
   const prds = loadTrackedPrds(rootDir, config, {
     taskQueues,
     prs,
+  });
+  const prdHistory = loadTrackedPrdHistory(rootDir, config, {
+    prds,
   });
   const taskCounts = countBy(listTasks(taskQueues), 'status');
   const prCounts = countBy(prs.pullRequests, 'status');
@@ -64,6 +67,7 @@ function buildStatusSnapshot(rootDir) {
     deployment: buildDeploymentSnapshot(rootDir, config),
     runtime,
     prds,
+    prdHistory,
   };
 }
 

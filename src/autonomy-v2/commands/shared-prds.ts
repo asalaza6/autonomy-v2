@@ -1,7 +1,7 @@
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/config-main.js';
 import { buildPrdStateRelativePath } from '../../sync/sync-prd.js';
-import { commitTrackedFilesToIntegrationBranch, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
+import { commitTrackedFilesToIntegrationBranch, listArchivedPrdSpecs, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
 import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, QueueMap, TrackedPrdRecord } from '../autonomy-types.js';
 import { getAutonomyPaths, readJson } from './shared-core.js';
 import { isTerminalTaskStatus, listTasks, readTaskQueues } from './shared-queues.js';
@@ -102,6 +102,37 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
   };
 }
 
+function loadTrackedPrdHistory(rootDir: string, config: AutonomyConfig, options: AnyRecord = {}): { prds: TrackedPrdRecord[] } {
+  const activePrds = ((options.prds && Array.isArray(options.prds.prds)) ? options.prds.prds : [])
+    .filter((prd) => prd && String(prd.status || '') === 'completed')
+    .map((prd) => ({
+      ...prd,
+      status: 'completed',
+      isQueued: false,
+    }));
+  const archivedPrds = listArchivedPrdSpecs(rootDir, config.integrationBranch).map((entry) => ({
+    ...entry.spec,
+    isQueued: false,
+    status: 'completed',
+    updatedAt: entry.spec.createdAt,
+    archived: true,
+    archivePath: entry.relativePath,
+  }));
+  const historyById = new Map<string, TrackedPrdRecord>();
+  [...activePrds, ...archivedPrds].forEach((prd) => {
+    if (!prd || !prd.id || historyById.has(prd.id)) {
+      return;
+    }
+    historyById.set(prd.id, prd);
+  });
+  return {
+    prds: Array.from(historyById.values()).sort((left, right) => {
+      return (Date.parse(String(right.updatedAt || right.createdAt || '')) || 0)
+        - (Date.parse(String(left.updatedAt || left.createdAt || '')) || 0);
+    }),
+  };
+}
+
 function archiveCompletedPrdSpecs(rootDir, state) {
   if (!state || !state.config || !state.config.integrationBranch) {
     throw new Error('archiveCompletedPrdSpecs requires config.integrationBranch.');
@@ -171,5 +202,6 @@ function loadAllState(rootDir: string): {
 export {
   archiveCompletedPrdSpecs,
   loadAllState,
+  loadTrackedPrdHistory,
   loadTrackedPrds,
 };

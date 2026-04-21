@@ -44,6 +44,47 @@ test('status snapshots include the current runtime and PRD state', () => {
   assert.match(output, /Active PRD:/);
 });
 
+test('status snapshots include archived PRDs for project history', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-history-');
+  initAutonomyRepo(repoDir);
+
+  const archivedSpecPath = path.join(
+    repoDir,
+    'prompts',
+    'autonomous',
+    'v2',
+    'specs',
+    'prds',
+    'archived',
+    'prd-history-001.json'
+  );
+  fs.mkdirSync(path.dirname(archivedSpecPath), { recursive: true });
+  fs.writeFileSync(archivedSpecPath, `${JSON.stringify({
+    id: 'prd-history-001',
+    title: 'History PRD',
+    createdAt: '2026-04-01T12:00:00.000Z',
+    specification: 'Keep completed PRDs visible.',
+    requirements: ['show full PRD info'],
+    tasks: [
+      {
+        id: 'task-history-001',
+        title: 'Render history',
+        agentId: 'architecture-agent',
+        acceptance: ['History includes archived PRDs.'],
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', 'prompts/autonomous/v2/specs/prds/archived/prd-history-001.json']);
+  git(repoDir, ['commit', '-m', 'archive history prd']);
+  git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  assert.equal(snapshot.prds.prds.some((prd) => prd.id === 'prd-history-001'), false);
+  assert.equal(snapshot.prdHistory.prds.length, 1);
+  assert.equal(snapshot.prdHistory.prds[0].id, 'prd-history-001');
+  assert.equal(snapshot.prdHistory.prds[0].archivePath, 'prompts/autonomous/v2/specs/prds/archived/prd-history-001.json');
+});
+
 test('status snapshots include deployment branch comparison details', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-deploy-');
   initAutonomyRepo(repoDir);
