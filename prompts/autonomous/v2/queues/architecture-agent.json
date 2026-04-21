@@ -189,6 +189,29 @@
       "updatedAt": "2026-04-21T06:12:51.368Z",
       "startedAt": "2026-04-21T06:12:51.368Z",
       "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-when-prds-run-the-d8bef0-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement When PRDs run The task bar should reflect in steps",
+      "description": "The required wrapper check `npm run typecheck` passed and the branch merge-tree against `origin/dev` showed no conflicts, but the prior blocking issue is still present. The latest commit only queues the review follow-up; it does not correct the PRD step logic.\n`src/autonomy-v2/control-plane/status-view.ts:158` still returns `reviewing` whenever any pull request status exists, before checking whether the active PRD has remaining tasks or whether the PR belongs to that PRD. This keeps partially implemented PRDs from showing the `implementing` step accurately.\n`tests/unit/control-plane-dashboard.test.ts:152` still asserts `prdRun.currentStepId` is `reviewing` for an active PRD with 1 of 3 tasks complete, codifying the incorrect behavior. Expected correction: keep PRDs with remaining implementation tasks in `implementing`; only move to `reviewing` once the active PRD's implementation work is complete or the active review PR is specifically for that PRD, and add focused coverage for the partial-PRD-with-active-PR case.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-prds-run-the-d8bef0",
+      "laneKey": "prd-when-prds-run-the-d8bef0:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The required wrapper check `npm run typecheck` passed and the branch merge-tree against `origin/dev` showed no conflicts, but the prior blocking issue is still present. The latest commit only queues the review follow-up; it does not correct the PRD step logic.\n`src/autonomy-v2/control-plane/status-view.ts:158` still returns `reviewing` whenever any pull request status exists, before checking whether the active PRD has remaining tasks or whether the PR belongs to that PRD. This keeps partially implemented PRDs from showing the `implementing` step accurately.\n`tests/unit/control-plane-dashboard.test.ts:152` still asserts `prdRun.currentStepId` is `reviewing` for an active PRD with 1 of 3 tasks complete, codifying the incorrect behavior. Expected correction: keep PRDs with remaining implementation tasks in `implementing`; only move to `reviewing` once the active PRD's implementation work is complete or the active review PR is specifically for that PRD, and add focused coverage for the partial-PRD-with-active-PR case."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
+      "createdAt": "2026-04-21T06:14:20.318Z",
+      "updatedAt": "2026-04-21T06:14:20.318Z",
+      "startedAt": null,
+      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
     }
   ],
   "schemaVersion": 1
