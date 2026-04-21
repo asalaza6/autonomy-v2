@@ -16,6 +16,7 @@ import {
   completeJob,
   createControlPlaneDeployJob,
   createControlPlanePackageUpdateJob,
+  createControlPlaneRestartJob,
   createControlPlaneJob,
   ensureControlPlaneDataDir,
   enqueueJob,
@@ -34,6 +35,7 @@ import {
   validateDeploySubmission,
   validatePackageUpdateSubmission,
   validatePrdAddSubmission,
+  validateRestartSubmission,
 } from './control-plane-validation.js';
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
@@ -304,6 +306,26 @@ async function handleRequest(
         repoId: String(body && body.repoId || repoId || '').trim(),
       });
       const job = enqueueJob(rootDir, createControlPlanePackageUpdateJob(payload));
+      logControlPlaneEvent('control-plane:job:queued', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type,
+      });
+      sendJson(res, 201, job);
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/restart') && req.method === 'POST') {
+    const repoId = url.pathname.split('/')[3];
+    try {
+      const body = await readJsonBody(req);
+      const { payload } = validateRestartSubmission(listDiscoveredRepos(rootDir), {
+        repoId: String(body && body.repoId || repoId || '').trim(),
+      });
+      const job = enqueueJob(rootDir, createControlPlaneRestartJob(payload));
       logControlPlaneEvent('control-plane:job:queued', {
         jobId: job.id,
         repoId: job.repoId,

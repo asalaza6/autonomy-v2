@@ -302,7 +302,14 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
   } else if (status === 'completed' && jobType === 'deploy' && job && job.result) {
     details.push(`merged ${job.result.sourceBranch || 'dev'} into ${job.result.targetBranch || 'main'}`);
   } else if (status === 'completed' && jobType === 'package:update' && job && job.result) {
-    details.push(`installed ${job.result.installedVersion || job.result.newDeclaredVersion || 'latest'}`);
+    const updateCommand = job.result.updateCommand || {};
+    const updateMode = updateCommand.mode === 'custom' ? 'custom command' : 'default install';
+    details.push(`${updateMode}: ${job.result.installedVersion || job.result.newDeclaredVersion || 'latest'}`);
+  } else if (status === 'completed' && jobType === 'restart' && job && job.result) {
+    const restartStatus = job.result.restartStatus && job.result.restartStatus.status
+      ? job.result.restartStatus.status
+      : 'skipped';
+    details.push(`restart ${restartStatus}`);
   } else if (status === 'completed' && job && job.result && job.result.prdId) {
     details.push(`PRD ${job.result.prdId} committed`);
   } else if (job && job.claimedAt) {
@@ -344,6 +351,15 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
       failed: 'Update failed',
     };
   }
+  if (jobType === 'restart') {
+    return {
+      queued: 'Waiting to restart',
+      claimed: 'Restart claimed by bridge',
+      running: 'Restarting services',
+      completed: 'Restart queued',
+      failed: 'Restart failed',
+    };
+  }
   return {
     queued: 'Waiting to be claimed',
     claimed: 'Claimed by the bridge',
@@ -359,6 +375,9 @@ function formatControlPlaneJobTitle(job: any, jobType: string) {
   }
   if (jobType === 'package:update') {
     return 'Update Autonomy v2 package';
+  }
+  if (jobType === 'restart') {
+    return 'Restart Autonomy v2 services';
   }
   if (jobType === 'agent:chat') {
     return `Repo chat: ${summarizeText(job && job.payload && job.payload.prompt || job && job.id || 'message')}`;

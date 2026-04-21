@@ -6,6 +6,7 @@ import type {
   ControlPlanePrdAddPayload,
   ControlPlaneDeployPayload,
   ControlPlanePackageUpdatePayload,
+  ControlPlaneRestartPayload,
   ControlPlaneAgentChatMessagePayload,
   ControlPlaneConversationRecord,
   ControlPlaneChatMessageRecord,
@@ -223,6 +224,9 @@ function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null
   if (normalized === 'package:update') {
     return 'package:update' as const;
   }
+  if (normalized === 'restart') {
+    return 'restart' as const;
+  }
   return 'prd:add' as const;
 }
 
@@ -241,6 +245,12 @@ function normalizeJobPayload(
     return {
       repoId: String((payload as ControlPlanePackageUpdatePayload).repoId || repoId).trim() || repoId,
     } as ControlPlanePackageUpdatePayload;
+  }
+
+  if (type === 'restart') {
+    return {
+      repoId: String((payload as ControlPlaneRestartPayload).repoId || repoId).trim() || repoId,
+    } as ControlPlaneRestartPayload;
   }
 
   if (type === 'agent:chat') {
@@ -585,6 +595,21 @@ function createControlPlanePackageUpdateJob(payload: ControlPlanePackageUpdatePa
   return job;
 }
 
+function createControlPlaneRestartJob(payload: ControlPlaneRestartPayload): ControlPlaneJobRecord {
+  const job: ControlPlaneJobRecord = {
+    id: createControlPlaneRecordId('job'),
+    type: 'restart' as const,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+    },
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
 function createControlPlaneAgentChatJob(payload: ControlPlaneAgentChatMessagePayload): ControlPlaneJobRecord {
   const job: ControlPlaneJobRecord = {
     id: createControlPlaneRecordId('job'),
@@ -743,6 +768,7 @@ export {
   createControlPlaneJob,
   createControlPlaneDeployJob,
   createControlPlanePackageUpdateJob,
+  createControlPlaneRestartJob,
   ensureControlPlaneDataDir,
   enqueueJob,
   getControlPlanePaths,

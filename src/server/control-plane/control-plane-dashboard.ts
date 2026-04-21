@@ -106,6 +106,7 @@ function buildRepoDashboard(
 
   const deployJob = jobs.find((job) => job.repoId === repoId && job.type === 'deploy') || null;
   const packageUpdateJob = jobs.find((job) => job.repoId === repoId && job.type === 'package:update') || null;
+  const restartJob = jobs.find((job) => job.repoId === repoId && job.type === 'restart') || null;
 
   return {
     ...summary,
@@ -117,6 +118,7 @@ function buildRepoDashboard(
     deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
     deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
     packageUpdateJob: packageUpdateJob ? summarizeControlPlaneJob(packageUpdateJob, label) : null,
+    restartJob: restartJob ? summarizeControlPlaneJob(restartJob, label) : null,
     versionStatus: buildRepoVersionStatus(repoId, repoStatus, jobs),
     packageStatus: buildRepoPackageStatus(repoStatus),
   };

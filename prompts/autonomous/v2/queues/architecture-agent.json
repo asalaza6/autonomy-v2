@@ -786,10 +786,67 @@
         "or launched/deferred statuses clearly.",
         "Control panel should expose separate buttons/actions for Update and Restart."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T21:50:07.288Z",
-      "updatedAt": "2026-04-21T21:50:07.288Z"
+      "updatedAt": "2026-04-21T22:05:50.706Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
+      "startedAt": "2026-04-21T21:50:26.520Z",
+      "completedAt": "2026-04-21T22:05:50.637Z",
+      "completionMode": "code",
+      "commitSha": "d6dea0a8eb72b849c85ad16215c180be2e445d12"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-separate-package-update-and-997e0b-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement Separate Package Update and Restart Commands",
+      "description": "I cannot complete the review in this environment because filesystem access is read-only and no shell/GitHub tool calls were made to inspect the diff or project context. The deterministic wrapper reports `npm run typecheck` passed, but that alone is insufficient to approve without reviewing the actual changes against `origin/dev` and `prompts/autonomous/v2/project-context.md`.\nBlocking review process issue: the required project context and current branch diff were not inspected, so correctness, regressions, merge safety, and acceptance criteria cannot be verified from the provided metadata alone.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-separate-package-update-and-997e0b",
+      "laneKey": "prd-separate-package-update-and-997e0b:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "I cannot complete the review in this environment because filesystem access is read-only and no shell/GitHub tool calls were made to inspect the diff or project context. The deterministic wrapper reports `npm run typecheck` passed, but that alone is insufficient to approve without reviewing the actual changes against `origin/dev` and `prompts/autonomous/v2/project-context.md`.\nBlocking review process issue: the required project context and current branch diff were not inspected, so correctness, regressions, merge safety, and acceptance criteria cannot be verified from the provided metadata alone."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
+      "createdAt": "2026-04-21T22:06:11.430Z",
+      "updatedAt": "2026-04-21T22:09:19.396Z",
+      "startedAt": "2026-04-21T22:06:11.430Z",
+      "prId": "pr-prd-separate-package-update-and-997e0b-architecture-agent",
+      "completedAt": "2026-04-21T22:09:19.342Z",
+      "completionMode": "noop",
+      "commitSha": "6e5049ac4ca7c08c197c332b725347fefd5d5511"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-separate-package-update-and-997e0b-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement Separate Package Update and Restart Commands",
+      "description": "`npm run typecheck` passed and the branch appears mergeable against `origin/dev`, but the self-hosted `autonomy-v2` update path is still not configured correctly.\nBlocking: `prompts/autonomous/v2/config/control-plane.json` still has no `packageUpdateCommand` for repoId `autonomy-v2`. Because `executeControlPlanePackageUpdate` falls back to the default install flow when `config.packageUpdateCommand` is absent, clicking Update for this repo would still attempt the default `@asalaza6/autonomy-v2@latest` install instead of running `npm run release:patch`. Add the repo-level config and focused verification against the actual repo config, not only a fixture-mutated config.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-separate-package-update-and-997e0b",
+      "laneKey": "prd-separate-package-update-and-997e0b:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed and the branch appears mergeable against `origin/dev`, but the self-hosted `autonomy-v2` update path is still not configured correctly.\nBlocking: `prompts/autonomous/v2/config/control-plane.json` still has no `packageUpdateCommand` for repoId `autonomy-v2`. Because `executeControlPlanePackageUpdate` falls back to the default install flow when `config.packageUpdateCommand` is absent, clicking Update for this repo would still attempt the default `@asalaza6/autonomy-v2@latest` install instead of running `npm run release:patch`. Add the repo-level config and focused verification against the actual repo config, not only a fixture-mutated config."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
+      "createdAt": "2026-04-21T22:09:40.645Z",
+      "updatedAt": "2026-04-21T22:12:16.984Z",
+      "startedAt": "2026-04-21T22:09:40.645Z",
+      "prId": "pr-prd-separate-package-update-and-997e0b-architecture-agent",
+      "completedAt": "2026-04-21T22:12:16.929Z",
+      "completionMode": "code",
+      "commitSha": "250c0331e2591b29b235da92096f849d63178baa"
     }
   ]
 }

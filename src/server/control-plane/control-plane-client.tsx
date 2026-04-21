@@ -175,6 +175,7 @@ type RepoSummary = {
   deploymentUrl?: string | null;
   deploymentLabel?: string | null;
   deployJob?: JobSummary | null;
+  restartJob?: JobSummary | null;
   versionStatus?: VersionStatusSummary | null;
   packageStatus?: PackageStatusSummary | null;
   packageUpdateJob?: JobSummary | null;
@@ -287,6 +288,7 @@ let latestDashboard: DashboardSummary = {};
 let latestConversations: ChatConversationSummary[] = [];
 let deployingRepoIds = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
+let restartingRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedHistoryPrdId = '';
 let prdHistoryContinueMessagePrdId = '';
@@ -386,6 +388,20 @@ function mountControlPlane() {
         return;
       }
       handlePackageUpdate(repoId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
+    const restartButton = target ? target.closest<HTMLButtonElement>('[data-action="restart"]') : null;
+    if (restartButton) {
+      const repoId = String(restartButton.dataset.repoId || '').trim();
+      if (!repoId) {
+        return;
+      }
+      handleRestart(repoId).catch((error: unknown) => {
         if (messageEl) {
           messageEl.textContent = getErrorMessage(error);
         }
@@ -907,6 +923,32 @@ async function handlePackageUpdate(repoId: string) {
     const next = new Set(updatingPackageRepoIds);
     next.delete(repoId);
     updatingPackageRepoIds = next;
+  }
+}
+
+async function handleRestart(repoId: string) {
+  if (!repoId || restartingRepoIds.has(repoId)) {
+    return;
+  }
+
+  restartingRepoIds = new Set(restartingRepoIds).add(repoId);
+  if (messageEl) {
+    messageEl.textContent = `Queueing restart for ${repoId}...`;
+  }
+
+  try {
+    await requestJson(`/api/repos/${encodeURIComponent(repoId)}/restart`, {
+      method: 'POST',
+      body: JSON.stringify({ repoId }),
+    });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `Restart queued for ${repoId}.`;
+    }
+  } finally {
+    const next = new Set(restartingRepoIds);
+    next.delete(repoId);
+    restartingRepoIds = next;
   }
 }
 
@@ -2121,7 +2163,8 @@ function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
 }
 
 function PackageUpdateButton({ repo }: { repo: RepoSummary }) {
-  const state = buildPackageUpdateButtonState(repo);
+  const updateState = buildPackageUpdateButtonState(repo);
+  const restartState = buildRestartButtonState(repo);
   if (!repo.repoId) {
     return null;
   }
@@ -2129,14 +2172,25 @@ function PackageUpdateButton({ repo }: { repo: RepoSummary }) {
     <div className="repo-actions" style={{ marginTop: '12px' }}>
       <button
         type="button"
-        className={`secondary deploy-button${state.busy ? ' is-loading' : ''}`}
+        className={`secondary deploy-button${updateState.busy ? ' is-loading' : ''}`}
         data-action="package-update"
         data-repo-id={repo.repoId || ''}
-        disabled={state.disabled}
-        aria-busy={state.busy}
+        disabled={updateState.disabled}
+        aria-busy={updateState.busy}
       >
-        {state.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
-        <span>{state.label}</span>
+        {updateState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+        <span>{updateState.label}</span>
+      </button>
+      <button
+        type="button"
+        className={`secondary deploy-button${restartState.busy ? ' is-loading' : ''}`}
+        data-action="restart"
+        data-repo-id={repo.repoId || ''}
+        disabled={restartState.disabled}
+        aria-busy={restartState.busy}
+      >
+        {restartState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+        <span>{restartState.label}</span>
       </button>
     </div>
   );
@@ -2254,6 +2308,44 @@ function buildPackageUpdateButtonState(repo: RepoSummary | null) {
   };
 }
 
+function buildRestartButtonState(repo: RepoSummary | null) {
+  const repoId = String(repo && repo.repoId || '').trim();
+  const jobStatus = String(repo && repo.restartJob && repo.restartJob.status || '').trim();
+  const queueing = Boolean(repoId && restartingRepoIds.has(repoId));
+  const restarting = jobStatus === 'claimed' || jobStatus === 'running';
+  const queued = jobStatus === 'queued';
+
+  if (queueing) {
+    return {
+      label: 'Queueing restart...',
+      disabled: true,
+      busy: true,
+    };
+  }
+
+  if (restarting) {
+    return {
+      label: 'Restarting services...',
+      disabled: true,
+      busy: true,
+    };
+  }
+
+  if (queued) {
+    return {
+      label: 'Restart queued',
+      disabled: true,
+      busy: false,
+    };
+  }
+
+  return {
+    label: 'Restart services',
+    disabled: false,
+    busy: false,
+  };
+}
+
 function formatTimestamp(value: string | null | undefined) {
   const date = new Date(value || '');
   if (Number.isNaN(date.getTime())) {
@@ -2291,6 +2383,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 export {
   ChatMessage,
   ChatPrdProposalCard,
+  PackageUpdateButton,
   PrdHistoryDetail,
   buildChatPrdDraftFormState,
   captureChatScrollSnapshot,

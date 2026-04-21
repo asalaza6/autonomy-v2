@@ -9,6 +9,7 @@
     "heroku",
     "main"
   ],
+  "packageUpdateCommand": "npm run release:patch",
   "deploymentUrl": "https://example.com",
   "deploymentLabel": "Production site"
 }
