@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -167,6 +166,30 @@
       "completedAt": "2026-04-21T06:09:06.626Z",
       "completionMode": "code",
       "commitSha": "f6b0115cf214f07ff18de88845b8155d3fb5ce53"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-when-prds-run-the-d8bef0-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement When PRDs run The task bar should reflect in steps",
+      "description": "The required wrapper check `npm run typecheck` passed and the branch appears mergeable with `origin/dev`, but the PRD step logic has a blocking correctness issue.\n`src/autonomy-v2/control-plane/status-view.ts:158` marks the run as `reviewing` whenever any active PR exists, without checking whether the selected PRD still has unfinished tasks or whether the PR belongs to that PRD. The new unit test at `tests/unit/control-plane-dashboard.test.ts:148-155` codifies the bug by expecting `reviewing` while the active PRD is only 1/3 complete. This will make the task bar skip/misreport the implementing step for PRDs that still have remaining implementation work. Expected correction: keep PRDs with remaining tasks in `implementing`, and only move to `reviewing` when the current PRD's implementation work is complete or its current review PR is actually active. Add focused coverage for a partially completed PRD with an active PR remaining in `implementing`.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-when-prds-run-the-d8bef0",
+      "laneKey": "prd-when-prds-run-the-d8bef0:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The required wrapper check `npm run typecheck` passed and the branch appears mergeable with `origin/dev`, but the PRD step logic has a blocking correctness issue.\n`src/autonomy-v2/control-plane/status-view.ts:158` marks the run as `reviewing` whenever any active PR exists, without checking whether the selected PRD still has unfinished tasks or whether the PR belongs to that PRD. The new unit test at `tests/unit/control-plane-dashboard.test.ts:148-155` codifies the bug by expecting `reviewing` while the active PRD is only 1/3 complete. This will make the task bar skip/misreport the implementing step for PRDs that still have remaining implementation work. Expected correction: keep PRDs with remaining tasks in `implementing`, and only move to `reviewing` when the current PRD's implementation work is complete or its current review PR is actually active. Add focused coverage for a partially completed PRD with an active PR remaining in `implementing`."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
+      "createdAt": "2026-04-21T06:12:51.368Z",
+      "updatedAt": "2026-04-21T06:12:51.368Z",
+      "startedAt": "2026-04-21T06:12:51.368Z",
+      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
