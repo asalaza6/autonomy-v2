@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -556,6 +555,30 @@
       "updatedAt": "2026-04-21T08:55:55.186Z",
       "startedAt": null,
       "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-prd-control-plane-package-f7d2a3-architecture-agent-4",
+      "title": "Address review for [architecture-agent] Implement PRD Control Plane package update and restart for managed repos",
+      "description": "`npm run typecheck` passed in the deterministic wrapper, and the bridge restart is now deferred past the normal success path. Still blocking: the deferred self-restart is not tied to durable job completion, so the prior stuck-claimed-job failure mode can still happen on `/complete` failures.\nIn `src/server/control-plane/control-plane-bridge.ts:173`, deferred bridge restart commands are queued before the job completion request. The completion POST at `src/server/control-plane/control-plane-bridge.ts:199` is swallowed with `.catch(() => null)`, but the deferred restart still runs at `src/server/control-plane/control-plane-bridge.ts:256`. If `/api/jobs/:id/complete` fails transiently, the bridge can restart itself while the job remains claimed, violating the package update completion requirement. Only launch deferred self-restart after completion is durably acknowledged, or drop the deferred restart and surface a failure when completion cannot be posted.\nThe focused deferral test in `tests/unit/control-plane-package-update-bridge.test.ts:109` covers the successful completion ordering, but it does not cover the completion-failure path. Add coverage proving a configured `controlBridgeRestartCommand` is not launched when `/complete` fails or cannot be acknowledged.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-prd-control-plane-package-f7d2a3",
+      "laneKey": "prd-prd-control-plane-package-f7d2a3:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed in the deterministic wrapper, and the bridge restart is now deferred past the normal success path. Still blocking: the deferred self-restart is not tied to durable job completion, so the prior stuck-claimed-job failure mode can still happen on `/complete` failures.\nIn `src/server/control-plane/control-plane-bridge.ts:173`, deferred bridge restart commands are queued before the job completion request. The completion POST at `src/server/control-plane/control-plane-bridge.ts:199` is swallowed with `.catch(() => null)`, but the deferred restart still runs at `src/server/control-plane/control-plane-bridge.ts:256`. If `/api/jobs/:id/complete` fails transiently, the bridge can restart itself while the job remains claimed, violating the package update completion requirement. Only launch deferred self-restart after completion is durably acknowledged, or drop the deferred restart and surface a failure when completion cannot be posted.\nThe focused deferral test in `tests/unit/control-plane-package-update-bridge.test.ts:109` covers the successful completion ordering, but it does not cover the completion-failure path. Add coverage proving a configured `controlBridgeRestartCommand` is not launched when `/complete` fails or cannot be acknowledged."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
+      "createdAt": "2026-04-21T09:00:07.322Z",
+      "updatedAt": "2026-04-21T09:00:07.322Z",
+      "startedAt": null,
+      "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
