@@ -16,6 +16,8 @@ test('project UI renders chat PRD draft review controls in the existing PRD form
   assert.match(html, /Review and submit/);
   assert.match(html, /id="prd-title"/);
   assert.match(html, /id="discard-chat-prd-draft"/);
+  assert.match(html, /id="chat-jump-latest"/);
+  assert.match(html, /New messages - jump to latest/);
 });
 
 test('chat PRD proposal card renders review and discard actions', async () => {
@@ -75,6 +77,60 @@ test('chat PRD draft state can be edited before normal PRD submission validation
   assert.equal(payload.title, 'Edited chat PRD title');
   assert.equal(payload.specification, 'Edited PRD specification.');
   assert.deepEqual(payload.requirements, ['Edited requirement']);
+});
+
+test('chat scroll decision preserves reading position and shows jump affordance', async () => {
+  installBrowserStubs();
+  const { resolveChatScrollDecision } = await import('../../src/server/control-plane/control-plane-client.js');
+  const decision = resolveChatScrollDecision({
+    scrollTop: 180,
+    scrollHeight: 1200,
+    clientHeight: 420,
+    nearBottom: false,
+  }, {
+    previousFingerprint: 'message-count:2',
+    nextFingerprint: 'message-count:3',
+  });
+
+  assert.equal(decision.scrollToLatest, false);
+  assert.equal(decision.preserveScrollTop, 180);
+  assert.equal(decision.showJumpToLatest, true);
+});
+
+test('chat scroll decision keeps latest visible near bottom or after send', async () => {
+  installBrowserStubs();
+  const { isChatNearBottom, resolveChatScrollDecision } = await import('../../src/server/control-plane/control-plane-client.js');
+
+  assert.equal(isChatNearBottom({
+    scrollTop: 580,
+    scrollHeight: 1000,
+    clientHeight: 360,
+  }), true);
+
+  const nearBottomDecision = resolveChatScrollDecision({
+    scrollTop: 580,
+    scrollHeight: 1000,
+    clientHeight: 360,
+    nearBottom: true,
+  }, {
+    previousFingerprint: 'message-count:2',
+    nextFingerprint: 'message-count:3',
+  });
+  const sendDecision = resolveChatScrollDecision({
+    scrollTop: 120,
+    scrollHeight: 1000,
+    clientHeight: 360,
+    nearBottom: false,
+  }, {
+    forceScrollToLatest: true,
+    previousFingerprint: 'message-count:2',
+    nextFingerprint: 'message-count:3',
+  });
+
+  assert.equal(nearBottomDecision.scrollToLatest, true);
+  assert.equal(nearBottomDecision.showJumpToLatest, false);
+  assert.equal(sendDecision.scrollToLatest, true);
+  assert.equal(sendDecision.showJumpToLatest, false);
 });
 
 function installBrowserStubs() {

@@ -633,10 +633,14 @@
       "acceptance": [
         "Task `prd-create-a-prd-proposal-c35a5e-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T09:46:57.110Z",
-      "updatedAt": "2026-04-21T09:46:57.110Z"
+      "updatedAt": "2026-04-21T09:53:56.893Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-create-a-prd-proposal-c35a5e-architecture-agent",
+      "startedAt": "2026-04-21T09:47:18.719Z",
+      "completedAt": "2026-04-21T09:53:56.893Z",
+      "completionMode": "code"
     }
   ]
 }

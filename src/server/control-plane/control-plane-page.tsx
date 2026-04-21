@@ -745,6 +745,11 @@ const styles = `
     min-width: min(100%, 280px);
   }
 
+  .chat-thread-frame {
+    position: relative;
+    display: grid;
+  }
+
   .chat-thread {
     min-height: 360px;
     max-height: 560px;
@@ -756,6 +761,26 @@ const styles = `
     border-radius: 16px;
     border: 1px solid rgba(31, 26, 21, 0.1);
     background: rgba(255, 255, 255, 0.7);
+  }
+
+  .chat-jump-latest[hidden] {
+    display: none;
+  }
+
+  .chat-jump-latest {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    width: fit-content;
+    max-width: calc(100% - 28px);
+    background: var(--accent);
+    color: white;
+    border: none;
+    box-shadow: 0 10px 24px rgba(36, 91, 117, 0.24);
+    cursor: pointer;
+    font-weight: 700;
+    white-space: nowrap;
   }
 
   .chat-message {
@@ -962,7 +987,12 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                     </div>
                   </div>
                   <div className="chat-layout">
-                    <div id="chat-thread" className="chat-thread" aria-live="polite" />
+                    <div className="chat-thread-frame">
+                      <div id="chat-thread" className="chat-thread" aria-live="polite" />
+                      <button type="button" className="chat-jump-latest" id="chat-jump-latest" hidden>
+                        New messages - jump to latest
+                      </button>
+                    </div>
                     <form id="chat-form" className="chat-form">
                       <label>
                         Message
