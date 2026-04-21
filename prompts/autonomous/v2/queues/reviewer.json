@@ -377,13 +377,14 @@
         "Keep normal History selection and Chat behavior unchanged for PRDs without source chat metadata."
       ],
       "reviewRound": 1,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-21T20:37:26.535Z",
-      "updatedAt": "2026-04-21T20:42:09.073Z",
+      "updatedAt": "2026-04-21T20:42:14.183Z",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T20:37:30.346Z",
       "reviewedAt": "2026-04-21T20:42:09.073Z",
-      "lastDecision": "approved"
+      "lastDecision": "approved",
+      "mergedAt": "2026-04-21T20:42:14.183Z"
     }
   ]
 }
