@@ -343,6 +343,99 @@ test('bridge skips deferred package update restart when completion is not acknow
   assert.doesNotMatch(logs.join('\n'), /bridge:package:update:deferred-restart \|/);
 });
 
+test('bridge skips deferred package update restart when completion response is not the completed job', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-package-restart-unacknowledged-complete-');
+  initAutonomyRepo(repoDir);
+  writePackageUpdateManifest(repoDir, '1.0.0');
+  const bridgeMarkerPath = path.join(os.tmpdir(), `autonomy-v2-bridge-restart-unacknowledged-complete-${Date.now()}.txt`);
+  fs.rmSync(bridgeMarkerPath, { force: true });
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.controlBridgeRestartCommand = {
+    command: process.execPath,
+    args: ['-e', `require('fs').writeFileSync(${JSON.stringify(bridgeMarkerPath)}, 'bridge restarted\\n', 'utf8')`],
+  };
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
+  const fakeBinDir = createFakePackageUpdateBin('9.9.12-test');
+  let completedJob: any = null;
+
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${fakeBinDir}:${process.env.PATH || ''}`;
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        jobs: [
+          {
+            id: 'job-package-update-restart-3',
+            type: 'package:update',
+            repoId: 'default',
+            payload: {
+              repoId: 'default',
+            },
+            status: 'queued',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (req.url === '/api/jobs/job-package-update-restart-3/claim' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-package-update-restart-3', status: 'claimed' }));
+      return;
+    }
+
+    if (req.url === '/api/jobs/job-package-update-restart-3/complete' && req.method === 'POST') {
+      completedJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'different-job', status: 'completed' }));
+      return;
+    }
+
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      await readRequestText(req);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+    restoreEnv('PATH', originalPath);
+  });
+
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
+  });
+
+  await assertFileMissingAfter(bridgeMarkerPath);
+  assert.equal(completedJob.status, 'completed');
+  assert.equal(completedJob.result.installedVersion, '9.9.12-test');
+  assert.match(logs.join('\n'), /bridge:job:completed .*status=unacknowledged/);
+  assert.match(logs.join('\n'), /bridge:package:update:deferred-restart-skipped/);
+  assert.doesNotMatch(logs.join('\n'), /bridge:package:update:deferred-restart \|/);
+});
+
 function writePackageUpdateManifest(repoDir: string, previousVersion: string) {
   fs.writeFileSync(path.join(repoDir, 'package.json'), `${JSON.stringify({
     name: 'autonomy-control-plane-package-update-fixture',

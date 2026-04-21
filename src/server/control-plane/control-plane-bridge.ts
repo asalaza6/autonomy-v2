@@ -202,14 +202,16 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         completionError = formatErrorMessage(error);
         return null;
       });
-      const completedStatus = getResponseStatus(completed);
+      const completionResponseStatus = getResponseStatus(completed);
+      const completionAcknowledged = isCompletedJobResponse(completed, job.id);
+      const completedStatus = completionAcknowledged ? completionResponseStatus : '';
       logBridgeEvent('bridge:job:completed', {
         jobId: job.id,
         repoId: job.repoId,
         type: job.type || 'prd:add',
         status: completedStatus || 'unacknowledged',
       });
-      if (isCompletedJobResponse(completed) && deferredRestartCommandsForJob.length > 0) {
+      if (isCompletedJobResponse(completed, job.id) && deferredRestartCommandsForJob.length > 0) {
         deferredPackageUpdateRestarts.push({
           jobId: job.id,
           repoId: job.repoId,
@@ -220,7 +222,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           jobId: job.id,
           repoId: job.repoId,
           reason: completionError ? 'completion-failed' : 'completion-not-acknowledged',
-          status: completedStatus || '',
+          status: completionResponseStatus || '',
           error: completionError || '',
         });
       }
@@ -371,8 +373,14 @@ function getResponseStatus(value: unknown) {
     : '';
 }
 
-function isCompletedJobResponse(value: unknown) {
-  return getResponseStatus(value) === 'completed';
+function getResponseId(value: unknown) {
+  return value && typeof value === 'object' && 'id' in value
+    ? String((value as { id?: unknown }).id || '')
+    : '';
+}
+
+function isCompletedJobResponse(value: unknown, jobId: string) {
+  return getResponseStatus(value) === 'completed' && getResponseId(value) === jobId;
 }
 
 function logBridgeEvent(event: string, fields: Record<string, unknown> = {}) {
