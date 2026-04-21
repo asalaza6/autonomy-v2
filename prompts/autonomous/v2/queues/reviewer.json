@@ -170,11 +170,13 @@
         "Task `prd-prd-reconcile-manually-merged-f904f9-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-21T07:51:31.452Z",
-      "updatedAt": "2026-04-21T07:57:32.547Z",
+      "updatedAt": "2026-04-21T07:57:57.607Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T07:51:35.176Z"
+      "dispatchedAt": "2026-04-21T07:51:35.176Z",
+      "reviewedAt": "2026-04-21T07:57:57.607Z",
+      "lastDecision": "approved"
     }
   ]
 }
