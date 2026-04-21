@@ -344,6 +344,43 @@
       "reviewedAt": "2026-04-21T20:10:19.786Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T20:10:25.221Z"
+    },
+    {
+      "id": "review-pr-prd-continue-source-chat-from-8fed29-architecture-agent",
+      "title": "Review [architecture-agent] Implement Continue Source Chat from PRD History",
+      "description": "Review pr-prd-continue-source-chat-from-8fed29-architecture-agent for Implement Continue Source Chat from PRD History",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-continue-source-chat-from-8fed29-architecture-agent",
+      "sourceTaskId": "prd-continue-source-chat-from-8fed29-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T20:37:26.535Z",
+      "updatedAt": "2026-04-21T20:37:26.535Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-continue-source-chat-from-8fed29-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Extract source chat metadata for PRD history summaries",
+        "including repo ID",
+        "conversation ID",
+        "manager message ID",
+        "agent message ID",
+        "and created timestamp when present.",
+        "Preserve compatibility with existing archived PRDs that only contain a `## Source Chat Message` section in `specification`.",
+        "Add a History detail action to continue the source chat when a source conversation ID is present.",
+        "When clicked",
+        "verify the conversation exists in the current repo's persisted conversations",
+        "select it in the Chat tab",
+        "switch to Chat",
+        "scroll to latest",
+        "and focus the input.",
+        "If the PRD has no source conversation ID or the referenced conversation is not present",
+        "display `chat not available` without creating a new conversation.",
+        "Do not store full transcripts in PRD history; reuse existing persisted chat conversations only.",
+        "Keep normal History selection and Chat behavior unchanged for PRDs without source chat metadata."
+      ],
+      "scopeViolations": []
     }
   ]
 }
