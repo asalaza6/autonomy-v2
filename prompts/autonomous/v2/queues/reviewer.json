@@ -122,13 +122,14 @@
         "Task `prd-create-a-system-to-37e0e9-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 1,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-21T06:56:56.048Z",
-      "updatedAt": "2026-04-21T07:01:52.891Z",
+      "updatedAt": "2026-04-21T07:01:57.897Z",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T06:56:59.950Z",
       "reviewedAt": "2026-04-21T07:01:52.891Z",
-      "lastDecision": "approved"
+      "lastDecision": "approved",
+      "mergedAt": "2026-04-21T07:01:57.897Z"
     }
   ]
 }
