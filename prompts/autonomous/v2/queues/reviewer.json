@@ -98,14 +98,14 @@
         "The required wrapper check `npm run typecheck` passed, the worktree is clean at the current PR branch HEAD, and a merge-tree check against `origin/dev` showed no conflicts. The prior uncommitted-worktree blocker is resolved, and the partial-PRD active-PR case is now covered. However, the committed implementation still does not reliably surface the `reviewing` step from real status snapshots.\nBlocking correctness issue: `src/autonomy-v2/control-plane/status-view.ts:161` returns `implementing` whenever `completedTaskCount < plannedTaskCount`, but `completedTaskCount` only comes from `completedTaskSpecIds` in `describePrd` (`src/autonomy-v2/control-plane/status-view.ts:54`). Real status snapshots built by `loadTrackedPrds` do not populate `completedTaskSpecIds` at all (`src/autonomy-v2/commands/shared-prds.ts:75`), even though PR records carry completed/pending task state. As a result, a PRD with all planned implementation tasks in an open review PR will still render as `implementing` instead of `reviewing`, so the task bar does not reflect the review phase in the normal control-plane path.\nExpected correction: derive completed task ids/counts in `loadTrackedPrds` from linked task statuses and/or the PR's `completedTaskIds`/`pendingTaskIds`, then make `resolvePrdRunStep` move the current PRD to `reviewing` when its implementation work is complete and its active PR/reviewer work is pending. Keep the existing partial-PRD-with-active-PR coverage, and add focused coverage that goes through the real snapshot path without manually injecting `completedTaskSpecIds`."
       ],
       "reviewRound": 6,
-      "status": "changes_requested",
+      "status": "merged",
       "createdAt": "2026-04-21T06:09:07.751Z",
-      "updatedAt": "2026-04-21T06:37:08.828Z",
+      "updatedAt": "2026-04-21T18:53:42.860Z",
       "reviewedAt": "2026-04-21T06:25:38.300Z",
       "lastDecision": "approved",
-      "lastMergeFailureMessage": "Merge blocked.\n- PR status must be approved before merge, received changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T06:28:25.807Z"
+      "dispatchedAt": "2026-04-21T06:28:25.807Z",
+      "mergedAt": "2026-04-21T18:53:42.860Z"
     },
     {
       "id": "review-pr-prd-create-a-system-to-37e0e9-architecture-agent",
@@ -222,14 +222,14 @@
         "`npm run typecheck` passed in the deterministic wrapper, and the bridge restart is now deferred past the normal success path. Still blocking: the deferred self-restart is not tied to durable job completion, so the prior stuck-claimed-job failure mode can still happen on `/complete` failures.\nIn `src/server/control-plane/control-plane-bridge.ts:173`, deferred bridge restart commands are queued before the job completion request. The completion POST at `src/server/control-plane/control-plane-bridge.ts:199` is swallowed with `.catch(() => null)`, but the deferred restart still runs at `src/server/control-plane/control-plane-bridge.ts:256`. If `/api/jobs/:id/complete` fails transiently, the bridge can restart itself while the job remains claimed, violating the package update completion requirement. Only launch deferred self-restart after completion is durably acknowledged, or drop the deferred restart and surface a failure when completion cannot be posted.\nThe focused deferral test in `tests/unit/control-plane-package-update-bridge.test.ts:109` covers the successful completion ordering, but it does not cover the completion-failure path. Add coverage proving a configured `controlBridgeRestartCommand` is not launched when `/complete` fails or cannot be acknowledged."
       ],
       "reviewRound": 6,
-      "status": "changes_requested",
+      "status": "merged",
       "createdAt": "2026-04-21T08:48:40.009Z",
-      "updatedAt": "2026-04-21T09:21:21.082Z",
+      "updatedAt": "2026-04-21T18:53:42.860Z",
       "reviewedAt": "2026-04-21T09:04:35.709Z",
       "lastDecision": "approved",
-      "lastMergeFailureMessage": "Merge blocked.\n- PR status must be approved before merge, received changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T09:12:39.415Z"
+      "dispatchedAt": "2026-04-21T09:12:39.415Z",
+      "mergedAt": "2026-04-21T18:53:42.860Z"
     },
     {
       "id": "review-pr-prd-prd-continue-original-agent-fc326d-architecture-agent",
