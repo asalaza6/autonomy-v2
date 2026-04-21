@@ -312,10 +312,6 @@
       "prId": "pr-prd-generalize-agent-conversation-continuation-94434d-architecture-agent",
       "sourceTaskId": "prd-generalize-agent-conversation-continuation-94434d-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-21T20:04:44.477Z",
-      "updatedAt": "2026-04-21T20:04:44.477Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-generalize-agent-conversation-continuation-94434d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -339,9 +335,12 @@
         "queue metadata",
         "or PR review state as needed so reviewer continuation survives normal task lifecycle transitions."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-21T20:04:48.236Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-21T20:04:44.477Z",
+      "updatedAt": "2026-04-21T20:05:03.841Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-21T20:04:48.236Z"
     }
   ]
 }
