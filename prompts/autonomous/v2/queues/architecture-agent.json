@@ -506,6 +506,29 @@
       "updatedAt": "2026-04-21T08:52:28.579Z",
       "startedAt": "2026-04-21T08:52:28.579Z",
       "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-prd-control-plane-package-f7d2a3-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement PRD Control Plane package update and restart for managed repos",
+      "description": "`npm run typecheck` passed in the deterministic wrapper and the diff is lane-scoped, but the round-1 blocker is still present. The package update path still executes restart commands before the bridge posts the updated status and `/complete` result, so a real bridge self-restart can terminate the current bridge process and leave the job stuck as claimed.\nBlocking: `src/server/control-plane/control-plane-package-update.ts:10` calls `runPackageUpdateRestartCommands` inside `executeControlPlanePackageUpdate`, and `src/server/control-plane/control-plane-bridge.ts:150` only posts repo status and `/complete` after that function returns. Defer or detach `controlBridgeRestartCommand` until after the status update and job completion are durably posted, or otherwise make completion durable before restarting the current bridge process.\nMissing focused verification: `tests/unit/control-plane-package-update-bridge.test.ts:109` uses a harmless child process restart command, so it proves command execution but not the self-restart ordering hazard. Add coverage that asserts job completion/status reporting happens before any bridge self-restart command can stop the running bridge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-prd-control-plane-package-f7d2a3",
+      "laneKey": "prd-prd-control-plane-package-f7d2a3:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed in the deterministic wrapper and the diff is lane-scoped, but the round-1 blocker is still present. The package update path still executes restart commands before the bridge posts the updated status and `/complete` result, so a real bridge self-restart can terminate the current bridge process and leave the job stuck as claimed.\nBlocking: `src/server/control-plane/control-plane-package-update.ts:10` calls `runPackageUpdateRestartCommands` inside `executeControlPlanePackageUpdate`, and `src/server/control-plane/control-plane-bridge.ts:150` only posts repo status and `/complete` after that function returns. Defer or detach `controlBridgeRestartCommand` until after the status update and job completion are durably posted, or otherwise make completion durable before restarting the current bridge process.\nMissing focused verification: `tests/unit/control-plane-package-update-bridge.test.ts:109` uses a harmless child process restart command, so it proves command execution but not the self-restart ordering hazard. Add coverage that asserts job completion/status reporting happens before any bridge self-restart command can stop the running bridge."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
+      "createdAt": "2026-04-21T08:54:32.060Z",
+      "updatedAt": "2026-04-21T08:54:32.060Z",
+      "startedAt": null,
+      "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
     }
   ],
   "schemaVersion": 1
