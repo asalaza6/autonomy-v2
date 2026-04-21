@@ -140,18 +140,17 @@
       "prId": "pr-prd-we-made-a-change-087d3e-architecture-agent",
       "sourceTaskId": "prd-we-made-a-change-087d3e-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-21T07:19:42.856Z",
-      "updatedAt": "2026-04-21T07:19:42.856Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-we-made-a-change-087d3e-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
         "Task `prd-we-made-a-change-087d3e-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-21T07:19:47.280Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-21T07:19:42.856Z",
+      "updatedAt": "2026-04-21T07:19:53.961Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-21T07:19:47.280Z"
     }
   ]
 }
