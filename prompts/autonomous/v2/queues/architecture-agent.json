@@ -815,11 +815,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
       "createdAt": "2026-04-21T22:06:11.430Z",
-      "updatedAt": "2026-04-21T22:09:19.342Z",
+      "updatedAt": "2026-04-21T22:09:19.396Z",
       "startedAt": "2026-04-21T22:06:11.430Z",
       "prId": "pr-prd-separate-package-update-and-997e0b-architecture-agent",
       "completedAt": "2026-04-21T22:09:19.342Z",
-      "completionMode": "noop"
+      "completionMode": "noop",
+      "commitSha": "6e5049ac4ca7c08c197c332b725347fefd5d5511"
     }
   ]
 }
