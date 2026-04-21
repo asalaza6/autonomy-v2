@@ -4,9 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { buildStatusSnapshot } from '../../src/autonomy-v2/control-plane/status-service.js';
+import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
 import {
+  addPrdWithTasks,
   CLI_BIN,
   createFixtureRepo,
+  getAutonomyPathsForTest,
   git,
   initAutonomyRepo,
   runNode,
@@ -83,6 +86,84 @@ test('status snapshots include archived PRDs for project history', () => {
   assert.equal(snapshot.prdHistory.prds.length, 1);
   assert.equal(snapshot.prdHistory.prds[0].id, 'prd-history-001');
   assert.equal(snapshot.prdHistory.prds[0].archivePath, 'prompts/autonomous/v2/specs/prds/archived/prd-history-001.json');
+});
+
+test('status snapshots derive completed PRD tasks from active PR records', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-prd-review-');
+  initAutonomyRepo(repoDir);
+
+  const taskOne = {
+    id: 'prd-review-001-architecture-agent-1',
+    title: 'Build first slice',
+    agentId: 'architecture-agent',
+    description: 'First implementation task.',
+    acceptance: ['First implementation task is complete.'],
+    sprintId: 'multi-agent-mvp',
+  };
+  const taskTwo = {
+    id: 'prd-review-001-architecture-agent-2',
+    title: 'Build second slice',
+    agentId: 'architecture-agent',
+    description: 'Second implementation task.',
+    acceptance: ['Second implementation task is complete.'],
+    sprintId: 'multi-agent-mvp',
+  };
+  addPrdWithTasks(repoDir, 'prd-review-001', 'Review step PRD', [taskOne, taskTwo]);
+
+  const paths = getAutonomyPathsForTest(repoDir);
+  fs.writeFileSync(paths.prsState, `${JSON.stringify({
+    pullRequests: [
+      {
+        id: 'pr-prd-review-001-architecture-agent',
+        taskId: taskTwo.id,
+        agentId: 'architecture-agent',
+        laneKey: 'prd-review-001:architecture-agent',
+        prdId: 'prd-review-001',
+        sprintId: 'multi-agent-mvp',
+        taskIds: [taskOne.id, taskTwo.id],
+        completedTaskIds: [taskOne.id, taskTwo.id],
+        pendingTaskIds: [],
+        headBranch: 'agent/multi-agent-mvp/architecture-agent/prd-review-001-architecture-agent',
+        baseBranch: 'dev',
+        status: 'open',
+        title: '[architecture-agent] Review step PRD',
+        createdAt: '2026-04-01T12:00:00.000Z',
+        updatedAt: '2026-04-01T12:10:00.000Z',
+        remote: {
+          number: 7,
+          url: 'https://github.com/asalaza6/autonomy-v2/pull/7',
+        },
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  const prd = snapshot.prds.prds.find((candidate) => candidate.id === 'prd-review-001');
+  assert.ok(prd);
+  assert.deepEqual(prd.completedTaskSpecIds, [taskOne.id, taskTwo.id]);
+  assert.equal(snapshot.pullRequestStatuses.length, 1);
+
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: '2026-04-01T12:11:00.000Z',
+        snapshot,
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repos[0].activePrd.completedTaskCount, 2);
+  assert.equal(dashboard.repos[0].activePrd.remainingTaskCount, 0);
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'reviewing');
+  assert.deepEqual(
+    dashboard.repos[0].prdRun.steps.map((step) => step.state),
+    ['done', 'done', 'active']
+  );
 });
 
 test('status snapshots include deployment branch comparison details', () => {

@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -260,14 +261,15 @@
       "acceptance": [
         "The required wrapper check `npm run typecheck` passed, the worktree is clean at the current PR branch HEAD, and a merge-tree check against `origin/dev` showed no conflicts. The prior uncommitted-worktree blocker is resolved, and the partial-PRD active-PR case is now covered. However, the committed implementation still does not reliably surface the `reviewing` step from real status snapshots.\nBlocking correctness issue: `src/autonomy-v2/control-plane/status-view.ts:161` returns `implementing` whenever `completedTaskCount < plannedTaskCount`, but `completedTaskCount` only comes from `completedTaskSpecIds` in `describePrd` (`src/autonomy-v2/control-plane/status-view.ts:54`). Real status snapshots built by `loadTrackedPrds` do not populate `completedTaskSpecIds` at all (`src/autonomy-v2/commands/shared-prds.ts:75`), even though PR records carry completed/pending task state. As a result, a PRD with all planned implementation tasks in an open review PR will still render as `implementing` instead of `reviewing`, so the task bar does not reflect the review phase in the normal control-plane path.\nExpected correction: derive completed task ids/counts in `loadTrackedPrds` from linked task statuses and/or the PR's `completedTaskIds`/`pendingTaskIds`, then make `resolvePrdRunStep` move the current PRD to `reviewing` when its implementation work is complete and its active PR/reviewer work is pending. Keep the existing partial-PRD-with-active-PR coverage, and add focused coverage that goes through the real snapshot path without manually injecting `completedTaskSpecIds`."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
       "createdAt": "2026-04-21T06:23:01.354Z",
-      "updatedAt": "2026-04-21T06:23:01.354Z",
+      "updatedAt": "2026-04-21T06:28:06.169Z",
       "startedAt": "2026-04-21T06:23:01.354Z",
-      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent"
+      "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent",
+      "completedAt": "2026-04-21T06:28:06.169Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
