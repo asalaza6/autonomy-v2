@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -484,6 +483,30 @@
       "completedAt": "2026-04-21T08:48:38.710Z",
       "completionMode": "code",
       "commitSha": "ff8d18c013520371a2d9ab2e70a70097597b6c8e"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-prd-control-plane-package-f7d2a3-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement PRD Control Plane package update and restart for managed repos",
+      "description": "`npm run typecheck` passed in the deterministic wrapper and the diff is lane-scoped, but the package update restart path is not safe to merge yet.\nBlocking: `executeControlPlanePackageUpdate` runs restart commands before the bridge reports job completion. In `src/server/control-plane/control-plane-package-update.ts:10-15`, `runPackageUpdateRestartCommands` is called inside the update execution, and `src/server/control-plane/control-plane-bridge.ts:150-184` only POSTs `/complete` after that returns. A real `controlBridgeRestartCommand` such as a pm2/systemd restart can terminate the current bridge process before it reaches `/complete`, leaving the job stuck as claimed and failing the acceptance requirement to complete with structured result data. Defer/detach the bridge self-restart until after the status and job completion are posted, or otherwise make completion durable before restarting the current process. Add focused coverage for this ordering; the current restart test uses a harmless child command and does not cover the self-restart hazard.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-prd-control-plane-package-f7d2a3",
+      "laneKey": "prd-prd-control-plane-package-f7d2a3:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed in the deterministic wrapper and the diff is lane-scoped, but the package update restart path is not safe to merge yet.\nBlocking: `executeControlPlanePackageUpdate` runs restart commands before the bridge reports job completion. In `src/server/control-plane/control-plane-package-update.ts:10-15`, `runPackageUpdateRestartCommands` is called inside the update execution, and `src/server/control-plane/control-plane-bridge.ts:150-184` only POSTs `/complete` after that returns. A real `controlBridgeRestartCommand` such as a pm2/systemd restart can terminate the current bridge process before it reaches `/complete`, leaving the job stuck as claimed and failing the acceptance requirement to complete with structured result data. Defer/detach the bridge self-restart until after the status and job completion are posted, or otherwise make completion durable before restarting the current process. Add focused coverage for this ordering; the current restart test uses a harmless child command and does not cover the self-restart hazard."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
+      "createdAt": "2026-04-21T08:52:28.579Z",
+      "updatedAt": "2026-04-21T08:52:28.579Z",
+      "startedAt": "2026-04-21T08:52:28.579Z",
+      "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
