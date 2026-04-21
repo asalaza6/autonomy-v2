@@ -213,7 +213,7 @@
       "sourceTaskId": "prd-prd-control-plane-package-f7d2a3-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T08:48:40.009Z",
       "updatedAt": "2026-04-21T08:48:40.009Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
@@ -221,7 +221,9 @@
       "acceptance": [
         "Task `prd-prd-control-plane-package-f7d2a3-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-21T08:48:43.647Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
