@@ -105,19 +105,31 @@ test('control plane chat ignores unmarked PRD-shaped JSON status summaries in an
   const statusSummary = {
     title: 'Existing PRD: Add chat-generated PRD drafts',
     status: 'active',
+    problem: 'This describes already queued work.',
+    goal: 'Show the current queue state without creating a new PRD.',
     requirements: ['Render a review state', 'Keep manual submission'],
+    acceptanceCriteria: ['The existing PRD remains visible'],
+    verification: ['No new PRD is created from status output'],
     updatedAt: '2026-04-21T08:00:00.000Z',
   };
-
-  assert.equal(extractPrdProposalFromText(JSON.stringify(statusSummary)), null);
-  assert.equal(
-    extractPrdProposalFromText(`
+  const statusAnswer = `
 The current PRD state is:
 
 \`\`\`json
 ${JSON.stringify(statusSummary, null, 2)}
 \`\`\`
-`),
+`;
+
+  assert.equal(extractPrdProposalFromText(JSON.stringify(statusSummary)), null);
+  assert.equal(extractPrdProposalFromText(statusAnswer), null);
+  assert.equal(
+    normalizeChatPrdProposal({ answer: statusAnswer }, statusAnswer, 'alpha', {
+      repoId: 'alpha',
+      conversationId: 'chat-1',
+      messageId: 'msg-manager',
+      responseMessageId: 'msg-agent',
+      prompt: 'What is the current PRD state?',
+    }),
     null
   );
 });

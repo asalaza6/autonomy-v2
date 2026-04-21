@@ -447,13 +447,15 @@
       "acceptance": [
         "Blocked. The deterministic wrapper reports `npm run typecheck` passed, but the mergeable branch at HEAD still contains the prior PRD proposal detection regression. There are uncommitted local edits in `src/server/control-plane/control-plane-prd-proposal.ts` and `tests/unit/control-plane-chat.test.ts` that appear intended to address it, but they are not part of the branch that can be merged into `dev`.\n`src/server/control-plane/control-plane-prd-proposal.ts:65` and `:77` in HEAD still parse direct JSON and generic fenced JSON through `parsePrdProposalCandidate` with no explicit proposal marker requirement.\n`src/server/control-plane/control-plane-prd-proposal.ts:178` in HEAD still accepts any object with `title` plus `requirements`/`problem`/`goal`/related fields as a proposal, so a normal chat answer showing an existing PRD/status JSON object can still create a draft PRD.\n`tests/unit/control-plane-chat.test.ts` in HEAD still lacks the requested negative test proving unmarked PRD-shaped JSON status summaries are ignored. Commit the parser fix and focused test before this can be merged."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
       "createdAt": "2026-04-21T08:22:22.113Z",
-      "updatedAt": "2026-04-21T08:24:33.519Z",
+      "updatedAt": "2026-04-21T08:27:52.094Z",
       "startedAt": "2026-04-21T08:24:33.519Z",
-      "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent"
+      "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent",
+      "completedAt": "2026-04-21T08:27:52.094Z",
+      "completionMode": "code"
     }
   ]
 }
