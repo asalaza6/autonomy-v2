@@ -193,10 +193,10 @@
       "acceptance": [
         "Task `prd-i-can’t-add-it-d62eb2-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-21T08:14:06.581Z",
-      "updatedAt": "2026-04-21T08:20:37.737Z",
+      "updatedAt": "2026-04-21T08:20:47.662Z",
       "reviewedAt": "2026-04-21T08:20:37.737Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
