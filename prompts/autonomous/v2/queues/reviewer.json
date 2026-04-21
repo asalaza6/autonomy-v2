@@ -194,13 +194,13 @@
         "Task `prd-i-can’t-add-it-d62eb2-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T08:14:06.581Z",
       "updatedAt": "2026-04-21T08:19:15.367Z",
       "reviewedAt": "2026-04-21T08:18:53.428Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T08:14:12.374Z"
+      "dispatchedAt": "2026-04-21T08:19:17.061Z"
     }
   ]
 }
