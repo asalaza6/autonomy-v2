@@ -373,11 +373,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T07:59:16.225Z",
-      "updatedAt": "2026-04-21T08:14:05.398Z",
+      "updatedAt": "2026-04-21T08:14:05.461Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
       "startedAt": "2026-04-21T07:59:19.483Z",
       "completedAt": "2026-04-21T08:14:05.398Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "82203fce6fd1b0649f9fd1cc7295a6685be30359"
     }
   ]
 }
