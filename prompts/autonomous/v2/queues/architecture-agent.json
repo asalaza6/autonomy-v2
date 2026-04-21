@@ -457,6 +457,28 @@
       "completedAt": "2026-04-21T08:27:52.094Z",
       "completionMode": "code",
       "commitSha": "b59ef4a484d9caf0943f1251d7a10bb32120a1bc"
+    },
+    {
+      "id": "prd-prd-control-plane-package-f7d2a3-architecture-agent-1",
+      "title": "Implement PRD Control Plane package update and restart for managed repos",
+      "description": "# PRD: Control Plane package update and restart for managed repos\n\n## Problem\nManaged repos that run the Autonomy v2 control bridge and server do not have a Control Plane workflow to pull the newest published `@asalaza6/autonomy-v2` package, install it, and restart their local bridge/server processes. The UI also does not clearly show each repo’s currently installed Autonomy v2 package version.\n\n## Goal\nAfter this repo publishes a new patch release, each managed repo can independently detect or receive an update request, install the newest Autonomy v2 package, refresh scaffold/config, restart its bridge and server, and report the installed version back to the Control Plane UI.\n\n## Requirements\n- Keep `npm run release:patch` as the release path for publishing this repo to npm.\n- Add a Control Plane job type such as `package:update` for a specific repo.\n- Extend the bridge to claim `package:update` jobs for mapped repos.\n- Reuse or wrap `autonomy-v2 update --root <repo>` so managed repos install `@asalaza6/autonomy-v2@latest` with their detected package manager.\n- After update, restart the local `autonomy-v2-control bridge` process and the `autonomy-v2-server` process when they are running under a supported supervisor or configured restart command.\n- Add config for restart commands, for example `controlBridgeRestartCommand` and `serverRestartCommand`, with safe no-op behavior when not configured.\n- Report update result fields: previous declared version, new declared version, installed version, package manager, refresh status, restart status, and errors.\n- Add installed Autonomy v2 package version to repo status snapshots, independent of deploy/build version.\n- Show that version dynamically in the Control Plane repo page using the current installed package version from the managed repo.\n- Do not auto-update every repo without explicit job/user action unless an auto-update setting is added and enabled per repo.\n\n## Acceptance Criteria\n- A manager can queue an update job for one managed repo from the Control Plane.\n- The repo’s bridge installs the latest `@asalaza6/autonomy-v2`, refreshes init, and completes the job with structured result data.\n- If restart commands are configured, bridge/server restart is attempted and reflected in the job result.\n- If restart commands are missing, the update succeeds and reports restart as skipped, not failed.\n- The repo page displays the installed Autonomy v2 package version dynamically from the latest repo status.\n- Existing deploy version UI remains separate from package version UI.\n- Existing `deploy`, `prd:add`, and `agent:chat` jobs continue to work.\n\n## Verification\n- Unit test update job creation, validation, claiming, and completion.\n- Bridge test proving `package:update` invokes the update path and returns installed version data.\n- Test skipped restart behavior when restart commands are not configured.\n- Test configured restart command execution and error reporting.\n- UI/dashboard test proving installed package version renders from repo status.\n- Run `npm run typecheck` and relevant unit tests.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-prd-control-plane-package-f7d2a3",
+      "laneKey": "prd-prd-control-plane-package-f7d2a3:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Task `prd-prd-control-plane-package-f7d2a3-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-21T08:29:39.559Z",
+      "updatedAt": "2026-04-21T08:29:39.559Z"
     }
   ]
 }
