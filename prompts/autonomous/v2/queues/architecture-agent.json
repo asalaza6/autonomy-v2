@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -379,6 +378,30 @@
       "completedAt": "2026-04-21T08:14:05.398Z",
       "completionMode": "code",
       "commitSha": "82203fce6fd1b0649f9fd1cc7295a6685be30359"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-i-can-t-add-it-d62eb2-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement I can’t add it directly from this read-only chat Queue",
+      "description": "Blocked on a correctness regression in PRD proposal detection. The wrapper reported `npm run typecheck` passed, and the current base advancement appears limited to reviewer queue metadata, but the PR does not satisfy the non-PRD chat acceptance criterion.\n`src/server/control-plane/control-plane-prd-proposal.ts:65` and `src/server/control-plane/control-plane-prd-proposal.ts:178` parse any direct JSON or fenced `json` block with `title` plus `requirements`/`problem`/`goal` as a PRD proposal. That means a normal chat answer that shows an existing PRD/status object as JSON can create a draft PRD, violating “Non-PRD chat responses do not create draft PRDs.” Require an explicit proposal marker for answer-text extraction, such as `kind: \"prd-proposal\"`, `prdProposal`, `prd_proposal`, `proposal`, or an `autonomy-prd-proposal`/`prd-proposal` fence/comment, while still accepting the structured `prdProposal` field from the model output. Add a focused negative test with a normal JSON status/PRD summary containing `title` and `requirements` to prove it is ignored.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-i-can’t-add-it-d62eb2",
+      "laneKey": "prd-i-can’t-add-it-d62eb2:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocked on a correctness regression in PRD proposal detection. The wrapper reported `npm run typecheck` passed, and the current base advancement appears limited to reviewer queue metadata, but the PR does not satisfy the non-PRD chat acceptance criterion.\n`src/server/control-plane/control-plane-prd-proposal.ts:65` and `src/server/control-plane/control-plane-prd-proposal.ts:178` parse any direct JSON or fenced `json` block with `title` plus `requirements`/`problem`/`goal` as a PRD proposal. That means a normal chat answer that shows an existing PRD/status object as JSON can create a draft PRD, violating “Non-PRD chat responses do not create draft PRDs.” Require an explicit proposal marker for answer-text extraction, such as `kind: \"prd-proposal\"`, `prdProposal`, `prd_proposal`, `proposal`, or an `autonomy-prd-proposal`/`prd-proposal` fence/comment, while still accepting the structured `prdProposal` field from the model output. Add a focused negative test with a normal JSON status/PRD summary containing `title` and `requirements` to prove it is ignored."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
+      "createdAt": "2026-04-21T08:18:53.428Z",
+      "updatedAt": "2026-04-21T08:18:53.428Z",
+      "startedAt": "2026-04-21T08:18:53.428Z",
+      "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
