@@ -218,14 +218,14 @@
         "Task `prd-prd-control-plane-package-f7d2a3-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 6,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T08:48:40.009Z",
       "updatedAt": "2026-04-21T09:06:29.895Z",
       "reviewedAt": "2026-04-21T09:04:35.709Z",
       "lastDecision": "approved",
       "lastMergeFailureMessage": "Merge blocked.\n- pending lane tasks must be completed before merge",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T09:00:22.358Z"
+      "dispatchedAt": "2026-04-21T09:06:31.797Z"
     }
   ]
 }
