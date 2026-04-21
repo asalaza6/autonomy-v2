@@ -789,11 +789,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-21T21:50:07.288Z",
-      "updatedAt": "2026-04-21T22:05:50.637Z",
+      "updatedAt": "2026-04-21T22:05:50.706Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-separate-package-update-and-997e0b-architecture-agent",
       "startedAt": "2026-04-21T21:50:26.520Z",
       "completedAt": "2026-04-21T22:05:50.637Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "d6dea0a8eb72b849c85ad16215c180be2e445d12"
     }
   ]
 }
