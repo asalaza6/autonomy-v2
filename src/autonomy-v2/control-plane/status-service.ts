@@ -7,6 +7,7 @@ import { gitRefExists, resolveBaseRef, runGitRead } from '../commands/shared-rep
 import { loadAllState, loadTrackedPrdHistory, loadTrackedPrds } from '../commands/shared-prds.js';
 import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
 import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapshot } from '../commands/deploy-version.js';
+import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../sync/review-reconciliation.js';
 
 function buildStatusSnapshot(rootDir) {
   ensureInitialized(rootDir);
@@ -14,7 +15,9 @@ function buildStatusSnapshot(rootDir) {
   const runtime = fs.existsSync(paths.runtimeState)
     ? readJson(paths.runtimeState)
     : { workers: {} };
-  const { config, sprint, taskQueues, prs, branchLocks } = loadAllState(rootDir);
+  const { config, sprint, taskQueues: loadedTaskQueues, prs: loadedPrs, branchLocks } = loadAllState(rootDir);
+  const taskQueues = reconcileTaskQueuesForStatus(loadedTaskQueues, loadedPrs);
+  const prs = reconcilePullRequestsForStatus(loadedPrs, taskQueues);
   const prds = loadTrackedPrds(rootDir, config, {
     taskQueues,
     prs,
@@ -68,6 +71,41 @@ function buildStatusSnapshot(rootDir) {
     runtime,
     prds,
     prdHistory,
+  };
+}
+
+function reconcileTaskQueuesForStatus(taskQueues, prs) {
+  const pullRequests = ((prs && prs.pullRequests) || []) as any[];
+  const pullRequestsById = new Map<string, any>(
+    pullRequests
+      .filter((pr) => pr && pr.id)
+      .map((pr) => [String(pr.id), pr])
+  );
+  const implementationTasks = listTasks(taskQueues).filter((task) => task && task.type !== 'review');
+  const now = new Date().toISOString();
+  return Object.fromEntries(Object.entries(taskQueues || {}).map(([agentId, queue]) => {
+    const queueState = queue as any;
+    if (!queueState || queueState.role !== 'review') {
+      return [agentId, queueState];
+    }
+    return [agentId, {
+      ...queueState,
+      tasks: (queueState.tasks || []).map((task) => reconcileReviewTaskRecord(task, {
+        pullRequestsById,
+        implementationTasks,
+        now,
+      })),
+    }];
+  }));
+}
+
+function reconcilePullRequestsForStatus(prs, taskQueues) {
+  const implementationTasks = listTasks(taskQueues).filter((task) => task && task.type !== 'review');
+  const now = new Date().toISOString();
+  return {
+    ...(prs || {}),
+    pullRequests: (((prs && prs.pullRequests) || []) as any[])
+      .map((pr) => reconcilePullRequestRecord(pr, implementationTasks, now)),
   };
 }
 

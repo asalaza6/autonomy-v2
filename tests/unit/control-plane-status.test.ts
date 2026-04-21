@@ -166,6 +166,128 @@ test('status snapshots derive completed PRD tasks from active PR records', () =>
   );
 });
 
+test('status snapshots reconcile stale manually resolved review state', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-stale-review-');
+  initAutonomyRepo(repoDir);
+
+  const task = {
+    id: 'prd-resolved-review-001-architecture-agent-1',
+    title: 'Build resolved slice',
+    agentId: 'architecture-agent',
+    description: 'Implementation was already applied.',
+    acceptance: ['Implementation task is complete.'],
+    sprintId: 'multi-agent-mvp',
+  };
+  addPrdWithTasks(repoDir, 'prd-resolved-review-001', 'Resolved review PRD', [task]);
+
+  const prId = 'pr-prd-resolved-review-001-architecture-agent';
+  const controlWorktree = path.join(repoDir, '.autonomy', 'control', 'dev-sync');
+  const architectureQueuePath = path.join(controlWorktree, 'prompts', 'autonomous', 'v2', 'queues', 'architecture-agent.json');
+  const reviewerQueuePath = path.join(controlWorktree, 'prompts', 'autonomous', 'v2', 'queues', 'reviewer.json');
+  const architectureQueue = JSON.parse(fs.readFileSync(architectureQueuePath, 'utf8'));
+  architectureQueue.tasks = architectureQueue.tasks.map((candidate) => candidate.id === task.id
+    ? {
+        ...candidate,
+        state: 'done',
+        status: 'done',
+        completedAt: '2026-04-21T08:00:00.000Z',
+        updatedAt: '2026-04-21T08:00:00.000Z',
+      }
+    : candidate);
+  fs.writeFileSync(architectureQueuePath, `${JSON.stringify(architectureQueue, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(reviewerQueuePath, `${JSON.stringify({
+    agentId: 'reviewer',
+    role: 'review',
+    tasks: [
+      {
+        id: `review-${prId}`,
+        title: 'Review resolved PRD',
+        description: 'Stale review task left behind after manual resolution.',
+        agentId: 'reviewer',
+        type: 'review',
+        prId,
+        sourceAgentId: 'architecture-agent',
+        sourceTaskId: task.id,
+        status: 'changes_requested',
+        lastDecision: 'changes_requested',
+        lastMergeFailureMessage: 'waiting for architecture-agent to address feedback',
+        createdAt: '2026-04-21T07:55:00.000Z',
+        updatedAt: '2026-04-21T07:55:00.000Z',
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+  git(controlWorktree, [
+    'add',
+    '--all',
+    '--',
+    'prompts/autonomous/v2/queues/architecture-agent.json',
+    'prompts/autonomous/v2/queues/reviewer.json',
+  ]);
+  git(controlWorktree, ['commit', '-m', 'seed stale resolved review state']);
+  git(repoDir, ['update-ref', 'refs/heads/dev', git(controlWorktree, ['rev-parse', 'HEAD'])]);
+
+  const paths = getAutonomyPathsForTest(repoDir);
+  fs.writeFileSync(paths.prsState, `${JSON.stringify({
+    pullRequests: [
+      {
+        id: prId,
+        taskId: task.id,
+        agentId: 'architecture-agent',
+        laneKey: 'prd-resolved-review-001:architecture-agent',
+        prdId: 'prd-resolved-review-001',
+        sprintId: 'multi-agent-mvp',
+        taskIds: [task.id],
+        completedTaskIds: [task.id],
+        pendingTaskIds: [],
+        headBranch: 'agent/multi-agent-mvp/architecture-agent/prd-resolved-review-001-architecture-agent',
+        baseBranch: 'dev',
+        status: 'changes_requested',
+        title: '[architecture-agent] Resolved review PRD',
+        createdAt: '2026-04-21T07:50:00.000Z',
+        updatedAt: '2026-04-21T08:00:00.000Z',
+        remote: {
+          number: 11,
+          url: 'https://github.com/asalaza6/autonomy-v2/pull/11',
+          state: 'open',
+        },
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  const reviewerQueue = snapshot.queues.find((queue) => queue.agentId === 'reviewer');
+  const reviewerStatus = snapshot.agentStatuses.find((agent) => agent.agentId === 'reviewer');
+  const prd = snapshot.prds.prds.find((candidate) => candidate.id === 'prd-resolved-review-001');
+
+  assert.equal(reviewerQueue.statuses.changes_requested, undefined);
+  assert.equal(reviewerQueue.statuses.merged, 1);
+  assert.equal(snapshot.taskCounts.changes_requested, undefined);
+  assert.equal(snapshot.prCounts.changes_requested, undefined);
+  assert.equal(snapshot.prCounts.merged, 1);
+  assert.equal(reviewerStatus.workerStatus, 'idle');
+  assert.equal(reviewerStatus.detail, 'no review tasks');
+  assert.equal(snapshot.pullRequestStatuses.length, 0);
+  assert.equal(prd.status, 'completed');
+  assert.deepEqual(prd.completedTaskSpecIds, [task.id]);
+
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: '2026-04-21T08:01:00.000Z',
+        snapshot,
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repos[0].activePrd, null);
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'idle');
+});
+
 test('status snapshots include deployment branch comparison details', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-deploy-');
   initAutonomyRepo(repoDir);

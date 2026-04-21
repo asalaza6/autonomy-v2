@@ -343,10 +343,14 @@
       "acceptance": [
         "Task `prd-prd-reconcile-manually-merged-f904f9-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T07:32:35.932Z",
-      "updatedAt": "2026-04-21T07:32:35.932Z"
+      "updatedAt": "2026-04-21T07:51:30.192Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-prd-reconcile-manually-merged-f904f9-architecture-agent",
+      "startedAt": "2026-04-21T07:32:56.222Z",
+      "completedAt": "2026-04-21T07:51:30.192Z",
+      "completionMode": "code"
     }
   ]
 }

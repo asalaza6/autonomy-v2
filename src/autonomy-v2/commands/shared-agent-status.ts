@@ -1,10 +1,11 @@
 import fs from 'fs';
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel, isPmRole, isReviewRole } from '../../agents/role-catalog.js';
 import type { AnyRecord } from '../autonomy-types.js';
-import { getTaskQueue, readImplementationQueueSnapshot, filterCompletedImplementationQueueTasks, getImplementationTaskState, isTerminalTaskStatus } from './shared-queues.js';
+import { getTaskQueue, readImplementationQueueSnapshot, filterCompletedImplementationQueueTasks, getImplementationTaskState, isTerminalTaskStatus, listTasks as listQueueTasks } from './shared-queues.js';
 import { resolveImplementationBranchRef } from './shared-lanes.js';
 import { buildTaskLaneKey, buildWorktreePath } from './shared-repo.js';
 import { normalizeLaneKey } from './shared-core.js';
+import { reviewTaskHasActionableImplementationWork } from '../../sync/review-reconciliation.js';
 
 function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, branchLocks, runtime, prds }) {
   const prById = new Map((prs.pullRequests || []).map((pr) => [pr.id, pr]));
@@ -25,7 +26,7 @@ function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, branchLoc
       return buildPmAgentStatus(agent, worker, prds);
     }
     if (isReviewRole(agent.role)) {
-      return buildReviewAgentStatus(agent, queue, worker, prById);
+      return buildReviewAgentStatus(agent, queue, worker, prById, listQueueTasks(taskQueues));
     }
     return buildImplementationAgentStatus(rootDir, config, branchLocks, agent, queue, worker, prById, branchLockByLane);
   });
@@ -171,14 +172,29 @@ function readLatestImplementationBranchQueue(rootDir, config, branchLocksState, 
   return null;
 }
 
-function buildReviewAgentStatus(agent, queue, worker, prById) {
+function buildReviewAgentStatus(agent, queue, worker, prById, allTasks) {
   const tasks = queue.tasks || [];
+  const implementationTasks = (allTasks || []).filter((task) => task && task.type !== 'review');
   const assignedTask = tasks.find((task) => task.status === 'assigned') || null;
   const queuedTask = tasks.find((task) => task.status === 'queued') || null;
-  const blockedTask = tasks.find((task) => task.status === 'changes_requested') || null;
+  const blockedTask = tasks.find((task) => {
+    const pr = task && task.prId ? prById.get(task.prId) || null : null;
+    return task.status === 'changes_requested'
+      && reviewTaskHasActionableImplementationWork(task, pr, implementationTasks);
+  }) || null;
   const failedTask = tasks.find((task) => task.status === 'failed') || null;
+  const pendingReviewTasks = tasks.filter((task) => {
+    if (!task || ['assigned', 'queued', 'failed'].includes(task.status)) {
+      return Boolean(task);
+    }
+    if (task.status !== 'changes_requested') {
+      return false;
+    }
+    const pr = task.prId ? prById.get(task.prId) || null : null;
+    return reviewTaskHasActionableImplementationWork(task, pr, implementationTasks);
+  });
   const extraCount = countAdditionalPendingTasks(
-    tasks.filter((task) => ['assigned', 'queued', 'changes_requested', 'failed'].includes(task.status)),
+    pendingReviewTasks,
     (assignedTask || queuedTask || blockedTask || failedTask || {}).id
   );
 

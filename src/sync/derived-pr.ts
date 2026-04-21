@@ -1,5 +1,6 @@
 import { AGENT_ROLES, TASK_TYPES, getRoleLabel } from '../agents/role-catalog.js';
 import type { PullRequestRecord, TaskRecord } from './sync-types.js';
+import { isPullRequestResolved, pullRequestChangesAlreadyApplied } from './review-reconciliation.js';
 
 function buildStablePullRequestId(laneKey) {
   return `pr-${String(laneKey || 'lane').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
@@ -143,11 +144,20 @@ function approvedPrNeedsReviewerRecovery(pr, existingTask) {
     .test(String(existingTask.lastError || ''));
 }
 
-function resolveDerivedPullRequestStatus(existingStatus, laneState, pendingTasks, pendingExtraTaskIds, existingPr, existingReviewerTask) {
+function resolveDerivedPullRequestStatus(existingStatus, laneState, pendingTasks, pendingExtraTaskIds, existingPr, existingReviewerTask, completedTasks = []) {
   if (laneState && laneState.merged) {
     return 'merged';
   }
   if (existingPr && (existingPr.mergedAt || (existingPr.remote && existingPr.remote.mergedAt))) {
+    return 'merged';
+  }
+  const hasPendingWork = (pendingTasks || []).length > 0 || (pendingExtraTaskIds || []).length > 0;
+  const hasChangesRequestedSignal = existingStatus === 'changes_requested'
+    || reviewDecisionIsChangesRequested(findLatestReview(existingPr))
+    || reviewerTaskIndicatesChangesRequested(existingReviewerTask);
+  if (!hasPendingWork
+    && hasChangesRequestedSignal
+    && (isPullRequestResolved(existingPr) || pullRequestChangesAlreadyApplied(existingPr, completedTasks))) {
     return 'merged';
   }
   if ((pendingTasks || []).length > 0) {
@@ -159,9 +169,7 @@ function resolveDerivedPullRequestStatus(existingStatus, laneState, pendingTasks
   if (existingStatus === 'conflicted') {
     return 'conflicted';
   }
-  if (existingStatus === 'changes_requested'
-    || reviewDecisionIsChangesRequested(findLatestReview(existingPr))
-    || reviewerTaskIndicatesChangesRequested(existingReviewerTask)) {
+  if (hasChangesRequestedSignal) {
     return 'changes_requested';
   }
   if (existingStatus === 'approved'
@@ -320,7 +328,8 @@ function buildDerivedPullRequestRecord({
       pendingTasks,
       extraPendingTaskIds,
       existingPr,
-      existingReviewerTask
+      existingReviewerTask,
+      completedTasks
     ),
     reviews,
     createdAt: existingPr && existingPr.createdAt ? existingPr.createdAt : now,
