@@ -126,17 +126,18 @@ function describePrd(prd: any) {
 }
 
 function buildPrdRunSummary(activePrd: any, queuedPrds: any[] = [], pullRequestStatuses: any[] = []) {
-  const currentStepId = resolvePrdRunStep(activePrd, queuedPrds, pullRequestStatuses);
+  const prdPullRequestStatuses = selectPullRequestStatusesForPrd(activePrd, pullRequestStatuses);
+  const currentStepId = resolvePrdRunStep(activePrd, queuedPrds, prdPullRequestStatuses);
   const currentStepIndex = PRD_RUN_STEPS.findIndex((step) => step.id === currentStepId);
   const steps = PRD_RUN_STEPS.map((step, index) => ({
     ...step,
     state: resolvePrdStepState(currentStepId, currentStepIndex, index),
-    detail: describePrdRunStep(step.id, activePrd, pullRequestStatuses),
+    detail: describePrdRunStep(step.id, activePrd, prdPullRequestStatuses),
   }));
   return {
     currentStepId,
     currentStepLabel: formatPrdRunStepLabel(currentStepId),
-    detail: describePrdRun(activePrd, queuedPrds, pullRequestStatuses),
+    detail: describePrdRun(activePrd, queuedPrds, prdPullRequestStatuses),
     steps,
   };
 }
@@ -155,18 +156,47 @@ function resolvePrdRunStep(activePrd: any, queuedPrds: any[] = [], pullRequestSt
   if (status === 'failed') {
     return Number(activePrd.plannedTaskCount || 0) > 0 ? 'implementing' : 'planning';
   }
-  if (pullRequestStatuses.length > 0) {
-    return 'reviewing';
-  }
   const plannedTaskCount = Number(activePrd.plannedTaskCount || 0);
   const completedTaskCount = Number(activePrd.completedTaskCount || 0);
+  if (plannedTaskCount > 0 && completedTaskCount < plannedTaskCount) {
+    return 'implementing';
+  }
   if (plannedTaskCount > 0 && completedTaskCount >= plannedTaskCount) {
+    return 'reviewing';
+  }
+  if (pullRequestStatuses.length > 0) {
     return 'reviewing';
   }
   if (status === 'planned' || plannedTaskCount > 0) {
     return 'implementing';
   }
   return 'planning';
+}
+
+function selectPullRequestStatusesForPrd(activePrd: any, pullRequestStatuses: any[] = []) {
+  const prdId = String(activePrd && activePrd.id || '').trim();
+  if (!prdId) {
+    return [];
+  }
+  return (pullRequestStatuses || []).filter((prStatus) => pullRequestStatusMatchesPrd(prStatus, prdId));
+}
+
+function pullRequestStatusMatchesPrd(prStatus: any, prdId: string) {
+  const explicitPrdId = String(prStatus && prStatus.prdId || '').trim();
+  if (explicitPrdId) {
+    return explicitPrdId === prdId;
+  }
+
+  const prId = String(prStatus && prStatus.prId || '').trim();
+  const prdSlug = slugifyIdentifier(prdId);
+  return Boolean(prdSlug && (prId === `pr-${prdSlug}` || prId.startsWith(`pr-${prdSlug}-`)));
+}
+
+function slugifyIdentifier(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function resolvePrdStepState(currentStepId: string, currentStepIndex: number, stepIndex: number) {

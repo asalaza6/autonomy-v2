@@ -100,6 +100,7 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
           pullRequestStatuses: [
             {
               prId: 'pr-1',
+              prdId: 'prd-active-001',
               number: 7,
               title: 'Feature PR',
               status: 'open',
@@ -149,10 +150,10 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   assert.equal(dashboard.repos[0].activePrd.completedTaskCount, 1);
   assert.equal(dashboard.repos[0].activePrd.remainingTaskCount, 2);
   assert.equal(dashboard.repos[0].activePrd.progressPercent, 33);
-  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'reviewing');
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'implementing');
   assert.deepEqual(
     dashboard.repos[0].prdRun.steps.map((step) => step.state),
-    ['done', 'done', 'active']
+    ['done', 'active', 'pending']
   );
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
   assert.equal(dashboard.repos[0].prdHistory[0].title, 'Finished PRD');
@@ -168,6 +169,98 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
   assert.match(dashboard.jobs[0].detail, /created/);
+});
+
+test('control plane dashboard keeps partially completed PRDs in implementing while their PR is active', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: new Date().toISOString(),
+        snapshot: {
+          prds: {
+            prds: [
+              {
+                id: 'prd-active-001',
+                title: 'Active PRD',
+                status: 'planned',
+                isQueued: false,
+                plannedTaskIds: ['task-1', 'task-2', 'task-3'],
+                completedTaskSpecIds: ['task-1'],
+                updatedAt: '2026-04-01T12:08:00.000Z',
+              },
+            ],
+          },
+          pullRequestStatuses: [
+            {
+              prId: 'pr-prd-active-001-architecture-agent',
+              prdId: 'prd-active-001',
+              title: 'Feature PR',
+              status: 'open',
+              action: 'waiting for reviewer',
+              updatedAt: '2026-04-01T12:05:00.000Z',
+            },
+          ],
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'implementing');
+  assert.equal(dashboard.repos[0].prdRun.currentStepLabel, 'Implementing');
+  assert.match(dashboard.repos[0].prdRun.detail, /1\/3 tasks complete/);
+  assert.deepEqual(
+    dashboard.repos[0].prdRun.steps.map((step) => step.state),
+    ['done', 'active', 'pending']
+  );
+});
+
+test('control plane dashboard ignores active pull requests from other PRDs for the run step', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: new Date().toISOString(),
+        snapshot: {
+          prds: {
+            prds: [
+              {
+                id: 'prd-active-001',
+                title: 'Active PRD',
+                status: 'planned',
+                isQueued: false,
+                updatedAt: '2026-04-01T12:08:00.000Z',
+              },
+            ],
+          },
+          pullRequestStatuses: [
+            {
+              prId: 'pr-prd-other-architecture-agent',
+              prdId: 'prd-other',
+              title: 'Other PRD PR',
+              status: 'open',
+              action: 'waiting for reviewer',
+              updatedAt: '2026-04-01T12:05:00.000Z',
+            },
+          ],
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'implementing');
+  assert.deepEqual(
+    dashboard.repos[0].prdRun.steps.map((step) => step.state),
+    ['done', 'active', 'pending']
+  );
 });
 
 test('control plane dashboard retains offline repos that were previously discovered', () => {
