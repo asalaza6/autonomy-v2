@@ -5,6 +5,7 @@ import {
   assertControlPlaneRepoId,
   normalizeControlPlaneConfig,
   normalizeRepoRecord,
+  validateAgentChatSubmission,
   validateDeploySubmission,
   validatePrdAddSubmission,
 } from '../../src/server/control-plane/control-plane-validation.js';
@@ -103,6 +104,34 @@ test('deploy submission validation enforces discovered repo registration', () =>
   });
 
   assert.equal(payload.repoId, 'alpha');
+});
+
+test('agent chat submission validation enforces discovered repos and message content', () => {
+  const repos = [
+    {
+      repoId: 'alpha',
+      label: 'Alpha',
+    },
+  ];
+
+  assert.throws(() => validateAgentChatSubmission(repos, {
+    repoId: 'missing',
+    message: 'What is happening?',
+  }));
+  assert.throws(() => validateAgentChatSubmission(repos, {
+    repoId: 'alpha',
+    message: '   ',
+  }));
+
+  const { payload } = validateAgentChatSubmission(repos, {
+    repoId: 'alpha',
+    conversationId: 'chat-1',
+    message: 'What is happening?',
+  });
+
+  assert.equal(payload.repoId, 'alpha');
+  assert.equal(payload.conversationId, 'chat-1');
+  assert.equal(payload.prompt, 'What is happening?');
 });
 
 test('bridge repo map defaults the current working directory when omitted', () => {

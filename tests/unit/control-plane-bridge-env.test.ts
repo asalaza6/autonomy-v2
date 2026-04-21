@@ -160,6 +160,94 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   assert.equal(git(repoDir, ['rev-parse', 'main']), git(repoDir, ['rev-parse', 'dev']));
 });
 
+test('bridge executes agent chat jobs for mapped repos', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-chat-bridge-');
+  initAutonomyRepo(repoDir);
+  let heartbeatCount = 0;
+  let completedJob: any = null;
+
+  const originalChatStub = process.env.AUTONOMY_CONTROL_PLANE_CHAT_STUB;
+  process.env.AUTONOMY_CONTROL_PLANE_CHAT_STUB = '1';
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({
+        jobs: [
+          {
+            id: 'job-chat-1',
+            type: 'agent:chat',
+            repoId: 'default',
+            payload: {
+              repoId: 'default',
+              conversationId: 'chat-1',
+              messageId: 'msg-manager-1',
+              responseMessageId: 'msg-agent-1',
+              prompt: 'Summarize the repo.',
+              history: [],
+            },
+            status: 'queued',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      }));
+      return;
+    }
+
+    if (req.url === '/api/jobs/job-chat-1/claim' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-chat-1', status: 'claimed' }));
+      return;
+    }
+
+    if (req.url === '/api/jobs/job-chat-1/complete' && req.method === 'POST') {
+      completedJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-chat-1', status: 'completed' }));
+      return;
+    }
+
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      heartbeatCount += 1;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+    restoreEnv('AUTONOMY_CONTROL_PLANE_CHAT_STUB', originalChatStub);
+  });
+
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
+  });
+
+  assert.equal(heartbeatCount, 1);
+  assert.equal(completedJob.status, 'completed');
+  assert.match(completedJob.result.answer, /Repo default/);
+  assert.match(completedJob.result.answer, /Summarize the repo/);
+  assert.match(logs.join('\n'), /bridge:agent:chat:start/);
+  assert.match(logs.join('\n'), /bridge:agent:chat:done/);
+});
+
 function restoreEnv(key: string, value: string | undefined) {
   if (typeof value === 'undefined') {
     delete process.env[key];

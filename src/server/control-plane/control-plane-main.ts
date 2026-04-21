@@ -19,14 +19,16 @@ import {
   ensureControlPlaneDataDir,
   enqueueJob,
   getRepoStatuses,
+  listConversations,
   listDiscoveredRepos,
   listJobs,
   loadControlPlaneState,
+  queueAgentChatMessage,
   setRepoStatus,
   touchHeartbeat,
 } from './control-plane-store.js';
 import { runControlPlaneBridgeLoop } from './control-plane-bridge.js';
-import { validateDeploySubmission, validatePrdAddSubmission } from './control-plane-validation.js';
+import { validateAgentChatSubmission, validateDeploySubmission, validatePrdAddSubmission } from './control-plane-validation.js';
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
 const controlPlaneAssetCache = new Map<string, string>();
@@ -283,6 +285,48 @@ async function handleRequest(
     return;
   }
 
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/conversations') && req.method === 'GET') {
+    const repoId = decodeURIComponent(url.pathname.split('/')[3] || '');
+    try {
+      validateAgentChatSubmission(listDiscoveredRepos(rootDir), {
+        repoId,
+        prompt: 'status',
+      });
+      sendJson(res, 200, {
+        conversations: listConversations(rootDir, repoId),
+      });
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/conversations') && req.method === 'POST') {
+    const repoId = decodeURIComponent(url.pathname.split('/')[3] || '');
+    try {
+      const body = await readJsonBody(req);
+      const { payload } = validateAgentChatSubmission(listDiscoveredRepos(rootDir), {
+        ...body,
+        repoId: String(body && body.repoId || repoId || '').trim(),
+      });
+      const queued = queueAgentChatMessage(rootDir, {
+        repoId: payload.repoId,
+        conversationId: payload.conversationId,
+        prompt: payload.prompt,
+      });
+      logControlPlaneEvent('control-plane:job:queued', {
+        jobId: queued.job.id,
+        repoId: queued.job.repoId,
+        type: queued.job.type,
+        conversationId: queued.conversation.id,
+      });
+      sendJson(res, 201, queued);
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
   if (url.pathname.startsWith('/api/jobs/') && url.pathname.endsWith('/claim') && req.method === 'POST') {
     const jobId = url.pathname.split('/')[3];
     const body = await readJsonBody(req);
@@ -392,6 +436,9 @@ function filterControlPlaneState(state: ControlPlaneState, repoId: string) {
     jobs: (state.jobs || []).filter((job) => String(job.repoId || '') === normalizedRepoId),
     repoStatuses: normalizedRepoId && state.repoStatuses[normalizedRepoId]
       ? { [normalizedRepoId]: state.repoStatuses[normalizedRepoId] }
+      : {},
+    conversations: normalizedRepoId && state.conversations[normalizedRepoId]
+      ? { [normalizedRepoId]: state.conversations[normalizedRepoId] }
       : {},
   };
 }

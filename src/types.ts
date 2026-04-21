@@ -154,11 +154,40 @@ export interface ControlPlaneDeployPayload extends AnyRecord {
   repoId: string;
 }
 
+export interface ControlPlaneAgentChatMessagePayload extends AnyRecord {
+  repoId: string;
+  conversationId: string;
+  messageId: string;
+  responseMessageId: string;
+  prompt: string;
+  history?: Array<Pick<ControlPlaneChatMessageRecord, 'role' | 'content' | 'createdAt'>>;
+}
+
+export interface ControlPlaneChatMessageRecord extends AnyRecord {
+  id: string;
+  role: 'manager' | 'agent';
+  content: string;
+  createdAt: string;
+  updatedAt?: string;
+  status?: 'queued' | 'responding' | 'complete' | 'failed';
+  jobId?: string;
+  error?: string;
+}
+
+export interface ControlPlaneConversationRecord extends AnyRecord {
+  id: string;
+  repoId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ControlPlaneChatMessageRecord[];
+}
+
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add' | 'deploy';
+  type: 'prd:add' | 'deploy' | 'agent:chat';
   repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlaneDeployPayload;
+  payload: ControlPlanePrdAddPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
@@ -183,6 +212,7 @@ export interface ControlPlaneState extends AnyRecord {
   schemaVersion?: number;
   jobs: ControlPlaneJobRecord[];
   repoStatuses: Record<string, ControlPlaneRepoStatusRecord>;
+  conversations: Record<string, ControlPlaneConversationRecord[]>;
   heartbeats: Record<string, ControlPlaneHeartbeatRecord>;
 }
 

@@ -97,6 +97,26 @@ type JobSummary = {
   branch?: string;
 };
 
+type ChatMessageSummary = {
+  id?: string;
+  role?: 'manager' | 'agent';
+  content?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  status?: 'queued' | 'responding' | 'complete' | 'failed';
+  jobId?: string;
+  error?: string;
+};
+
+type ChatConversationSummary = {
+  id?: string;
+  repoId?: string;
+  title?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  messages?: ChatMessageSummary[];
+};
+
 type HeartbeatSummary = {
   label?: string;
   status?: string;
@@ -165,6 +185,7 @@ type DashboardSummary = {
 type StateSnapshot = {
   dashboard?: DashboardSummary;
   jobs?: JobSummary[];
+  conversations?: Record<string, ChatConversationSummary[]>;
   [key: string]: unknown;
 };
 
@@ -204,9 +225,17 @@ const prdModalEl = document.getElementById('prd-modal');
 const quickPrdForm = document.getElementById('quick-prd-form') as HTMLFormElement | null;
 const quickPrdSpecEl = document.getElementById('quick-prd-spec') as HTMLTextAreaElement | null;
 const quickFormMessageEl = document.getElementById('quick-form-message');
+const chatConversationSelect = document.getElementById('chat-conversation-select') as HTMLSelectElement | null;
+const newChatButton = document.getElementById('new-chat-button');
+const chatRefreshButton = document.getElementById('chat-refresh-button');
+const chatThreadEl = document.getElementById('chat-thread');
+const chatForm = document.getElementById('chat-form') as HTMLFormElement | null;
+const chatInputEl = document.getElementById('chat-input') as HTMLTextAreaElement | null;
+const chatMessageEl = document.getElementById('chat-message');
 const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-tab]'));
 const panels: Record<string, HTMLElement | null> = {
   main: document.getElementById('main-panel'),
+  chat: document.getElementById('chat-panel'),
   history: document.getElementById('history-panel'),
   dashboard: document.getElementById('dashboard-panel'),
   submit: document.getElementById('submit-panel'),
@@ -214,12 +243,15 @@ const panels: Record<string, HTMLElement | null> = {
 };
 const entranceContext = readEntranceContext();
 const apiBaseUrl = String(window.__AUTONOMY_CONTROL_PLANE_API_BASE_URL__ || '').trim().replace(/\/+$/, '');
+const NEW_CHAT_VALUE = '__new__';
 
 let latestRepos: RepoRecord[] = [];
 let latestDashboard: DashboardSummary = {};
+let latestConversations: ChatConversationSummary[] = [];
 let deployingRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedHistoryPrdId = '';
+let selectedChatConversationId = '';
 
 function mountControlPlane() {
   if (
@@ -236,6 +268,29 @@ function mountControlPlane() {
   }
   if (quickPrdForm) {
     quickPrdForm.addEventListener('submit', handleQuickSubmit);
+  }
+  if (chatForm) {
+    chatForm.addEventListener('submit', handleChatSubmit);
+  }
+  if (chatConversationSelect) {
+    chatConversationSelect.addEventListener('change', () => {
+      selectedChatConversationId = chatConversationSelect.value || NEW_CHAT_VALUE;
+      renderChat(latestConversations);
+    });
+  }
+  if (newChatButton) {
+    newChatButton.addEventListener('click', () => {
+      selectedChatConversationId = NEW_CHAT_VALUE;
+      renderChat(latestConversations);
+      window.setTimeout(() => chatInputEl?.focus(), 0);
+    });
+  }
+  if (chatRefreshButton) {
+    chatRefreshButton.addEventListener('click', () => refresh().catch((error: unknown) => {
+      if (chatMessageEl) {
+        chatMessageEl.textContent = getErrorMessage(error);
+      }
+    }));
   }
   if (refreshButton) {
     refreshButton.addEventListener('click', () => refresh().catch((error: unknown) => {
@@ -354,6 +409,42 @@ async function handleQuickSubmit(event: SubmitEvent) {
   }
 }
 
+async function handleChatSubmit(event: SubmitEvent) {
+  event.preventDefault();
+
+  if (!chatInputEl || !chatMessageEl || entranceContext.entrance !== 'project') {
+    return;
+  }
+
+  const message = chatInputEl.value.trim();
+  if (!message) {
+    chatMessageEl.textContent = 'Enter a message first.';
+    return;
+  }
+
+  chatMessageEl.textContent = 'Sending...';
+
+  try {
+    const queued = await requestJson<{
+      conversation?: ChatConversationSummary;
+      job?: JobSummary;
+    }>(`/api/repos/${encodeURIComponent(entranceContext.repoId)}/conversations`, {
+      method: 'POST',
+      body: JSON.stringify({
+        repoId: entranceContext.repoId,
+        conversationId: selectedChatConversationId === NEW_CHAT_VALUE ? '' : selectedChatConversationId,
+        message,
+      }),
+    });
+    selectedChatConversationId = String(queued.conversation && queued.conversation.id || selectedChatConversationId || '');
+    chatInputEl.value = '';
+    chatMessageEl.textContent = 'Message queued for the bridge.';
+    await refresh();
+  } catch (error) {
+    chatMessageEl.textContent = getErrorMessage(error);
+  }
+}
+
 async function refresh() {
   const reposRequestUrl = entranceContext.entrance === 'project' && entranceContext.repoId
     ? `/api/repos?repoId=${encodeURIComponent(entranceContext.repoId)}`
@@ -370,6 +461,7 @@ async function refresh() {
   renderDashboard(state.dashboard || {});
   renderControlPlaneHeartbeats(state.dashboard || {});
   renderProjectMain(state.dashboard || {});
+  renderChat(extractRepoConversations(state));
   renderAdvanced(state);
 
   if (lastUpdatedEl) {
@@ -599,6 +691,53 @@ function renderPrdHistory(dashboard: DashboardSummary) {
     <PrdHistoryList history={history} selectedPrdId={selectedHistoryPrdId} />
   );
   prdHistoryDetailEl.innerHTML = renderToHtml(<PrdHistoryDetail prd={selectedPrd} />);
+}
+
+function renderChat(conversations: ChatConversationSummary[]) {
+  if (
+    entranceContext.entrance !== 'project'
+    || !chatConversationSelect
+    || !chatThreadEl
+  ) {
+    return;
+  }
+
+  latestConversations = Array.isArray(conversations) ? conversations.slice() : [];
+  if (
+    selectedChatConversationId !== NEW_CHAT_VALUE
+    && (!selectedChatConversationId || !latestConversations.some((conversation) => conversation.id === selectedChatConversationId))
+  ) {
+    selectedChatConversationId = latestConversations.length > 0
+      ? String(latestConversations[0].id || '')
+      : NEW_CHAT_VALUE;
+  }
+
+  chatConversationSelect.innerHTML = renderToHtml(<ChatConversationOptions conversations={latestConversations} />);
+  chatConversationSelect.value = selectedChatConversationId || NEW_CHAT_VALUE;
+
+  const selectedConversation = selectedChatConversationId === NEW_CHAT_VALUE
+    ? null
+    : latestConversations.find((conversation) => conversation.id === selectedChatConversationId) || null;
+  chatThreadEl.innerHTML = renderToHtml(<ChatThread conversation={selectedConversation} />);
+  chatThreadEl.scrollTop = chatThreadEl.scrollHeight;
+}
+
+function extractRepoConversations(state: StateSnapshot) {
+  if (entranceContext.entrance !== 'project') {
+    return [];
+  }
+  const conversationsByRepo = state.conversations || {};
+  const conversations = conversationsByRepo[entranceContext.repoId] || [];
+  return conversations
+    .slice()
+    .sort((left, right) => {
+      const leftTime = Date.parse(String(left.updatedAt || left.createdAt || '')) || 0;
+      const rightTime = Date.parse(String(right.updatedAt || right.createdAt || '')) || 0;
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+      return String(left.id || '').localeCompare(String(right.id || ''));
+    });
 }
 
 function renderAdvanced(state: StateSnapshot) {
@@ -850,6 +989,54 @@ function RepoOptions({ repos }: { repos: RepoRecord[] }) {
         return <option value={repo.repoId}>{label}</option>;
       })}
     </>
+  );
+}
+
+function ChatConversationOptions({ conversations }: { conversations: ChatConversationSummary[] }) {
+  return (
+    <>
+      <option value={NEW_CHAT_VALUE}>New conversation</option>
+      {conversations.map((conversation) => (
+        <option value={conversation.id || ''}>
+          {conversation.title || conversation.id || 'Repo conversation'}
+        </option>
+      ))}
+    </>
+  );
+}
+
+function ChatThread({ conversation }: { conversation: ChatConversationSummary | null }) {
+  const messages = conversation && Array.isArray(conversation.messages) ? conversation.messages : [];
+  if (!conversation) {
+    return <div className="muted">Start a new conversation with the repo agent.</div>;
+  }
+  if (!messages.length) {
+    return <div className="muted">No messages in this conversation yet.</div>;
+  }
+
+  return (
+    <>
+      {messages.map((message) => <ChatMessage message={message} />)}
+    </>
+  );
+}
+
+function ChatMessage({ message }: { message: ChatMessageSummary }) {
+  const role = message.role === 'agent' ? 'agent' : 'manager';
+  const status = String(message.status || 'complete');
+  const meta = [
+    role === 'agent' ? 'Repo agent' : 'Manager',
+    status === 'complete' ? '' : status,
+    message.updatedAt || message.createdAt ? formatTimestamp(message.updatedAt || message.createdAt) : '',
+  ].filter(Boolean).join(' | ');
+
+  return (
+    <div className={`chat-message ${role} ${status}`}>
+      <div className="chat-message-head">
+        <span>{meta || (role === 'agent' ? 'Repo agent' : 'Manager')}</span>
+      </div>
+      <div className="chat-message-body">{message.content || ''}</div>
+    </div>
   );
 }
 

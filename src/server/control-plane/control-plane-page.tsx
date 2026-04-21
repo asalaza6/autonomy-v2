@@ -729,6 +729,83 @@ const styles = `
     padding-top: 0;
   }
 
+  .chat-layout {
+    display: grid;
+    gap: 14px;
+  }
+
+  .chat-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .chat-controls select {
+    min-width: min(100%, 280px);
+  }
+
+  .chat-thread {
+    min-height: 360px;
+    max-height: 560px;
+    overflow: auto;
+    display: grid;
+    align-content: start;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    background: rgba(255, 255, 255, 0.7);
+  }
+
+  .chat-message {
+    width: min(760px, 92%);
+    display: grid;
+    gap: 6px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(31, 26, 21, 0.08);
+    background: rgba(255, 255, 255, 0.86);
+  }
+
+  .chat-message.manager {
+    justify-self: end;
+    background: rgba(36, 91, 117, 0.1);
+    border-color: rgba(36, 91, 117, 0.18);
+  }
+
+  .chat-message.agent {
+    justify-self: start;
+  }
+
+  .chat-message.failed {
+    border-color: rgba(192, 74, 87, 0.35);
+    background: rgba(192, 74, 87, 0.08);
+  }
+
+  .chat-message-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 650;
+  }
+
+  .chat-message-body {
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  .chat-form {
+    display: grid;
+    gap: 10px;
+  }
+
+  .chat-form textarea {
+    min-height: 110px;
+  }
+
   @media (max-width: 980px) {
     .metric-grid, .raw-grid, .grid, .history-layout, .progress-steps { grid-template-columns: 1fr; }
     .main-stage-actions, .progress-head, .progress-foot { align-items: start; }
@@ -780,6 +857,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
           {isManager ? null : (
             <nav className="tabs" role="tablist" aria-label="Control plane views">
               <button type="button" className="tab-button active" data-tab="main" role="tab" aria-selected="true">Main</button>
+              <button type="button" className="tab-button" data-tab="chat" role="tab" aria-selected="false">Chat</button>
               <button type="button" className="tab-button" data-tab="history" role="tab" aria-selected="false">History</button>
               <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
             </nav>
@@ -834,6 +912,35 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                     </div>
                   </article>
                 </div>
+              </section>
+
+              <section id="chat-panel" className="tabs-panel" role="tabpanel">
+                <article className="surface">
+                  <div className="surface-head">
+                    <div>
+                      <h2>Repo Chat</h2>
+                      <p className="muted">Ask the repo agent about current status, active PRDs, queued work, and repository context.</p>
+                    </div>
+                    <div className="chat-controls">
+                      <select id="chat-conversation-select" aria-label="Conversation" />
+                      <button type="button" className="secondary" id="new-chat-button">New conversation</button>
+                    </div>
+                  </div>
+                  <div className="chat-layout">
+                    <div id="chat-thread" className="chat-thread" aria-live="polite" />
+                    <form id="chat-form" className="chat-form">
+                      <label>
+                        Message
+                        <textarea id="chat-input" name="message" placeholder="Ask about this repo." />
+                      </label>
+                      <div className="row">
+                        <button type="submit" className="primary">Send to repo agent</button>
+                        <button type="button" className="secondary" id="chat-refresh-button">Refresh</button>
+                      </div>
+                      <div className="muted body-note" id="chat-message" />
+                    </form>
+                  </div>
+                </article>
               </section>
 
               <section id="history-panel" className="tabs-panel" role="tabpanel">

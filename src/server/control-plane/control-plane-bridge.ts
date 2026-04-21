@@ -3,6 +3,7 @@ import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
+import { answerControlPlaneAgentChat } from './control-plane-chat.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -97,7 +98,24 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         },
       });
       let result: Record<string, unknown>;
-      if (job.type === 'deploy') {
+      if (job.type === 'agent:chat') {
+        logBridgeEvent('bridge:agent:chat:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          conversationId: job.payload && job.payload.conversationId || '',
+        });
+        result = await answerControlPlaneAgentChat({
+          repoRoot,
+          repoId: job.repoId,
+          payload: job.payload,
+          snapshot,
+        });
+        logBridgeEvent('bridge:agent:chat:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          conversationId: job.payload && job.payload.conversationId || '',
+        });
+      } else if (job.type === 'deploy') {
         logBridgeEvent('bridge:deploy:start', {
           jobId: job.id,
           repoId: job.repoId,
