@@ -4,6 +4,7 @@ import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-serv
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
+import { executeControlPlanePackageUpdate } from './control-plane-package-update.js';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -140,6 +141,28 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           version: execution.version || null,
           deployCommand: execution.deployCommand || null,
         };
+      } else if (job.type === 'package:update') {
+        logBridgeEvent('bridge:package:update:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          root: repoRoot,
+        });
+        const execution = executeControlPlanePackageUpdate(repoRoot);
+        await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+          method: 'POST',
+          body: {
+            repo: registration.repo,
+            snapshot: execution.snapshot,
+          },
+        });
+        logBridgeEvent('bridge:package:update:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          packageManager: execution.packageManager,
+          installedVersion: execution.installedVersion || '-',
+          restart: execution.restartStatus.status,
+        });
+        result = execution.result;
       } else {
         logBridgeEvent('bridge:prd:add:start', {
           jobId: job.id,

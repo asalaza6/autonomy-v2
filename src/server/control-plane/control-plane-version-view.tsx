@@ -9,6 +9,15 @@ type VersionStatusSummary = {
   detail?: string;
 };
 
+type PackageStatusSummary = {
+  packageName?: string | null;
+  installedVersion?: string | null;
+  declaredVersion?: string | null;
+  packageManager?: string | null;
+  status?: string;
+  detail?: string;
+};
+
 function VersionStatus({ versionStatus }: { versionStatus: VersionStatusSummary | null }) {
   const version = String(versionStatus && versionStatus.version || '').trim();
   if (!version) {
@@ -28,9 +37,32 @@ function VersionStatus({ versionStatus }: { versionStatus: VersionStatusSummary 
   );
 }
 
+function PackageStatus({ packageStatus }: { packageStatus: PackageStatusSummary | null }) {
+  const installedVersion = String(packageStatus && packageStatus.installedVersion || '').trim();
+  if (!installedVersion) {
+    return <div className="list-note">Installed package version unavailable.</div>;
+  }
+  const packageName = String(packageStatus && packageStatus.packageName || '@asalaza6/autonomy-v2');
+  return (
+    <div className="queued-prd">
+      <div className="item-head">
+        <div>
+          <div className="pill">Installed package</div>
+          <div className="queue-title">{installedVersion}</div>
+        </div>
+      </div>
+      <div className="queue-detail">
+        {[packageName, packageStatus && packageStatus.detail].filter(Boolean).join(' | ')}
+      </div>
+    </div>
+  );
+}
+
 export {
+  PackageStatus,
   VersionStatus,
 };
 export type {
+  PackageStatusSummary,
   VersionStatusSummary,
 };

@@ -105,6 +105,7 @@ function buildRepoDashboard(
       };
 
   const deployJob = jobs.find((job) => job.repoId === repoId && job.type === 'deploy') || null;
+  const packageUpdateJob = jobs.find((job) => job.repoId === repoId && job.type === 'package:update') || null;
 
   return {
     ...summary,
@@ -115,7 +116,36 @@ function buildRepoDashboard(
     deploymentUrl: String(repoConfig?.deploymentUrl || '').trim() || null,
     deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
     deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
+    packageUpdateJob: packageUpdateJob ? summarizeControlPlaneJob(packageUpdateJob, label) : null,
     versionStatus: buildRepoVersionStatus(repoId, repoStatus, jobs),
+    packageStatus: buildRepoPackageStatus(repoStatus),
+  };
+}
+
+function buildRepoPackageStatus(repoStatus: AnyRecord | null) {
+  const packageSnapshot = repoStatus
+    && repoStatus.snapshot
+    && repoStatus.snapshot.autonomyPackage
+    ? repoStatus.snapshot.autonomyPackage
+    : null;
+  const installedVersion = normalizeVersionString(packageSnapshot && packageSnapshot.installedVersion);
+  const declaredVersion = normalizeVersionString(packageSnapshot && packageSnapshot.declaredVersion);
+  const packageManager = String(packageSnapshot && packageSnapshot.packageManager || '').trim() || null;
+  const packageName = String(packageSnapshot && packageSnapshot.packageName || '@asalaza6/autonomy-v2');
+  const detailParts = [];
+  if (declaredVersion) {
+    detailParts.push(`declared ${declaredVersion}`);
+  }
+  if (packageManager) {
+    detailParts.push(packageManager);
+  }
+  return {
+    packageName,
+    installedVersion,
+    declaredVersion,
+    packageManager,
+    status: installedVersion ? 'installed' : declaredVersion ? 'declared' : 'unavailable',
+    detail: detailParts.length > 0 ? detailParts.join(' | ') : 'Package version unavailable',
   };
 }
 

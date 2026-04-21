@@ -2,8 +2,8 @@
 /// <reference lib="dom.iterable" />
 
 import { Fragment, h, renderToHtml } from './control-plane-jsx-runtime/jsx-runtime.js';
-import { VersionStatus } from './control-plane-version-view.js';
-import type { VersionStatusSummary } from './control-plane-version-view.js';
+import { PackageStatus, VersionStatus } from './control-plane-version-view.js';
+import type { PackageStatusSummary, VersionStatusSummary } from './control-plane-version-view.js';
 import {
   buildPrdSubmissionFromProposal,
   extractPrdProposalFromText,
@@ -92,6 +92,7 @@ type PullRequestSummary = {
 
 type JobSummary = {
   id?: string;
+  type?: string;
   title?: string;
   status?: string;
   statusLabel?: string;
@@ -172,6 +173,8 @@ type RepoSummary = {
   deploymentLabel?: string | null;
   deployJob?: JobSummary | null;
   versionStatus?: VersionStatusSummary | null;
+  packageStatus?: PackageStatusSummary | null;
+  packageUpdateJob?: JobSummary | null;
 };
 
 type DashboardSummary = {
@@ -278,6 +281,7 @@ let latestRepos: RepoRecord[] = [];
 let latestDashboard: DashboardSummary = {};
 let latestConversations: ChatConversationSummary[] = [];
 let deployingRepoIds = new Set<string>();
+let updatingPackageRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedHistoryPrdId = '';
 let selectedChatConversationId = '';
@@ -342,6 +346,20 @@ function mountControlPlane() {
         return;
       }
       handleDeploy(repoId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
+    const packageUpdateButton = target ? target.closest<HTMLButtonElement>('[data-action="package-update"]') : null;
+    if (packageUpdateButton) {
+      const repoId = String(packageUpdateButton.dataset.repoId || '').trim();
+      if (!repoId) {
+        return;
+      }
+      handlePackageUpdate(repoId).catch((error: unknown) => {
         if (messageEl) {
           messageEl.textContent = getErrorMessage(error);
         }
@@ -825,6 +843,32 @@ async function handleDeploy(repoId: string) {
     const next = new Set(deployingRepoIds);
     next.delete(repoId);
     deployingRepoIds = next;
+  }
+}
+
+async function handlePackageUpdate(repoId: string) {
+  if (!repoId || updatingPackageRepoIds.has(repoId)) {
+    return;
+  }
+
+  updatingPackageRepoIds = new Set(updatingPackageRepoIds).add(repoId);
+  if (messageEl) {
+    messageEl.textContent = `Queueing package update for ${repoId}...`;
+  }
+
+  try {
+    await requestJson(`/api/repos/${encodeURIComponent(repoId)}/package-update`, {
+      method: 'POST',
+      body: JSON.stringify({ repoId }),
+    });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `Package update queued for ${repoId}.`;
+    }
+  } finally {
+    const next = new Set(updatingPackageRepoIds);
+    next.delete(repoId);
+    updatingPackageRepoIds = next;
   }
 }
 
@@ -1593,6 +1637,10 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
         <RepoSection title="Version">
           <VersionStatus versionStatus={repo.versionStatus || null} />
         </RepoSection>
+        <RepoSection title="Package">
+          <PackageStatus packageStatus={repo.packageStatus || null} />
+          <PackageUpdateButton repo={repo} />
+        </RepoSection>
         <RepoSection title="Deployment">
           <div className={`status-chip ${statusClass(deployment && deployment.status)}`}>
             <span className="status-dot" />
@@ -1655,6 +1703,10 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
           {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
             ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
             : <div className="list-note">No active PRs.</div>}
+        </RepoSection>
+        <RepoSection title="Autonomy v2">
+          <PackageStatus packageStatus={repo.packageStatus || null} />
+          <PackageUpdateButton repo={repo} />
         </RepoSection>
         <RepoSection title="Deployment">
           <div className="queued-prd">
@@ -1787,6 +1839,28 @@ function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
   );
 }
 
+function PackageUpdateButton({ repo }: { repo: RepoSummary }) {
+  const state = buildPackageUpdateButtonState(repo);
+  if (!repo.repoId) {
+    return null;
+  }
+  return (
+    <div className="repo-actions" style={{ marginTop: '12px' }}>
+      <button
+        type="button"
+        className={`secondary deploy-button${state.busy ? ' is-loading' : ''}`}
+        data-action="package-update"
+        data-repo-id={repo.repoId || ''}
+        disabled={state.disabled}
+        aria-busy={state.busy}
+      >
+        {state.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+        <span>{state.label}</span>
+      </button>
+    </div>
+  );
+}
+
 function JobStack({ jobs }: { jobs: JobSummary[] }) {
   if (!jobs.length) {
     return <div className="muted">No bridge jobs queued yet.</div>;
@@ -1858,6 +1932,44 @@ function buildDeployButtonState(repo: RepoSummary | null) {
     disabled: false,
     busy: false,
     active: false,
+  };
+}
+
+function buildPackageUpdateButtonState(repo: RepoSummary | null) {
+  const repoId = String(repo && repo.repoId || '').trim();
+  const jobStatus = String(repo && repo.packageUpdateJob && repo.packageUpdateJob.status || '').trim();
+  const queueing = Boolean(repoId && updatingPackageRepoIds.has(repoId));
+  const updating = jobStatus === 'claimed' || jobStatus === 'running';
+  const queued = jobStatus === 'queued';
+
+  if (queueing) {
+    return {
+      label: 'Queueing update...',
+      disabled: true,
+      busy: true,
+    };
+  }
+
+  if (updating) {
+    return {
+      label: 'Updating package...',
+      disabled: true,
+      busy: true,
+    };
+  }
+
+  if (queued) {
+    return {
+      label: 'Update queued',
+      disabled: true,
+      busy: false,
+    };
+  }
+
+  return {
+    label: 'Update package',
+    disabled: false,
+    busy: false,
   };
 }
 

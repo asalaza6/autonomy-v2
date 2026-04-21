@@ -47,6 +47,31 @@ test('status snapshots include the current runtime and PRD state', () => {
   assert.match(output, /Active PRD:/);
 });
 
+test('status snapshots include installed autonomy package version separately from deploy version', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-package-version-');
+  initAutonomyRepo(repoDir);
+  fs.writeFileSync(path.join(repoDir, 'package.json'), `${JSON.stringify({
+    name: 'package-version-fixture',
+    private: true,
+    optionalDependencies: {
+      '@asalaza6/autonomy-v2': '^1.4.44',
+    },
+  }, null, 2)}\n`, 'utf8');
+  const installedManifestPath = path.join(repoDir, 'node_modules', '@asalaza6', 'autonomy-v2', 'package.json');
+  fs.mkdirSync(path.dirname(installedManifestPath), { recursive: true });
+  fs.writeFileSync(installedManifestPath, `${JSON.stringify({
+    name: '@asalaza6/autonomy-v2',
+    version: '1.4.45',
+  }, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+
+  assert.equal(snapshot.autonomyPackage.packageName, '@asalaza6/autonomy-v2');
+  assert.equal(snapshot.autonomyPackage.declaredVersion, '^1.4.44');
+  assert.equal(snapshot.autonomyPackage.installedVersion, '1.4.45');
+  assert.equal(snapshot.deployment.version.packageVersion, null);
+});
+
 test('status snapshots include archived PRDs for project history', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-history-');
   initAutonomyRepo(repoDir);

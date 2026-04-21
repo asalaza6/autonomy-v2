@@ -15,6 +15,10 @@ interface CommandSpec {
   args: string[];
 }
 
+interface PackageUpdateDependencies {
+  execCommand?: (file: string, args: string[], cwd: string) => string;
+}
+
 interface RefreshSkipped {
   skipped: true;
   reason: string;
@@ -29,18 +33,42 @@ interface RefreshApplied {
 type RefreshResult = RefreshSkipped | RefreshApplied;
 
 function run(rootDir: string, options: CliOptions) {
+  const payload = runPackageUpdate(rootDir, options);
+
+  printOutput(options, payload, () => {
+    console.log(`Updated ${PACKAGE_NAME} with ${payload.packageManager}.`);
+    console.log(`Declared version: ${payload.newDeclaredVersion || '(unchanged)'}`);
+    if (payload.installedVersion) {
+      console.log(`Installed version: ${payload.installedVersion}`);
+    }
+    if (payload.refresh.skipped === true) {
+      console.log(`Scaffold refresh: skipped (${payload.refresh.reason})`);
+      return;
+    }
+    console.log('Scaffold refresh: applied via init --force');
+  });
+
+  return payload;
+}
+
+function runPackageUpdate(
+  rootDir: string,
+  options: CliOptions = {},
+  dependencies: PackageUpdateDependencies = {}
+) {
   const manifestPath = path.join(rootDir, 'package.json');
   if (!fs.existsSync(manifestPath)) {
     throw new Error(`Missing package.json at ${manifestPath}. Run "autonomy-v2 update" from a Node project root or pass --root.`);
   }
 
+  const runCommand = dependencies.execCommand || execCommand;
   const manifest = readJson<AnyRecord>(manifestPath, {});
   const packageManager = resolvePackageManager(rootDir, options, manifest);
   const dependencyType = resolveDependencyType(manifest);
   const previousVersion = resolveDeclaredVersion(manifest);
   const installCommand = buildInstallCommand(packageManager, dependencyType, `${PACKAGE_NAME}@latest`);
 
-  execCommand(installCommand.file, installCommand.args, rootDir);
+  runCommand(installCommand.file, installCommand.args, rootDir);
 
   const updatedManifest = readJson<AnyRecord>(manifestPath, {});
   const declaredVersion = resolveDeclaredVersion(updatedManifest);
@@ -48,36 +76,49 @@ function run(rootDir: string, options: CliOptions) {
   const initialized = fs.existsSync(getAutonomyPaths(rootDir).agentsConfig);
   const shouldRefresh = initialized && options['skip-init'] !== true;
   const refresh: RefreshResult = shouldRefresh
-    ? runRefresh(rootDir, packageManager)
+    ? runRefresh(rootDir, packageManager, runCommand)
     : {
       skipped: true,
       reason: initialized ? 'skip-init' : 'not-initialized',
     };
+  const refreshStatus = refresh.skipped === true ? 'skipped' : 'applied';
 
-  const payload = {
+  return {
     rootDir,
     packageName: PACKAGE_NAME,
     packageManager,
     dependencyType,
     previousVersion,
     declaredVersion,
+    previousDeclaredVersion: previousVersion,
+    newDeclaredVersion: declaredVersion,
     installedVersion,
     refreshed: refresh.skipped !== true,
+    refreshStatus,
     refresh,
+    errors: [] as string[],
   };
+}
 
-  printOutput(options, payload, () => {
-    console.log(`Updated ${PACKAGE_NAME} with ${packageManager}.`);
-    console.log(`Declared version: ${declaredVersion || '(unchanged)'}`);
-    if (installedVersion) {
-      console.log(`Installed version: ${installedVersion}`);
-    }
-    if (refresh.skipped === true) {
-      console.log(`Scaffold refresh: skipped (${refresh.reason})`);
-      return;
-    }
-    console.log('Scaffold refresh: applied via init --force');
-  });
+function readAutonomyPackageStatus(rootDir: string) {
+  const manifestPath = path.join(rootDir, 'package.json');
+  const manifest = fs.existsSync(manifestPath)
+    ? readJson<AnyRecord>(manifestPath, {})
+    : {};
+  let packageManager: PackageManager | null = null;
+  try {
+    packageManager = fs.existsSync(manifestPath)
+      ? resolvePackageManager(rootDir, {}, manifest)
+      : null;
+  } catch (_) {
+    packageManager = null;
+  }
+  return {
+    packageName: PACKAGE_NAME,
+    packageManager,
+    declaredVersion: resolveDeclaredVersion(manifest),
+    installedVersion: readInstalledVersion(rootDir),
+  };
 }
 
 function resolvePackageManager(rootDir: string, options: CliOptions, manifest: AnyRecord): PackageManager {
@@ -172,14 +213,18 @@ function readInstalledVersion(rootDir: string): string {
   return String(installedManifest.version || '');
 }
 
-function runRefresh(rootDir: string, packageManager: PackageManager): RefreshResult {
+function runRefresh(
+  rootDir: string,
+  packageManager: PackageManager,
+  runCommand: (file: string, args: string[], cwd: string) => string
+): RefreshResult {
   const installedCliPath = path.join(rootDir, 'node_modules', ...PACKAGE_NAME.split('/'), 'dist', 'bin', 'autonomy-v2.js');
   let result = '';
   if (fs.existsSync(installedCliPath)) {
-    result = execCommand(process.execPath, [installedCliPath, 'init', '--root', rootDir, '--force', '--json'], rootDir);
+    result = runCommand(process.execPath, [installedCliPath, 'init', '--root', rootDir, '--force', '--json'], rootDir);
   } else {
     const refreshCommand = buildRefreshCommand(packageManager, rootDir);
-    result = execCommand(refreshCommand.file, refreshCommand.args, rootDir);
+    result = runCommand(refreshCommand.file, refreshCommand.args, rootDir);
   }
 
   try {
@@ -231,4 +276,9 @@ function execCommand(file: string, args: string[], cwd: string): string {
   }
 }
 
-export { run };
+export {
+  PACKAGE_NAME as AUTONOMY_PACKAGE_NAME,
+  readAutonomyPackageStatus,
+  run,
+  runPackageUpdate,
+};

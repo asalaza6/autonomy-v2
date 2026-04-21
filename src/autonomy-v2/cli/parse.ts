@@ -41,6 +41,7 @@ function isMutatingCommand(command: string) {
     buildRoleEventName(AGENT_ROLES.REVIEW, 'record'),
     'merge',
     'deploy',
+    'update',
   ]).has(command);
 }
 

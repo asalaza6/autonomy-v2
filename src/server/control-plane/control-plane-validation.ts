@@ -2,6 +2,7 @@ import type {
   ControlPlaneConfig,
   ControlPlaneAgentChatMessagePayload,
   ControlPlaneDeployPayload,
+  ControlPlanePackageUpdatePayload,
   ControlPlanePrdAddPayload,
   ControlPlaneRepoRecord,
 } from '../../types.js';
@@ -29,6 +30,8 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     description: repo.description,
     default: repo.default,
     deployCommand: repo.deployCommand,
+    controlBridgeRestartCommand: repo.controlBridgeRestartCommand,
+    serverRestartCommand: repo.serverRestartCommand,
     deploymentUrl: repo.deploymentUrl,
     deploymentLabel: repo.deploymentLabel,
   };
@@ -51,6 +54,8 @@ function normalizeRepoRecord(
     description: String((repo as Record<string, unknown>).description || '').trim() || undefined,
     default: (repo as Record<string, unknown>).default === true,
     deployCommand: (repo as ControlPlaneRepoRecord).deployCommand,
+    controlBridgeRestartCommand: (repo as ControlPlaneRepoRecord).controlBridgeRestartCommand,
+    serverRestartCommand: (repo as ControlPlaneRepoRecord).serverRestartCommand,
     deploymentUrl: String((repo as Record<string, unknown>).deploymentUrl || '').trim() || undefined,
     deploymentLabel: String((repo as Record<string, unknown>).deploymentLabel || '').trim() || undefined,
   } as ControlPlaneRepoRecord;
@@ -113,6 +118,19 @@ function validatePrdAddSubmission(
 function validateDeploySubmission(
   repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
   submission: Partial<ControlPlaneDeployPayload> = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
+  return {
+    repo,
+    payload: {
+      repoId: repo.repoId,
+    },
+  };
+}
+
+function validatePackageUpdateSubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlanePackageUpdatePayload> = {}
 ) {
   const repo = resolveRepoById(repos, submission.repoId || '');
   return {
@@ -212,5 +230,6 @@ export {
   resolveRepoById,
   validateAgentChatSubmission,
   validateDeploySubmission,
+  validatePackageUpdateSubmission,
   validatePrdAddSubmission,
 };
