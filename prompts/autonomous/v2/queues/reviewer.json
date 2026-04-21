@@ -218,9 +218,9 @@
         "Task `prd-prd-control-plane-package-f7d2a3-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 6,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-21T08:48:40.009Z",
-      "updatedAt": "2026-04-21T09:08:32.537Z",
+      "updatedAt": "2026-04-21T09:08:36.049Z",
       "reviewedAt": "2026-04-21T09:04:35.709Z",
       "lastDecision": "approved",
       "lastMergeFailureMessage": "Merge blocked.\n- PR status must be approved before merge, received changes_requested\n- pending lane tasks must be completed before merge",
