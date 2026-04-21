@@ -220,7 +220,7 @@
       "reviewRound": 5,
       "status": "changes_requested",
       "createdAt": "2026-04-21T08:48:40.009Z",
-      "updatedAt": "2026-04-21T09:05:28.602Z",
+      "updatedAt": "2026-04-21T09:05:59.399Z",
       "reviewedAt": "2026-04-21T09:04:35.709Z",
       "lastDecision": "approved",
       "lastMergeFailureMessage": "Merge blocked.\n- pending lane tasks must be completed before merge",
