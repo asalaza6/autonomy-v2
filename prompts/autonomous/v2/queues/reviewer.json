@@ -188,16 +188,15 @@
       "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent",
       "sourceTaskId": "prd-i-can-t-add-it-d62eb2-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "queued",
-      "createdAt": "2026-04-21T08:14:06.581Z",
-      "updatedAt": "2026-04-21T08:14:06.581Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
         "Task `prd-i-can’t-add-it-d62eb2-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "scopeViolations": []
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T08:14:06.581Z",
+      "updatedAt": "2026-04-21T08:14:10.679Z"
     }
   ]
 }
