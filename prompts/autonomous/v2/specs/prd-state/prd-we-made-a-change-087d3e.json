@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-we-made-a-change-087d3e",
+  "status": "planned",
+  "createdAt": "2026-04-21T07:15:36.783Z",
+  "updatedAt": "2026-04-21T07:15:36.783Z",
+  "plannedTaskIds": [
+    "prd-we-made-a-change-087d3e-architecture-agent-1"
+  ]
+}
