@@ -278,6 +278,26 @@
       "reviewedAt": "2026-04-21T09:57:23.787Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-21T09:57:29.287Z"
+    },
+    {
+      "id": "review-pr-prd-when-i-talk-in-b2b937-architecture-agent",
+      "title": "Review [architecture-agent] Implement When I talk in chat it gives error Does it",
+      "description": "Review pr-prd-when-i-talk-in-b2b937-architecture-agent for Implement When I talk in chat it gives error Does it",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-when-i-talk-in-b2b937-architecture-agent",
+      "sourceTaskId": "prd-when-i-talk-in-b2b937-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T19:00:05.849Z",
+      "updatedAt": "2026-04-21T19:00:05.849Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-when-i-talk-in-b2b937-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-when-i-talk-in-b2b937-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
