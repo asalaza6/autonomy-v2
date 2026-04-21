@@ -15,6 +15,10 @@ import { appendTrackedBranchFollowupTask, ensureReviewerTask, enqueueLaneFollowu
 import { findTask } from './shared-queues.js';
 import { normalizeReviewDecision } from './shared-repo.js';
 import { uniqueStrings } from './shared-repo.js';
+import {
+  getAgentConversationId,
+  setAgentConversationReference,
+} from '../../agents/conversation-references.js';
 
 async function run(rootDir, options) {
   ensureInitialized(rootDir);
@@ -31,6 +35,7 @@ async function run(rootDir, options) {
 
   const decision = normalizeReviewDecision(requireOption(options, 'decision'));
   const rawSummary = getStringOption(options, 'summary', '');
+  const reviewConversationId = String(getStringOption(options, 'conversation-id', '')).trim();
   const decisionRecord: any = {
     reviewerId,
     decision,
@@ -38,6 +43,9 @@ async function run(rootDir, options) {
     publishedSummary: buildSignedReviewSummary(reviewer, rawSummary),
     reviewedAt: new Date().toISOString(),
   };
+  if (reviewConversationId) {
+    decisionRecord.conversationId = reviewConversationId;
+  }
   pr.reviews.push(decisionRecord);
   pr.updatedAt = decisionRecord.reviewedAt;
   pr.status = decision === 'approved' ? 'approved' : 'changes_requested';
@@ -45,7 +53,13 @@ async function run(rootDir, options) {
   const task = findTask(state.taskQueues, pr.taskId);
   const implementationAgent = getAgent(state.config, pr.agentId);
   const usesTrackedImplementationQueue = isImplementationRole(implementationAgent.role);
-  const implementationConversationId = String(task && task.implementationConversationId || '').trim();
+  const implementationConversationId = getAgentConversationId(task, {
+    agentId: pr.agentId,
+    role: AGENT_ROLES.IMPLEMENTATION,
+  }) || getAgentConversationId(pr, {
+    agentId: pr.agentId,
+    role: AGENT_ROLES.IMPLEMENTATION,
+  });
   let followupTask = null;
   const followupPatch = decision === 'changes_requested'
     ? {
@@ -57,6 +71,7 @@ async function run(rootDir, options) {
         createdAt: decisionRecord.reviewedAt,
         updatedAt: decisionRecord.reviewedAt,
         implementationConversationId: implementationConversationId || undefined,
+        conversationReferences: task && task.conversationReferences || undefined,
       }
     : null;
   if (decision === 'changes_requested' && usesTrackedImplementationQueue) {
@@ -86,6 +101,16 @@ async function run(rootDir, options) {
     acceptance: pr.acceptance || [],
     agentId: pr.agentId,
   }, decisionRecord.reviewedAt);
+  if (reviewConversationId) {
+    setAgentConversationReference(pr, {
+      agentId: reviewerId,
+      role: AGENT_ROLES.REVIEW,
+    }, reviewConversationId, decisionRecord.reviewedAt);
+    setAgentConversationReference(reviewerTask, {
+      agentId: reviewerId,
+      role: AGENT_ROLES.REVIEW,
+    }, reviewConversationId, decisionRecord.reviewedAt);
+  }
   reviewerTask.status = decision === 'approved' ? 'approved' : 'changes_requested';
   reviewerTask.reviewedAt = decisionRecord.reviewedAt;
   reviewerTask.lastDecision = decision;

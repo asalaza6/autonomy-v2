@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { resolveGithubAuthToken } from '../../github/github-main.js';
+import { AGENT_ROLES } from '../../agents/role-catalog.js';
+import { getAgentConversationId, setAgentConversationReference } from '../../agents/conversation-references.js';
 import { CLI_PATH, RUNTIME_SEGMENTS } from './runner-constants.js';
 import {
   buildTaskQueueState,
@@ -92,9 +94,12 @@ function markImplementationTaskComplete(worktreePath, config, task, branch, comp
   currentTask.updatedAt = now;
   currentTask.completedAt = now;
   currentTask.completionMode = completionMode;
-  const implementationConversationId = getImplementationConversationId(task);
+  const implementationConversationId = getImplementationConversationId(task, agent.id);
   if (implementationConversationId) {
-    currentTask.implementationConversationId = implementationConversationId;
+    setAgentConversationReference(currentTask, {
+      agentId: agent.id,
+      role: AGENT_ROLES.IMPLEMENTATION,
+    }, implementationConversationId, now);
   }
   delete currentTask.lastError;
 
@@ -137,8 +142,11 @@ function recordImplementationTaskCommitSha(worktreePath, config, task, commitSha
   return { queuePath, relativePath, changed: true };
 }
 
-function getImplementationConversationId(task) {
-  return String(task && task.implementationConversationId || '').trim();
+function getImplementationConversationId(task, agentId = '') {
+  return getAgentConversationId(task, {
+    agentId: agentId || task && task.agentId,
+    role: AGENT_ROLES.IMPLEMENTATION,
+  });
 }
 
 function listChangedFiles(worktreePath) {

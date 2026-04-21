@@ -59,6 +59,7 @@ export interface ReviewDecisionRecord extends AnyRecord {
   summary?: string;
   publishedSummary?: string;
   reviewedAt?: string;
+  conversationId?: string;
   remotePublishFallback?: string;
 }
 
@@ -83,6 +84,7 @@ export interface TaskRecord extends AnyRecord {
   startedAt?: string | null;
   completedAt?: string;
   implementationConversationId?: string;
+  conversationReferences?: Record<string, AnyRecord>;
   prId?: string;
   sourceTaskId?: string;
   sourceAgentId?: string;
@@ -315,6 +317,7 @@ export interface PullRequestRecord extends AnyRecord {
   scopeViolations?: ScopeViolation[];
   conflicts?: ConflictRecord[];
   conflict?: ConflictRecord;
+  conversationReferences?: Record<string, AnyRecord>;
 }
 
 export interface PrState extends AnyRecord {
