@@ -146,11 +146,13 @@
         "Task `prd-we-made-a-change-087d3e-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-21T07:19:42.856Z",
-      "updatedAt": "2026-04-21T07:19:53.961Z",
+      "updatedAt": "2026-04-21T07:19:56.692Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-21T07:19:47.280Z"
+      "dispatchedAt": "2026-04-21T07:19:47.280Z",
+      "reviewedAt": "2026-04-21T07:19:56.692Z",
+      "lastDecision": "approved"
     }
   ]
 }
