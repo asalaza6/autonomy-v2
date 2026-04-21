@@ -202,6 +202,26 @@
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T08:22:51.974Z",
       "mergedAt": "2026-04-21T08:28:27.529Z"
+    },
+    {
+      "id": "review-pr-prd-prd-control-plane-package-f7d2a3-architecture-agent",
+      "title": "Review [architecture-agent] Implement PRD Control Plane package update and restart for managed repos",
+      "description": "Review pr-prd-prd-control-plane-package-f7d2a3-architecture-agent for Implement PRD Control Plane package update and restart for managed repos",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-prd-control-plane-package-f7d2a3-architecture-agent",
+      "sourceTaskId": "prd-prd-control-plane-package-f7d2a3-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T08:48:40.009Z",
+      "updatedAt": "2026-04-21T08:48:40.009Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-prd-control-plane-package-f7d2a3-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-prd-control-plane-package-f7d2a3-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
