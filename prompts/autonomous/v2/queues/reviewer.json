@@ -410,10 +410,10 @@
         "or launched/deferred statuses clearly.",
         "Control panel should expose separate buttons/actions for Update and Restart."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-21T22:05:51.784Z",
-      "updatedAt": "2026-04-21T22:09:40.645Z",
+      "updatedAt": "2026-04-21T22:09:57.499Z",
       "reviewedAt": "2026-04-21T22:09:40.645Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
