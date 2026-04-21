@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-create-a-system-to-37e0e9",
+  "title": "Create a system to talk back and forth with a",
+  "createdAt": "2026-04-21T06:42:52.559Z",
+  "specification": "Create a system to talk back and forth with a agent about the repo in control panel UI. The context should be maintained in between new conversations. \n\nIt should allow to talk back and forth between the manager and the AI, with that repos control panel through the control bridge."
+}
