@@ -29,7 +29,8 @@ test('control plane chat structured output schema supports optional PRD proposal
   const schemaProperties = Object.keys(CHAT_RESPONSE_SCHEMA.properties);
 
   assert.deepEqual(schemaProperties, ['answer', 'prdProposal']);
-  assert.deepEqual(CHAT_RESPONSE_SCHEMA.required, ['answer']);
+  assert.deepEqual(CHAT_RESPONSE_SCHEMA.required, ['answer', 'prdProposal']);
+  assertStructuredOutputObjectRequirements(CHAT_RESPONSE_SCHEMA);
   assert.match(
     buildAgentChatPrompt('alpha', {
       repoId: 'alpha',
@@ -38,9 +39,39 @@ test('control plane chat structured output schema supports optional PRD proposal
       responseMessageId: 'message-002',
       prompt: 'Hello',
     }, {}),
-    /optional prdProposal field/
+    /Set prdProposal to null/
   );
 });
+
+function assertStructuredOutputObjectRequirements(schema: any, path = 'schema') {
+  if (!schema || typeof schema !== 'object') {
+    return;
+  }
+
+  if (schema.type === 'object' && schema.properties && typeof schema.properties === 'object') {
+    const propertyNames = Object.keys(schema.properties).sort();
+    const required = Array.isArray(schema.required) ? [...schema.required].sort() : [];
+    assert.deepEqual(required, propertyNames, `${path}.required must include every property`);
+  }
+
+  if (schema.properties && typeof schema.properties === 'object') {
+    for (const [key, value] of Object.entries(schema.properties)) {
+      assertStructuredOutputObjectRequirements(value, `${path}.properties.${key}`);
+    }
+  }
+
+  for (const keyword of ['anyOf', 'oneOf', 'allOf']) {
+    if (Array.isArray(schema[keyword])) {
+      schema[keyword].forEach((entry: any, index: number) => {
+        assertStructuredOutputObjectRequirements(entry, `${path}.${keyword}.${index}`);
+      });
+    }
+  }
+
+  if (schema.items) {
+    assertStructuredOutputObjectRequirements(schema.items, `${path}.items`);
+  }
+}
 
 test('control plane chat detects structured PRD proposals without treating normal prose as a draft', () => {
   const proposal = normalizeChatPrdProposal({
