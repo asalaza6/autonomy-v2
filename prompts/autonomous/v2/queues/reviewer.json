@@ -94,12 +94,12 @@
         "Task `prd-when-prds-run-the-d8bef0-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 6,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-21T06:09:07.751Z",
-      "updatedAt": "2026-04-21T06:28:24.122Z",
+      "updatedAt": "2026-04-21T06:28:28.197Z",
       "reviewedAt": "2026-04-21T06:25:38.300Z",
       "lastDecision": "approved",
-      "lastMergeFailureMessage": "Merge blocked.\n- pending lane tasks must be completed before merge",
+      "lastMergeFailureMessage": "Merge blocked.\n- PR status must be approved before merge, received changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T06:28:25.807Z"
     }
