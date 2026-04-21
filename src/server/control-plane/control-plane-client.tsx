@@ -608,23 +608,22 @@ function resolveProjectProgress(repo: RepoSummary | null) {
 
 function ProjectMainDeployActions({ repo }: { repo: RepoSummary | null }) {
   const deployment = repo && repo.deployment ? repo.deployment : null;
-  const deployJobPending = ['queued', 'claimed', 'running'].includes(String(repo && repo.deployJob && repo.deployJob.status || ''));
-  const showDeployButton = Boolean(repo && repo.repoId && deployment && deployment.hasChanges);
-  const deployButtonLabel = deployJobPending
-    ? 'Deploy queued'
-    : `Deploy ${deployment && deployment.sourceBranch ? deployment.sourceBranch : 'dev'} to ${deployment && deployment.targetBranch ? deployment.targetBranch : 'main'}`;
+  const deployButtonState = buildDeployButtonState(repo);
+  const showDeployButton = Boolean(repo && repo.repoId && (deployButtonState.active || deployment && deployment.hasChanges));
 
   return (
     <>
       {showDeployButton ? (
         <button
           type="button"
-          className="primary"
+          className={`primary deploy-button${deployButtonState.busy ? ' is-loading' : ''}`}
           data-action="deploy"
           data-repo-id={repo && repo.repoId ? repo.repoId : ''}
-          disabled={deployJobPending || deployingRepoIds.has(String(repo && repo.repoId || ''))}
+          disabled={deployButtonState.disabled}
+          aria-busy={deployButtonState.busy}
         >
-          {deployingRepoIds.has(String(repo && repo.repoId || '')) ? 'Queueing deploy...' : deployButtonLabel}
+          {deployButtonState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+          <span>{deployButtonState.label}</span>
         </button>
       ) : null}
       {repo && repo.deploymentUrl ? (
@@ -861,9 +860,8 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
 function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
   const updated = repo.updatedAt ? `Updated ${formatTimestamp(repo.updatedAt)}` : 'No status snapshot yet';
   const deployment = repo.deployment || null;
-  const deployJobPending = ['queued', 'claimed', 'running'].includes(String(repo.deployJob && repo.deployJob.status || ''));
-  const showDeployButton = Boolean(repo.repoId && deployment && deployment.hasChanges);
-  const deployButtonLabel = deployJobPending ? 'Deploy queued' : `Deploy ${deployment && deployment.sourceBranch ? deployment.sourceBranch : 'dev'} to ${deployment && deployment.targetBranch ? deployment.targetBranch : 'main'}`;
+  const deployButtonState = buildDeployButtonState(repo);
+  const showDeployButton = Boolean(repo.repoId && (deployButtonState.active || deployment && deployment.hasChanges));
   const deploymentStatus = deployment ? deployment.status : null;
 
   return (
@@ -926,12 +924,14 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
               {showDeployButton ? (
                 <button
                   type="button"
-                  className="primary"
+                  className={`primary deploy-button${deployButtonState.busy ? ' is-loading' : ''}`}
                   data-action="deploy"
                   data-repo-id={repo.repoId || ''}
-                  disabled={deployJobPending || deployingRepoIds.has(String(repo.repoId || ''))}
+                  disabled={deployButtonState.disabled}
+                  aria-busy={deployButtonState.busy}
                 >
-                  {deployingRepoIds.has(String(repo.repoId || '')) ? 'Queueing deploy...' : deployButtonLabel}
+                  {deployButtonState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+                  <span>{deployButtonState.label}</span>
                 </button>
               ) : null}
               {repo.deploymentUrl ? (
@@ -1054,6 +1054,51 @@ function JobCard({ job }: { job: JobSummary }) {
       <div className="job-detail">{job.repoId || ''}{details ? ` | ${details}` : ''}</div>
     </div>
   );
+}
+
+function buildDeployButtonState(repo: RepoSummary | null) {
+  const repoId = String(repo && repo.repoId || '').trim();
+  const deployment = repo && repo.deployment ? repo.deployment : null;
+  const jobStatus = String(repo && repo.deployJob && repo.deployJob.status || '').trim();
+  const queueing = Boolean(repoId && deployingRepoIds.has(repoId));
+  const deploying = jobStatus === 'claimed' || jobStatus === 'running';
+  const queued = jobStatus === 'queued';
+  const sourceBranch = deployment && deployment.sourceBranch ? deployment.sourceBranch : 'dev';
+  const targetBranch = deployment && deployment.targetBranch ? deployment.targetBranch : 'main';
+
+  if (queueing) {
+    return {
+      label: 'Queueing deploy...',
+      disabled: true,
+      busy: true,
+      active: true,
+    };
+  }
+
+  if (deploying) {
+    return {
+      label: 'Deploying...',
+      disabled: true,
+      busy: true,
+      active: true,
+    };
+  }
+
+  if (queued) {
+    return {
+      label: 'Deploy queued',
+      disabled: true,
+      busy: false,
+      active: true,
+    };
+  }
+
+  return {
+    label: `Deploy ${sourceBranch} to ${targetBranch}`,
+    disabled: false,
+    busy: false,
+    active: false,
+  };
 }
 
 function formatTimestamp(value: string | null | undefined) {

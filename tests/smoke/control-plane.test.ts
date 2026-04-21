@@ -62,6 +62,11 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     const versionViewAsset = await fetch(`http://127.0.0.1:${port}/control-plane-version-view.js`);
     assert.equal(versionViewAsset.status, 200);
     assert.match(await versionViewAsset.text(), /VersionStatus/);
+    const clientAsset = await fetch(`http://127.0.0.1:${port}/control-plane-client.js`);
+    assert.equal(clientAsset.status, 200);
+    const clientSource = await clientAsset.text();
+    assert.match(clientSource, /Deploying\.\.\./);
+    assert.match(clientSource, /deploy-spinner/);
 
     runNode(CONTROL_BIN, [
       'bridge',

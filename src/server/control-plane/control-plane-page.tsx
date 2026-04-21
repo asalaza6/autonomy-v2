@@ -330,6 +330,37 @@ const styles = `
     font-weight: 650;
   }
 
+  button.primary:disabled {
+    cursor: default;
+    opacity: 0.76;
+  }
+
+  button.deploy-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 168px;
+  }
+
+  .deploy-spinner {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    border-top-color: white;
+    animation: deploy-spin 0.8s linear infinite;
+  }
+
+  @keyframes deploy-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .deploy-spinner { animation: none; }
+  }
+
   button.secondary {
     background: white;
     color: var(--accent);
