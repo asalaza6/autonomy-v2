@@ -425,11 +425,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-i-can-t-add-it-d62eb2-architecture-agent",
       "createdAt": "2026-04-21T08:20:37.737Z",
-      "updatedAt": "2026-04-21T08:24:33.519Z",
+      "updatedAt": "2026-04-21T08:24:33.571Z",
       "startedAt": "2026-04-21T08:23:05.301Z",
       "prId": "pr-prd-i-can-t-add-it-d62eb2-architecture-agent",
       "completedAt": "2026-04-21T08:24:33.519Z",
-      "completionMode": "noop"
+      "completionMode": "noop",
+      "commitSha": "cb104b639e5403e04da007867aabbeb56c388d2e"
     },
     {
       "id": "architecture-agent-followup-pr-prd-i-can-t-add-it-d62eb2-architecture-agent-3",
