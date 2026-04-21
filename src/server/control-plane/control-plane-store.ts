@@ -5,6 +5,9 @@ import type {
   ControlPlaneRepoRecord,
   ControlPlanePrdAddPayload,
   ControlPlaneDeployPayload,
+  ControlPlaneAgentChatMessagePayload,
+  ControlPlaneConversationRecord,
+  ControlPlaneChatMessageRecord,
   ControlPlaneJobRecord,
   ControlPlaneHeartbeatRecord,
   ControlPlaneRepoStatusRecord,
@@ -16,6 +19,7 @@ const DEFAULT_CONTROL_PLANE_STATE: ControlPlaneState = {
   schemaVersion: 1,
   jobs: [],
   repoStatuses: {},
+  conversations: {},
   heartbeats: {},
 };
 
@@ -61,8 +65,72 @@ function normalizeControlPlaneState(state: Partial<ControlPlaneState> = {}): Con
     schemaVersion: typeof state.schemaVersion === 'number' ? state.schemaVersion : 1,
     jobs: Array.isArray(state.jobs) ? state.jobs.map(normalizeJobRecord).filter(Boolean) : [],
     repoStatuses: normalizeRepoStatuses(state.repoStatuses),
+    conversations: normalizeConversations(state.conversations),
     heartbeats: normalizeHeartbeats(state.heartbeats),
   };
+}
+
+function normalizeConversations(
+  conversations: Record<string, ControlPlaneConversationRecord[]> | undefined | null
+) {
+  const normalized: Record<string, ControlPlaneConversationRecord[]> = {};
+  Object.entries(conversations || {}).forEach(([repoId, entries]) => {
+    const normalizedRepoId = String(repoId || '').trim();
+    if (!normalizedRepoId || !Array.isArray(entries)) {
+      return;
+    }
+    const repoConversations = entries
+      .map((conversation) => normalizeConversationRecord(conversation, normalizedRepoId))
+      .filter((conversation): conversation is ControlPlaneConversationRecord => Boolean(conversation));
+    if (repoConversations.length > 0) {
+      normalized[normalizedRepoId] = repoConversations;
+    }
+  });
+  return normalized;
+}
+
+function normalizeConversationRecord(
+  conversation: ControlPlaneConversationRecord | null | undefined,
+  fallbackRepoId = ''
+) {
+  if (!conversation || !conversation.id) {
+    return null;
+  }
+  const repoId = String(conversation.repoId || fallbackRepoId || '').trim();
+  if (!repoId) {
+    return null;
+  }
+  const createdAt = String(conversation.createdAt || new Date().toISOString());
+  return {
+    ...conversation,
+    id: String(conversation.id),
+    repoId,
+    title: String(conversation.title || 'Repo conversation').trim() || 'Repo conversation',
+    createdAt,
+    updatedAt: String(conversation.updatedAt || createdAt),
+    messages: Array.isArray(conversation.messages)
+      ? conversation.messages.map(normalizeChatMessageRecord).filter((message): message is ControlPlaneChatMessageRecord => Boolean(message))
+      : [],
+  } as ControlPlaneConversationRecord;
+}
+
+function normalizeChatMessageRecord(message: ControlPlaneChatMessageRecord | null | undefined) {
+  if (!message || !message.id) {
+    return null;
+  }
+  const createdAt = String(message.createdAt || new Date().toISOString());
+  const normalized: ControlPlaneChatMessageRecord = {
+    ...message,
+    id: String(message.id),
+    role: normalizeChatRole(message.role),
+    content: String(message.content || ''),
+    createdAt,
+    updatedAt: message.updatedAt ? String(message.updatedAt) : undefined,
+    status: normalizeChatMessageStatus(message.status),
+    jobId: normalizeOptionalString(message.jobId),
+    error: normalizeOptionalString(message.error),
+  };
+  return normalized;
 }
 
 function normalizeHeartbeats(heartbeats: Record<string, ControlPlaneHeartbeatRecord> | undefined | null) {
@@ -138,6 +206,9 @@ function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null
   if (normalized === 'deploy') {
     return 'deploy' as const;
   }
+  if (normalized === 'agent:chat') {
+    return 'agent:chat' as const;
+  }
   return 'prd:add' as const;
 }
 
@@ -150,6 +221,25 @@ function normalizeJobPayload(
     return {
       repoId: String((payload as ControlPlaneDeployPayload).repoId || repoId).trim() || repoId,
     } as ControlPlaneDeployPayload;
+  }
+
+  if (type === 'agent:chat') {
+    const chatPayload = payload as ControlPlaneAgentChatMessagePayload;
+    const conversationId = String(chatPayload.conversationId || '').trim();
+    const messageId = String(chatPayload.messageId || '').trim();
+    const responseMessageId = String(chatPayload.responseMessageId || '').trim();
+    const prompt = String(chatPayload.prompt || '').trim();
+    if (!conversationId || !messageId || !responseMessageId || !prompt) {
+      return null;
+    }
+    return {
+      repoId: String(chatPayload.repoId || repoId).trim() || repoId,
+      conversationId,
+      messageId,
+      responseMessageId,
+      prompt,
+      history: normalizeChatHistory(chatPayload.history),
+    } as ControlPlaneAgentChatMessagePayload;
   }
 
   return {
@@ -170,6 +260,31 @@ function normalizeJobPayload(
 function normalizeOptionalString(value: unknown) {
   const text = String(value || '').trim();
   return text || undefined;
+}
+
+function normalizeChatHistory(history: ControlPlaneAgentChatMessagePayload['history'] | undefined) {
+  if (!Array.isArray(history)) {
+    return [];
+  }
+  return history
+    .map((message) => ({
+      role: normalizeChatRole(message && message.role),
+      content: String(message && message.content || '').trim(),
+      createdAt: String(message && message.createdAt || ''),
+    }))
+    .filter((message) => message.content);
+}
+
+function normalizeChatRole(role: string | undefined | null) {
+  return String(role || '').trim() === 'agent' ? 'agent' as const : 'manager' as const;
+}
+
+function normalizeChatMessageStatus(status: string | undefined | null) {
+  const normalized = String(status || 'complete').trim();
+  if (['queued', 'responding', 'complete', 'failed'].includes(normalized)) {
+    return normalized as ControlPlaneChatMessageRecord['status'];
+  }
+  return 'complete' as const;
 }
 
 function normalizeJobStatus(status: string | undefined | null) {
@@ -203,6 +318,91 @@ function listJobs(rootDir: string, filter: Partial<Pick<ControlPlaneJobRecord, '
   });
 }
 
+function listConversations(rootDir: string, repoId: string) {
+  const state = loadControlPlaneState(rootDir);
+  const normalizedRepoId = String(repoId || '').trim();
+  if (!normalizedRepoId) {
+    return [];
+  }
+  return (state.conversations[normalizedRepoId] || [])
+    .slice()
+    .sort((left, right) => {
+      const leftTime = Date.parse(String(left.updatedAt || left.createdAt || '')) || 0;
+      const rightTime = Date.parse(String(right.updatedAt || right.createdAt || '')) || 0;
+      if (leftTime !== rightTime) {
+        return rightTime - leftTime;
+      }
+      return String(left.id || '').localeCompare(String(right.id || ''));
+    });
+}
+
+function queueAgentChatMessage(rootDir: string, input: {
+  repoId: string;
+  conversationId?: string;
+  prompt: string;
+}) {
+  const state = loadControlPlaneState(rootDir);
+  const repoId = String(input.repoId || '').trim();
+  const prompt = String(input.prompt || '').trim();
+  if (!repoId) {
+    throw new Error('Missing repoId.');
+  }
+  if (!prompt) {
+    throw new Error('Provide a message for the repo agent.');
+  }
+
+  const now = new Date().toISOString();
+  const conversations = state.conversations[repoId] || [];
+  state.conversations[repoId] = conversations;
+  let conversation = conversations.find((entry) => entry.id === String(input.conversationId || '').trim()) || null;
+  if (!conversation) {
+    conversation = {
+      id: createControlPlaneRecordId('chat'),
+      repoId,
+      title: buildConversationTitle(prompt),
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    };
+    conversations.push(conversation);
+  }
+
+  const history = buildConversationHistory(conversation);
+  const managerMessage: ControlPlaneChatMessageRecord = {
+    id: createControlPlaneRecordId('msg'),
+    role: 'manager',
+    content: prompt,
+    createdAt: now,
+    updatedAt: now,
+    status: 'complete',
+  };
+  const responseMessage: ControlPlaneChatMessageRecord = {
+    id: createControlPlaneRecordId('msg'),
+    role: 'agent',
+    content: 'Waiting for the bridge to reply...',
+    createdAt: now,
+    updatedAt: now,
+    status: 'queued',
+  };
+  const job = createControlPlaneAgentChatJob({
+    repoId,
+    conversationId: conversation.id,
+    messageId: managerMessage.id,
+    responseMessageId: responseMessage.id,
+    prompt,
+    history,
+  });
+  responseMessage.jobId = job.id;
+  conversation.messages.push(managerMessage, responseMessage);
+  conversation.updatedAt = now;
+  state.jobs.push(normalizeJobRecord(job) || job);
+  saveControlPlaneState(rootDir, state);
+  return {
+    conversation,
+    job,
+  };
+}
+
 function claimJob(rootDir: string, jobId: string, options: { repoIds?: string[] } = {}) {
   const state = loadControlPlaneState(rootDir);
   const job = state.jobs.find((entry) => entry.id === jobId);
@@ -218,6 +418,13 @@ function claimJob(rootDir: string, jobId: string, options: { repoIds?: string[] 
   job.status = 'claimed';
   job.claimedAt = new Date().toISOString();
   job.updatedAt = job.claimedAt;
+  if (job.type === 'agent:chat') {
+    updateAgentChatResponseMessage(state, job, {
+      status: 'responding',
+      content: 'Bridge is drafting a reply...',
+      updatedAt: job.updatedAt,
+    });
+  }
   saveControlPlaneState(rootDir, state);
   return job;
 }
@@ -236,6 +443,9 @@ function completeJob(rootDir: string, jobId: string, patch: Partial<ControlPlane
   }
   if (typeof patch.result !== 'undefined') {
     job.result = patch.result;
+  }
+  if (job.type === 'agent:chat') {
+    applyAgentChatJobCompletion(state, job);
   }
   saveControlPlaneState(rootDir, state);
   return job;
@@ -340,6 +550,119 @@ function createControlPlaneDeployJob(payload: ControlPlaneDeployPayload): Contro
   return job;
 }
 
+function createControlPlaneAgentChatJob(payload: ControlPlaneAgentChatMessagePayload): ControlPlaneJobRecord {
+  const job: ControlPlaneJobRecord = {
+    id: createControlPlaneRecordId('job'),
+    type: 'agent:chat' as const,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+      conversationId: payload.conversationId,
+      messageId: payload.messageId,
+      responseMessageId: payload.responseMessageId,
+      prompt: payload.prompt,
+      history: normalizeChatHistory(payload.history),
+    },
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
+function applyAgentChatJobCompletion(state: ControlPlaneState, job: ControlPlaneJobRecord) {
+  const now = job.updatedAt || new Date().toISOString();
+  if (job.status === 'completed') {
+    const answer = String(job.result && (job.result.answer || job.result.message) || '').trim();
+    updateAgentChatResponseMessage(state, job, {
+      status: 'complete',
+      content: answer || 'The repo agent completed without returning a message.',
+      updatedAt: now,
+    });
+    return;
+  }
+
+  if (job.status === 'failed') {
+    const error = String(job.error || 'The repo agent could not reply.').trim();
+    updateAgentChatResponseMessage(state, job, {
+      status: 'failed',
+      content: error,
+      error,
+      updatedAt: now,
+    });
+  }
+}
+
+function updateAgentChatResponseMessage(
+  state: ControlPlaneState,
+  job: ControlPlaneJobRecord,
+  patch: Partial<ControlPlaneChatMessageRecord>
+) {
+  const payload = job.payload as ControlPlaneAgentChatMessagePayload;
+  const repoId = String(job.repoId || payload.repoId || '').trim();
+  const conversationId = String(payload.conversationId || '').trim();
+  const responseMessageId = String(payload.responseMessageId || '').trim();
+  if (!repoId || !conversationId || !responseMessageId) {
+    return;
+  }
+  const conversation = (state.conversations[repoId] || []).find((entry) => entry.id === conversationId);
+  if (!conversation) {
+    return;
+  }
+  let message = conversation.messages.find((entry) => entry.id === responseMessageId) || null;
+  if (!message) {
+    message = {
+      id: responseMessageId,
+      role: 'agent',
+      content: '',
+      createdAt: patch.updatedAt || new Date().toISOString(),
+      jobId: job.id,
+      status: 'queued',
+    };
+    conversation.messages.push(message);
+  }
+  message.role = 'agent';
+  message.jobId = job.id;
+  if (typeof patch.content !== 'undefined') {
+    message.content = String(patch.content || '');
+  }
+  if (typeof patch.status !== 'undefined') {
+    message.status = normalizeChatMessageStatus(patch.status);
+  }
+  if (typeof patch.error !== 'undefined') {
+    message.error = normalizeOptionalString(patch.error);
+  }
+  message.updatedAt = String(patch.updatedAt || new Date().toISOString());
+  conversation.updatedAt = message.updatedAt;
+}
+
+function buildConversationHistory(conversation: ControlPlaneConversationRecord) {
+  return (conversation.messages || [])
+    .filter((message) => message && message.status !== 'queued' && message.status !== 'responding')
+    .map((message) => ({
+      role: normalizeChatRole(message.role),
+      content: String(message.content || '').trim(),
+      createdAt: String(message.createdAt || ''),
+    }))
+    .filter((message) => message.content)
+    .slice(-20);
+}
+
+function buildConversationTitle(prompt: string) {
+  const words = String(prompt || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 8)
+    .join(' ');
+  return words || 'Repo conversation';
+}
+
+function createControlPlaneRecordId(prefix: string) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
 function getControlPlaneStateKey(rootDir: string) {
   return path.resolve(rootDir || process.cwd());
 }
@@ -358,15 +681,18 @@ function shouldPersistControlPlaneState(rootDir: string) {
 export {
   claimJob,
   completeJob,
+  createControlPlaneAgentChatJob,
   createControlPlaneJob,
   createControlPlaneDeployJob,
   ensureControlPlaneDataDir,
   enqueueJob,
   getControlPlanePaths,
+  listConversations,
   listDiscoveredRepos,
   getRepoStatuses,
   listJobs,
   loadControlPlaneState,
+  queueAgentChatMessage,
   saveControlPlaneState,
   setRepoStatus,
   touchHeartbeat,

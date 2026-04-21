@@ -285,11 +285,17 @@ function formatPrdRunStepLabel(stepId: string) {
 function summarizeControlPlaneJob(job: any, repoLabel = '') {
   const status = String(job && job.status || 'queued');
   const jobType = String(job && job.type || 'prd:add');
-  const statusLabelMap: Record<string, string> = {
+  const statusLabelMap: Record<string, string> = jobType === 'agent:chat' ? {
+    queued: 'Waiting for bridge reply',
+    claimed: 'Bridge is drafting reply',
+    running: 'Bridge is drafting reply',
+    completed: 'Reply delivered',
+    failed: 'Failed',
+  } : {
     queued: 'Waiting to be claimed',
     claimed: 'Claimed by the bridge',
     running: 'Running on the local repo',
-    completed: 'Completed and committed',
+    completed: jobType === 'deploy' ? 'Deploy completed' : 'Completed and committed',
     failed: 'Failed',
   };
   const details = [];
@@ -298,6 +304,8 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
   }
   if (status === 'failed' && job && job.error) {
     details.push(`error: ${summarizeText(job.error)}`);
+  } else if (status === 'completed' && jobType === 'agent:chat' && job && job.result) {
+    details.push('agent replied');
   } else if (status === 'completed' && jobType === 'deploy' && job && job.result) {
     details.push(`merged ${job.result.sourceBranch || 'dev'} into ${job.result.targetBranch || 'main'}`);
   } else if (status === 'completed' && job && job.result && job.result.prdId) {
@@ -312,15 +320,23 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     id: String(job && job.id || ''),
     repoId: String(job && job.repoId || ''),
     repoLabel: repoLabel || String(job && job.repoId || ''),
-    title: jobType === 'deploy'
-      ? `Deploy ${String(job && job.result && job.result.sourceBranch || job && job.payload && job.payload.sourceBranch || 'dev')} to ${String(job && job.result && job.result.targetBranch || job && job.payload && job.payload.targetBranch || 'main')}`
-      : String(job && job.payload && job.payload.title || job && job.id || 'Untitled job'),
+    title: formatControlPlaneJobTitle(job, jobType),
     status,
     statusLabel: statusLabelMap[status] || formatStatusLabel(status),
     detail: details.join(' | '),
     createdAt: job && job.createdAt ? String(job.createdAt) : null,
     updatedAt: job && job.updatedAt ? String(job.updatedAt) : null,
   };
+}
+
+function formatControlPlaneJobTitle(job: any, jobType: string) {
+  if (jobType === 'deploy') {
+    return `Deploy ${String(job && job.result && job.result.sourceBranch || job && job.payload && job.payload.sourceBranch || 'dev')} to ${String(job && job.result && job.result.targetBranch || job && job.payload && job.payload.targetBranch || 'main')}`;
+  }
+  if (jobType === 'agent:chat') {
+    return `Repo chat: ${summarizeText(job && job.payload && job.payload.prompt || job && job.id || 'message')}`;
+  }
+  return String(job && job.payload && job.payload.title || job && job.id || 'Untitled job');
 }
 
 function buildHeartbeatSummary(updatedAt: string | null | undefined, label: string, nowMs = Date.now()) {

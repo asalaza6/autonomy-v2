@@ -289,10 +289,14 @@
       "acceptance": [
         "Task `prd-create-a-system-to-37e0e9-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-21T06:43:55.970Z",
-      "updatedAt": "2026-04-21T06:43:55.970Z"
+      "updatedAt": "2026-04-21T06:56:54.673Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-create-a-system-to-37e0e9-architecture-agent",
+      "startedAt": "2026-04-21T06:44:15.851Z",
+      "completedAt": "2026-04-21T06:56:54.673Z",
+      "completionMode": "code"
     }
   ]
 }

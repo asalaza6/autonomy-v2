@@ -1,5 +1,6 @@
 import type {
   ControlPlaneConfig,
+  ControlPlaneAgentChatMessagePayload,
   ControlPlaneDeployPayload,
   ControlPlanePrdAddPayload,
   ControlPlaneRepoRecord,
@@ -122,6 +123,25 @@ function validateDeploySubmission(
   };
 }
 
+function validateAgentChatSubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlaneAgentChatMessagePayload> & { message?: string; conversationId?: string } = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
+  const prompt = String(submission.prompt || submission.message || '').trim();
+  if (!prompt) {
+    throw new Error('Provide a message for the repo agent.');
+  }
+  return {
+    repo,
+    payload: {
+      repoId: repo.repoId,
+      conversationId: String(submission.conversationId || '').trim() || undefined,
+      prompt,
+    },
+  };
+}
+
 function assertControlPlaneRepoId(config: Partial<ControlPlaneConfig> | null | undefined) {
   const repoId = String(config && config.repoId || '').trim();
   if (!repoId) {
@@ -190,6 +210,7 @@ export {
   normalizeControlPlaneConfig,
   normalizeRepoRecord,
   resolveRepoById,
+  validateAgentChatSubmission,
   validateDeploySubmission,
   validatePrdAddSubmission,
 };
