@@ -265,11 +265,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-when-prds-run-the-d8bef0-architecture-agent",
       "createdAt": "2026-04-21T06:23:01.354Z",
-      "updatedAt": "2026-04-21T06:28:06.169Z",
+      "updatedAt": "2026-04-21T06:28:06.224Z",
       "startedAt": "2026-04-21T06:23:01.354Z",
       "prId": "pr-prd-when-prds-run-the-d8bef0-architecture-agent",
       "completedAt": "2026-04-21T06:28:06.169Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "75393c506e930622115d7178e30523632403eb65"
     }
   ]
 }
