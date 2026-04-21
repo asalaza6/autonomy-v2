@@ -265,7 +265,7 @@
       "sourceTaskId": "prd-create-a-prd-proposal-c35a5e-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-21T09:53:58.065Z",
       "updatedAt": "2026-04-21T09:53:58.065Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-create-a-prd-proposal-c35a5e-architecture-agent",
@@ -273,7 +273,9 @@
       "acceptance": [
         "Task `prd-create-a-prd-proposal-c35a5e-architecture-agent-1` is complete within the assigned agent scope."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-21T09:54:02.155Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
