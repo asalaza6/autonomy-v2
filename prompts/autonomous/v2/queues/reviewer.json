@@ -270,13 +270,14 @@
         "Task `prd-create-a-prd-proposal-c35a5e-architecture-agent-1` is complete within the assigned agent scope."
       ],
       "reviewRound": 1,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-21T09:53:58.065Z",
-      "updatedAt": "2026-04-21T09:57:23.787Z",
+      "updatedAt": "2026-04-21T09:57:29.287Z",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T09:54:02.155Z",
       "reviewedAt": "2026-04-21T09:57:23.787Z",
-      "lastDecision": "approved"
+      "lastDecision": "approved",
+      "mergedAt": "2026-04-21T09:57:29.287Z"
     }
   ]
 }
