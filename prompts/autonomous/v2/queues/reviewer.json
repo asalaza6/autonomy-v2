@@ -106,6 +106,26 @@
       "lastMergeFailureMessage": "Merge blocked.\n- PR status must be approved before merge, received changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T06:28:25.807Z"
+    },
+    {
+      "id": "review-pr-prd-create-a-system-to-37e0e9-architecture-agent",
+      "title": "Review [architecture-agent] Implement Create a system to talk back and forth with a",
+      "description": "Review pr-prd-create-a-system-to-37e0e9-architecture-agent for Implement Create a system to talk back and forth with a",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-create-a-system-to-37e0e9-architecture-agent",
+      "sourceTaskId": "prd-create-a-system-to-37e0e9-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-21T06:56:56.048Z",
+      "updatedAt": "2026-04-21T06:56:56.048Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-create-a-system-to-37e0e9-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Task `prd-create-a-system-to-37e0e9-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "scopeViolations": []
     }
   ]
 }
