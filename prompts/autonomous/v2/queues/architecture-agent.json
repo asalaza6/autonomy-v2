@@ -352,6 +352,28 @@
       "completedAt": "2026-04-21T07:51:30.192Z",
       "completionMode": "code",
       "commitSha": "28eac6f8a5532ca213532814b601478b274fca4f"
+    },
+    {
+      "id": "prd-i-can-t-add-it-d62eb2-architecture-agent-1",
+      "title": "Implement I can’t add it directly from this read-only chat Queue",
+      "description": "I can’t add it directly from this read-only chat. Queue this as a second PRD, separate from the reconciliation PRD that is already running on `architecture-agent`.\n\n# PRD: Chat-generated PRD handoff to Control Plane UI\n\n## Problem\nWhen this chat recommends a repo change, the manager currently has to manually copy the recommendation into the Control Plane PRD form. The chat should be able to return a structured PRD proposal that the Control Plane detects and loads into the UI as a draft, while still requiring the user to review and submit it.\n\n## Goal\nEnable assistant responses to include a machine-readable PRD proposal, detect that proposal in the chat/control-plane layer, and populate the Control Plane UI with an editable PRD draft that the user can submit.\n\n## Requirements\n- Define a structured response shape for PRD recommendations, including title, problem, goal, requirements, acceptance criteria, verification, priority if supported, and source chat message metadata.\n- Detect when a chat answer contains a PRD recommendation versus normal prose.\n- Add a Control Plane UI draft state that displays the proposed PRD details in the existing PRD submission flow.\n- Let the user edit, discard, or submit the proposed PRD.\n- Do not auto-submit PRDs without explicit user confirmation.\n- Preserve normal chat behavior for non-PRD answers.\n- Keep the feature compatible with existing durable PRD queue/state under `prompts/autonomous/v2/`.\n\n## Acceptance Criteria\n- A chat response can return a PRD proposal and the UI recognizes it as a draft PRD.\n- The Control Plane shows a clear “review and submit” PRD draft populated from the chat proposal.\n- User submission creates the same kind of PRD/task state as manually entered PRDs.\n- Non-PRD chat responses do not create draft PRDs.\n- Refreshing the UI does not accidentally submit or lose an acknowledged draft, according to existing UI state conventions.\n\n## Verification\n- Add unit tests for PRD recommendation detection/parsing.\n- Add UI test or component test for rendering, editing, discarding, and submitting a chat-generated PRD draft.\n- Add an integration-style test proving submitted chat PRDs enter the normal Control Plane queue path.\n- Run `npm run typecheck` and relevant UI/server tests.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-i-can’t-add-it-d62eb2",
+      "laneKey": "prd-i-can’t-add-it-d62eb2:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Task `prd-i-can’t-add-it-d62eb2-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-21T07:59:16.225Z",
+      "updatedAt": "2026-04-21T07:59:16.225Z"
     }
   ]
 }
