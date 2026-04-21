@@ -5,10 +5,31 @@ import os from 'os';
 import path from 'path';
 
 import {
+  CHAT_RESPONSE_SCHEMA,
+  buildAgentChatPrompt,
+} from '../../src/server/control-plane/control-plane-chat.js';
+import {
   completeJob,
   loadControlPlaneState,
   queueAgentChatMessage,
 } from '../../src/server/control-plane/control-plane-store.js';
+
+test('control plane chat structured output schema matches the answer-only prompt', () => {
+  const schemaProperties = Object.keys(CHAT_RESPONSE_SCHEMA.properties);
+
+  assert.deepEqual(schemaProperties, ['answer']);
+  assert.deepEqual(CHAT_RESPONSE_SCHEMA.required, schemaProperties);
+  assert.match(
+    buildAgentChatPrompt('alpha', {
+      repoId: 'alpha',
+      conversationId: 'conversation-001',
+      messageId: 'message-001',
+      responseMessageId: 'message-002',
+      prompt: 'Hello',
+    }, {}),
+    /Return JSON only with an answer field\./
+  );
+});
 
 test('control plane chat persists conversation messages and bridge replies', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-chat-'));
