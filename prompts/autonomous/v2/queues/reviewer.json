@@ -452,9 +452,9 @@
         "Add logs/events that make restart outcomes visible in the control panel job history."
       ],
       "reviewRound": 5,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-22T01:30:46.300Z",
-      "updatedAt": "2026-04-22T01:47:42.707Z",
+      "updatedAt": "2026-04-22T01:48:13.194Z",
       "reviewedAt": "2026-04-22T01:47:18.540Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
