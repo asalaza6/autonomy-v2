@@ -21,11 +21,13 @@ async function run(rootDir, options) {
     ? listImplementationLaneTasks(rootDir, state, pr.agentId, pr.laneKey || pr.taskId, { pr }).tasks
     : listLaneTasks(state.taskQueues, pr.agentId, pr.laneKey || pr.taskId);
   const pendingLaneTasks = laneTasks.filter((candidate) => !isTerminalTaskStatus(getImplementationTaskState(candidate)));
+  const reviewerTask = getReviewerTask(state.taskQueues, state.config, pr);
 
   const evaluation = evaluateMerge({
     config: state.config,
     pr,
     actor,
+    reviewerTask,
   });
   if (!evaluation.ok || pendingLaneTasks.length > 0 || (pr.pendingTaskIds || []).length > 0) {
     process.exitCode = 1;
@@ -134,18 +136,21 @@ async function run(rootDir, options) {
   if (options.execute === true) {
     const mergedAt = new Date().toISOString();
     pr.status = 'merged';
+    pr.mergeState = 'merged';
     pr.mergedAt = mergedAt;
     pr.updatedAt = mergedAt;
+    delete pr.mergeBlockedCode;
+    delete pr.mergeBlockedReason;
     const task = findTask(state.taskQueues, pr.taskId);
     if (task) {
       task.status = 'merged';
       task.updatedAt = mergedAt;
     }
-    const reviewerTask = getReviewerTask(state.taskQueues, state.config, pr);
     if (reviewerTask) {
       reviewerTask.status = 'merged';
       reviewerTask.mergedAt = mergedAt;
       delete reviewerTask.lastError;
+      delete reviewerTask.lastMergeFailureCode;
       delete reviewerTask.lastMergeFailureMessage;
       reviewerTask.updatedAt = mergedAt;
     }

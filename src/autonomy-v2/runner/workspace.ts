@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process';
 import { resolveGithubAuthToken } from '../../github/github-main.js';
 import { AGENT_ROLES } from '../../agents/role-catalog.js';
 import { getAgentConversationId, setAgentConversationReference } from '../../agents/conversation-references.js';
+import { classifyMergeFailureMessage } from '../commands/merge-watchdog.js';
 import { CLI_PATH, RUNTIME_SEGMENTS } from './runner-constants.js';
 import {
   buildTaskQueueState,
@@ -356,7 +357,7 @@ function tryMergeWithRetry(rootDir, prId, agentId) {
     }
   }
 
-  return { merged: false, message: lastMessage };
+  return { merged: false, message: lastMessage, code: classifyMergeFailureMessage(lastMessage) };
 }
 
 export {

@@ -144,7 +144,7 @@ type ScmCapability = {
   runGit?: (cwd: string, args: string[]) => void;
   readGit?: (cwd: string, args: string[]) => string;
   tryPushBranch?: (worktreePath: string, branch: string) => { ok: boolean; message: string; };
-  tryMergeWithRetry?: (prId: string, agentId: string) => { merged: boolean; message: string | null; };
+  tryMergeWithRetry?: (prId: string, agentId: string) => { merged: boolean; message: string | null; code?: string | null; };
   hasStagedGitChanges?: (cwd: string) => boolean;
 };
 

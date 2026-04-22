@@ -5,6 +5,12 @@ import {
   resolveReturnedConversationId,
   setAgentConversationReference,
 } from './conversation-references.js';
+import {
+  classifyMergeFailureMessage,
+  formatMergeFailureReason,
+  getPullRequestCommitCount,
+  shouldRetryApprovedPrMerge,
+} from '../autonomy-v2/commands/merge-watchdog.js';
 import type { AgentConfig, AutonomyConfig, PullRequestRecord, TaskRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedReviewWork, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
 
@@ -178,7 +184,7 @@ class ReviewAgentDefinition extends AgentDefinition {
       sourceAgentId: work.sourceAgentId,
       reviewRound,
       prStatus: pr.status,
-      commitCount: this.getPrCommitCount(pr),
+      commitCount: getPullRequestCommitCount(pr),
       lastDecision: reviewerTask.lastDecision || null,
       stub: context.codex.useStub?.() === true,
     });
@@ -192,12 +198,12 @@ class ReviewAgentDefinition extends AgentDefinition {
       });
     }
 
-    if (this.shouldRetryApprovedPrMerge(pr, reviewerTask)) {
+    if (shouldRetryApprovedPrMerge(pr, reviewerTask)) {
       context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.REVIEW, 'merge-retry'), {
         reviewTaskId: work.reviewTaskId,
         prId: pr.id,
         reviewRound,
-        commitCount: this.getPrCommitCount(pr),
+        commitCount: getPullRequestCommitCount(pr),
       });
       const mergeResult = context.scm.tryMergeWithRetry
         ? context.scm.tryMergeWithRetry(pr.id, context.agent.id)
@@ -206,11 +212,13 @@ class ReviewAgentDefinition extends AgentDefinition {
         ? Boolean(context.reviewClient.publishMergeFollowupCommentIfNeeded?.(pr, reviewerTask, mergeResult.message))
         : false;
       if (!mergeResult.merged) {
+        const mergeFailureCode = this.resolveMergeFailureCode(mergeResult);
         context.queueStore.persistReviewerTaskState?.(work.reviewTaskId, {
           status: 'approved',
           updatedAt: context.clock.now(),
           lastError: null,
-          lastMergeFailureMessage: this.normalizeNonEmptyString(mergeResult.message),
+          lastMergeFailureCode: mergeFailureCode,
+          lastMergeFailureMessage: this.normalizeNonEmptyString(formatMergeFailureReason(mergeFailureCode, mergeResult.message)),
         });
       }
       context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.REVIEW, 'done'), {
@@ -362,11 +370,13 @@ class ReviewAgentDefinition extends AgentDefinition {
       merged = mergeResult.merged;
       mergeMessage = mergeResult.message;
       if (!merged) {
+        const mergeFailureCode = this.resolveMergeFailureCode(mergeResult);
         mergeCommentPublished = Boolean(context.reviewClient.publishMergeFollowupCommentIfNeeded?.(pr, reviewerTask, mergeMessage));
         context.queueStore.persistReviewerTaskState?.(work.reviewTaskId, {
           status: 'approved',
           updatedAt: context.clock.now(),
-          lastMergeFailureMessage: this.normalizeNonEmptyString(mergeMessage),
+          lastMergeFailureCode: mergeFailureCode,
+          lastMergeFailureMessage: this.normalizeNonEmptyString(formatMergeFailureReason(mergeFailureCode, mergeMessage)),
         });
       }
     }
@@ -530,36 +540,6 @@ class ReviewAgentDefinition extends AgentDefinition {
     return resolveReturnedConversationId(value);
   }
 
-  private latestReviewDecision(pr: PullRequestRecord): string {
-    if (!pr || !Array.isArray(pr.reviews) || pr.reviews.length === 0) {
-      return '';
-    }
-    return String(pr.reviews[pr.reviews.length - 1].decision || '');
-  }
-
-  private getPrCommitCount(pr: PullRequestRecord): number {
-    const count = Number(pr && (pr.commitCount || (pr.remote && pr.remote.commitCount)));
-    return Number.isFinite(count) ? count : 0;
-  }
-
-  private shouldRetryApprovedPrMerge(pr: PullRequestRecord, reviewerTask: TaskRecord): boolean {
-    if (this.latestReviewDecision(pr) !== 'approved') {
-      return false;
-    }
-    if (pr && pr.mergedAt) {
-      return false;
-    }
-    if (pr && pr.remote && pr.remote.mergedAt) {
-      return false;
-    }
-    const reviewedCommitCount = Number(reviewerTask && reviewerTask.reviewedCommitCount);
-    const currentCommitCount = this.getPrCommitCount(pr);
-    if (Number.isFinite(reviewedCommitCount) && reviewedCommitCount > 0) {
-      return currentCommitCount <= reviewedCommitCount;
-    }
-    return true;
-  }
-
   private shouldForceApproveAfterRepeatedReviews(pr: PullRequestRecord): boolean {
     const reviewCount = Number.isFinite(Number(pr && pr.reviews && pr.reviews.length))
       ? Number(pr.reviews.length)
@@ -629,6 +609,10 @@ class ReviewAgentDefinition extends AgentDefinition {
   private normalizeNonEmptyString(value: unknown): string {
     const normalized = String(value || '').trim();
     return normalized || '';
+  }
+
+  private resolveMergeFailureCode(mergeResult: AnyRecord): string {
+    return String((mergeResult && mergeResult.code) || classifyMergeFailureMessage(mergeResult && mergeResult.message));
   }
 
   private extractErrorMessage(error: unknown): string {

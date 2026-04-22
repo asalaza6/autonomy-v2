@@ -209,6 +209,7 @@ function reconcileReviewTaskRecord(
     updatedAt: now,
   };
   delete record.lastError;
+  delete record.lastMergeFailureCode;
   delete record.lastMergeFailureMessage;
   return record;
 }
