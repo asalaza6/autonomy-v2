@@ -1113,11 +1113,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
       "createdAt": "2026-04-22T04:28:32.122Z",
-      "updatedAt": "2026-04-22T04:43:00.875Z",
+      "updatedAt": "2026-04-22T04:43:00.935Z",
       "startedAt": "2026-04-22T04:39:24.530Z",
       "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
       "completedAt": "2026-04-22T04:43:00.875Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "92cefab3422f7cb0fb800f8fd3f61e862de51fa7"
     },
     {
       "id": "architecture-agent-followup-pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent-4",
