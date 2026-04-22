@@ -263,6 +263,9 @@ function buildBlockedMergeDiagnosis(message: string, baseDiagnosis: AnyRecord = 
 
 function classifyMergeFailureMessage(message: unknown) {
   const text = String(message || '').toLowerCase();
+  if (/unreviewed head|review must cover the latest head|approval reviewed/.test(text)) {
+    return 'unreviewed_head';
+  }
   if (/conflicts?|merge conflict|dirty/.test(text)) {
     return 'conflicts';
   }
@@ -303,6 +306,9 @@ function formatMergeFailureReason(code: string, message: unknown) {
   }
   if (code === 'mergeability_unknown') {
     return detail || 'GitHub mergeability is not ready yet';
+  }
+  if (code === 'unreviewed_head') {
+    return detail || 'review must cover the latest PR head before merge';
   }
   return detail || 'automatic merge was rejected';
 }

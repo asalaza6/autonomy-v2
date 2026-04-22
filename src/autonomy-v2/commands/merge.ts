@@ -21,11 +21,13 @@ async function run(rootDir, options) {
     ? listImplementationLaneTasks(rootDir, state, pr.agentId, pr.laneKey || pr.taskId, { pr }).tasks
     : listLaneTasks(state.taskQueues, pr.agentId, pr.laneKey || pr.taskId);
   const pendingLaneTasks = laneTasks.filter((candidate) => !isTerminalTaskStatus(getImplementationTaskState(candidate)));
+  const reviewerTask = getReviewerTask(state.taskQueues, state.config, pr);
 
   const evaluation = evaluateMerge({
     config: state.config,
     pr,
     actor,
+    reviewerTask,
   });
   if (!evaluation.ok || pendingLaneTasks.length > 0 || (pr.pendingTaskIds || []).length > 0) {
     process.exitCode = 1;
@@ -144,7 +146,6 @@ async function run(rootDir, options) {
       task.status = 'merged';
       task.updatedAt = mergedAt;
     }
-    const reviewerTask = getReviewerTask(state.taskQueues, state.config, pr);
     if (reviewerTask) {
       reviewerTask.status = 'merged';
       reviewerTask.mergedAt = mergedAt;

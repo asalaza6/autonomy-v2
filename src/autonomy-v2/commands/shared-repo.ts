@@ -287,7 +287,7 @@ function normalizeReviewDecision(decision) {
   throw new Error(`Unsupported ${getRoleLabel(AGENT_ROLES.REVIEW)} decision "${decision}". Use approve or changes-requested.`);
 }
 
-function evaluateMerge({ config, pr, actor }) {
+function evaluateMerge({ config, pr, actor, reviewerTask = null }) {
   const reasons = [];
   const mergeActors = config.mergeActors || [];
   if (mergeActors.length > 0) {
@@ -314,6 +314,10 @@ function evaluateMerge({ config, pr, actor }) {
       reasons.push(`latest ${getRoleLabel(AGENT_ROLES.REVIEW)} decision is ${latestDecision}`);
     }
   }
+  const unreviewedHeadReason = getUnreviewedHeadMergeBlocker(pr, reviewerTask);
+  if (unreviewedHeadReason) {
+    reasons.push(unreviewedHeadReason);
+  }
 
   return {
     ok: reasons.length === 0,
@@ -321,6 +325,26 @@ function evaluateMerge({ config, pr, actor }) {
     mergeStrategy: config.mergeStrategy || 'merge',
     integrationBranch: config.integrationBranch,
   };
+}
+
+function getPrCommitCount(pr) {
+  const counts = [
+    Number(pr && pr.commitCount),
+    Number(pr && pr.remote && pr.remote.commitCount),
+  ].filter((count) => Number.isFinite(count) && count > 0);
+  return counts.length > 0 ? Math.max(...counts) : 0;
+}
+
+function getUnreviewedHeadMergeBlocker(pr, reviewerTask) {
+  const reviewedCommitCount = Number(reviewerTask && reviewerTask.reviewedCommitCount);
+  if (!Number.isFinite(reviewedCommitCount) || reviewedCommitCount <= 0) {
+    return '';
+  }
+  const currentCommitCount = getPrCommitCount(pr);
+  if (currentCommitCount <= reviewedCommitCount) {
+    return '';
+  }
+  return `PR head has ${currentCommitCount} commits, but approval reviewed ${reviewedCommitCount}; review must cover the latest head before merge`;
 }
 
 export {

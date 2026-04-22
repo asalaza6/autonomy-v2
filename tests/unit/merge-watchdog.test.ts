@@ -15,6 +15,7 @@ import {
   selectApprovedMergeWatchdogCandidate,
   shouldRetryApprovedPrMerge,
 } from '../../src/autonomy-v2/commands/merge-watchdog.js';
+import { evaluateMerge } from '../../src/autonomy-v2/commands/shared-repo.js';
 import { getAutonomyPaths, readJson, writeJson } from '../../src/autonomy-v2/commands/shared-core.js';
 import {
   buildPullRequestStatusSummaries,
@@ -241,6 +242,36 @@ test('approved PR merge watchdog requeues stale approved heads before automatic 
   assert.match(persistedReviewTask.lastMergeFailureMessage, /approval reviewed 2/);
 });
 
+test('merge evaluation blocks approved PRs beyond the reviewed commit count', () => {
+  const pr = buildApprovedPr({
+    commitCount: 3,
+    remote: {
+      number: 17,
+      state: 'open',
+      url: 'https://github.com/asalaza6/autonomy-v2/pull/17',
+      commitCount: 3,
+      sha: 'head-after-approval',
+    },
+  });
+  const reviewerTask = buildApprovedReviewTask({ reviewedCommitCount: 2 });
+
+  const evaluation = evaluateMerge({
+    config: {
+      integrationBranch: 'dev',
+      blockedBranches: [],
+      mergeActors: ['reviewer'],
+      mergeStrategy: 'merge',
+    },
+    pr,
+    actor: { id: 'reviewer', role: 'review' },
+    reviewerTask,
+  }) as any;
+
+  assert.equal(evaluation.ok, false);
+  assert.match(evaluation.reasons.join('\n'), /approval reviewed 2/);
+  assert.match(evaluation.reasons.join('\n'), /latest head before merge/);
+});
+
 test('merge failure classifier identifies specific blocked and waiting reasons', () => {
   assert.equal(classifyMergeFailureMessage('Merge conflict in package.json'), 'conflicts');
   assert.equal(classifyMergeFailureMessage('Required status check "typecheck" is expected.'), 'pending_checks');
@@ -250,6 +281,10 @@ test('merge failure classifier identifies specific blocked and waiting reasons',
   assert.equal(
     formatMergeFailureReason('conflicts', 'remote rejected the merge'),
     'merge conflicts block this PR'
+  );
+  assert.equal(
+    classifyMergeFailureMessage('PR head has 3 commits, but approval reviewed 2; review must cover the latest head before merge'),
+    'unreviewed_head'
   );
 });
 
