@@ -419,6 +419,43 @@
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-21T22:09:59.224Z",
       "mergedAt": "2026-04-21T22:15:43.953Z"
+    },
+    {
+      "id": "review-pr-prd-default-service-restart-fallback-98a973-architecture-agent",
+      "title": "Review [architecture-agent] Implement Default Service Restart Fallback",
+      "description": "Review pr-prd-default-service-restart-fallback-98a973-architecture-agent for Implement Default Service Restart Fallback",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent",
+      "sourceTaskId": "prd-default-service-restart-fallback-98a973-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-22T01:30:46.300Z",
+      "updatedAt": "2026-04-22T01:30:46.300Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Record service lifecycle metadata for the control panel server and control bridge",
+        "including PID",
+        "cwd",
+        "launch command or restart command",
+        "and timestamp.",
+        "When explicit restart commands are configured",
+        "preserve the current configured-command behavior.",
+        "When restart commands are missing",
+        "create a default restart plan from the recorded lifecycle metadata.",
+        "Execute default restart through a detached helper so the bridge can complete the restart job and heartbeat before stopping itself.",
+        "Stop the server and bridge processes using only verified registered PIDs",
+        "then relaunch the server first and bridge last.",
+        "Report clear statuses for restarted",
+        "skipped",
+        "missing metadata",
+        "stale PID",
+        "and relaunch failure cases.",
+        "Add logs/events that make restart outcomes visible in the control panel job history."
+      ],
+      "scopeViolations": []
     }
   ]
 }
