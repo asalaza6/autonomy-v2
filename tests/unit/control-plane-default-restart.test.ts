@@ -10,8 +10,10 @@ import {
   writeControlPlaneServiceLifecycle,
 } from '../../src/server/control-plane/control-plane-lifecycle.js';
 import {
+  completeJob,
   createControlPlaneRestartJob,
   enqueueJob,
+  getControlPlanePaths,
   loadControlPlaneState,
 } from '../../src/server/control-plane/control-plane-store.js';
 import {
@@ -299,6 +301,97 @@ test('default restart helper reports failure when node restart command exits aft
   assert.equal(storedJob?.result?.restartStatus.helperResults[0].status, 'relaunch-failed');
 });
 
+test('default restart helper records bridge results before a relaunched bridge can cache stale job state', async (t) => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-default-restart-stale-state-'));
+  const probeScriptPath = writeRestartProbeScript(rootDir);
+  const staleBridgeScriptPath = writeStaleStateBridgeScript(rootDir);
+  const eventsPath = path.join(rootDir, 'restart-events.log');
+  const serverPidPath = path.join(rootDir, 'server.pid');
+  const bridgePidPath = path.join(rootDir, 'bridge.pid');
+  const server = startRestartProbe(rootDir, probeScriptPath, 'server', serverPidPath, eventsPath);
+  const bridge = startRestartProbe(rootDir, probeScriptPath, 'controlBridge', bridgePidPath, eventsPath);
+  t.after(async () => {
+    await stopPid(readPidFile(serverPidPath));
+    await stopPid(readPidFile(bridgePidPath));
+    await stopChild(server);
+    await stopChild(bridge);
+  });
+
+  const originalServerPid = await waitForPidFile(serverPidPath);
+  const originalBridgePid = await waitForPidFile(bridgePidPath);
+  const serverMetadata = buildProbeLifecycle('server', rootDir, probeScriptPath, serverPidPath, eventsPath, originalServerPid);
+  const bridgeMetadata = buildControlPlaneServiceLifecycleMetadata('controlBridge', {
+    pid: originalBridgePid,
+    cwd: rootDir,
+    launch: {
+      command: process.execPath,
+      args: [staleBridgeScriptPath, rootDir, bridgePidPath, eventsPath],
+      cwd: rootDir,
+      env: {
+        AUTONOMY_RESTART_STALE_WRITE_DELAY_MS: '250',
+      },
+    },
+    matchTokens: [path.basename(probeScriptPath), 'controlBridge'],
+  });
+  writeControlPlaneServiceLifecycle(rootDir, serverMetadata);
+  writeControlPlaneServiceLifecycle(rootDir, bridgeMetadata);
+  const job = enqueueJob(rootDir, createControlPlaneRestartJob({ repoId: 'alpha' }));
+  completeJob(rootDir, job.id, {
+    status: 'completed',
+    result: {
+      restartStatus: {
+        status: 'deferred',
+        server: {
+          target: 'server',
+          status: 'deferred',
+          mode: 'default',
+        },
+        controlBridge: {
+          target: 'controlBridge',
+          status: 'deferred',
+          mode: 'default',
+        },
+      },
+      errors: [],
+    },
+  });
+
+  const outcome = await runDefaultControlPlaneRestart({
+    rootDir,
+    jobId: job.id,
+    startDelayMs: 0,
+    stopTimeoutMs: 500,
+    relaunchReadyTimeoutMs: 100,
+    targets: [
+      {
+        target: 'server',
+        metadata: serverMetadata,
+      },
+      {
+        target: 'controlBridge',
+        metadata: bridgeMetadata,
+      },
+    ],
+  });
+
+  assert.equal(outcome.status, 'restarted');
+  assert.equal(outcome.targets.map((target) => target.target).join(','), 'server,controlBridge');
+  await waitForChangedPid(serverPidPath, originalServerPid);
+  await waitForChangedPid(bridgePidPath, originalBridgePid);
+
+  const events = await waitForFileText(eventsPath, 5000, /controlBridge:stale-write:restarted/);
+  assert.match(events, /controlBridge:startup-delay:[1-9]\d*/);
+  assert.match(events, /controlBridge:cached-bridge-status:restarted/);
+
+  const persistedState = JSON.parse(fs.readFileSync(getControlPlanePaths(rootDir).statePath, 'utf8'));
+  const storedJob = persistedState.jobs.find((entry: any) => entry.id === job.id);
+  assert.equal(storedJob?.result?.restartStatus.status, 'restarted');
+  assert.equal(storedJob?.result?.restartStatus.helperStatus, 'restarted');
+  assert.equal(storedJob?.result?.restartStatus.server.status, 'restarted');
+  assert.equal(storedJob?.result?.restartStatus.controlBridge.status, 'restarted');
+  assert.equal(storedJob?.result?.restartStatus.helperResults.length, 2);
+});
+
 function buildProbeLifecycle(
   kind: 'server' | 'controlBridge',
   rootDir: string,
@@ -336,6 +429,50 @@ function writeRestartProbeScript(rootDir: string) {
     '}',
     'function shutdown() {',
     "  fs.appendFileSync(eventsPath, `${role}:stopped:${process.pid}\\n`, 'utf8');",
+    '  process.exit(0);',
+    '}',
+    "process.on('SIGTERM', shutdown);",
+    "process.on('SIGINT', shutdown);",
+    'setInterval(() => {}, 1000);',
+    '',
+  ].join('\n'), 'utf8');
+  return scriptPath;
+}
+
+function writeStaleStateBridgeScript(rootDir: string) {
+  const scriptPath = path.join(rootDir, 'stale-state-bridge.cjs');
+  fs.writeFileSync(scriptPath, [
+    "const fs = require('fs');",
+    "const path = require('path');",
+    'const rootDir = process.argv[2];',
+    'const pidPath = process.argv[3];',
+    'const eventsPath = process.argv[4];',
+    "const statePath = path.join(rootDir, '.autonomy', 'control-plane', 'state.json');",
+    "fs.writeFileSync(pidPath, `${process.pid}\\n`, 'utf8');",
+    "fs.appendFileSync(eventsPath, `controlBridge:started:${process.pid}\\n`, 'utf8');",
+    "const startupDelayMs = Number(process.env.AUTONOMY_CONTROL_PLANE_BRIDGE_START_DELAY_MS || '0');",
+    "const writeDelayMs = Number(process.env.AUTONOMY_RESTART_STALE_WRITE_DELAY_MS || '200');",
+    "fs.appendFileSync(eventsPath, `controlBridge:startup-delay:${startupDelayMs}\\n`, 'utf8');",
+    'setTimeout(() => {',
+    "  const cachedState = JSON.parse(fs.readFileSync(statePath, 'utf8'));",
+    "  const job = cachedState.jobs && cachedState.jobs[0] || {};",
+    "  const restartStatus = job.result && job.result.restartStatus || {};",
+    "  const bridgeStatus = restartStatus.controlBridge && restartStatus.controlBridge.status || '';",
+    "  fs.appendFileSync(eventsPath, `controlBridge:cached-status:${restartStatus.status || ''}\\n`, 'utf8');",
+    "  fs.appendFileSync(eventsPath, `controlBridge:cached-bridge-status:${bridgeStatus}\\n`, 'utf8');",
+    '  setTimeout(() => {',
+    '    cachedState.heartbeats = cachedState.heartbeats || {};',
+    '    cachedState.heartbeats.bridge = {',
+    "      kind: 'bridge',",
+    "      updatedAt: new Date().toISOString(),",
+    "      note: 'simulated bridge poll from cached state',",
+    '    };',
+    "    fs.writeFileSync(statePath, `${JSON.stringify(cachedState, null, 2)}\\n`, 'utf8');",
+    "    fs.appendFileSync(eventsPath, `controlBridge:stale-write:${bridgeStatus}\\n`, 'utf8');",
+    '  }, writeDelayMs);',
+    '}, Math.max(0, startupDelayMs));',
+    'function shutdown() {',
+    "  fs.appendFileSync(eventsPath, `controlBridge:stopped:${process.pid}\\n`, 'utf8');",
     '  process.exit(0);',
     '}',
     "process.on('SIGTERM', shutdown);",

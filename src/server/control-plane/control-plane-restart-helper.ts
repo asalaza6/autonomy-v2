@@ -45,6 +45,8 @@ const DEFAULT_STOP_TIMEOUT_MS = 4000;
 const DEFAULT_RELAUNCH_READY_TIMEOUT_MS = 750;
 const PROCESS_POLL_MS = 50;
 const MIN_RELAUNCH_OBSERVATION_MS = PROCESS_POLL_MS * 2;
+const CONTROL_BRIDGE_START_DELAY_ENV = 'AUTONOMY_CONTROL_PLANE_BRIDGE_START_DELAY_MS';
+const CONTROL_BRIDGE_START_DELAY_BUFFER_MS = PROCESS_POLL_MS * 4;
 
 async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Promise<DefaultRestartOutcome> {
   const normalizedPlan = normalizeDefaultRestartPlan(plan);
@@ -88,25 +90,24 @@ async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Pr
   });
   const relaunchReadyTimeoutMs = normalizedPlan.relaunchReadyTimeoutMs || DEFAULT_RELAUNCH_READY_TIMEOUT_MS;
   const launchOutcomes: DefaultRestartTargetOutcome[] = [];
+  let outcome = buildDefaultRestartOutcome([
+    ...validationOutcomes,
+    ...stopOutcomes,
+    ...launchOutcomes,
+  ]);
   for (const target of orderedTargets(stoppedTargets)) {
     launchOutcomes.push(await relaunchService(target, relaunchReadyTimeoutMs));
+    outcome = buildDefaultRestartOutcome([
+      ...validationOutcomes,
+      ...stopOutcomes,
+      ...launchOutcomes,
+    ]);
+    recordRestartOutcome(normalizedPlan.rootDir, normalizedPlan.jobId, outcome);
   }
 
-  const outcome = {
-    status: aggregateRestartOutcome([
-      ...validationOutcomes,
-      ...stopOutcomes,
-      ...launchOutcomes,
-    ]),
-    completedAt: new Date().toISOString(),
-    targets: compactOutcomes([
-      ...validationOutcomes,
-      ...stopOutcomes,
-      ...launchOutcomes,
-    ]),
-  };
-
-  recordRestartOutcome(normalizedPlan.rootDir, normalizedPlan.jobId, outcome);
+  if (launchOutcomes.length === 0) {
+    recordRestartOutcome(normalizedPlan.rootDir, normalizedPlan.jobId, outcome);
+  }
   return outcome;
 }
 
@@ -216,10 +217,7 @@ function relaunchService(
       child = spawn(launch.command, launch.args, {
         cwd: launch.cwd,
         detached: true,
-        env: {
-          ...process.env,
-          ...(launch.env || {}),
-        },
+        env: buildRelaunchEnv(target.target, launch.env || {}, readyTimeoutMs),
         stdio: 'ignore',
       });
     } catch (error) {
@@ -262,9 +260,7 @@ function waitForRelaunchReadiness(
 ): Promise<DefaultRestartTargetOutcome> {
   const metadata = target.metadata;
   const launch = metadata.launch;
-  const observedReadyTimeoutMs = Number.isFinite(readyTimeoutMs)
-    ? Math.max(MIN_RELAUNCH_OBSERVATION_MS, readyTimeoutMs)
-    : DEFAULT_RELAUNCH_READY_TIMEOUT_MS;
+  const observedReadyTimeoutMs = normalizeRelaunchReadyTimeoutMs(readyTimeoutMs);
   return new Promise((resolve) => {
     let settled = false;
     let readinessTimer: NodeJS.Timeout | undefined;
@@ -315,6 +311,42 @@ function waitForRelaunchReadiness(
       });
     }, observedReadyTimeoutMs);
   });
+}
+
+function buildDefaultRestartOutcome(outcomes: DefaultRestartTargetOutcome[]): DefaultRestartOutcome {
+  return {
+    status: aggregateRestartOutcome(outcomes),
+    completedAt: new Date().toISOString(),
+    targets: compactOutcomes(outcomes),
+  };
+}
+
+function buildRelaunchEnv(
+  target: ControlPlaneServiceKind,
+  launchEnv: Record<string, string>,
+  readyTimeoutMs: number
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...launchEnv,
+  };
+  if (target === 'controlBridge') {
+    const existingDelayMs = normalizeNonNegativeNumber(env[CONTROL_BRIDGE_START_DELAY_ENV]);
+    const requiredDelayMs = normalizeRelaunchReadyTimeoutMs(readyTimeoutMs) + CONTROL_BRIDGE_START_DELAY_BUFFER_MS;
+    env[CONTROL_BRIDGE_START_DELAY_ENV] = String(Math.max(existingDelayMs, requiredDelayMs));
+  }
+  return env;
+}
+
+function normalizeRelaunchReadyTimeoutMs(readyTimeoutMs: number) {
+  return Number.isFinite(readyTimeoutMs)
+    ? Math.max(MIN_RELAUNCH_OBSERVATION_MS, readyTimeoutMs)
+    : DEFAULT_RELAUNCH_READY_TIMEOUT_MS;
+}
+
+function normalizeNonNegativeNumber(value: unknown) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? Math.max(0, numberValue) : 0;
 }
 
 function recordRestartOutcome(rootDir: string, jobId: string | undefined, outcome: DefaultRestartOutcome) {

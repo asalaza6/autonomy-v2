@@ -994,13 +994,15 @@
       "acceptance": [
         "`npm run typecheck` passed and the prior early-exit relaunch failure blocker is now covered in the committed helper/test. However, the default restart outcome can still be lost from job history because the helper records results only after relaunching the bridge, while the relaunched bridge can cause the new server process to cache and rewrite stale control-plane state first.\nBlocking: `src/server/control-plane/control-plane-restart-helper.ts:89` relaunches all stopped targets, including `controlBridge`, before `recordRestartOutcome(...)` runs at `src/server/control-plane/control-plane-restart-helper.ts:108`. A relaunched bridge immediately polls in `src/server/control-plane/control-plane-bridge.ts:331-333`, which can make the newly relaunched server load `.autonomy/control-plane/state.json` before the helper writes the final `restarted`/`relaunch-failed` result. Because `loadControlPlaneState` caches state per process at `src/server/control-plane/control-plane-store.ts:42-53`, later server writes can preserve or overwrite the stale `deferred` restart result, so restart outcomes may not be visible in the control panel job history. Update the flow so helper results cannot race with the new server/bridge state cache, and add focused coverage for this cross-process stale-state/job-history case."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
       "createdAt": "2026-04-22T01:47:18.540Z",
-      "updatedAt": "2026-04-22T01:49:49.374Z",
+      "updatedAt": "2026-04-22T01:56:50.654Z",
       "startedAt": "2026-04-22T01:49:49.374Z",
-      "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent"
+      "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent",
+      "completedAt": "2026-04-22T01:56:50.654Z",
+      "completionMode": "code"
     }
   ]
 }

@@ -11,6 +11,8 @@ import {
   runDeferredControlPlaneRestartCommands,
 } from './control-plane-package-update.js';
 
+const CONTROL_BRIDGE_START_DELAY_ENV = 'AUTONOMY_CONTROL_PLANE_BRIDGE_START_DELAY_MS';
+
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
   String(value || '')
@@ -324,6 +326,11 @@ async function runControlPlaneBridgeLoop(rootDir: string, options: {
   once?: boolean;
 }) {
   recordControlBridgeLifecycle(options.repoRoots);
+  const startupDelayMs = normalizeBridgeStartupDelay(process.env[CONTROL_BRIDGE_START_DELAY_ENV]);
+  delete process.env[CONTROL_BRIDGE_START_DELAY_ENV];
+  if (startupDelayMs > 0) {
+    await delay(startupDelayMs);
+  }
   if (options.once === true) {
     return runControlPlaneBridgeOnce(rootDir, options);
   }
@@ -380,6 +387,11 @@ async function requestJsonOnce(url: string, init: Omit<RequestInit, 'body'> & { 
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeBridgeStartupDelay(value: unknown) {
+  const delayMs = Number(value);
+  return Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0;
 }
 
 function formatErrorMessage(error: unknown) {
