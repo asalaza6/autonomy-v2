@@ -22,5 +22,31 @@
     "stale-review requeues",
     "and reconciliation from `changes_requested` to `merged`.",
     "Avoid rewriting existing git history as part of the functional fix."
+  ],
+  "tasks": [
+    {
+      "id": "prd-make-reviewer-queue-sync-24ab70-architecture-agent-1",
+      "title": "Implement Make Reviewer Queue Sync Idempotent",
+      "agentId": "architecture-agent",
+      "description": "# PRD: Make Reviewer Queue Sync Idempotent\n\nPriority: high\n\n## Problem\nReviewer queue sync rewrites `updatedAt` on every scheduler tick, causing frequent `autonomy(queue): sync reviewer queue` commits that only change timestamps.\n\n## Goal\nStop timestamp-only reviewer queue commits while preserving real queue-state updates and review reconciliation behavior.\n\n## Requirements\n- Preserve existing reviewer task `updatedAt` when derived reviewer task content is semantically unchanged.\n- Only bump reviewer task `updatedAt` when meaningful task fields change, including status, source task, review round, PR linkage, merge/decision fields, dispatcher fields, or conversation references.\n- Ensure `syncTrackedReviewerQueues()` does not commit when the resulting reviewer queue is semantically identical to the tracked queue.\n- Keep legitimate reviewer queue commits for assignments, approvals, changes requested, merges, stale-review requeues, and reconciliation from `changes_requested` to `merged`.\n- Avoid rewriting existing git history as part of the functional fix.\n\n## Acceptance Criteria\n- Running two scheduler sync ticks against unchanged PR/reviewer state creates no second reviewer queue commit.\n- A date-only `updatedAt` change is not staged or committed for `prompts/autonomous/v2/queues/reviewer.json`.\n- A real reviewer task status transition still updates the queue and commits once.\n- Existing review follow-up refresh and stale review reconciliation behavior remains intact.\n\n## Verification\n- Add or update unit coverage around `buildDerivedReviewerTask()` or sync flow to assert stable `updatedAt` for unchanged derived tasks.\n- Add an integration-style test using a fixture repo that runs sync twice and asserts the reviewer queue commit count is unchanged on the second run.\n- Run the relevant unit tests for reviewer follow-up refresh, control-plane status reconciliation, and review queue state.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1776829257204_507afcf476d878\nManager message: msg_1776833156739_9ef51bb61edd9\nAgent message: msg_1776833156739_f65e11d13dfb18\nCreated: 2026-04-22T04:47:47.465Z",
+      "acceptance": [
+        "Preserve existing reviewer task `updatedAt` when derived reviewer task content is semantically unchanged.",
+        "Only bump reviewer task `updatedAt` when meaningful task fields change",
+        "including status",
+        "source task",
+        "review round",
+        "PR linkage",
+        "merge/decision fields",
+        "dispatcher fields",
+        "or conversation references.",
+        "approvals",
+        "changes requested",
+        "merges",
+        "stale-review requeues",
+        "and reconciliation from `changes_requested` to `merged`.",
+        "Avoid rewriting existing git history as part of the functional fix."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }

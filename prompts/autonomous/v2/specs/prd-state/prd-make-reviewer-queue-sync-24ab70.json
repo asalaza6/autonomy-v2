@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-make-reviewer-queue-sync-24ab70",
+  "status": "planned",
+  "createdAt": "2026-04-22T05:45:23.308Z",
+  "updatedAt": "2026-04-22T05:45:23.308Z",
+  "plannedTaskIds": [
+    "prd-make-reviewer-queue-sync-24ab70-architecture-agent-1"
+  ]
+}
