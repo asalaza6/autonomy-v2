@@ -464,6 +464,36 @@
       "lastMergeFailureMessage": "Merge blocked.\n- PR status must be approved before merge, received changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-22T01:57:24.826Z"
+    },
+    {
+      "id": "review-pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "title": "Review [architecture-agent] Implement Approved PR Merge Watchdog",
+      "description": "Review pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent for Implement Approved PR Merge Watchdog",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "sourceTaskId": "prd-approved-pr-merge-watchdog-5461cc-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-22T04:19:32.650Z",
+      "updatedAt": "2026-04-22T04:19:32.650Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Detect PRs in approved state that have not merged after a short timeout.",
+        "Check GitHub mergeability",
+        "required status checks",
+        "branch protection",
+        "conflicts",
+        "and stale branch state.",
+        "Attempt the merge automatically when all required conditions are satisfied.",
+        "If merge is blocked",
+        "write a clear status reason into the control panel PR status/action.",
+        "Avoid duplicate merge attempts and make retries idempotent.",
+        "Escalate stuck PRs to the manager/status surface instead of leaving them as active review work."
+      ],
+      "scopeViolations": []
     }
   ]
 }
