@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1113,6 +1112,30 @@
       "updatedAt": "2026-04-22T04:28:32.122Z",
       "startedAt": null,
       "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent-4",
+      "title": "Address review for [architecture-agent] Implement Approved PR Merge Watchdog",
+      "description": "`npm run typecheck` passes and the stale-reviewed-head guard is now present, but the branch is not safe to approve or merge yet.\nMerge safety blocker: the lane still records pending follow-up work for this same PR. `prompts/autonomous/v2/queues/architecture-agent.json:1086` has follow-up 2 active and `prompts/autonomous/v2/queues/architecture-agent.json:1109` has follow-up 3 queued. The merge command blocks when any lane task or `pendingTaskIds` remain pending (`src/autonomy-v2/commands/merge.ts:23`, `src/autonomy-v2/commands/merge.ts:30`). Complete or clear those stale follow-up tasks so the PR has no pending lane work, then rerun `npm run typecheck`.\nDuplicate merge-attempt risk: the scheduler runs `runApprovedPrMergeWatchdog` before acquiring the state lock (`src/server/orchestrator/scheduler.ts:51`, lock starts at `src/server/orchestrator/scheduler.ts:63`), and the watchdog only records attempt state after a failed merge attempt (`src/autonomy-v2/commands/merge-watchdog.ts:81`, `src/autonomy-v2/commands/merge-watchdog.ts:87`). Concurrent ticks can select the same approved PR and issue duplicate merge attempts before either writes `lastAttemptKey`. Make candidate selection/attempt marking atomic under the state lock, or otherwise record an in-flight attempt before executing the merge, with focused coverage for duplicate-run idempotency.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-approved-pr-merge-watchdog-5461cc",
+      "laneKey": "prd-approved-pr-merge-watchdog-5461cc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passes and the stale-reviewed-head guard is now present, but the branch is not safe to approve or merge yet.\nMerge safety blocker: the lane still records pending follow-up work for this same PR. `prompts/autonomous/v2/queues/architecture-agent.json:1086` has follow-up 2 active and `prompts/autonomous/v2/queues/architecture-agent.json:1109` has follow-up 3 queued. The merge command blocks when any lane task or `pendingTaskIds` remain pending (`src/autonomy-v2/commands/merge.ts:23`, `src/autonomy-v2/commands/merge.ts:30`). Complete or clear those stale follow-up tasks so the PR has no pending lane work, then rerun `npm run typecheck`.\nDuplicate merge-attempt risk: the scheduler runs `runApprovedPrMergeWatchdog` before acquiring the state lock (`src/server/orchestrator/scheduler.ts:51`, lock starts at `src/server/orchestrator/scheduler.ts:63`), and the watchdog only records attempt state after a failed merge attempt (`src/autonomy-v2/commands/merge-watchdog.ts:81`, `src/autonomy-v2/commands/merge-watchdog.ts:87`). Concurrent ticks can select the same approved PR and issue duplicate merge attempts before either writes `lastAttemptKey`. Make candidate selection/attempt marking atomic under the state lock, or otherwise record an in-flight attempt before executing the merge, with focused coverage for duplicate-run idempotency."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "createdAt": "2026-04-22T04:35:15.604Z",
+      "updatedAt": "2026-04-22T04:35:15.604Z",
+      "startedAt": null,
+      "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
