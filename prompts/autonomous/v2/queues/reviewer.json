@@ -454,11 +454,12 @@
       "reviewRound": 5,
       "status": "approved",
       "createdAt": "2026-04-22T01:30:46.300Z",
-      "updatedAt": "2026-04-22T01:50:55.214Z",
+      "updatedAt": "2026-04-22T01:50:59.289Z",
       "reviewedAt": "2026-04-22T01:50:55.214Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-22T01:47:44.447Z"
+      "dispatchedAt": "2026-04-22T01:47:44.447Z",
+      "lastMergeFailureMessage": "Merge blocked.\n- pending lane tasks must be completed before merge"
     }
   ]
 }
