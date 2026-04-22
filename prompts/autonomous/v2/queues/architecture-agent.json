@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -940,6 +939,30 @@
       "updatedAt": "2026-04-22T01:40:44.640Z",
       "startedAt": "2026-04-22T01:40:44.640Z",
       "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-default-service-restart-fallback-98a973-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Implement Default Service Restart Fallback",
+      "description": "`npm run typecheck` passed, and the diff is in scope and merge-tree did not show conflicts with `origin/dev`. However the PR branch HEAD still has the prior relaunch-failure bug; the apparent fix is only present as unstaged local changes, so it is not safely mergeable as reviewed.\nBlocking: committed `src/server/control-plane/control-plane-restart-helper.ts:230` still marks a relaunched service as `restarted` immediately on the child `spawn` event and never observes an immediate non-zero exit. A command that spawns and then fails can still leave job history reporting success while the service is down.\nBlocking verification gap in committed `tests/unit/control-plane-default-restart.test.ts`: the branch only covers an ENOENT spawn error, not a process that successfully spawns and exits non-zero. The unstaged local test/fix should be included in the branch, or equivalent committed coverage added, before approval.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-default-service-restart-fallback-98a973",
+      "laneKey": "prd-default-service-restart-fallback-98a973:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed, and the diff is in scope and merge-tree did not show conflicts with `origin/dev`. However the PR branch HEAD still has the prior relaunch-failure bug; the apparent fix is only present as unstaged local changes, so it is not safely mergeable as reviewed.\nBlocking: committed `src/server/control-plane/control-plane-restart-helper.ts:230` still marks a relaunched service as `restarted` immediately on the child `spawn` event and never observes an immediate non-zero exit. A command that spawns and then fails can still leave job history reporting success while the service is down.\nBlocking verification gap in committed `tests/unit/control-plane-default-restart.test.ts`: the branch only covers an ENOENT spawn error, not a process that successfully spawns and exits non-zero. The unstaged local test/fix should be included in the branch, or equivalent committed coverage added, before approval."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
+      "createdAt": "2026-04-22T01:41:02.276Z",
+      "updatedAt": "2026-04-22T01:41:02.276Z",
+      "startedAt": null,
+      "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
