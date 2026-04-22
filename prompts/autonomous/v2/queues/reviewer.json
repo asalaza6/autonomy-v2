@@ -429,10 +429,6 @@
       "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent",
       "sourceTaskId": "prd-default-service-restart-fallback-98a973-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-22T01:30:46.300Z",
-      "updatedAt": "2026-04-22T01:30:46.300Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -455,9 +451,12 @@
         "and relaunch failure cases.",
         "Add logs/events that make restart outcomes visible in the control panel job history."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-22T01:30:51.958Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-22T01:30:46.300Z",
+      "updatedAt": "2026-04-22T01:30:54.604Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-22T01:30:51.958Z"
     }
   ]
 }
