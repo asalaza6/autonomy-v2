@@ -11,6 +11,8 @@ import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './control-plane-browser.js';
+import { loadControlPlaneConfig } from './control-plane-config.js';
+import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import {
   claimJob,
   completeJob,
@@ -107,6 +109,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
   await new Promise((resolve) => {
     server.listen(port, host, () => resolve(undefined));
   });
+  recordControlPlaneServerLifecycle(rootDir);
   console.log(`Control plane listening on http://${host}:${port}`);
 
   const shutdown = () => {
@@ -416,6 +419,9 @@ async function handleRequest(
       deployCommand: job.result && job.result.deployCommand
         ? job.result.deployCommand.command || 'yes'
         : '',
+      restart: job.result && job.result.restartStatus && job.result.restartStatus.status || '',
+      restartServer: job.result && job.result.restartStatus && job.result.restartStatus.server && job.result.restartStatus.server.status || '',
+      restartBridge: job.result && job.result.restartStatus && job.result.restartStatus.controlBridge && job.result.restartStatus.controlBridge.status || '',
     });
     sendJson(res, 200, job);
     return;
@@ -568,6 +574,18 @@ function parseRepoRoots(value: string, fallbackRepoRoot = '') {
     repoRoots.__path_0 = fallbackRepoRoot;
   }
   return repoRoots;
+}
+
+function recordControlPlaneServerLifecycle(rootDir: string) {
+  let serverRestartCommand;
+  try {
+    serverRestartCommand = loadControlPlaneConfig(rootDir).serverRestartCommand;
+  } catch (_) {
+    serverRestartCommand = undefined;
+  }
+  recordControlPlaneServiceLifecycle(rootDir, 'server', {
+    restartCommand: serverRestartCommand,
+  });
 }
 
 async function sendControlPlaneAsset(

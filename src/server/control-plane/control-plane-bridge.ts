@@ -4,6 +4,7 @@ import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-serv
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
+import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import {
   executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
@@ -178,7 +179,10 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           root: repoRoot,
         });
-        const execution = executeControlPlaneRestart(repoRoot);
+        const execution = executeControlPlaneRestart(repoRoot, {
+          jobId: job.id,
+          repoId: job.repoId,
+        });
         await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
           method: 'POST',
           body: {
@@ -190,6 +194,8 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           jobId: job.id,
           repoId: job.repoId,
           restart: execution.restartStatus.status,
+          server: execution.restartStatus.server && execution.restartStatus.server.status || '',
+          bridge: execution.restartStatus.controlBridge && execution.restartStatus.controlBridge.status || '',
         });
         deferredRestartCommandsForJob = execution.deferredRestartCommands;
         result = execution.result;
@@ -297,6 +303,8 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         jobId: restart.jobId,
         repoId: restart.repoId,
         target: result.target,
+        mode: result.mode,
+        targets: Array.isArray(result.targets) ? result.targets.join(',') : '',
         status: result.status,
         command: result.command,
         error: result.error || '',
@@ -315,6 +323,7 @@ async function runControlPlaneBridgeLoop(rootDir: string, options: {
   pollMs: number;
   once?: boolean;
 }) {
+  recordControlBridgeLifecycle(options.repoRoots);
   if (options.once === true) {
     return runControlPlaneBridgeOnce(rootDir, options);
   }
@@ -436,6 +445,19 @@ function resolveRegisteredRepoRoots(repoRoots: Record<string, string>) {
     };
   });
   return registrations;
+}
+
+function recordControlBridgeLifecycle(repoRoots: Record<string, string>) {
+  const registrations = resolveRegisteredRepoRoots(repoRoots);
+  const targets = Object.values(registrations);
+  if (targets.length === 0) {
+    return;
+  }
+  targets.forEach((registration) => {
+    recordControlPlaneServiceLifecycle(registration.rootDir, 'controlBridge', {
+      restartCommand: registration.repo.controlBridgeRestartCommand,
+    });
+  });
 }
 
 export {

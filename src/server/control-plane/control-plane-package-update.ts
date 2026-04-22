@@ -1,11 +1,16 @@
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { readAutonomyPackageStatus, runPackageUpdate } from '../../autonomy-v2/commands/update.js';
 import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../types.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
+import type { ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
+import { validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
+import type { DefaultRestartHelperPlan } from './control-plane-restart-helper.js';
 
 type RestartTarget = 'controlBridge' | 'server';
+type DeferredRestartTarget = RestartTarget | 'default';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_COMMAND_OUTPUT_LENGTH = 4000;
@@ -19,16 +24,29 @@ interface NormalizedControlPlaneCommandConfig {
   shell: boolean;
 }
 
-interface DeferredRestartCommand {
+interface ConfiguredDeferredRestartCommand {
+  mode: 'configured';
   target: RestartTarget;
   commandConfig: NormalizedControlPlaneCommandConfig;
 }
 
+interface DefaultDeferredRestartCommand {
+  mode: 'default';
+  target: 'default';
+  command: string;
+  cwd: string;
+  helperPlan: DefaultRestartHelperPlan;
+}
+
+type DeferredRestartCommand = ConfiguredDeferredRestartCommand | DefaultDeferredRestartCommand;
+
 interface DeferredRestartLaunchResult {
-  target: RestartTarget;
+  target: DeferredRestartTarget;
+  mode: 'configured' | 'default';
   command: string;
   cwd: string;
   status: 'launched' | 'failed';
+  targets?: RestartTarget[];
   error?: string;
 }
 
@@ -115,9 +133,12 @@ function executeCustomControlPlanePackageUpdate(
   };
 }
 
-function executeControlPlaneRestart(rootDir: string) {
+function executeControlPlaneRestart(rootDir: string, context: {
+  jobId?: string;
+  repoId?: string;
+} = {}) {
   const restartConfig = loadControlPlaneConfig(rootDir);
-  const restartPlan = prepareControlPlaneRestartCommands(rootDir, restartConfig);
+  const restartPlan = prepareControlPlaneRestartCommands(rootDir, restartConfig, context);
   const restartStatus = restartPlan.restartStatus;
   const errors = collectRestartErrors(restartStatus);
 
@@ -132,10 +153,13 @@ function executeControlPlaneRestart(rootDir: string) {
   };
 }
 
-function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlaneConfig) {
-  const controlBridgePlan = deferRestartCommand(rootDir, 'controlBridge', config.controlBridgeRestartCommand);
+function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlaneConfig, context: {
+  jobId?: string;
+  repoId?: string;
+} = {}) {
+  const controlBridgePlan = prepareRestartTarget(rootDir, 'controlBridge', config.controlBridgeRestartCommand);
   const controlBridge = controlBridgePlan.status;
-  const serverPlan = deferRestartCommand(rootDir, 'server', config.serverRestartCommand);
+  const serverPlan = prepareRestartTarget(rootDir, 'server', config.serverRestartCommand);
   const server = serverPlan.status;
   const targetStatuses = [controlBridge.status, server.status];
   const status = targetStatuses.includes('failed')
@@ -149,12 +173,11 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
       controlBridge,
       server,
     },
-    deferredCommands: [serverPlan.deferredCommand, controlBridgePlan.deferredCommand]
-      .filter((command): command is DeferredRestartCommand => Boolean(command)),
+    deferredCommands: buildDeferredRestartCommands(rootDir, serverPlan, controlBridgePlan, context),
   };
 }
 
-function deferRestartCommand(
+function prepareRestartTarget(
   rootDir: string,
   target: RestartTarget,
   value: DeployCommandConfig | null | undefined
@@ -169,18 +192,12 @@ function deferRestartCommand(
         status: 'failed' as const,
         error: formatErrorMessage(error),
       },
-      deferredCommand: null,
+      configuredCommand: null,
+      defaultTarget: null,
     };
   }
   if (!commandConfig) {
-    return {
-      status: {
-        target,
-        status: 'skipped' as const,
-        reason: 'not-configured',
-      },
-      deferredCommand: null,
-    };
+    return prepareDefaultRestartTarget(rootDir, target);
   }
 
   return {
@@ -188,13 +205,112 @@ function deferRestartCommand(
       target,
       status: 'deferred' as const,
       reason: 'after-job-completion',
+      mode: 'configured' as const,
       command: commandConfig.displayCommand,
       cwd: path.relative(rootDir, commandConfig.cwd) || '.',
     },
-    deferredCommand: {
+    configuredCommand: {
+      mode: 'configured' as const,
       target,
       commandConfig,
     },
+    defaultTarget: null,
+  };
+}
+
+function prepareDefaultRestartTarget(rootDir: string, target: RestartTarget) {
+  const validation = validateControlPlaneServiceLifecycle(rootDir, target);
+  if (validation.status === 'missing-metadata') {
+    return {
+      status: {
+        target,
+        status: 'skipped' as const,
+        reason: 'missing-metadata',
+      },
+      configuredCommand: null,
+      defaultTarget: null,
+    };
+  }
+  if (validation.status === 'stale-pid' || !validation.metadata) {
+    return {
+      status: {
+        target,
+        status: 'failed' as const,
+        mode: 'default' as const,
+        reason: validation.reason || 'stale-pid',
+        error: validation.error || `${target} lifecycle PID is stale.`,
+      },
+      configuredCommand: null,
+      defaultTarget: null,
+    };
+  }
+
+  return {
+    status: {
+      target,
+      status: 'deferred' as const,
+      mode: 'default' as const,
+      reason: 'default-lifecycle-metadata',
+      pid: validation.metadata.pid,
+      command: validation.metadata.launchCommand,
+      cwd: path.relative(rootDir, validation.metadata.launch.cwd) || '.',
+      recordedAt: validation.metadata.recordedAt,
+    },
+    configuredCommand: null,
+    defaultTarget: {
+      target,
+      metadata: validation.metadata,
+    },
+  };
+}
+
+function buildDeferredRestartCommands(
+  rootDir: string,
+  serverPlan: ReturnType<typeof prepareRestartTarget>,
+  controlBridgePlan: ReturnType<typeof prepareRestartTarget>,
+  context: {
+    jobId?: string;
+    repoId?: string;
+  }
+) {
+  const deferredCommands: DeferredRestartCommand[] = [];
+  if (serverPlan.configuredCommand) {
+    deferredCommands.push(serverPlan.configuredCommand);
+  }
+
+  const defaultTargets = [serverPlan.defaultTarget, controlBridgePlan.defaultTarget]
+    .filter((target): target is { target: RestartTarget; metadata: ControlPlaneServiceLifecycleRecord } => Boolean(target));
+  if (defaultTargets.length > 0) {
+    deferredCommands.push(createDefaultRestartCommand(rootDir, defaultTargets, context));
+  }
+
+  if (controlBridgePlan.configuredCommand) {
+    deferredCommands.push(controlBridgePlan.configuredCommand);
+  }
+  return deferredCommands;
+}
+
+function createDefaultRestartCommand(
+  rootDir: string,
+  targets: Array<{ target: RestartTarget; metadata: ControlPlaneServiceLifecycleRecord }>,
+  context: {
+    jobId?: string;
+    repoId?: string;
+  }
+): DefaultDeferredRestartCommand {
+  const helperPlan: DefaultRestartHelperPlan = {
+    rootDir,
+    jobId: String(context.jobId || '').trim() || undefined,
+    repoId: String(context.repoId || '').trim() || undefined,
+    requestedAt: new Date().toISOString(),
+    targets,
+  };
+  return {
+    mode: 'default',
+    target: 'default',
+    command: 'default lifecycle restart helper',
+    cwd: rootDir,
+    helperPlan,
   };
 }
 
@@ -215,9 +331,14 @@ async function runDeferredControlPlaneRestartCommands(
 }
 
 function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): Promise<DeferredRestartLaunchResult> {
+  if (deferredCommand.mode === 'default') {
+    return startDetachedDefaultRestartHelper(deferredCommand);
+  }
+
   const { target, commandConfig } = deferredCommand;
   const base = {
     target,
+    mode: 'configured' as const,
     command: commandConfig.displayCommand,
     cwd: commandConfig.cwd,
   };
@@ -242,6 +363,60 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
           ...commandConfig.env,
         },
         shell: commandConfig.shell,
+        stdio: 'ignore',
+      });
+    } catch (error) {
+      settle({
+        ...base,
+        status: 'failed',
+        error: formatErrorMessage(error),
+      });
+      return;
+    }
+    child.once('spawn', () => {
+      child.unref();
+      settle({
+        ...base,
+        status: 'launched',
+      });
+    });
+    child.once('error', (error) => {
+      settle({
+        ...base,
+        status: 'failed',
+        error: error.message,
+      });
+    });
+  });
+}
+
+function startDetachedDefaultRestartHelper(deferredCommand: DefaultDeferredRestartCommand): Promise<DeferredRestartLaunchResult> {
+  const helperPath = fileURLToPath(new URL('./control-plane-restart-helper.js', import.meta.url));
+  const payload = Buffer.from(JSON.stringify(deferredCommand.helperPlan)).toString('base64url');
+  const base = {
+    target: 'default' as const,
+    mode: 'default' as const,
+    command: deferredCommand.command,
+    cwd: deferredCommand.cwd,
+    targets: deferredCommand.helperPlan.targets.map((target) => target.target),
+  };
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (result: DeferredRestartLaunchResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(result);
+    };
+
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(process.execPath, [helperPath, '--payload', payload], {
+        cwd: deferredCommand.cwd,
+        detached: true,
+        env: process.env,
         stdio: 'ignore',
       });
     } catch (error) {
@@ -435,6 +610,7 @@ function collectRestartErrors(restartStatus: {
 export {
   executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
+  prepareControlPlaneRestartCommands,
   runDeferredControlPlaneRestartCommands,
   runDeferredPackageUpdateRestartCommands,
 };
