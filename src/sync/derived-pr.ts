@@ -200,6 +200,31 @@ function uniqueStrings(values) {
   }, []);
 }
 
+function stripUpdatedAtFields(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUpdatedAtFields(entry));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.keys(value)
+    .sort()
+    .reduce((record, key) => {
+      if (key === 'updatedAt') {
+        return record;
+      }
+      record[key] = stripUpdatedAtFields(value[key]);
+      return record;
+    }, {});
+}
+
+function reviewerTaskSemanticallyEqual(existingTask, nextTask) {
+  if (!existingTask || !nextTask) {
+    return false;
+  }
+  return JSON.stringify(stripUpdatedAtFields(existingTask)) === JSON.stringify(stripUpdatedAtFields(nextTask));
+}
+
 function buildDerivedReviewerTask(pr: PullRequestRecord, sourceTask: TaskRecord, now: string, existingTask: TaskRecord | null = null, linkedRuntimeTasks: TaskRecord[] = []) {
   const pendingLinkedTasks = linkedRuntimeTasks.filter((task) => task && task.type !== TASK_TYPES.REVIEW && isPendingRuntimeTask(task));
   const existingStatus = existingTask && existingTask.status ? existingTask.status : '';
@@ -255,6 +280,9 @@ function buildDerivedReviewerTask(pr: PullRequestRecord, sourceTask: TaskRecord,
     agentId: 'reviewer',
     role: AGENT_ROLES.REVIEW,
   }, now);
+  if (reviewerTaskSemanticallyEqual(existingTask, record)) {
+    return existingTask;
+  }
   return record;
 }
 

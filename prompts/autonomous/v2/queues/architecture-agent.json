@@ -1179,10 +1179,14 @@
         "and reconciliation from `changes_requested` to `merged`.",
         "Avoid rewriting existing git history as part of the functional fix."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-22T05:45:23.249Z",
-      "updatedAt": "2026-04-22T05:45:23.249Z"
+      "updatedAt": "2026-04-22T05:53:36.666Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-reviewer-queue-sync-24ab70-architecture-agent",
+      "startedAt": "2026-04-22T05:45:43.335Z",
+      "completedAt": "2026-04-22T05:53:36.666Z",
+      "completionMode": "code"
     }
   ]
 }

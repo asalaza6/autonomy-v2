@@ -26,6 +26,28 @@ function buildTrackedReviewQueueState(agent, tasks = []) {
   };
 }
 
+function stripUpdatedAtFields(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUpdatedAtFields(entry));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+  return Object.keys(value)
+    .sort()
+    .reduce((record, key) => {
+      if (key === 'updatedAt') {
+        return record;
+      }
+      record[key] = stripUpdatedAtFields(value[key]);
+      return record;
+    }, {});
+}
+
+function trackedReviewQueueSemanticallyEqual(existingQueue, nextQueue) {
+  return JSON.stringify(stripUpdatedAtFields(existingQueue || {})) === JSON.stringify(stripUpdatedAtFields(nextQueue || {}));
+}
+
 function syncTrackedReviewerQueues(rootDir: string, integrationBranch: string, config: AutonomyConfig, ref: string, derivedTasks: AnyRecord[] = [], options: AnyRecord = {}) {
   const updates = [];
   const pullRequestsById = new Map<string, AnyRecord>(
@@ -59,9 +81,13 @@ function syncTrackedReviewerQueues(rootDir: string, integrationBranch: string, c
         now,
       }))
       : [];
+    const nextQueue = buildTrackedReviewQueueState(agent, retainedTasks.concat(reconciledDerivedTasks));
+    if (trackedReviewQueueSemanticallyEqual(existingQueue, nextQueue)) {
+      return;
+    }
     updates.push({
       relativePath,
-      content: buildTrackedReviewQueueState(agent, retainedTasks.concat(reconciledDerivedTasks)),
+      content: nextQueue,
     });
   });
   if (updates.length === 0) {
