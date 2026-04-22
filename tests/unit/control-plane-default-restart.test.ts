@@ -243,6 +243,63 @@ test('default restart helper reports relaunch failures after stopping a verified
   assert.equal(storedJob?.result?.restartStatus.helperResults[0].status, 'relaunch-failed');
 });
 
+test('default restart helper reports failure when a relaunched process exits after spawn', async (t) => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-default-relaunch-exited-'));
+  const probeScriptPath = writeRestartProbeScript(rootDir);
+  const eventsPath = path.join(rootDir, 'restart-events.log');
+  const pidPath = path.join(rootDir, 'server.pid');
+  const server = startRestartProbe(rootDir, probeScriptPath, 'server', pidPath, eventsPath);
+  t.after(async () => {
+    await stopPid(readPidFile(pidPath));
+    await stopChild(server);
+  });
+
+  const originalPid = await waitForPidFile(pidPath);
+  const metadata = buildControlPlaneServiceLifecycleMetadata('server', {
+    pid: originalPid,
+    cwd: rootDir,
+    launch: {
+      command: process.execPath,
+      args: [probeScriptPath, 'server', pidPath, eventsPath],
+      cwd: rootDir,
+      env: {
+        AUTONOMY_RESTART_PROBE_EXIT_CODE: '42',
+      },
+    },
+    matchTokens: [path.basename(probeScriptPath), 'server'],
+  });
+  writeControlPlaneServiceLifecycle(rootDir, metadata);
+  const job = enqueueJob(rootDir, createControlPlaneRestartJob({ repoId: 'alpha' }));
+
+  const outcome = await runDefaultControlPlaneRestart({
+    rootDir,
+    jobId: job.id,
+    startDelayMs: 0,
+    stopTimeoutMs: 500,
+    relaunchReadyTimeoutMs: 500,
+    targets: [
+      {
+        target: 'server',
+        metadata,
+      },
+    ],
+  });
+
+  assert.equal(outcome.status, 'failed');
+  assert.equal(outcome.targets.length, 1);
+  assert.equal(outcome.targets[0].target, 'server');
+  assert.equal(outcome.targets[0].status, 'relaunch-failed');
+  assert.equal(outcome.targets[0].reason, 'early-exit');
+  assert.match(outcome.targets[0].error || '', /exit code 42/);
+
+  const storedJob = loadControlPlaneState(rootDir).jobs.find((entry) => entry.id === job.id);
+  assert.equal(storedJob?.result?.restartStatus.status, 'failed');
+  assert.equal(storedJob?.result?.restartStatus.helperStatus, 'failed');
+  assert.equal(storedJob?.result?.restartStatus.server.status, 'relaunch-failed');
+  assert.equal(storedJob?.result?.restartStatus.server.reason, 'early-exit');
+  assert.equal(storedJob?.result?.restartStatus.helperResults[0].status, 'relaunch-failed');
+});
+
 function buildProbeLifecycle(
   kind: 'server' | 'controlBridge',
   rootDir: string,
@@ -273,6 +330,11 @@ function writeRestartProbeScript(rootDir: string) {
     'const eventsPath = process.argv[4];',
     "fs.writeFileSync(pidPath, `${process.pid}\\n`, 'utf8');",
     "fs.appendFileSync(eventsPath, `${role}:started:${process.pid}\\n`, 'utf8');",
+    'const exitCode = Number(process.env.AUTONOMY_RESTART_PROBE_EXIT_CODE || 0);',
+    'if (exitCode) {',
+    "  fs.appendFileSync(eventsPath, `${role}:exiting:${process.pid}:${exitCode}\\n`, 'utf8');",
+    '  process.exit(exitCode);',
+    '}',
     'function shutdown() {',
     "  fs.appendFileSync(eventsPath, `${role}:stopped:${process.pid}\\n`, 'utf8');",
     '  process.exit(0);',

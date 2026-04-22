@@ -20,6 +20,7 @@ interface DefaultRestartHelperPlan {
   requestedAt?: string;
   startDelayMs?: number;
   stopTimeoutMs?: number;
+  relaunchReadyTimeoutMs?: number;
   targets: DefaultRestartTarget[];
 }
 
@@ -41,6 +42,7 @@ interface DefaultRestartOutcome {
 
 const DEFAULT_START_DELAY_MS = 500;
 const DEFAULT_STOP_TIMEOUT_MS = 4000;
+const DEFAULT_RELAUNCH_READY_TIMEOUT_MS = 750;
 const PROCESS_POLL_MS = 50;
 
 async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Promise<DefaultRestartOutcome> {
@@ -83,9 +85,10 @@ async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Pr
       && (outcome.reason === 'stopped' || outcome.reason === 'force-stopped')
     ));
   });
+  const relaunchReadyTimeoutMs = normalizedPlan.relaunchReadyTimeoutMs || DEFAULT_RELAUNCH_READY_TIMEOUT_MS;
   const launchOutcomes: DefaultRestartTargetOutcome[] = [];
   for (const target of orderedTargets(stoppedTargets)) {
-    launchOutcomes.push(await relaunchService(target));
+    launchOutcomes.push(await relaunchService(target, relaunchReadyTimeoutMs));
   }
 
   const outcome = {
@@ -191,16 +194,24 @@ async function stopRegisteredProcess(
     };
 }
 
-function relaunchService(target: DefaultRestartTarget): Promise<DefaultRestartTargetOutcome> {
+function relaunchService(
+  target: DefaultRestartTarget,
+  readyTimeoutMs: number
+): Promise<DefaultRestartTargetOutcome> {
   const metadata = target.metadata;
   const launch = metadata.launch;
   return new Promise((resolve) => {
     let settled = false;
+    let spawned = false;
+    let readinessTimer: NodeJS.Timeout | undefined;
     const settle = (outcome: DefaultRestartTargetOutcome) => {
       if (settled) {
         return;
       }
       settled = true;
+      if (readinessTimer) {
+        clearTimeout(readinessTimer);
+      }
       resolve(outcome);
     };
 
@@ -228,14 +239,32 @@ function relaunchService(target: DefaultRestartTarget): Promise<DefaultRestartTa
     }
 
     child.once('spawn', () => {
-      child.unref();
-      settle({
-        target: target.target,
-        status: 'restarted',
-        pid: child.pid || undefined,
-        command: metadata.launchCommand,
-        cwd: launch.cwd,
-      });
+      spawned = true;
+      readinessTimer = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        if (child.pid && !isProcessAlive(child.pid)) {
+          settle({
+            target: target.target,
+            status: 'relaunch-failed',
+            pid: child.pid,
+            command: metadata.launchCommand,
+            cwd: launch.cwd,
+            reason: 'early-exit',
+            error: `${formatTargetLabel(target.target)} relaunched as PID ${child.pid} but exited before readiness.`,
+          });
+          return;
+        }
+        child.unref();
+        settle({
+          target: target.target,
+          status: 'restarted',
+          pid: child.pid || undefined,
+          command: metadata.launchCommand,
+          cwd: launch.cwd,
+        });
+      }, Math.max(0, readyTimeoutMs));
     });
     child.once('error', (error) => {
       settle({
@@ -245,6 +274,20 @@ function relaunchService(target: DefaultRestartTarget): Promise<DefaultRestartTa
         cwd: launch.cwd,
         reason: 'spawn-error',
         error: error.message,
+      });
+    });
+    child.once('exit', (code, signal) => {
+      if (!spawned) {
+        return;
+      }
+      settle({
+        target: target.target,
+        status: 'relaunch-failed',
+        pid: child.pid || undefined,
+        command: metadata.launchCommand,
+        cwd: launch.cwd,
+        reason: 'early-exit',
+        error: `${formatTargetLabel(target.target)} relaunched${child.pid ? ` as PID ${child.pid}` : ''} but exited with ${formatExitStatus(code, signal)} before readiness.`,
       });
     });
   });
@@ -301,6 +344,7 @@ function normalizeDefaultRestartPlan(plan: DefaultRestartHelperPlan): DefaultRes
     requestedAt: String(plan.requestedAt || new Date().toISOString()),
     startDelayMs: Number.isFinite(Number(plan.startDelayMs)) ? Math.max(0, Number(plan.startDelayMs)) : DEFAULT_START_DELAY_MS,
     stopTimeoutMs: Number.isFinite(Number(plan.stopTimeoutMs)) ? Math.max(0, Number(plan.stopTimeoutMs)) : DEFAULT_STOP_TIMEOUT_MS,
+    relaunchReadyTimeoutMs: Number.isFinite(Number(plan.relaunchReadyTimeoutMs)) ? Math.max(0, Number(plan.relaunchReadyTimeoutMs)) : DEFAULT_RELAUNCH_READY_TIMEOUT_MS,
     targets: Array.isArray(plan.targets) ? plan.targets : [],
   };
 }
@@ -381,6 +425,16 @@ function formatErrorMessage(error: unknown) {
 
 function formatTargetLabel(target: ControlPlaneServiceKind) {
   return target === 'controlBridge' ? 'Control bridge' : 'Control panel server';
+}
+
+function formatExitStatus(code: number | null, signal: NodeJS.Signals | null) {
+  if (code !== null) {
+    return `exit code ${code}`;
+  }
+  if (signal) {
+    return `signal ${signal}`;
+  }
+  return 'an unknown status';
 }
 
 function parseHelperPlanArg(argv: string[]) {
