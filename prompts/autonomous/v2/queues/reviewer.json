@@ -474,10 +474,6 @@
       "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
       "sourceTaskId": "prd-approved-pr-merge-watchdog-5461cc-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "queued",
-      "createdAt": "2026-04-22T04:19:32.650Z",
-      "updatedAt": "2026-04-22T04:19:32.650Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -493,7 +489,10 @@
         "Avoid duplicate merge attempts and make retries idempotent.",
         "Escalate stuck PRs to the manager/status surface instead of leaving them as active review work."
       ],
-      "scopeViolations": []
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-22T04:19:32.650Z",
+      "updatedAt": "2026-04-22T04:19:36.444Z"
     }
   ]
 }
