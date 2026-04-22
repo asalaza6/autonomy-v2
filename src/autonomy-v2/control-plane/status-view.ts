@@ -310,6 +310,10 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
       ? job.result.restartStatus.status
       : 'skipped';
     details.push(`restart ${restartStatus}`);
+    const restartDetail = summarizeRestartTargets(job.result.restartStatus || {});
+    if (restartDetail) {
+      details.push(restartDetail);
+    }
   } else if (status === 'completed' && job && job.result && job.result.prdId) {
     details.push(`PRD ${job.result.prdId} committed`);
   } else if (job && job.claimedAt) {
@@ -356,7 +360,7 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
       queued: 'Waiting to restart',
       claimed: 'Restart claimed by bridge',
       running: 'Restarting services',
-      completed: 'Restart queued',
+      completed: 'Restart recorded',
       failed: 'Restart failed',
     };
   }
@@ -367,6 +371,24 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
     completed: jobType === 'deploy' ? 'Deploy completed' : 'Completed and committed',
     failed: 'Failed',
   };
+}
+
+function summarizeRestartTargets(restartStatus: any) {
+  const labels: Record<string, string> = {
+    server: 'server',
+    controlBridge: 'bridge',
+  };
+  return ['server', 'controlBridge']
+    .map((target) => {
+      const status = String(restartStatus && restartStatus[target] && restartStatus[target].status || '').trim();
+      if (!status) {
+        return '';
+      }
+      const reason = String(restartStatus && restartStatus[target] && restartStatus[target].reason || '').trim();
+      return `${labels[target]} ${status}${reason ? ` (${reason})` : ''}`;
+    })
+    .filter(Boolean)
+    .join(', ');
 }
 
 function formatControlPlaneJobTitle(job: any, jobType: string) {

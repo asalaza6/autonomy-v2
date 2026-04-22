@@ -443,7 +443,7 @@ test('bridge executes restart jobs independently after completion', async (t) =>
   assert.match(logs.join('\n'), /bridge:restart:deferred-launch/);
 });
 
-test('bridge reports skipped restart when restart commands are missing', async (t) => {
+test('bridge reports skipped restart when restart commands and lifecycle metadata are missing', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-restart-missing-');
   initAutonomyRepo(repoDir);
   let completedJob: any = null;
@@ -516,8 +516,11 @@ test('bridge reports skipped restart when restart commands are missing', async (
   assert.equal(completedJob.status, 'completed');
   assert.equal(completedJob.result.restartStatus.status, 'skipped');
   assert.equal(completedJob.result.restartStatus.controlBridge.status, 'skipped');
+  assert.equal(completedJob.result.restartStatus.controlBridge.reason, 'missing-metadata');
   assert.equal(completedJob.result.restartStatus.server.status, 'skipped');
+  assert.equal(completedJob.result.restartStatus.server.reason, 'missing-metadata');
   assert.deepEqual(completedJob.result.errors, []);
+  assert.match(logs.join('\n'), /bridge:restart:done.*restart=skipped.*server=skipped.*bridge=skipped/);
   assert.doesNotMatch(logs.join('\n'), /bridge:restart:deferred-launch/);
 });
 

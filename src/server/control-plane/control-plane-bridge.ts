@@ -4,11 +4,14 @@ import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-serv
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
+import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import {
   executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
   runDeferredControlPlaneRestartCommands,
 } from './control-plane-package-update.js';
+
+const CONTROL_BRIDGE_START_DELAY_ENV = 'AUTONOMY_CONTROL_PLANE_BRIDGE_START_DELAY_MS';
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -178,7 +181,10 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           root: repoRoot,
         });
-        const execution = executeControlPlaneRestart(repoRoot);
+        const execution = executeControlPlaneRestart(repoRoot, {
+          jobId: job.id,
+          repoId: job.repoId,
+        });
         await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
           method: 'POST',
           body: {
@@ -190,6 +196,8 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           jobId: job.id,
           repoId: job.repoId,
           restart: execution.restartStatus.status,
+          server: execution.restartStatus.server && execution.restartStatus.server.status || '',
+          bridge: execution.restartStatus.controlBridge && execution.restartStatus.controlBridge.status || '',
         });
         deferredRestartCommandsForJob = execution.deferredRestartCommands;
         result = execution.result;
@@ -297,6 +305,8 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         jobId: restart.jobId,
         repoId: restart.repoId,
         target: result.target,
+        mode: result.mode,
+        targets: Array.isArray(result.targets) ? result.targets.join(',') : '',
         status: result.status,
         command: result.command,
         error: result.error || '',
@@ -315,6 +325,12 @@ async function runControlPlaneBridgeLoop(rootDir: string, options: {
   pollMs: number;
   once?: boolean;
 }) {
+  recordControlBridgeLifecycle(options.repoRoots);
+  const startupDelayMs = normalizeBridgeStartupDelay(process.env[CONTROL_BRIDGE_START_DELAY_ENV]);
+  delete process.env[CONTROL_BRIDGE_START_DELAY_ENV];
+  if (startupDelayMs > 0) {
+    await delay(startupDelayMs);
+  }
   if (options.once === true) {
     return runControlPlaneBridgeOnce(rootDir, options);
   }
@@ -371,6 +387,11 @@ async function requestJsonOnce(url: string, init: Omit<RequestInit, 'body'> & { 
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeBridgeStartupDelay(value: unknown) {
+  const delayMs = Number(value);
+  return Number.isFinite(delayMs) ? Math.max(0, delayMs) : 0;
 }
 
 function formatErrorMessage(error: unknown) {
@@ -436,6 +457,19 @@ function resolveRegisteredRepoRoots(repoRoots: Record<string, string>) {
     };
   });
   return registrations;
+}
+
+function recordControlBridgeLifecycle(repoRoots: Record<string, string>) {
+  const registrations = resolveRegisteredRepoRoots(repoRoots);
+  const targets = Object.values(registrations);
+  if (targets.length === 0) {
+    return;
+  }
+  targets.forEach((registration) => {
+    recordControlPlaneServiceLifecycle(registration.rootDir, 'controlBridge', {
+      restartCommand: registration.repo.controlBridgeRestartCommand,
+    });
+  });
 }
 
 export {
