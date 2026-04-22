@@ -959,13 +959,24 @@
       "acceptance": [
         "`npm run typecheck` passed, and the diff is in scope and merge-tree did not show conflicts with `origin/dev`. However the PR branch HEAD still has the prior relaunch-failure bug; the apparent fix is only present as unstaged local changes, so it is not safely mergeable as reviewed.\nBlocking: committed `src/server/control-plane/control-plane-restart-helper.ts:230` still marks a relaunched service as `restarted` immediately on the child `spawn` event and never observes an immediate non-zero exit. A command that spawns and then fails can still leave job history reporting success while the service is down.\nBlocking verification gap in committed `tests/unit/control-plane-default-restart.test.ts`: the branch only covers an ENOENT spawn error, not a process that successfully spawns and exits non-zero. The unstaged local test/fix should be included in the branch, or equivalent committed coverage added, before approval."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
       "createdAt": "2026-04-22T01:41:02.276Z",
-      "updatedAt": "2026-04-22T01:48:29.113Z",
+      "updatedAt": "2026-04-22T01:49:49.374Z",
       "startedAt": "2026-04-22T01:48:29.113Z",
-      "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent"
+      "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent",
+      "completedAt": "2026-04-22T01:49:49.374Z",
+      "completionMode": "noop",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019db2df-ee04-7393-9b53-0e3c71b32c98",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-22T01:49:49.374Z"
+        }
+      },
+      "implementationConversationId": "019db2df-ee04-7393-9b53-0e3c71b32c98"
     },
     {
       "id": "architecture-agent-followup-pr-prd-default-service-restart-fallback-98a973-architecture-agent-4",
@@ -982,12 +993,12 @@
       "acceptance": [
         "`npm run typecheck` passed and the prior early-exit relaunch failure blocker is now covered in the committed helper/test. However, the default restart outcome can still be lost from job history because the helper records results only after relaunching the bridge, while the relaunched bridge can cause the new server process to cache and rewrite stale control-plane state first.\nBlocking: `src/server/control-plane/control-plane-restart-helper.ts:89` relaunches all stopped targets, including `controlBridge`, before `recordRestartOutcome(...)` runs at `src/server/control-plane/control-plane-restart-helper.ts:108`. A relaunched bridge immediately polls in `src/server/control-plane/control-plane-bridge.ts:331-333`, which can make the newly relaunched server load `.autonomy/control-plane/state.json` before the helper writes the final `restarted`/`relaunch-failed` result. Because `loadControlPlaneState` caches state per process at `src/server/control-plane/control-plane-store.ts:42-53`, later server writes can preserve or overwrite the stale `deferred` restart result, so restart outcomes may not be visible in the control panel job history. Update the flow so helper results cannot race with the new server/bridge state cache, and add focused coverage for this cross-process stale-state/job-history case."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
       "createdAt": "2026-04-22T01:47:18.540Z",
-      "updatedAt": "2026-04-22T01:47:18.540Z",
-      "startedAt": null,
+      "updatedAt": "2026-04-22T01:49:49.374Z",
+      "startedAt": "2026-04-22T01:49:49.374Z",
       "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent"
     }
   ]
