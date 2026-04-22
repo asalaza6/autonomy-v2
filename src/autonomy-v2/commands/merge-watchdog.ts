@@ -58,6 +58,13 @@ function runApprovedPrMergeWatchdog(rootDir: string, options: AnyRecord = {}) {
     return { checked: 1, changed: true, merged: true, prId: candidate.pr.id, diagnosis };
   }
 
+  const unreviewedHeadDiagnosis = buildUnreviewedHeadMergeDiagnosis(candidate.pr, candidate.reviewTask, diagnosis);
+  if (unreviewedHeadDiagnosis) {
+    const changed = applyMergeDiagnosis(candidate.pr, candidate.reviewTask, unreviewedHeadDiagnosis, now);
+    persistWatchdogState(rootDir, state, changed);
+    return { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis: unreviewedHeadDiagnosis };
+  }
+
   if (diagnosis.canMerge) {
     const attemptKey = buildMergeAttemptKey(candidate.pr, diagnosis);
     if (mergeAttemptIsFresh(candidate.pr, attemptKey, now, resolvePositiveNumber(options.retryMs, DEFAULT_MERGE_WATCHDOG_RETRY_MS))) {
@@ -303,6 +310,57 @@ function latestReviewDecision(pr: PullRequestRecord) {
   return String(review && review.decision || '');
 }
 
+function getPullRequestCommitCount(pr: PullRequestRecord) {
+  const counts = [
+    Number(pr && pr.commitCount),
+    Number(pr && pr.remote && pr.remote.commitCount),
+  ].filter((count) => Number.isFinite(count) && count > 0);
+  return counts.length > 0 ? Math.max(...counts) : 0;
+}
+
+function reviewedCommitCountCoversPullRequestHead(pr: PullRequestRecord, reviewTask: TaskRecord) {
+  const reviewedCommitCount = Number(reviewTask && reviewTask.reviewedCommitCount);
+  const currentCommitCount = getPullRequestCommitCount(pr);
+  if (Number.isFinite(reviewedCommitCount) && reviewedCommitCount > 0) {
+    return currentCommitCount <= reviewedCommitCount;
+  }
+  return true;
+}
+
+function shouldRetryApprovedPrMerge(pr: PullRequestRecord, reviewTask: TaskRecord) {
+  if (latestReviewDecision(pr) !== 'approved') {
+    return false;
+  }
+  if (pr && pr.mergedAt) {
+    return false;
+  }
+  if (pr && pr.remote && pr.remote.mergedAt) {
+    return false;
+  }
+  return reviewedCommitCountCoversPullRequestHead(pr, reviewTask);
+}
+
+function buildUnreviewedHeadMergeDiagnosis(
+  pr: PullRequestRecord,
+  reviewTask: TaskRecord,
+  baseDiagnosis: AnyRecord = {}
+) {
+  if (reviewedCommitCountCoversPullRequestHead(pr, reviewTask)) {
+    return null;
+  }
+  const currentCommitCount = getPullRequestCommitCount(pr);
+  const reviewedCommitCount = Number(reviewTask && reviewTask.reviewedCommitCount);
+  return {
+    mergeState: 'blocked',
+    canMerge: false,
+    code: 'unreviewed_head',
+    reason: `PR head has ${currentCommitCount} commits, but approval reviewed ${reviewedCommitCount}; review must cover the latest head before merge`,
+    headSha: baseDiagnosis.headSha || (pr.remote && pr.remote.sha) || null,
+    commitCount: currentCommitCount,
+    reviewedCommitCount,
+  };
+}
+
 function extractExecError(error) {
   if (error && error.stderr) {
     return String(error.stderr).trim();
@@ -320,9 +378,13 @@ function resolvePositiveNumber(value: unknown, fallback: number) {
 
 export {
   approvedPullRequestIsDue,
+  buildUnreviewedHeadMergeDiagnosis,
   classifyMergeFailureMessage,
   diagnoseApprovedPullRequestMerge,
   formatMergeFailureReason,
+  getPullRequestCommitCount,
+  reviewedCommitCountCoversPullRequestHead,
   runApprovedPrMergeWatchdog,
   selectApprovedMergeWatchdogCandidate,
+  shouldRetryApprovedPrMerge,
 };

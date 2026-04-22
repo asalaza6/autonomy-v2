@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   approvedPullRequestIsDue,
+  buildUnreviewedHeadMergeDiagnosis,
   classifyMergeFailureMessage,
   formatMergeFailureReason,
+  reviewedCommitCountCoversPullRequestHead,
   selectApprovedMergeWatchdogCandidate,
+  shouldRetryApprovedPrMerge,
 } from '../../src/autonomy-v2/commands/merge-watchdog.js';
 import {
   buildPullRequestStatusSummaries,
@@ -102,6 +105,34 @@ test('approved PR merge watchdog selects the oldest due approved PR', () => {
   });
 
   assert.equal(candidate.pr.id, 'pr-older');
+});
+
+test('approved PR merge watchdog blocks heads that changed after approval', () => {
+  const pr = buildApprovedPr({
+    commitCount: 2,
+    remote: {
+      number: 17,
+      state: 'open',
+      url: 'https://github.com/asalaza6/autonomy-v2/pull/17',
+      commitCount: 3,
+      sha: 'head-after-approval',
+    },
+  });
+  const reviewTask = buildApprovedReviewTask({ reviewedCommitCount: 2 });
+
+  assert.equal(reviewedCommitCountCoversPullRequestHead(pr, reviewTask), false);
+  assert.equal(shouldRetryApprovedPrMerge(pr, reviewTask), false);
+
+  const diagnosis = buildUnreviewedHeadMergeDiagnosis(pr, reviewTask, {
+    canMerge: true,
+    headSha: 'head-after-approval',
+  });
+
+  assert.equal(diagnosis?.mergeState, 'blocked');
+  assert.equal(diagnosis?.canMerge, false);
+  assert.equal(diagnosis?.code, 'unreviewed_head');
+  assert.equal(diagnosis?.headSha, 'head-after-approval');
+  assert.match(diagnosis?.reason || '', /review must cover the latest head before merge/);
 });
 
 test('merge failure classifier identifies specific blocked and waiting reasons', () => {
