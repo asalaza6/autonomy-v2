@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-approved-pr-merge-watchdog-5461cc",
+  "title": "Approved PR Merge Watchdog",
+  "createdAt": "2026-04-22T03:37:16.477Z",
+  "specification": "# PRD: Approved PR Merge Watchdog\n\nPriority: high\n\n## Problem\nApproved pull requests can remain in `approved, waiting for merge` without a visible blocker, leaving deploy status ambiguous and delaying promotion from dev to main.\n\n## Goal\nAutomatically detect approved-but-unmerged PRs, either merge them when safe or report the exact reason they are blocked.\n\n## Requirements\n- Detect PRs in approved state that have not merged after a short timeout.\n- Check GitHub mergeability, required status checks, branch protection, conflicts, and stale branch state.\n- Attempt the merge automatically when all required conditions are satisfied.\n- If merge is blocked, write a clear status reason into the control panel PR status/action.\n- Avoid duplicate merge attempts and make retries idempotent.\n- Escalate stuck PRs to the manager/status surface instead of leaving them as active review work.\n\n## Acceptance Criteria\n- An approved PR that is mergeable transitions to merged without manual intervention.\n- An approved PR that cannot merge shows a specific blocker such as failed checks, pending checks, conflicts, or branch protection.\n- The reviewer queue no longer reports active review for PRs that are merely waiting on merge diagnosis.\n- The deploy panel clearly distinguishes `review active`, `approved waiting merge`, and `blocked from merge` states.\n\n## Verification\n- Create or simulate an approved mergeable PR and confirm the watchdog merges it.\n- Create or simulate blocked cases for pending CI, failed CI, conflict, and branch protection, and confirm the blocker is displayed.\n- Confirm repeated watchdog runs do not create duplicate actions or inconsistent PR state.\n- Confirm dev-to-main deploy status updates correctly after the PR merges.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1776828567846_6941ef561ee298\nManager message: msg_1776828567846_440f43fd5a12b\nAgent message: msg_1776828567846_b424ed32d4ae58\nCreated: 2026-04-22T03:29:57.201Z",
+  "requirements": [
+    "Detect PRs in approved state that have not merged after a short timeout.",
+    "Check GitHub mergeability",
+    "required status checks",
+    "branch protection",
+    "conflicts",
+    "and stale branch state.",
+    "Attempt the merge automatically when all required conditions are satisfied.",
+    "If merge is blocked",
+    "write a clear status reason into the control panel PR status/action.",
+    "Avoid duplicate merge attempts and make retries idempotent.",
+    "Escalate stuck PRs to the manager/status surface instead of leaving them as active review work."
+  ]
+}
