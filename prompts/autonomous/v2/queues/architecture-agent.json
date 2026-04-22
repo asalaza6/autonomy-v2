@@ -1086,6 +1086,29 @@
       "updatedAt": "2026-04-22T04:26:25.144Z",
       "startedAt": null,
       "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Implement Approved PR Merge Watchdog",
+      "description": "Blocking issue remains. The deterministic `npm run typecheck` check passed, but the watchdog can still auto-merge an approved PR after new commits are pushed beyond the reviewed head.\n`src/autonomy-v2/commands/merge-watchdog.ts:61` attempts the merge whenever diagnosis reports `canMerge`, while candidate selection/approval checks at `src/autonomy-v2/commands/merge-watchdog.ts:114` and `src/autonomy-v2/commands/merge-watchdog.ts:139` never compare the current PR commit count/head with `reviewTask.reviewedCommitCount`. Diagnosis refreshes the remote commit count at `src/autonomy-v2/commands/merge-watchdog-diagnosis.ts:245`, and the merge command's `evaluateMerge` path only checks approved status/latest review at `src/autonomy-v2/commands/shared-repo.ts:306`. Add a stale-review guard before automatic merge, surface a clear stale/unreviewed-head blocker or requeue review, and add focused coverage for `commitCount > reviewedCommitCount`.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-approved-pr-merge-watchdog-5461cc",
+      "laneKey": "prd-approved-pr-merge-watchdog-5461cc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issue remains. The deterministic `npm run typecheck` check passed, but the watchdog can still auto-merge an approved PR after new commits are pushed beyond the reviewed head.\n`src/autonomy-v2/commands/merge-watchdog.ts:61` attempts the merge whenever diagnosis reports `canMerge`, while candidate selection/approval checks at `src/autonomy-v2/commands/merge-watchdog.ts:114` and `src/autonomy-v2/commands/merge-watchdog.ts:139` never compare the current PR commit count/head with `reviewTask.reviewedCommitCount`. Diagnosis refreshes the remote commit count at `src/autonomy-v2/commands/merge-watchdog-diagnosis.ts:245`, and the merge command's `evaluateMerge` path only checks approved status/latest review at `src/autonomy-v2/commands/shared-repo.ts:306`. Add a stale-review guard before automatic merge, surface a clear stale/unreviewed-head blocker or requeue review, and add focused coverage for `commitCount > reviewedCommitCount`."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "createdAt": "2026-04-22T04:28:32.122Z",
+      "updatedAt": "2026-04-22T04:28:32.122Z",
+      "startedAt": null,
+      "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent"
     }
   ],
   "schemaVersion": 1
