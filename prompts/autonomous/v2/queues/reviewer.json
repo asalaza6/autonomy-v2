@@ -454,7 +454,7 @@
       "reviewRound": 6,
       "status": "approved",
       "createdAt": "2026-04-22T01:30:46.300Z",
-      "updatedAt": "2026-04-22T01:58:54.429Z",
+      "updatedAt": "2026-04-22T01:59:24.860Z",
       "reviewedAt": "2026-04-22T01:50:55.214Z",
       "lastDecision": "approved",
       "lastMergeFailureMessage": "Merge blocked.\n- PR status must be approved before merge, received changes_requested",
