@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1041,6 +1040,30 @@
       "completedAt": "2026-04-22T04:19:31.430Z",
       "completionMode": "code",
       "commitSha": "4f1929e743c0a26d70a39e7e5d2b897198e20a69"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement Approved PR Merge Watchdog",
+      "description": "Blocking issue found. `npm run typecheck` passed, and the branch appears scoped, but the watchdog can merge a PR whose head changed after approval.\n`src/autonomy-v2/commands/merge-watchdog.ts:61` attempts an automatic merge whenever GitHub diagnosis says `canMerge`, but neither candidate selection nor diagnosis compares the current PR commit count/head with `reviewTask.reviewedCommitCount`. `diagnoseApprovedPullRequestMerge` refreshes the remote commit count at `src/autonomy-v2/commands/merge-watchdog-diagnosis.ts:245`, so a new commit pushed after approval can still be auto-merged if GitHub allows it. Existing reviewer retry logic guards this at `src/agents/ReviewAgentDefinition.ts:560`. The watchdog should reuse that stale-review guard and surface a clear stale/unreviewed-head blocker or requeue review, with a focused test covering commitCount > reviewedCommitCount.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-approved-pr-merge-watchdog-5461cc",
+      "laneKey": "prd-approved-pr-merge-watchdog-5461cc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issue found. `npm run typecheck` passed, and the branch appears scoped, but the watchdog can merge a PR whose head changed after approval.\n`src/autonomy-v2/commands/merge-watchdog.ts:61` attempts an automatic merge whenever GitHub diagnosis says `canMerge`, but neither candidate selection nor diagnosis compares the current PR commit count/head with `reviewTask.reviewedCommitCount`. `diagnoseApprovedPullRequestMerge` refreshes the remote commit count at `src/autonomy-v2/commands/merge-watchdog-diagnosis.ts:245`, so a new commit pushed after approval can still be auto-merged if GitHub allows it. Existing reviewer retry logic guards this at `src/agents/ReviewAgentDefinition.ts:560`. The watchdog should reuse that stale-review guard and surface a clear stale/unreviewed-head blocker or requeue review, with a focused test covering commitCount > reviewedCommitCount."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "createdAt": "2026-04-22T04:23:24.286Z",
+      "updatedAt": "2026-04-22T04:23:24.286Z",
+      "startedAt": "2026-04-22T04:23:24.286Z",
+      "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
