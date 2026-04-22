@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -891,6 +890,30 @@
       "completedAt": "2026-04-22T01:30:45.127Z",
       "completionMode": "code",
       "commitSha": "1bffdbd1cfe50873e5a30776460bcf76f8b08954"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-default-service-restart-fallback-98a973-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement Default Service Restart Fallback",
+      "description": "`npm run typecheck` passed and the branch appears mergeable, but the default restart helper can report success even when a relaunched service immediately exits. That leaves the job history saying `restarted` while the server or bridge is actually down, so the relaunch-failure acceptance criteria are not satisfied.\nBlocking: `src/server/control-plane/control-plane-restart-helper.ts:230` resolves a relaunch as `restarted` on the child `spawn` event and never observes early process exit or service readiness. A command such as `node missing-script.js`, a bad cwd/env, or a server bind failure can spawn successfully and then exit immediately, but the helper records `status: 'restarted'` at `src/server/control-plane/control-plane-restart-helper.ts:232-238`. Update the helper to detect immediate relaunch failure/readiness before recording success, and add focused coverage for a process that spawns and exits non-zero after spawn.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-default-service-restart-fallback-98a973",
+      "laneKey": "prd-default-service-restart-fallback-98a973:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed and the branch appears mergeable, but the default restart helper can report success even when a relaunched service immediately exits. That leaves the job history saying `restarted` while the server or bridge is actually down, so the relaunch-failure acceptance criteria are not satisfied.\nBlocking: `src/server/control-plane/control-plane-restart-helper.ts:230` resolves a relaunch as `restarted` on the child `spawn` event and never observes early process exit or service readiness. A command such as `node missing-script.js`, a bad cwd/env, or a server bind failure can spawn successfully and then exit immediately, but the helper records `status: 'restarted'` at `src/server/control-plane/control-plane-restart-helper.ts:232-238`. Update the helper to detect immediate relaunch failure/readiness before recording success, and add focused coverage for a process that spawns and exits non-zero after spawn."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
+      "createdAt": "2026-04-22T01:35:56.004Z",
+      "updatedAt": "2026-04-22T01:35:56.004Z",
+      "startedAt": "2026-04-22T01:35:56.004Z",
+      "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
