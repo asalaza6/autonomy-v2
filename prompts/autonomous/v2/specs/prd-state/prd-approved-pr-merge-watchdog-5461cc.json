@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-approved-pr-merge-watchdog-5461cc",
+  "status": "planned",
+  "createdAt": "2026-04-22T03:41:29.045Z",
+  "updatedAt": "2026-04-22T03:41:29.045Z",
+  "plannedTaskIds": [
+    "prd-approved-pr-merge-watchdog-5461cc-architecture-agent-1"
+  ]
+}
