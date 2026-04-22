@@ -1063,6 +1063,29 @@
       "updatedAt": "2026-04-22T04:23:24.286Z",
       "startedAt": "2026-04-22T04:23:24.286Z",
       "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement Approved PR Merge Watchdog",
+      "description": "Blocking issue remains from round 1. The deterministic `npm run typecheck` check passed and the diff is lane-scoped, but the watchdog can still auto-merge a PR whose head changed after approval.\n`src/autonomy-v2/commands/merge-watchdog.ts:61` attempts the merge whenever diagnosis reports `canMerge`, and candidate selection at `src/autonomy-v2/commands/merge-watchdog.ts:139` still treats the PR as approved if `pr.status` or the latest review is approved. `diagnoseApprovedPullRequestMerge` refreshes the remote commit count at `src/autonomy-v2/commands/merge-watchdog-diagnosis.ts:245`; meanwhile sync can detect stale reviewed commits at `src/sync/derived-pr.ts:291` but leaves the PR approved, so the watchdog can merge before the requeued review runs. Add the same stale-review guard used by reviewer retry logic: block/requeue when current commit count or head is newer than `reviewTask.reviewedCommitCount`, surface a clear stale/unreviewed-head merge reason, and add a focused test covering `commitCount > reviewedCommitCount`.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-approved-pr-merge-watchdog-5461cc",
+      "laneKey": "prd-approved-pr-merge-watchdog-5461cc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issue remains from round 1. The deterministic `npm run typecheck` check passed and the diff is lane-scoped, but the watchdog can still auto-merge a PR whose head changed after approval.\n`src/autonomy-v2/commands/merge-watchdog.ts:61` attempts the merge whenever diagnosis reports `canMerge`, and candidate selection at `src/autonomy-v2/commands/merge-watchdog.ts:139` still treats the PR as approved if `pr.status` or the latest review is approved. `diagnoseApprovedPullRequestMerge` refreshes the remote commit count at `src/autonomy-v2/commands/merge-watchdog-diagnosis.ts:245`; meanwhile sync can detect stale reviewed commits at `src/sync/derived-pr.ts:291` but leaves the PR approved, so the watchdog can merge before the requeued review runs. Add the same stale-review guard used by reviewer retry logic: block/requeue when current commit count or head is newer than `reviewTask.reviewedCommitCount`, surface a clear stale/unreviewed-head merge reason, and add a focused test covering `commitCount > reviewedCommitCount`."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "createdAt": "2026-04-22T04:26:25.144Z",
+      "updatedAt": "2026-04-22T04:26:25.144Z",
+      "startedAt": null,
+      "prId": "pr-prd-approved-pr-merge-watchdog-5461cc-architecture-agent"
     }
   ],
   "schemaVersion": 1
