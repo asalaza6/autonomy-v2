@@ -242,6 +242,62 @@ test('approved PR merge watchdog requeues stale approved heads before automatic 
   assert.match(persistedReviewTask.lastMergeFailureMessage, /approval reviewed 2/);
 });
 
+test('approved PR merge watchdog records in-flight attempts before merge execution', () => {
+  const pr = buildApprovedPr({
+    commitCount: 1,
+    remote: null,
+  });
+  const reviewTask = buildApprovedReviewTask({
+    reviewedCommitCount: 1,
+  });
+  const { rootDir, paths } = createWatchdogRepo(pr, reviewTask);
+  let attempts = 0;
+  let duplicateRun: any = null;
+
+  const result = runApprovedPrMergeWatchdog(rootDir, {
+    now: '2026-04-22T00:01:00.000Z',
+    timeoutMs: 0,
+    retryMs: 0,
+    inFlightLeaseMs: 60_000,
+    attemptMerge: () => {
+      attempts += 1;
+      const persistedDuringAttempt = readJson(paths.prsState) as any;
+      assert.equal(
+        persistedDuringAttempt.pullRequests[0].mergeWatchdog.inFlightAttemptKey,
+        'pr-approved-merge-watchdog:1:local_merge_ready'
+      );
+
+      duplicateRun = runApprovedPrMergeWatchdog(rootDir, {
+        now: '2026-04-22T00:01:00.000Z',
+        timeoutMs: 0,
+        retryMs: 0,
+        inFlightLeaseMs: 60_000,
+        attemptMerge: () => {
+          attempts += 1;
+          return { merged: false, message: 'duplicate attempt', code: 'merge_rejected' };
+        },
+      }) as any;
+
+      return {
+        merged: false,
+        message: 'Required status check "typecheck" is expected.',
+        code: 'pending_checks',
+      };
+    },
+  }) as any;
+
+  assert.equal(attempts, 1);
+  assert.equal(duplicateRun?.checked, 1);
+  assert.equal(duplicateRun?.merged, false);
+  assert.equal(result.diagnosis.code, 'pending_checks');
+
+  const persistedPrs = readJson(paths.prsState) as any;
+  const persistedPr = persistedPrs.pullRequests[0];
+  assert.equal(persistedPr.mergeBlockedCode, 'pending_checks');
+  assert.equal(persistedPr.mergeWatchdog.lastAttemptKey, 'pr-approved-merge-watchdog:1:local_merge_ready');
+  assert.equal(persistedPr.mergeWatchdog.inFlightAttemptKey, undefined);
+});
+
 test('merge evaluation blocks approved PRs beyond the reviewed commit count', () => {
   const pr = buildApprovedPr({
     commitCount: 3,

@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { AnyRecord, PullRequestRecord, TaskRecord } from '../autonomy-types.js';
 import { isReviewRole } from '../../agents/role-catalog.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
 import { getAutonomyPaths, writeJson } from './shared-core.js';
 import {
   buildBlockedMergeDiagnosis,
@@ -19,13 +20,57 @@ const __dirname = path.dirname(__filename);
 const CLI_PATH = path.join(__dirname, '..', 'index.js');
 const DEFAULT_APPROVED_MERGE_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_MERGE_WATCHDOG_RETRY_MS = 60 * 1000;
+const DEFAULT_MERGE_WATCHDOG_IN_FLIGHT_LEASE_MS = 5 * 60 * 1000;
 
 function runApprovedPrMergeWatchdog(rootDir: string, options: AnyRecord = {}) {
   const now = String(options.now || new Date().toISOString());
+  const retryMs = resolvePositiveNumber(options.retryMs, DEFAULT_MERGE_WATCHDOG_RETRY_MS);
+  const inFlightLeaseMs = resolvePositiveNumber(options.inFlightLeaseMs, DEFAULT_MERGE_WATCHDOG_IN_FLIGHT_LEASE_MS);
+  const prepared = withWatchdogStateLock(rootDir, options, () => prepareApprovedPrMergeWatchdogAttempt(rootDir, {
+    ...options,
+    now,
+    retryMs,
+    inFlightLeaseMs,
+  }));
+  if (prepared.action !== 'attempt') {
+    return prepared.result;
+  }
+
+  const attemptMergeFn = typeof options.attemptMerge === 'function'
+    ? options.attemptMerge
+    : attemptMerge;
+  const mergeResult = attemptMergeFn(rootDir, prepared.prId, prepared.reviewerId);
+  if (mergeResult.merged) {
+    return {
+      checked: 1,
+      changed: true,
+      merged: true,
+      prId: prepared.prId,
+      diagnosis: prepared.diagnosis,
+    };
+  }
+
+  return withWatchdogStateLock(rootDir, options, () => finalizeApprovedPrMergeWatchdogAttempt(rootDir, {
+    now,
+    prId: prepared.prId,
+    reviewerId: prepared.reviewerId,
+    attemptKey: prepared.attemptKey,
+    diagnosis: prepared.diagnosis,
+    mergeResult,
+  }));
+}
+
+function prepareApprovedPrMergeWatchdogAttempt(rootDir: string, options: AnyRecord = {}) {
+  const now = String(options.now || new Date().toISOString());
+  const retryMs = resolvePositiveNumber(options.retryMs, DEFAULT_MERGE_WATCHDOG_RETRY_MS);
+  const inFlightLeaseMs = resolvePositiveNumber(options.inFlightLeaseMs, DEFAULT_MERGE_WATCHDOG_IN_FLIGHT_LEASE_MS);
   const state = loadAllState(rootDir);
   const reviewer = (state.config.agents || []).find((agent) => isReviewRole(agent.role));
   if (!reviewer) {
-    return { checked: 0, changed: false, merged: false, reason: 'no_reviewer' };
+    return {
+      action: 'return',
+      result: { checked: 0, changed: false, merged: false, reason: 'no_reviewer' },
+    };
   }
 
   const reviewerQueue = getTaskQueue(state.taskQueues, state.config, reviewer.id);
@@ -34,10 +79,13 @@ function runApprovedPrMergeWatchdog(rootDir: string, options: AnyRecord = {}) {
     reviewTasks: reviewerQueue.tasks || [],
     now,
     timeoutMs: resolvePositiveNumber(options.timeoutMs, DEFAULT_APPROVED_MERGE_TIMEOUT_MS),
-    retryMs: resolvePositiveNumber(options.retryMs, DEFAULT_MERGE_WATCHDOG_RETRY_MS),
+    retryMs,
   });
   if (!candidate) {
-    return { checked: 0, changed: false, merged: false, reason: 'no_due_approved_pr' };
+    return {
+      action: 'return',
+      result: { checked: 0, changed: false, merged: false, reason: 'no_due_approved_pr' },
+    };
   }
 
   let diagnosis;
@@ -55,43 +103,86 @@ function runApprovedPrMergeWatchdog(rootDir: string, options: AnyRecord = {}) {
   if (diagnosis.mergeState === 'merged') {
     applyMergedState(candidate.pr, candidate.reviewTask, diagnosis, now);
     persistWatchdogState(rootDir, state, true);
-    return { checked: 1, changed: true, merged: true, prId: candidate.pr.id, diagnosis };
+    return {
+      action: 'return',
+      result: { checked: 1, changed: true, merged: true, prId: candidate.pr.id, diagnosis },
+    };
   }
 
   const unreviewedHeadDiagnosis = buildUnreviewedHeadMergeDiagnosis(candidate.pr, candidate.reviewTask, diagnosis);
   if (unreviewedHeadDiagnosis) {
     const changed = applyMergeDiagnosis(candidate.pr, candidate.reviewTask, unreviewedHeadDiagnosis, now);
     persistWatchdogState(rootDir, state, changed);
-    return { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis: unreviewedHeadDiagnosis };
+    return {
+      action: 'return',
+      result: { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis: unreviewedHeadDiagnosis },
+    };
   }
 
   if (diagnosis.canMerge) {
     const attemptKey = buildMergeAttemptKey(candidate.pr, diagnosis);
-    if (mergeAttemptIsFresh(candidate.pr, attemptKey, now, resolvePositiveNumber(options.retryMs, DEFAULT_MERGE_WATCHDOG_RETRY_MS))) {
+    if (mergeAttemptIsFresh(candidate.pr, attemptKey, now, retryMs, inFlightLeaseMs)) {
       const changed = applyMergeDiagnosis(candidate.pr, candidate.reviewTask, {
         ...diagnosis,
         mergeState: 'waiting',
         code: 'merge_retry_wait',
-        reason: 'approved, waiting for merge retry window',
+        reason: mergeAttemptIsInFlight(candidate.pr, attemptKey, now, inFlightLeaseMs)
+          ? 'approved, automatic merge attempt is already in progress'
+          : 'approved, waiting for merge retry window',
+        preserveInFlightAttempt: true,
       }, now);
       persistWatchdogState(rootDir, state, changed);
-      return { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis };
+      return {
+        action: 'return',
+        result: { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis },
+      };
     }
 
-    const mergeResult = attemptMerge(rootDir, candidate.pr.id, reviewer.id);
-    if (mergeResult.merged) {
-      return { checked: 1, changed: true, merged: true, prId: candidate.pr.id, diagnosis };
-    }
-    const blocked: AnyRecord = buildBlockedMergeDiagnosis(mergeResult.message, diagnosis);
-    blocked.attemptKey = attemptKey;
-    const changed = applyMergeDiagnosis(candidate.pr, candidate.reviewTask, blocked, now);
+    const changed = applyMergeAttemptClaim(candidate.pr, diagnosis, attemptKey, now);
     persistWatchdogState(rootDir, state, changed);
-    return { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis: blocked };
+    return {
+      action: 'attempt',
+      prId: candidate.pr.id,
+      reviewerId: reviewer.id,
+      attemptKey,
+      diagnosis,
+    };
   }
 
   const changed = applyMergeDiagnosis(candidate.pr, candidate.reviewTask, diagnosis, now);
   persistWatchdogState(rootDir, state, changed);
-  return { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis };
+  return {
+    action: 'return',
+    result: { checked: 1, changed, merged: false, prId: candidate.pr.id, diagnosis },
+  };
+}
+
+function finalizeApprovedPrMergeWatchdogAttempt(rootDir: string, options: AnyRecord = {}) {
+  const state = loadAllState(rootDir);
+  const reviewer = (state.config.agents || []).find((agent) => isReviewRole(agent.role));
+  if (!reviewer) {
+    return { checked: 0, changed: false, merged: false, reason: 'no_reviewer' };
+  }
+
+  const pr = ((state.prs && state.prs.pullRequests) || [])
+    .find((candidate) => candidate && candidate.id === options.prId);
+  const reviewerQueue = getTaskQueue(state.taskQueues, state.config, reviewer.id);
+  const reviewTask = ((reviewerQueue && reviewerQueue.tasks) || [])
+    .find((task) => task && task.prId === options.prId) || null;
+  if (!pr) {
+    return { checked: 1, changed: false, merged: false, prId: options.prId, reason: 'pr_not_found' };
+  }
+  if (pr.status === 'merged' || pr.mergedAt || (pr.remote && (pr.remote.mergedAt || pr.remote.merged_at))) {
+    clearMergeAttemptClaim(pr, String(options.attemptKey || ''));
+    persistWatchdogState(rootDir, state, false);
+    return { checked: 1, changed: true, merged: true, prId: pr.id, diagnosis: options.diagnosis };
+  }
+
+  const blocked: AnyRecord = buildBlockedMergeDiagnosis(options.mergeResult && options.mergeResult.message, options.diagnosis);
+  blocked.attemptKey = options.attemptKey;
+  const changed = applyMergeDiagnosis(pr, reviewTask, blocked, String(options.now || new Date().toISOString()));
+  persistWatchdogState(rootDir, state, changed);
+  return { checked: 1, changed, merged: false, prId: pr.id, diagnosis: blocked };
 }
 
 function selectApprovedMergeWatchdogCandidate({
@@ -251,6 +342,9 @@ function applyMergeDiagnosis(pr: PullRequestRecord, reviewTask: TaskRecord, diag
     pr.mergeWatchdog.lastAttemptKey = diagnosis.attemptKey;
     pr.mergeWatchdog.lastAttemptAt = now;
   }
+  if (diagnosis.preserveInFlightAttempt !== true) {
+    clearMergeAttemptClaim(pr, String(diagnosis.attemptKey || ''));
+  }
   pr.updatedAt = now;
 
   if (reviewTask) {
@@ -277,6 +371,44 @@ function applyMergeDiagnosis(pr: PullRequestRecord, reviewTask: TaskRecord, diag
   return prior !== next;
 }
 
+function applyMergeAttemptClaim(pr: PullRequestRecord, diagnosis: AnyRecord, attemptKey: string, now: string) {
+  const prior = JSON.stringify({
+    mergeState: pr.mergeState || null,
+    mergeWatchdog: pr.mergeWatchdog || null,
+  });
+  pr.mergeState = 'waiting';
+  pr.mergeWatchdog = {
+    ...(pr.mergeWatchdog || {}),
+    lastCheckedAt: now,
+    lastCode: 'merge_in_progress',
+    lastReason: 'approved, automatic merge attempt in progress',
+    lastAttemptKey: attemptKey,
+    lastAttemptAt: now,
+    inFlightAttemptKey: attemptKey,
+    inFlightAttemptAt: now,
+  };
+  if (diagnosis.headSha) {
+    pr.mergeWatchdog.headSha = diagnosis.headSha;
+  }
+  pr.updatedAt = now;
+  const next = JSON.stringify({
+    mergeState: pr.mergeState || null,
+    mergeWatchdog: pr.mergeWatchdog || null,
+  });
+  return prior !== next;
+}
+
+function clearMergeAttemptClaim(pr: PullRequestRecord, attemptKey: string) {
+  if (!pr || !pr.mergeWatchdog) {
+    return;
+  }
+  if (attemptKey && pr.mergeWatchdog.inFlightAttemptKey && pr.mergeWatchdog.inFlightAttemptKey !== attemptKey) {
+    return;
+  }
+  delete pr.mergeWatchdog.inFlightAttemptKey;
+  delete pr.mergeWatchdog.inFlightAttemptAt;
+}
+
 function persistWatchdogState(rootDir: string, state: AnyRecord, queueChanged: boolean) {
   const paths = getAutonomyPaths(rootDir);
   writeJson(paths.prsState, state.prs);
@@ -297,13 +429,45 @@ function buildMergeAttemptKey(pr: PullRequestRecord, diagnosis: AnyRecord) {
   ].join(':');
 }
 
-function mergeAttemptIsFresh(pr: PullRequestRecord, attemptKey: string, now: string, retryMs: number) {
+function mergeAttemptIsFresh(
+  pr: PullRequestRecord,
+  attemptKey: string,
+  now: string,
+  retryMs: number,
+  inFlightLeaseMs = DEFAULT_MERGE_WATCHDOG_IN_FLIGHT_LEASE_MS
+) {
+  if (mergeAttemptIsInFlight(pr, attemptKey, now, inFlightLeaseMs)) {
+    return true;
+  }
   if (!pr.mergeWatchdog || pr.mergeWatchdog.lastAttemptKey !== attemptKey) {
     return false;
   }
   const lastAttemptAtMs = Date.parse(String(pr.mergeWatchdog.lastAttemptAt || ''));
   const nowMs = Date.parse(now);
   return Number.isFinite(lastAttemptAtMs) && Number.isFinite(nowMs) && nowMs - lastAttemptAtMs < retryMs;
+}
+
+function mergeAttemptIsInFlight(pr: PullRequestRecord, attemptKey: string, now: string, inFlightLeaseMs: number) {
+  if (!pr.mergeWatchdog || pr.mergeWatchdog.inFlightAttemptKey !== attemptKey) {
+    return false;
+  }
+  const inFlightAttemptAtMs = Date.parse(String(pr.mergeWatchdog.inFlightAttemptAt || ''));
+  const nowMs = Date.parse(now);
+  return Number.isFinite(inFlightAttemptAtMs)
+    && Number.isFinite(nowMs)
+    && nowMs - inFlightAttemptAtMs < inFlightLeaseMs;
+}
+
+function withWatchdogStateLock(rootDir: string, options: AnyRecord, callback: () => any) {
+  if (options.stateLockHeld === true) {
+    return callback();
+  }
+  const release = acquireStateLock(rootDir);
+  try {
+    return callback();
+  } finally {
+    release();
+  }
 }
 
 function latestReview(pr: PullRequestRecord) {
