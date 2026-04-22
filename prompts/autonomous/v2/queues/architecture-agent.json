@@ -847,6 +847,45 @@
       "completedAt": "2026-04-21T22:12:16.929Z",
       "completionMode": "code",
       "commitSha": "250c0331e2591b29b235da92096f849d63178baa"
+    },
+    {
+      "id": "prd-default-service-restart-fallback-98a973-architecture-agent-1",
+      "title": "Implement Default Service Restart Fallback",
+      "description": "# PRD: Default Service Restart Fallback\n\nPriority: High\n\n## Problem\nThe Restart services button currently queues a restart job, but for autonomy-v2 it skips execution when serverRestartCommand and controlBridgeRestartCommand are not configured.\n\n## Goal\nSupport a safe default restart path that can stop and relaunch the current control panel server and control bridge when explicit restart commands are absent.\n\n## Requirements\n- Record service lifecycle metadata for the control panel server and control bridge, including PID, cwd, launch command or restart command, and timestamp.\n- When explicit restart commands are configured, preserve the current configured-command behavior.\n- When restart commands are missing, create a default restart plan from the recorded lifecycle metadata.\n- Execute default restart through a detached helper so the bridge can complete the restart job and heartbeat before stopping itself.\n- Stop the server and bridge processes using only verified registered PIDs, then relaunch the server first and bridge last.\n- Report clear statuses for restarted, skipped, missing metadata, stale PID, and relaunch failure cases.\n- Add logs/events that make restart outcomes visible in the control panel job history.\n\n## Acceptance Criteria\n- Clicking Restart services on autonomy-v2 no longer reports skipped solely because restart commands are missing, provided valid lifecycle metadata exists.\n- If lifecycle metadata is absent or stale, the job fails or skips with a clear reason instead of guessing processes.\n- The restart job is marked complete or terminal before the current bridge process exits.\n- After a default restart, both the server and control bridge come back online and emit fresh heartbeat/status data.\n- Configured restart commands continue to work as they do today.\n\n## Verification\n- Unit-test restart plan selection for configured commands, valid default metadata, missing metadata, and stale PID cases.\n- Integration-test the detached helper against a local server/bridge pair using temporary PID metadata.\n- Manually verify the Restart services button on autonomy-v2 shows a successful restart and the control panel reconnects after the bridge relaunches.\n- Verify logs/job history distinguish skipped, failed, and restarted outcomes.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1776819238807_225c22458bd61\nManager message: msg_1776820157948_56b95308a4444\nAgent message: msg_1776820157948_9eaf5459fd6628\nCreated: 2026-04-22T01:09:45.966Z",
+      "agentId": "architecture-agent",
+      "prdId": "prd-default-service-restart-fallback-98a973",
+      "laneKey": "prd-default-service-restart-fallback-98a973:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Record service lifecycle metadata for the control panel server and control bridge",
+        "including PID",
+        "cwd",
+        "launch command or restart command",
+        "and timestamp.",
+        "When explicit restart commands are configured",
+        "preserve the current configured-command behavior.",
+        "When restart commands are missing",
+        "create a default restart plan from the recorded lifecycle metadata.",
+        "Execute default restart through a detached helper so the bridge can complete the restart job and heartbeat before stopping itself.",
+        "Stop the server and bridge processes using only verified registered PIDs",
+        "then relaunch the server first and bridge last.",
+        "Report clear statuses for restarted",
+        "skipped",
+        "missing metadata",
+        "stale PID",
+        "and relaunch failure cases.",
+        "Add logs/events that make restart outcomes visible in the control panel job history."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-22T01:10:56.995Z",
+      "updatedAt": "2026-04-22T01:10:56.995Z"
     }
   ]
 }
