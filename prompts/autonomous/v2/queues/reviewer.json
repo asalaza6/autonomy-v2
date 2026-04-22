@@ -490,9 +490,9 @@
         "Escalate stuck PRs to the manager/status surface instead of leaving them as active review work."
       ],
       "reviewRound": 5,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-22T04:19:32.650Z",
-      "updatedAt": "2026-04-22T04:35:21.393Z",
+      "updatedAt": "2026-04-22T04:35:51.725Z",
       "reviewedAt": "2026-04-22T04:35:15.604Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
