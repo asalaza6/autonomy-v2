@@ -490,14 +490,14 @@
         "Escalate stuck PRs to the manager/status surface instead of leaving them as active review work."
       ],
       "reviewRound": 5,
-      "status": "approved",
+      "status": "changes_requested",
       "createdAt": "2026-04-22T04:19:32.650Z",
-      "updatedAt": "2026-04-22T04:37:36.648Z",
+      "updatedAt": "2026-04-22T04:37:53.826Z",
       "reviewedAt": "2026-04-22T04:37:33.275Z",
       "lastDecision": "approved",
+      "lastMergeFailureMessage": "Merge blocked.\n- pending lane tasks must be completed before merge",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-22T04:35:23.069Z",
-      "lastMergeFailureMessage": "Merge blocked.\n- pending lane tasks must be completed before merge"
+      "dispatchedAt": "2026-04-22T04:35:23.069Z"
     }
   ]
 }
