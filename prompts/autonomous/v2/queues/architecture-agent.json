@@ -911,11 +911,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
       "createdAt": "2026-04-22T01:35:56.004Z",
-      "updatedAt": "2026-04-22T01:40:44.640Z",
+      "updatedAt": "2026-04-22T01:40:44.698Z",
       "startedAt": "2026-04-22T01:35:56.004Z",
       "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent",
       "completedAt": "2026-04-22T01:40:44.640Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "25f61e2f0184bc8d0071a15a59e1be050091c9d5"
     },
     {
       "id": "architecture-agent-followup-pr-prd-default-service-restart-fallback-98a973-architecture-agent-2",
