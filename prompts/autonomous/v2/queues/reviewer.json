@@ -533,13 +533,14 @@
         "Avoid rewriting existing git history as part of the functional fix."
       ],
       "reviewRound": 1,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-22T05:53:37.781Z",
-      "updatedAt": "2026-04-22T05:58:29.148Z",
+      "updatedAt": "2026-04-22T05:58:35.249Z",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-22T05:53:41.632Z",
       "reviewedAt": "2026-04-22T05:58:29.148Z",
-      "lastDecision": "approved"
+      "lastDecision": "approved",
+      "mergedAt": "2026-04-22T05:58:35.249Z"
     }
   ]
 }
