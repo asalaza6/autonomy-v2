@@ -94,6 +94,7 @@ export interface TaskRecord extends AnyRecord {
   lastDecision?: string;
   lastError?: string | null;
   lastMergeFailureMessage?: string;
+  lastMergeFailureCode?: string;
   dispatcher?: string;
   dispatchedAt?: string;
   scopeViolations?: ScopeViolation[];
@@ -330,6 +331,10 @@ export interface PullRequestRecord extends AnyRecord {
   scopeViolations?: ScopeViolation[];
   conflicts?: ConflictRecord[];
   conflict?: ConflictRecord;
+  mergeState?: 'waiting' | 'blocked' | 'merged';
+  mergeBlockedCode?: string;
+  mergeBlockedReason?: string;
+  mergeWatchdog?: AnyRecord;
   conversationReferences?: Record<string, AnyRecord>;
 }
 

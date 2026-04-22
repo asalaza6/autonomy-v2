@@ -1032,10 +1032,14 @@
         "Avoid duplicate merge attempts and make retries idempotent.",
         "Escalate stuck PRs to the manager/status surface instead of leaving them as active review work."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-22T03:41:29.000Z",
-      "updatedAt": "2026-04-22T03:41:29.000Z"
+      "updatedAt": "2026-04-22T04:19:31.430Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-approved-pr-merge-watchdog-5461cc-architecture-agent",
+      "startedAt": "2026-04-22T03:41:49.861Z",
+      "completedAt": "2026-04-22T04:19:31.430Z",
+      "completionMode": "code"
     }
   ]
 }

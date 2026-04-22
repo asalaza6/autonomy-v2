@@ -49,6 +49,10 @@ async function run(rootDir, options) {
   pr.reviews.push(decisionRecord);
   pr.updatedAt = decisionRecord.reviewedAt;
   pr.status = decision === 'approved' ? 'approved' : 'changes_requested';
+  delete pr.mergeState;
+  delete pr.mergeBlockedCode;
+  delete pr.mergeBlockedReason;
+  delete pr.mergeWatchdog;
 
   const task = findTask(state.taskQueues, pr.taskId);
   const implementationAgent = getAgent(state.config, pr.agentId);
@@ -121,6 +125,7 @@ async function run(rootDir, options) {
     delete reviewerTask.reviewedCommitCount;
   }
   delete reviewerTask.lastError;
+  delete reviewerTask.lastMergeFailureCode;
   delete reviewerTask.lastMergeFailureMessage;
   reviewerTask.updatedAt = decisionRecord.reviewedAt;
 

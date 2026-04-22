@@ -117,8 +117,14 @@ const styles = `
     box-shadow: 0 0 0 5px rgba(179, 106, 24, 0.1);
   }
 
+  .status-chip.waiting .status-dot {
+    background: linear-gradient(135deg, #b36a18, #e2a34c);
+    box-shadow: 0 0 0 5px rgba(179, 106, 24, 0.1);
+  }
+
   .status-chip.diverged .status-dot,
-  .status-chip.invalid .status-dot {
+  .status-chip.invalid .status-dot,
+  .status-chip.blocked .status-dot {
     background: linear-gradient(135deg, #8d3a43, #c86b74);
     box-shadow: 0 0 0 5px rgba(141, 58, 67, 0.1);
   }

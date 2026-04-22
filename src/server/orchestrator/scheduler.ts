@@ -1,6 +1,7 @@
 import { acquireStateLock } from '../../lock/lock-main.js';
 import type { AnyRecord, WorkerRuntime } from '../server-types.js';
 import { syncPrdSpecsFromIntegrationBranch } from '../../sync/syncer.js';
+import { runApprovedPrMergeWatchdog } from '../../autonomy-v2/commands/merge-watchdog.js';
 import { loadQueues } from './queues.js';
 import { findDueAgents, finalizePendingInlineWorkers, refreshRuntime, setWorkerState, spawnWorkerProcess, updateBacklogGrace } from './orchestrator-runtime.js';
 import { loadBranchLocks, loadConfig, loadPrds, loadRuntime, writeRuntime } from './orchestrator-state.js';
@@ -45,6 +46,18 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     imported: Array.isArray(sync.imported) ? sync.imported.length : 0,
     updated: Array.isArray(sync.updated) ? sync.updated.length : 0,
     invalid: Array.isArray(sync.invalid) ? sync.invalid.length : 0,
+  });
+  const watchdogStartedAt = Date.now();
+  const mergeWatchdog = runApprovedPrMergeWatchdog(rootDir, {
+    onProgress: options.onProgress,
+  });
+  emitSchedulerProgress(options, 'merge-watchdog:done', {
+    durationMs: Date.now() - watchdogStartedAt,
+    checked: mergeWatchdog.checked || 0,
+    changed: mergeWatchdog.changed ? 'yes' : 'no',
+    merged: mergeWatchdog.merged ? 'yes' : 'no',
+    prId: mergeWatchdog.prId || '-',
+    reason: mergeWatchdog.reason || mergeWatchdog.diagnosis && mergeWatchdog.diagnosis.code || '-',
   });
   emitSchedulerProgress(options, 'state-lock:wait', { lock: 'state-lock' });
   const release = acquireStateLock(rootDir);

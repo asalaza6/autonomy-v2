@@ -239,9 +239,19 @@ function describePrdRun(activePrd: any, queuedPrds: any[] = [], pullRequestStatu
       : 'Implementation is waiting for planned tasks.';
   }
   if (currentStepId === 'reviewing') {
-    return pullRequestStatuses.length > 0
-      ? `Review is active on ${pullRequestStatuses.length} pull request${pullRequestStatuses.length === 1 ? '' : 's'}.`
-      : 'Implementation tasks are complete and review is next.';
+    const reviewActiveCount = countPullRequestStatusesByKind(pullRequestStatuses, 'review-active');
+    const approvedWaitingCount = countPullRequestStatusesByKind(pullRequestStatuses, 'approved-waiting');
+    const blockedMergeCount = countPullRequestStatusesByKind(pullRequestStatuses, 'merge-blocked');
+    if (reviewActiveCount > 0) {
+      return `Review is active on ${reviewActiveCount} pull request${reviewActiveCount === 1 ? '' : 's'}.`;
+    }
+    if (blockedMergeCount > 0) {
+      return `${blockedMergeCount} approved PR${blockedMergeCount === 1 ? '' : 's'} blocked from merge.`;
+    }
+    if (approvedWaitingCount > 0) {
+      return `${approvedWaitingCount} approved PR${approvedWaitingCount === 1 ? '' : 's'} waiting for merge.`;
+    }
+    return 'Implementation tasks are complete and review is next.';
   }
   if (currentStepId === 'finished') {
     return 'This PRD finished and is ready for history.';
@@ -265,8 +275,17 @@ function describePrdRunStep(stepId: string, activePrd: any, pullRequestStatuses:
     return activePrd ? 'Waiting for tasks' : 'Waiting';
   }
   if (stepId === 'reviewing') {
-    if (pullRequestStatuses.length > 0) {
-      return `${pullRequestStatuses.length} active PR${pullRequestStatuses.length === 1 ? '' : 's'}`;
+    const reviewActiveCount = countPullRequestStatusesByKind(pullRequestStatuses, 'review-active');
+    const approvedWaitingCount = countPullRequestStatusesByKind(pullRequestStatuses, 'approved-waiting');
+    const blockedMergeCount = countPullRequestStatusesByKind(pullRequestStatuses, 'merge-blocked');
+    if (reviewActiveCount > 0) {
+      return `${reviewActiveCount} active review PR${reviewActiveCount === 1 ? '' : 's'}`;
+    }
+    if (blockedMergeCount > 0) {
+      return `${blockedMergeCount} blocked merge PR${blockedMergeCount === 1 ? '' : 's'}`;
+    }
+    if (approvedWaitingCount > 0) {
+      return `${approvedWaitingCount} approved PR${approvedWaitingCount === 1 ? '' : 's'} waiting`;
     }
     return activePrd && String(activePrd.status || '') === 'completed' ? 'Complete' : 'Waiting';
   }
@@ -500,7 +519,18 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     overviewParts.push(`${runningAgents} agent${runningAgents === 1 ? '' : 's'} running`);
   }
   if (pullRequestStatuses.length > 0) {
-    overviewParts.push(`${pullRequestStatuses.length} active PR${pullRequestStatuses.length === 1 ? '' : 's'}`);
+    const reviewActiveCount = countPullRequestStatusesByKind(pullRequestStatuses, 'review-active');
+    const approvedWaitingCount = countPullRequestStatusesByKind(pullRequestStatuses, 'approved-waiting');
+    const blockedMergeCount = countPullRequestStatusesByKind(pullRequestStatuses, 'merge-blocked');
+    if (reviewActiveCount > 0) {
+      overviewParts.push(`${reviewActiveCount} active review PR${reviewActiveCount === 1 ? '' : 's'}`);
+    }
+    if (approvedWaitingCount > 0) {
+      overviewParts.push(`${approvedWaitingCount} approved PR${approvedWaitingCount === 1 ? '' : 's'} waiting merge`);
+    }
+    if (blockedMergeCount > 0) {
+      overviewParts.push(`${blockedMergeCount} PR${blockedMergeCount === 1 ? '' : 's'} blocked from merge`);
+    }
   }
   if (deployment && deployment.statusLabel) {
     overviewParts.push(`Deploy: ${deployment.statusLabel}`);
@@ -525,6 +555,23 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     freshnessDetail: freshness.detail,
     freshnessUpdatedAt: freshness.updatedAt,
   };
+}
+
+function countPullRequestStatusesByKind(pullRequestStatuses: any[] = [], kind: string) {
+  return (pullRequestStatuses || []).filter((pullRequestStatus) => pullRequestStatusKind(pullRequestStatus) === kind).length;
+}
+
+function pullRequestStatusKind(pullRequestStatus: any) {
+  const statusLabel = String(pullRequestStatus && pullRequestStatus.statusLabel || '').toLowerCase();
+  const mergeState = String(pullRequestStatus && pullRequestStatus.mergeState || '').toLowerCase();
+  const status = String(pullRequestStatus && pullRequestStatus.status || '').toLowerCase();
+  if (statusLabel === 'blocked from merge' || mergeState === 'blocked') {
+    return 'merge-blocked';
+  }
+  if (statusLabel === 'approved waiting merge' || status === 'approved' || mergeState === 'waiting') {
+    return 'approved-waiting';
+  }
+  return 'review-active';
 }
 
 function formatStatusLabel(status: string) {

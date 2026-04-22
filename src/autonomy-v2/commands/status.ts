@@ -30,7 +30,7 @@ function run(rootDir, options) {
     });
     console.log(`PRs: ${formatCountSummary(payload.prCounts) || 'none'}`);
     if (payload.pullRequestStatuses.length > 0) {
-      console.log('Active PRs:');
+      console.log('Pull requests awaiting action:');
       payload.pullRequestStatuses.forEach((prStatus) => {
         console.log(formatPullRequestStatusLine(prStatus));
       });

@@ -36,6 +36,10 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
         number: pr.remote && pr.remote.number ? Number(pr.remote.number) : null,
         title: pr.title || pr.id,
         status: String(pr.status || 'open'),
+        statusLabel: describePullRequestStatusLabel(pr, reviewTask),
+        mergeState: resolvePullRequestMergeState(pr, reviewTask),
+        mergeBlockedCode: resolveMergeBlockedCode(pr, reviewTask),
+        mergeBlockedReason: resolveMergeBlockedReason(pr, reviewTask),
         branch: pr.headBranch || resolveTaskBranch(implementationTask, new Map(), branchLockByLane) || null,
         action: describePullRequestAction(pr, reviewTask, implementationTask, workerByAgentId),
         url: pr.remote && pr.remote.url ? pr.remote.url : null,
@@ -87,7 +91,7 @@ function describePullRequestAction(pr, reviewTask, implementationTask, workerByA
     return `waiting for ${pr.agentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to respond to ${getRoleLabel(AGENT_ROLES.REVIEW)}`;
   }
   if (String(pr.status || '') === 'approved') {
-    return 'approved, waiting for merge';
+    return describeApprovedMergeAction(pr, reviewTask);
   }
   if (String(pr.status || '') === 'conflicted') {
     return `waiting for ${pr.agentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to resolve merge conflict`;
@@ -141,14 +145,72 @@ function describePullRequestReviewAction(pr, reviewTask, reviewerWorker) {
     return `waiting for ${reviewTask.sourceAgentId || pr.agentId || getRoleAgentLabel(AGENT_ROLES.IMPLEMENTATION)} to resolve merge conflict`;
   }
   if (reviewTask.status === 'approved') {
-    return 'approved, waiting for merge';
+    return describeApprovedMergeAction(pr, reviewTask);
   }
   return `${getRoleLabel(AGENT_ROLES.REVIEW)} status: ${formatStatusLabel(reviewTask.status)}`;
 }
 
 function formatPullRequestStatusLine(prStatus) {
   const numberLabel = prStatus.number ? `PR #${prStatus.number}` : `PR ${prStatus.prId}`;
-  return `${numberLabel} | ${formatStatusLabel(prStatus.status)} | ${prStatus.title} | ${prStatus.action}`;
+  return `${numberLabel} | ${prStatus.statusLabel || formatStatusLabel(prStatus.status)} | ${prStatus.title} | ${prStatus.action}`;
+}
+
+function describePullRequestStatusLabel(pr, reviewTask) {
+  const status = String(pr && pr.status || 'open');
+  if (status === 'approved') {
+    const mergeState = resolvePullRequestMergeState(pr, reviewTask);
+    if (mergeState === 'blocked') {
+      return 'blocked from merge';
+    }
+    if (mergeState === 'waiting') {
+      return 'approved waiting merge';
+    }
+  }
+  if (status === 'open' || status === 'building' || status === 'changes_requested' || status === 'conflicted') {
+    return 'review active';
+  }
+  return formatStatusLabel(status);
+}
+
+function describeApprovedMergeAction(pr, reviewTask) {
+  const mergeState = resolvePullRequestMergeState(pr, reviewTask);
+  const reason = resolveMergeBlockedReason(pr, reviewTask);
+  if (mergeState === 'blocked') {
+    return reason ? `blocked from merge: ${reason}` : 'blocked from merge';
+  }
+  if (mergeState === 'waiting') {
+    return reason ? `approved, waiting for merge: ${reason}` : 'approved, waiting for merge diagnosis';
+  }
+  return 'approved, waiting for merge';
+}
+
+function resolvePullRequestMergeState(pr, reviewTask) {
+  if (pr && pr.mergeState) {
+    return String(pr.mergeState);
+  }
+  const code = resolveMergeBlockedCode(pr, reviewTask);
+  if (code) {
+    return code === 'pending_checks' || code === 'mergeability_unknown' || code === 'merge_retry_wait'
+      ? 'waiting'
+      : 'blocked';
+  }
+  return String(pr && pr.status || '') === 'approved' ? 'waiting' : '';
+}
+
+function resolveMergeBlockedCode(pr, reviewTask) {
+  return String(
+    pr && pr.mergeBlockedCode
+      || reviewTask && reviewTask.lastMergeFailureCode
+      || ''
+  ).trim();
+}
+
+function resolveMergeBlockedReason(pr, reviewTask) {
+  return String(
+    pr && pr.mergeBlockedReason
+      || reviewTask && reviewTask.lastMergeFailureMessage
+      || ''
+  ).trim();
 }
 
 function formatStatusLabel(status) {

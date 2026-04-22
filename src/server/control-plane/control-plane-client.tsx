@@ -87,6 +87,9 @@ type PullRequestSummary = {
   prId?: string;
   statusLabel?: string;
   status?: string;
+  mergeState?: string;
+  mergeBlockedCode?: string;
+  mergeBlockedReason?: string;
   action?: string;
   branch?: string;
   url?: string | null;
@@ -1787,7 +1790,7 @@ function MetricGrid({ dashboard }: { dashboard: DashboardSummary }) {
     ['Deployable repos', deployableRepoCount],
     ['Bridge jobs', dashboard.pendingJobCount || 0],
     ['Agents running', dashboard.runningAgentCount || 0],
-    ['Active PRs', dashboard.activePullRequestCount || 0],
+    ['PRs awaiting action', dashboard.activePullRequestCount || 0],
   ] as const;
 
   return (
@@ -2022,10 +2025,10 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
             ? repo.agentStatuses.map((agent) => <AgentCard agent={agent} />)
             : <div className="list-note">No agent status yet.</div>}
         </RepoSection>
-        <RepoSection title="Active PRs">
+        <RepoSection title="Pull Requests">
           {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
             ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
-            : <div className="list-note">No active PRs.</div>}
+            : <div className="list-note">No pull requests awaiting action.</div>}
         </RepoSection>
         <RepoSection title="Autonomy v2">
           <PackageStatus packageStatus={repo.packageStatus || null} />
@@ -2132,7 +2135,8 @@ function AgentCard({ agent }: { agent: AgentSummary }) {
 }
 
 function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
-  const details = [pullRequest.statusLabel || pullRequest.status, pullRequest.action, pullRequest.branch ? `branch ${pullRequest.branch}` : '']
+  const statusLabel = pullRequest.statusLabel || pullRequest.status || 'Pull request';
+  const details = [pullRequest.action, pullRequest.branch ? `branch ${pullRequest.branch}` : '']
     .filter(Boolean)
     .join(' | ');
   const title = pullRequest.title || pullRequest.prId || 'Untitled PR';
@@ -2141,7 +2145,10 @@ function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
     <div className="pull-request">
       <div className="item-head">
         <div>
-          <div className="pill">Active PR</div>
+          <div className={`status-chip ${statusClass(pullRequestStatusClass(pullRequest))}`}>
+            <span className="status-dot" />
+            <span>{statusLabel}</span>
+          </div>
           {pullRequest.url ? (
             <a
               className="pull-request-title pull-request-link"
@@ -2160,6 +2167,18 @@ function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {
       {details ? <div className="pull-request-detail">{details}</div> : null}
     </div>
   );
+}
+
+function pullRequestStatusClass(pullRequest: PullRequestSummary) {
+  const mergeState = String(pullRequest.mergeState || '').toLowerCase();
+  const statusLabel = String(pullRequest.statusLabel || '').toLowerCase();
+  if (mergeState === 'blocked' || statusLabel === 'blocked from merge') {
+    return 'blocked';
+  }
+  if (mergeState === 'waiting' || statusLabel === 'approved waiting merge') {
+    return 'waiting';
+  }
+  return 'online';
 }
 
 function PackageUpdateButton({ repo }: { repo: RepoSummary }) {

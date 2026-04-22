@@ -5,6 +5,7 @@ import {
   resolveReturnedConversationId,
   setAgentConversationReference,
 } from './conversation-references.js';
+import { classifyMergeFailureMessage, formatMergeFailureReason } from '../autonomy-v2/commands/merge-watchdog.js';
 import type { AgentConfig, AutonomyConfig, PullRequestRecord, TaskRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedReviewWork, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
 
@@ -206,11 +207,13 @@ class ReviewAgentDefinition extends AgentDefinition {
         ? Boolean(context.reviewClient.publishMergeFollowupCommentIfNeeded?.(pr, reviewerTask, mergeResult.message))
         : false;
       if (!mergeResult.merged) {
+        const mergeFailureCode = this.resolveMergeFailureCode(mergeResult);
         context.queueStore.persistReviewerTaskState?.(work.reviewTaskId, {
           status: 'approved',
           updatedAt: context.clock.now(),
           lastError: null,
-          lastMergeFailureMessage: this.normalizeNonEmptyString(mergeResult.message),
+          lastMergeFailureCode: mergeFailureCode,
+          lastMergeFailureMessage: this.normalizeNonEmptyString(formatMergeFailureReason(mergeFailureCode, mergeResult.message)),
         });
       }
       context.logger.logRunnerEvent?.(buildRoleEventName(AGENT_ROLES.REVIEW, 'done'), {
@@ -362,11 +365,13 @@ class ReviewAgentDefinition extends AgentDefinition {
       merged = mergeResult.merged;
       mergeMessage = mergeResult.message;
       if (!merged) {
+        const mergeFailureCode = this.resolveMergeFailureCode(mergeResult);
         mergeCommentPublished = Boolean(context.reviewClient.publishMergeFollowupCommentIfNeeded?.(pr, reviewerTask, mergeMessage));
         context.queueStore.persistReviewerTaskState?.(work.reviewTaskId, {
           status: 'approved',
           updatedAt: context.clock.now(),
-          lastMergeFailureMessage: this.normalizeNonEmptyString(mergeMessage),
+          lastMergeFailureCode: mergeFailureCode,
+          lastMergeFailureMessage: this.normalizeNonEmptyString(formatMergeFailureReason(mergeFailureCode, mergeMessage)),
         });
       }
     }
@@ -629,6 +634,10 @@ class ReviewAgentDefinition extends AgentDefinition {
   private normalizeNonEmptyString(value: unknown): string {
     const normalized = String(value || '').trim();
     return normalized || '';
+  }
+
+  private resolveMergeFailureCode(mergeResult: AnyRecord): string {
+    return String((mergeResult && mergeResult.code) || classifyMergeFailureMessage(mergeResult && mergeResult.message));
   }
 
   private extractErrorMessage(error: unknown): string {

@@ -134,8 +134,11 @@ async function run(rootDir, options) {
   if (options.execute === true) {
     const mergedAt = new Date().toISOString();
     pr.status = 'merged';
+    pr.mergeState = 'merged';
     pr.mergedAt = mergedAt;
     pr.updatedAt = mergedAt;
+    delete pr.mergeBlockedCode;
+    delete pr.mergeBlockedReason;
     const task = findTask(state.taskQueues, pr.taskId);
     if (task) {
       task.status = 'merged';
@@ -146,6 +149,7 @@ async function run(rootDir, options) {
       reviewerTask.status = 'merged';
       reviewerTask.mergedAt = mergedAt;
       delete reviewerTask.lastError;
+      delete reviewerTask.lastMergeFailureCode;
       delete reviewerTask.lastMergeFailureMessage;
       reviewerTask.updatedAt = mergedAt;
     }

@@ -13,7 +13,7 @@ function run(rootDir, options) {
       console.log(formatAgentStatusLine(agentStatus, { includePid: true }));
     });
     if (payload.pullRequestStatuses.length > 0) {
-      console.log('Active PRs:');
+      console.log('Pull requests awaiting action:');
       payload.pullRequestStatuses.forEach((prStatus) => {
         console.log(formatPullRequestStatusLine(prStatus));
       });

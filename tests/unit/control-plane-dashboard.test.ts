@@ -281,6 +281,69 @@ test('control plane dashboard keeps partially completed PRDs in implementing whi
   );
 });
 
+test('control plane dashboard distinguishes active review from approved merge states', () => {
+  const buildDashboardForPullRequest = (pullRequestStatus: any) => buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: new Date().toISOString(),
+        snapshot: {
+          prds: {
+            prds: [
+              {
+                id: 'prd-active-001',
+                title: 'Active PRD',
+                status: 'planned',
+                isQueued: false,
+                plannedTaskIds: ['task-1'],
+                completedTaskSpecIds: ['task-1'],
+                updatedAt: '2026-04-01T12:08:00.000Z',
+              },
+            ],
+          },
+          pullRequestStatuses: [
+            {
+              prId: 'pr-prd-active-001-architecture-agent',
+              prdId: 'prd-active-001',
+              title: 'Feature PR',
+              updatedAt: '2026-04-01T12:05:00.000Z',
+              ...pullRequestStatus,
+            },
+          ],
+        },
+      },
+    },
+  } as any);
+
+  const activeReview = buildDashboardForPullRequest({
+    status: 'open',
+    statusLabel: 'review active',
+    action: 'waiting for reviewer',
+  });
+  const approvedWaiting = buildDashboardForPullRequest({
+    status: 'approved',
+    statusLabel: 'approved waiting merge',
+    mergeState: 'waiting',
+    action: 'approved, waiting for merge diagnosis',
+  });
+  const blockedMerge = buildDashboardForPullRequest({
+    status: 'approved',
+    statusLabel: 'blocked from merge',
+    mergeState: 'blocked',
+    action: 'blocked from merge: failed checks: npm run typecheck',
+  });
+
+  assert.match(activeReview.repos[0].prdRun.detail, /Review is active on 1 pull request/);
+  assert.match(approvedWaiting.repos[0].prdRun.detail, /1 approved PR waiting for merge/);
+  assert.match(approvedWaiting.repos[0].overview, /1 approved PR waiting merge/);
+  assert.match(blockedMerge.repos[0].prdRun.detail, /1 approved PR blocked from merge/);
+  assert.match(blockedMerge.repos[0].overview, /1 PR blocked from merge/);
+});
+
 test('control plane dashboard ignores active pull requests from other PRDs for the run step', () => {
   const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
     schemaVersion: 1,

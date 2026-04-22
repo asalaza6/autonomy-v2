@@ -239,7 +239,7 @@ function buildDerivedReviewerTask(pr: PullRequestRecord, sourceTask: TaskRecord,
     createdAt: existingTask && existingTask.createdAt ? existingTask.createdAt : now,
     updatedAt: now,
   };
-  ['reviewedAt', 'lastDecision', 'lastError', 'lastMergeFailureMessage', 'dispatcher', 'dispatchedAt'].forEach((field) => {
+  ['reviewedAt', 'lastDecision', 'lastError', 'lastMergeFailureCode', 'lastMergeFailureMessage', 'dispatcher', 'dispatchedAt'].forEach((field) => {
     if (existingTask && existingTask[field]) {
       record[field] = existingTask[field];
     }
@@ -364,6 +364,14 @@ function buildDerivedPullRequestRecord({
   }
   if (existingPr && existingPr.conflict) {
     record.conflict = { ...existingPr.conflict };
+  }
+  ['mergeState', 'mergeBlockedCode', 'mergeBlockedReason'].forEach((field) => {
+    if (existingPr && existingPr[field]) {
+      record[field] = existingPr[field];
+    }
+  });
+  if (existingPr && existingPr.mergeWatchdog) {
+    record.mergeWatchdog = { ...existingPr.mergeWatchdog };
   }
   const conversationReferences = normalizeConversationReferences(existingPr && existingPr.conversationReferences);
   if (Object.keys(conversationReferences).length > 0) {
