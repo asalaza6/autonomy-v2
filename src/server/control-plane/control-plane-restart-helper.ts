@@ -44,6 +44,7 @@ const DEFAULT_START_DELAY_MS = 500;
 const DEFAULT_STOP_TIMEOUT_MS = 4000;
 const DEFAULT_RELAUNCH_READY_TIMEOUT_MS = 750;
 const PROCESS_POLL_MS = 50;
+const MIN_RELAUNCH_OBSERVATION_MS = PROCESS_POLL_MS * 2;
 
 async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Promise<DefaultRestartOutcome> {
   const normalizedPlan = normalizeDefaultRestartPlan(plan);
@@ -202,16 +203,11 @@ function relaunchService(
   const launch = metadata.launch;
   return new Promise((resolve) => {
     let settled = false;
-    let spawned = false;
-    let readinessTimer: NodeJS.Timeout | undefined;
     const settle = (outcome: DefaultRestartTargetOutcome) => {
       if (settled) {
         return;
       }
       settled = true;
-      if (readinessTimer) {
-        clearTimeout(readinessTimer);
-      }
       resolve(outcome);
     };
 
@@ -239,32 +235,12 @@ function relaunchService(
     }
 
     child.once('spawn', () => {
-      spawned = true;
-      readinessTimer = setTimeout(() => {
-        if (settled) {
-          return;
+      void waitForRelaunchReadiness(target, child, readyTimeoutMs).then((outcome) => {
+        if (outcome.status === 'restarted') {
+          child.unref();
         }
-        if (child.pid && !isProcessAlive(child.pid)) {
-          settle({
-            target: target.target,
-            status: 'relaunch-failed',
-            pid: child.pid,
-            command: metadata.launchCommand,
-            cwd: launch.cwd,
-            reason: 'early-exit',
-            error: `${formatTargetLabel(target.target)} relaunched as PID ${child.pid} but exited before readiness.`,
-          });
-          return;
-        }
-        child.unref();
-        settle({
-          target: target.target,
-          status: 'restarted',
-          pid: child.pid || undefined,
-          command: metadata.launchCommand,
-          cwd: launch.cwd,
-        });
-      }, Math.max(0, readyTimeoutMs));
+        settle(outcome);
+      });
     });
     child.once('error', (error) => {
       settle({
@@ -276,11 +252,36 @@ function relaunchService(
         error: error.message,
       });
     });
-    child.once('exit', (code, signal) => {
-      if (!spawned) {
+  });
+}
+
+function waitForRelaunchReadiness(
+  target: DefaultRestartTarget,
+  child: ReturnType<typeof spawn>,
+  readyTimeoutMs: number
+): Promise<DefaultRestartTargetOutcome> {
+  const metadata = target.metadata;
+  const launch = metadata.launch;
+  const observedReadyTimeoutMs = Number.isFinite(readyTimeoutMs)
+    ? Math.max(MIN_RELAUNCH_OBSERVATION_MS, readyTimeoutMs)
+    : DEFAULT_RELAUNCH_READY_TIMEOUT_MS;
+  return new Promise((resolve) => {
+    let settled = false;
+    let readinessTimer: NodeJS.Timeout | undefined;
+    let onExit: (code: number | null, signal: NodeJS.Signals | null) => void = () => {};
+    const finish = (outcome: DefaultRestartTargetOutcome) => {
+      if (settled) {
         return;
       }
-      settle({
+      settled = true;
+      if (readinessTimer) {
+        clearTimeout(readinessTimer);
+      }
+      child.off('exit', onExit);
+      resolve(outcome);
+    };
+    onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      finish({
         target: target.target,
         status: 'relaunch-failed',
         pid: child.pid || undefined,
@@ -289,7 +290,30 @@ function relaunchService(
         reason: 'early-exit',
         error: `${formatTargetLabel(target.target)} relaunched${child.pid ? ` as PID ${child.pid}` : ''} but exited with ${formatExitStatus(code, signal)} before readiness.`,
       });
-    });
+    };
+
+    child.once('exit', onExit);
+    readinessTimer = setTimeout(() => {
+      if (child.pid && !isProcessAlive(child.pid)) {
+        finish({
+          target: target.target,
+          status: 'relaunch-failed',
+          pid: child.pid,
+          command: metadata.launchCommand,
+          cwd: launch.cwd,
+          reason: 'early-exit',
+          error: `${formatTargetLabel(target.target)} relaunched as PID ${child.pid} but exited before readiness.`,
+        });
+        return;
+      }
+      finish({
+        target: target.target,
+        status: 'restarted',
+        pid: child.pid || undefined,
+        command: metadata.launchCommand,
+        cwd: launch.cwd,
+      });
+    }, observedReadyTimeoutMs);
   });
 }
 

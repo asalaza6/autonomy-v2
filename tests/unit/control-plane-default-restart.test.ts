@@ -183,7 +183,7 @@ test('detached default restart helper stops registered PIDs and relaunches servi
   assert.equal(isProcessAlive(newServerPid), true);
   assert.equal(isProcessAlive(newBridgePid), true);
 
-  const events = await waitForFileText(eventsPath);
+  const events = await waitForFileText(eventsPath, 5000, new RegExp(`controlBridge:started:${newBridgePid}`));
   assert.match(events, new RegExp(`server:stopped:${originalServerPid}`));
   assert.match(events, new RegExp(`controlBridge:stopped:${originalBridgePid}`));
   assert.match(events, new RegExp(`server:started:${newServerPid}`));
@@ -243,11 +243,12 @@ test('default restart helper reports relaunch failures after stopping a verified
   assert.equal(storedJob?.result?.restartStatus.helperResults[0].status, 'relaunch-failed');
 });
 
-test('default restart helper reports failure when a relaunched process exits after spawn', async (t) => {
+test('default restart helper reports failure when node restart command exits after spawn', async (t) => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-default-relaunch-exited-'));
   const probeScriptPath = writeRestartProbeScript(rootDir);
   const eventsPath = path.join(rootDir, 'restart-events.log');
   const pidPath = path.join(rootDir, 'server.pid');
+  const missingScriptPath = path.join(rootDir, 'missing-restart-script.js');
   const server = startRestartProbe(rootDir, probeScriptPath, 'server', pidPath, eventsPath);
   t.after(async () => {
     await stopPid(readPidFile(pidPath));
@@ -260,11 +261,9 @@ test('default restart helper reports failure when a relaunched process exits aft
     cwd: rootDir,
     launch: {
       command: process.execPath,
-      args: [probeScriptPath, 'server', pidPath, eventsPath],
+      args: [missingScriptPath],
       cwd: rootDir,
-      env: {
-        AUTONOMY_RESTART_PROBE_EXIT_CODE: '42',
-      },
+      env: {},
     },
     matchTokens: [path.basename(probeScriptPath), 'server'],
   });
@@ -290,7 +289,7 @@ test('default restart helper reports failure when a relaunched process exits aft
   assert.equal(outcome.targets[0].target, 'server');
   assert.equal(outcome.targets[0].status, 'relaunch-failed');
   assert.equal(outcome.targets[0].reason, 'early-exit');
-  assert.match(outcome.targets[0].error || '', /exit code 42/);
+  assert.match(outcome.targets[0].error || '', /exit code 1/);
 
   const storedJob = loadControlPlaneState(rootDir).jobs.find((entry) => entry.id === job.id);
   assert.equal(storedJob?.result?.restartStatus.status, 'failed');
@@ -393,11 +392,14 @@ function readPidFile(filePath: string) {
   }
 }
 
-async function waitForFileText(filePath: string, timeoutMs = 5000) {
+async function waitForFileText(filePath: string, timeoutMs = 5000, pattern?: RegExp) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath, 'utf8');
+      const text = fs.readFileSync(filePath, 'utf8');
+      if (!pattern || pattern.test(text)) {
+        return text;
+      }
     }
     await delay(20);
   }
