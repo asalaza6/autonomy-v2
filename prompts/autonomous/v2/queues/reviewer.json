@@ -489,10 +489,10 @@
         "Avoid duplicate merge attempts and make retries idempotent.",
         "Escalate stuck PRs to the manager/status surface instead of leaving them as active review work."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-22T04:19:32.650Z",
-      "updatedAt": "2026-04-22T04:26:25.144Z",
+      "updatedAt": "2026-04-22T04:26:42.044Z",
       "reviewedAt": "2026-04-22T04:26:25.144Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
