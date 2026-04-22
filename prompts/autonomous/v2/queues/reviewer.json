@@ -512,7 +512,7 @@
       "sourceTaskId": "prd-make-reviewer-queue-sync-24ab70-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-22T05:53:37.781Z",
       "updatedAt": "2026-04-22T05:53:37.781Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-reviewer-queue-sync-24ab70-architecture-agent",
@@ -536,7 +536,9 @@
         "and reconciliation from `changes_requested` to `merged`.",
         "Avoid rewriting existing git history as part of the functional fix."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-22T05:53:41.632Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
