@@ -501,6 +501,42 @@
       "lastDecision": "approved",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-22T04:49:07.207Z"
+    },
+    {
+      "id": "review-pr-prd-make-reviewer-queue-sync-24ab70-architecture-agent",
+      "title": "Review [architecture-agent] Implement Make Reviewer Queue Sync Idempotent",
+      "description": "Review pr-prd-make-reviewer-queue-sync-24ab70-architecture-agent for Implement Make Reviewer Queue Sync Idempotent",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-make-reviewer-queue-sync-24ab70-architecture-agent",
+      "sourceTaskId": "prd-make-reviewer-queue-sync-24ab70-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-22T05:53:37.781Z",
+      "updatedAt": "2026-04-22T05:53:37.781Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-reviewer-queue-sync-24ab70-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Preserve existing reviewer task `updatedAt` when derived reviewer task content is semantically unchanged.",
+        "Only bump reviewer task `updatedAt` when meaningful task fields change",
+        "including status",
+        "source task",
+        "review round",
+        "PR linkage",
+        "merge/decision fields",
+        "dispatcher fields",
+        "or conversation references.",
+        "Ensure `syncTrackedReviewerQueues()` does not commit when the resulting reviewer queue is semantically identical to the tracked queue.",
+        "Keep legitimate reviewer queue commits for assignments",
+        "approvals",
+        "changes requested",
+        "merges",
+        "stale-review requeues",
+        "and reconciliation from `changes_requested` to `merged`.",
+        "Avoid rewriting existing git history as part of the functional fix."
+      ],
+      "scopeViolations": []
     }
   ]
 }
