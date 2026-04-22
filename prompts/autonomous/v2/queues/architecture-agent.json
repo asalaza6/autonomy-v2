@@ -963,7 +963,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-service-restart-fallback-98a973-architecture-agent",
       "createdAt": "2026-04-22T01:41:02.276Z",
-      "updatedAt": "2026-04-22T01:49:49.374Z",
+      "updatedAt": "2026-04-22T01:49:49.428Z",
       "startedAt": "2026-04-22T01:48:29.113Z",
       "prId": "pr-prd-default-service-restart-fallback-98a973-architecture-agent",
       "completedAt": "2026-04-22T01:49:49.374Z",
@@ -976,7 +976,8 @@
           "updatedAt": "2026-04-22T01:49:49.374Z"
         }
       },
-      "implementationConversationId": "019db2df-ee04-7393-9b53-0e3c71b32c98"
+      "implementationConversationId": "019db2df-ee04-7393-9b53-0e3c71b32c98",
+      "commitSha": "712f4b4dd514ea0a5a40e626388d3cd7fc0dc484"
     },
     {
       "id": "architecture-agent-followup-pr-prd-default-service-restart-fallback-98a973-architecture-agent-4",
