@@ -4,6 +4,101 @@ import assert from 'node:assert/strict';
 import { buildDerivedReviewerTask } from '../../src/sync/derived-pr.js';
 import { reconcileReviewTaskRecord } from '../../src/sync/review-reconciliation.js';
 
+test('derived reviewer task preserves updatedAt when semantic content is unchanged', () => {
+  const now = '2026-04-22T09:00:00.000Z';
+  const existingTask = {
+    id: 'review-pr-stable-architecture-agent',
+    title: 'Review Stable PR',
+    description: 'Review pr-stable-architecture-agent for Build stable task',
+    agentId: 'reviewer',
+    type: 'review',
+    prId: 'pr-stable-architecture-agent',
+    sourceTaskId: 'stable-architecture-agent-1',
+    sourceAgentId: 'architecture-agent',
+    headBranch: 'agent/multi-agent-mvp/architecture-agent/stable-architecture-agent',
+    baseBranch: 'dev',
+    acceptance: ['Stable behavior is implemented.'],
+    reviewRound: 1,
+    status: 'queued',
+    createdAt: '2026-04-22T08:00:00.000Z',
+    updatedAt: '2026-04-22T08:05:00.000Z',
+    conversationReferences: {
+      'agent:reviewer': {
+        conversationId: 'review-session-stable',
+        agentId: 'reviewer',
+        role: 'review',
+        updatedAt: '2026-04-22T08:05:00.000Z',
+      },
+    },
+  } as any;
+
+  const reviewerTask = buildDerivedReviewerTask({
+    id: 'pr-stable-architecture-agent',
+    taskId: 'stable-architecture-agent-1',
+    title: 'Stable PR',
+    headBranch: 'agent/multi-agent-mvp/architecture-agent/stable-architecture-agent',
+    baseBranch: 'dev',
+    acceptance: ['Stable behavior is implemented.'],
+    status: 'open',
+    reviews: [],
+    conversationReferences: {
+      'agent:reviewer': {
+        conversationId: 'review-session-stable',
+        agentId: 'reviewer',
+        role: 'review',
+        updatedAt: now,
+      },
+    },
+  } as any, {
+    id: 'stable-architecture-agent-1',
+    title: 'Build stable task',
+    agentId: 'architecture-agent',
+  } as any, now, existingTask, []);
+
+  assert.equal(reviewerTask.updatedAt, '2026-04-22T08:05:00.000Z');
+  assert.equal(
+    reviewerTask.conversationReferences['agent:reviewer'].updatedAt,
+    '2026-04-22T08:05:00.000Z'
+  );
+});
+
+test('derived reviewer task bumps updatedAt when status changes', () => {
+  const now = '2026-04-22T09:05:00.000Z';
+  const reviewerTask = buildDerivedReviewerTask({
+    id: 'pr-transition-architecture-agent',
+    taskId: 'transition-architecture-agent-1',
+    title: 'Transition PR',
+    headBranch: 'agent/multi-agent-mvp/architecture-agent/transition-architecture-agent',
+    baseBranch: 'dev',
+    acceptance: ['Transition is complete.'],
+    status: 'merged',
+    reviews: [],
+  } as any, {
+    id: 'transition-architecture-agent-1',
+    title: 'Build transition task',
+    agentId: 'architecture-agent',
+  } as any, now, {
+    id: 'review-pr-transition-architecture-agent',
+    title: 'Review Transition PR',
+    description: 'Review pr-transition-architecture-agent for Build transition task',
+    agentId: 'reviewer',
+    type: 'review',
+    prId: 'pr-transition-architecture-agent',
+    sourceTaskId: 'transition-architecture-agent-1',
+    sourceAgentId: 'architecture-agent',
+    headBranch: 'agent/multi-agent-mvp/architecture-agent/transition-architecture-agent',
+    baseBranch: 'dev',
+    acceptance: ['Transition is complete.'],
+    reviewRound: 1,
+    status: 'queued',
+    createdAt: '2026-04-22T08:00:00.000Z',
+    updatedAt: '2026-04-22T08:05:00.000Z',
+  } as any, []);
+
+  assert.equal(reviewerTask.status, 'merged');
+  assert.equal(reviewerTask.updatedAt, now);
+});
+
 test('derived reviewer task requeues when a completed review follow-up updates the PR after changes requested', () => {
   const now = '2026-04-07T07:13:53.000Z';
   const reviewerTask = buildDerivedReviewerTask({
