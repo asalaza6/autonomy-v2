@@ -230,6 +230,7 @@ function applyMergeDiagnosis(pr: PullRequestRecord, reviewTask: TaskRecord, diag
     mergeState: pr.mergeState || null,
     mergeBlockedCode: pr.mergeBlockedCode || null,
     mergeBlockedReason: pr.mergeBlockedReason || null,
+    reviewTaskStatus: reviewTask && reviewTask.status || null,
     reviewTaskCode: reviewTask && reviewTask.lastMergeFailureCode || null,
     reviewTaskMessage: reviewTask && reviewTask.lastMergeFailureMessage || null,
   });
@@ -253,7 +254,12 @@ function applyMergeDiagnosis(pr: PullRequestRecord, reviewTask: TaskRecord, diag
   pr.updatedAt = now;
 
   if (reviewTask) {
-    reviewTask.status = 'approved';
+    reviewTask.status = diagnosis.requeueReview === true ? 'queued' : 'approved';
+    if (diagnosis.requeueReview === true) {
+      reviewTask.reviewRound = Array.isArray(pr.reviews)
+        ? pr.reviews.length + 1
+        : Number(reviewTask.reviewRound || 1);
+    }
     reviewTask.updatedAt = now;
     reviewTask.lastError = null;
     reviewTask.lastMergeFailureCode = nextCode;
@@ -264,6 +270,7 @@ function applyMergeDiagnosis(pr: PullRequestRecord, reviewTask: TaskRecord, diag
     mergeState: pr.mergeState || null,
     mergeBlockedCode: pr.mergeBlockedCode || null,
     mergeBlockedReason: pr.mergeBlockedReason || null,
+    reviewTaskStatus: reviewTask && reviewTask.status || null,
     reviewTaskCode: reviewTask && reviewTask.lastMergeFailureCode || null,
     reviewTaskMessage: reviewTask && reviewTask.lastMergeFailureMessage || null,
   });
@@ -358,6 +365,7 @@ function buildUnreviewedHeadMergeDiagnosis(
     headSha: baseDiagnosis.headSha || (pr.remote && pr.remote.sha) || null,
     commitCount: currentCommitCount,
     reviewedCommitCount,
+    requeueReview: true,
   };
 }
 

@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { execFileSync } from 'child_process';
 
 import {
   approvedPullRequestIsDue,
@@ -7,9 +11,11 @@ import {
   classifyMergeFailureMessage,
   formatMergeFailureReason,
   reviewedCommitCountCoversPullRequestHead,
+  runApprovedPrMergeWatchdog,
   selectApprovedMergeWatchdogCandidate,
   shouldRetryApprovedPrMerge,
 } from '../../src/autonomy-v2/commands/merge-watchdog.js';
+import { getAutonomyPaths, readJson, writeJson } from '../../src/autonomy-v2/commands/shared-core.js';
 import {
   buildPullRequestStatusSummaries,
   formatPullRequestStatusLine,
@@ -53,6 +59,69 @@ function buildApprovedReviewTask(overrides = {}) {
     updatedAt: '2026-04-22T00:00:00.000Z',
     ...overrides,
   } as any;
+}
+
+function git(cwd: string, args: string[]) {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+function createWatchdogRepo(pr: any, reviewTask: any) {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-merge-watchdog-'));
+  git(rootDir, ['init', '-b', 'dev']);
+  git(rootDir, ['config', 'user.email', 'autonomy-test@example.com']);
+  git(rootDir, ['config', 'user.name', 'Autonomy Test']);
+
+  const paths = getAutonomyPaths(rootDir);
+  const implementationQueuePath = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'queues', 'architecture-agent.json');
+  const reviewerQueueRelativePath = 'prompts/autonomous/v2/queues/reviewer.json';
+  const reviewerQueuePath = path.join(rootDir, reviewerQueueRelativePath);
+  const gitIdentity = {
+    name: 'Autonomy Test',
+    email: 'autonomy-test@example.com',
+  };
+  writeJson(paths.agentsConfig, {
+    schemaVersion: 1,
+    integrationBranch: 'dev',
+    agents: [
+      {
+        id: 'architecture-agent',
+        role: 'implementation',
+        systemPrompt: 'Architecture agent',
+        gitIdentity,
+        taskQueue: 'prompts/autonomous/v2/queues/architecture-agent.json',
+        checks: ['npm run typecheck'],
+      },
+      {
+        id: 'reviewer',
+        role: 'review',
+        systemPrompt: 'Reviewer agent',
+        gitIdentity,
+        taskQueue: reviewerQueueRelativePath,
+      },
+    ],
+  });
+  writeJson(paths.sprintConfig, { sprintId: 'test' });
+  writeJson(implementationQueuePath, {
+    schemaVersion: 1,
+    agentId: 'architecture-agent',
+    role: 'implementation',
+    tasks: [],
+  });
+  writeJson(reviewerQueuePath, {
+    agentId: 'reviewer',
+    role: 'review',
+    tasks: [reviewTask],
+  });
+  writeJson(paths.prsState, { pullRequests: [pr] });
+  writeJson(paths.branchLocksState, { locks: [] });
+
+  git(rootDir, ['add', 'prompts']);
+  git(rootDir, ['commit', '-m', 'seed autonomy state']);
+  return { rootDir, paths, reviewerQueueRelativePath };
 }
 
 test('approved PR merge watchdog waits for approval timeout and retry windows', () => {
@@ -132,7 +201,44 @@ test('approved PR merge watchdog blocks heads that changed after approval', () =
   assert.equal(diagnosis?.canMerge, false);
   assert.equal(diagnosis?.code, 'unreviewed_head');
   assert.equal(diagnosis?.headSha, 'head-after-approval');
+  assert.equal(diagnosis?.requeueReview, true);
   assert.match(diagnosis?.reason || '', /review must cover the latest head before merge/);
+});
+
+test('approved PR merge watchdog requeues stale approved heads before automatic merge', () => {
+  const pr = buildApprovedPr({
+    commitCount: 3,
+    remote: null,
+  });
+  const reviewTask = buildApprovedReviewTask({
+    reviewRound: 1,
+    reviewedCommitCount: 2,
+  });
+  const { rootDir, paths, reviewerQueueRelativePath } = createWatchdogRepo(pr, reviewTask);
+
+  const result = runApprovedPrMergeWatchdog(rootDir, {
+    now: '2026-04-22T00:01:00.000Z',
+    timeoutMs: 0,
+    retryMs: 0,
+  }) as any;
+
+  assert.equal(result.merged, false);
+  assert.equal(result.diagnosis.code, 'unreviewed_head');
+  assert.equal(result.diagnosis.commitCount, 3);
+  assert.equal(result.diagnosis.reviewedCommitCount, 2);
+
+  const persistedPrs = readJson(paths.prsState) as any;
+  const persistedPr = persistedPrs.pullRequests[0];
+  assert.equal(persistedPr.mergeState, 'blocked');
+  assert.equal(persistedPr.mergeBlockedCode, 'unreviewed_head');
+  assert.match(persistedPr.mergeBlockedReason, /approval reviewed 2/);
+
+  const reviewerQueue = JSON.parse(git(rootDir, ['show', `dev:${reviewerQueueRelativePath}`]));
+  const persistedReviewTask = reviewerQueue.tasks[0];
+  assert.equal(persistedReviewTask.status, 'queued');
+  assert.equal(persistedReviewTask.reviewRound, 2);
+  assert.equal(persistedReviewTask.lastMergeFailureCode, 'unreviewed_head');
+  assert.match(persistedReviewTask.lastMergeFailureMessage, /approval reviewed 2/);
 });
 
 test('merge failure classifier identifies specific blocked and waiting reasons', () => {
