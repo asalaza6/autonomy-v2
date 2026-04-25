@@ -12,6 +12,11 @@ test('project UI renders chat PRD draft review controls in the existing PRD form
     repoId: 'alpha',
   });
 
+  assert.match(html, /button\.repo-chat-submit \{/);
+  assert.match(html, /button\.repo-chat-submit:hover:not\(:disabled\) \{/);
+  assert.match(html, /button\.repo-chat-submit:focus-visible \{/);
+  assert.match(html, /class="primary repo-chat-submit">Send to repo agent<\/button>/);
+  assert.doesNotMatch(html, /class="primary repo-chat-submit">Queue PRD<\/button>/);
   assert.match(html, /id="chat-prd-draft-panel"/);
   assert.match(html, /Review and submit/);
   assert.match(html, /id="prd-title"/);
@@ -52,6 +57,7 @@ test('chat PRD proposal card renders review and discard actions', async () => {
   assert.match(html, /Draft from chat/);
   assert.match(html, /data-action="review-chat-prd"/);
   assert.match(html, /data-action="discard-chat-prd"/);
+  assert.doesNotMatch(html, /repo-chat-submit/);
 });
 
 test('history detail renders continue source chat action for source chat metadata', async () => {
