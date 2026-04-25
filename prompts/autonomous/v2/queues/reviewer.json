@@ -552,7 +552,7 @@
       "sourceTaskId": "prd-make-repo-chat-send-5d44da-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-25T00:50:03.678Z",
       "updatedAt": "2026-04-25T00:50:03.678Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-repo-chat-send-5d44da-architecture-agent",
@@ -564,7 +564,9 @@
         "Focused control-plane unit coverage asserts the Repo Chat submit button exposes the dedicated styling hook and that non-chat primary actions do not use the pink-specific selector, using `tests/unit/control-plane-chat-prd-draft-ui.test.ts` and existing `buildControlPlaneHtml` render coverage as needed.",
         "Verification includes passing the targeted control-plane chat/UI unit tests, including `tests/unit/control-plane-chat-prd-draft-ui.test.ts`, plus `npm run typecheck`."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-25T00:50:09.493Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
