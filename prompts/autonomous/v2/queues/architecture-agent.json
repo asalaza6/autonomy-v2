@@ -1213,11 +1213,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-25T00:46:29.219Z",
-      "updatedAt": "2026-04-25T00:50:01.766Z",
+      "updatedAt": "2026-04-25T00:50:01.838Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-repo-chat-send-5d44da-architecture-agent",
       "startedAt": "2026-04-25T00:46:49.527Z",
       "completedAt": "2026-04-25T00:50:01.766Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "6f2df25a36c7d9c2972ef13b9b22aac3ecb2c4b4"
     }
   ]
 }
