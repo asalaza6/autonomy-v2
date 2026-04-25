@@ -15,5 +15,21 @@
     "disabled state",
     "and form wiring.",
     "Do not change the appearance of `Queue PRD` or `Review PRD draft` buttons."
+  ],
+  "tasks": [
+    {
+      "id": "prd-make-repo-chat-send-5d44da-architecture-agent-1",
+      "title": "Scope Repo Chat submit styling to a dedicated pink button treatment",
+      "agentId": "architecture-agent",
+      "description": "Update the project control-plane Repo Chat UI so only the `Send to repo agent` submit button gets a dedicated pink styling hook. Scope the likely implementation to the Repo Chat markup and button styles in `src/server/control-plane/control-plane-page.tsx`, preserve the existing render path through `src/server/control-plane/control-plane-browser.ts`, and add focused UI coverage in `tests/unit/control-plane-chat-prd-draft-ui.test.ts` or the existing render test that exercises `buildControlPlaneHtml`.",
+      "acceptance": [
+        "The Repo Chat submit button in `src/server/control-plane/control-plane-page.tsx` no longer relies only on the shared `button.primary` selector; it exposes a dedicated Repo Chat class or selector while keeping `type=\"submit\"`, the `Send to repo agent` label, and the existing chat form wiring intact.",
+        "The dedicated Repo Chat submit selector renders with a pink treatment, preferably using `--accent-2` or a scoped equivalent, for default, hover, and focus-visible states without changing the shared `button.primary` appearance used by `Queue PRD` or `Review PRD draft` actions.",
+        "The Repo Chat submit button continues to reflect disabled or sending states correctly, and no regression is introduced to normal chat submission behavior.",
+        "Focused control-plane unit coverage asserts the Repo Chat submit button exposes the dedicated styling hook and that non-chat primary actions do not use the pink-specific selector, using `tests/unit/control-plane-chat-prd-draft-ui.test.ts` and existing `buildControlPlaneHtml` render coverage as needed.",
+        "Verification includes passing the targeted control-plane chat/UI unit tests, including `tests/unit/control-plane-chat-prd-draft-ui.test.ts`, plus `npm run typecheck`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
