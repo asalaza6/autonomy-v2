@@ -341,6 +341,29 @@ const styles = `
     opacity: 0.76;
   }
 
+  button.repo-chat-submit {
+    background: linear-gradient(135deg, var(--accent-2), #d56572);
+    box-shadow: 0 12px 24px rgba(192, 74, 87, 0.22);
+    transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  }
+
+  button.repo-chat-submit:hover:not(:disabled) {
+    background: linear-gradient(135deg, #b84350, #df727e);
+    box-shadow: 0 14px 28px rgba(192, 74, 87, 0.28);
+    transform: translateY(-1px);
+  }
+
+  button.repo-chat-submit:focus-visible {
+    outline: 3px solid rgba(192, 74, 87, 0.22);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(192, 74, 87, 0.14), 0 14px 28px rgba(192, 74, 87, 0.24);
+  }
+
+  button.repo-chat-submit:disabled {
+    box-shadow: none;
+    transform: none;
+  }
+
   button.deploy-button {
     display: inline-flex;
     align-items: center;
@@ -1022,7 +1045,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                         <textarea id="chat-input" name="message" placeholder="Ask about this repo." />
                       </label>
                       <div className="row">
-                        <button type="submit" className="primary">Send to repo agent</button>
+                        <button type="submit" className="primary repo-chat-submit">Send to repo agent</button>
                         <button type="button" className="secondary" id="chat-refresh-button">Refresh</button>
                       </div>
                       <div className="muted body-note" id="chat-message" />
