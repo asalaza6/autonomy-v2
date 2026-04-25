@@ -561,11 +561,13 @@
         "Verification includes passing the targeted control-plane chat/UI unit tests, including `tests/unit/control-plane-chat-prd-draft-ui.test.ts`, plus `npm run typecheck`."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-25T00:50:03.678Z",
-      "updatedAt": "2026-04-25T00:50:20.145Z",
+      "updatedAt": "2026-04-25T00:52:36.048Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-25T00:50:09.493Z"
+      "dispatchedAt": "2026-04-25T00:50:09.493Z",
+      "reviewedAt": "2026-04-25T00:52:36.048Z",
+      "lastDecision": "approved"
     }
   ]
 }
