@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1900,6 +1899,39 @@
       "completedAt": "2026-04-26T10:11:50.031Z",
       "completionMode": "noop",
       "commitSha": "f9860d192e3c402355d463628dfd5bf395cdd981"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-expose-active-pull-request-c879fc-architecture-agent-5",
+      "title": "Address review for [architecture-agent] Show the active pull request link in the main progress area",
+      "description": "Blocking on missing focused verification. Against the available `origin/dev` ref, the diff stays scoped to the active-PR progress-link feature and the deterministic merge blockers passed (`npm run typecheck`, `npm run lint`). I did not identify a new blocking code regression in the current implementation, but this still changes high-risk control-plane UI/status behavior in `src/autonomy-v2/control-plane/status-view.ts`, `src/server/control-plane/control-plane-client.tsx`, and `src/server/control-plane/control-plane-page.tsx` without recorded passing focused unit coverage for the added paths.\nFocused test execution is still missing for the new coverage in `tests/unit/control-plane-progress-ui.test.ts` and `tests/unit/control-plane-status.test.ts`. Per `prompts/autonomous/v2/project-context.md`, control-plane UI/status changes are high-risk and require focused tests in addition to `npm run typecheck`. Please run and pass those relevant unit tests, or an equivalent focused command that exercises those exact paths, and include the passing result before resubmitting.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-expose-active-pull-request-c879fc",
+      "laneKey": "prd-expose-active-pull-request-c879fc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on missing focused verification. Against the available `origin/dev` ref, the diff stays scoped to the active-PR progress-link feature and the deterministic merge blockers passed (`npm run typecheck`, `npm run lint`). I did not identify a new blocking code regression in the current implementation, but this still changes high-risk control-plane UI/status behavior in `src/autonomy-v2/control-plane/status-view.ts`, `src/server/control-plane/control-plane-client.tsx`, and `src/server/control-plane/control-plane-page.tsx` without recorded passing focused unit coverage for the added paths.\nFocused test execution is still missing for the new coverage in `tests/unit/control-plane-progress-ui.test.ts` and `tests/unit/control-plane-status.test.ts`. Per `prompts/autonomous/v2/project-context.md`, control-plane UI/status changes are high-risk and require focused tests in addition to `npm run typecheck`. Please run and pass those relevant unit tests, or an equivalent focused command that exercises those exact paths, and include the passing result before resubmitting."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-active-pull-request-c879fc-architecture-agent",
+      "createdAt": "2026-04-26T10:13:17.410Z",
+      "updatedAt": "2026-04-26T10:13:17.410Z",
+      "startedAt": "2026-04-26T10:13:17.410Z",
+      "prId": "pr-prd-expose-active-pull-request-c879fc-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc941-6122-76a2-a1fd-4dcbb245d617",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T10:13:17.410Z"
+        }
+      },
+      "implementationConversationId": "019dc941-6122-76a2-a1fd-4dcbb245d617"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
