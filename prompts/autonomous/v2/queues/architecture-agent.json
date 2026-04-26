@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4177,6 +4176,39 @@
       },
       "implementationConversationId": "019dcbbe-5689-7142-8515-3497415df800",
       "commitSha": "065acb9ad4d6f856bb14f7a309be6948c7cd00ff"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-show-associated-pull-request-5ed56d-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Add linked pull request metadata and conditional History action for completed PRDs",
+      "description": "Blocking on verification. The current diff looks scoped correctly and `npm run typecheck` / `npm run lint` passed, but this PR still changes high-risk control-plane history shaping and History detail rendering without merge-blocking evidence that the focused control-plane tests were actually executed against this branch.\nMissing required focused verification for the changed control-plane paths. This branch updates history snapshot shaping in `src/autonomy-v2/commands/shared-prds.ts` and History detail rendering in `src/server/control-plane/control-plane-client.tsx`, and it also modifies the focused suites in `tests/unit/control-plane-status.test.ts`, `tests/unit/control-plane-dashboard.test.ts`, and `tests/unit/control-plane-chat-prd-draft-ui.test.ts`. The deterministic check results still only show `npm run typecheck` and `npm run lint`, and the follow-up queue entry was completed as `noop`, so there is still no evidence that those focused tests were run. Please run and report those suites, or an equivalent narrower command that executes those cases, before this is merged.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-show-associated-pull-request-5ed56d",
+      "laneKey": "prd-show-associated-pull-request-5ed56d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on verification. The current diff looks scoped correctly and `npm run typecheck` / `npm run lint` passed, but this PR still changes high-risk control-plane history shaping and History detail rendering without merge-blocking evidence that the focused control-plane tests were actually executed against this branch.\nMissing required focused verification for the changed control-plane paths. This branch updates history snapshot shaping in `src/autonomy-v2/commands/shared-prds.ts` and History detail rendering in `src/server/control-plane/control-plane-client.tsx`, and it also modifies the focused suites in `tests/unit/control-plane-status.test.ts`, `tests/unit/control-plane-dashboard.test.ts`, and `tests/unit/control-plane-chat-prd-draft-ui.test.ts`. The deterministic check results still only show `npm run typecheck` and `npm run lint`, and the follow-up queue entry was completed as `noop`, so there is still no evidence that those focused tests were run. Please run and report those suites, or an equivalent narrower command that executes those cases, before this is merged."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
+      "createdAt": "2026-04-26T21:44:33.624Z",
+      "updatedAt": "2026-04-26T21:44:33.624Z",
+      "startedAt": "2026-04-26T21:44:33.624Z",
+      "prId": "pr-prd-show-associated-pull-request-5ed56d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dcbbe-5689-7142-8515-3497415df800",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T21:44:33.624Z"
+        }
+      },
+      "implementationConversationId": "019dcbbe-5689-7142-8515-3497415df800"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
