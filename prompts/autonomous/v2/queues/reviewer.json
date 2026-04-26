@@ -790,13 +790,11 @@
         "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
       ],
       "reviewRound": 35,
-      "status": "assigned",
+      "status": "failed",
       "createdAt": "2026-04-26T10:34:19.626Z",
-      "updatedAt": "2026-04-26T10:55:27.104Z",
+      "updatedAt": "2026-04-26T10:55:44.508Z",
       "reviewedAt": "2026-04-26T10:55:11.167Z",
       "lastDecision": "changes_requested",
-      "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T10:55:29.288Z",
       "conversationReferences": {
         "agent:reviewer": {
           "conversationId": "019dc95d-402a-7ca1-ae90-f56d444c6b3c",
@@ -804,7 +802,8 @@
           "role": "review",
           "updatedAt": "2026-04-26T10:55:27.104Z"
         }
-      }
+      },
+      "lastError": "Command failed: /Users/macmini/.local/node-v20.20.2-darwin-arm64/bin/node /Users/macmini/Documents/GitHub/autonomy-v2/dist/src/autonomy-v2/runner/default-runner.js"
     }
   ]
 }
