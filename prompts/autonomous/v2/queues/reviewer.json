@@ -781,7 +781,7 @@
       "sourceTaskId": "prd-fix-chat-prd-review-9f095c-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T10:34:19.626Z",
       "updatedAt": "2026-04-26T10:34:19.626Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
@@ -793,7 +793,9 @@
         "Opening the PRD review popup, closing it, backing out to chat, and submitting through the existing PRD flow continue to behave as before after the responsive layout changes.",
         "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-26T10:34:23.730Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
