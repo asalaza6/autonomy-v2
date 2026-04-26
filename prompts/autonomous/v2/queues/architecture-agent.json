@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1430,13 +1431,15 @@
       "acceptance": [
         "Found a blocking regression in the new review flow. `npm run typecheck` passed, but the PR is not safe to merge yet.\n`src/server/control-plane/control-plane-client.tsx:702` rebuilds `activeChatPrdDraft` from the original proposal every time the review button is clicked, and `src/server/control-plane/control-plane-client.tsx:1941` now leaves that button enabled as `Resume review`. That means a manager can edit the preserved draft, close the popup, then click `Resume review` and silently lose those edits because the form and localStorage are overwritten with a fresh draft. This breaks the acceptance requirement to preserve the draft for later review. Update the resume path to reopen the existing active draft when the proposal key matches, and add a focused test covering edit -> close/back -> resume without losing changes."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
       "createdAt": "2026-04-26T07:55:34.557Z",
-      "updatedAt": "2026-04-26T07:55:34.557Z",
+      "updatedAt": "2026-04-26T07:59:21.523Z",
       "startedAt": "2026-04-26T07:55:34.557Z",
-      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent"
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "completedAt": "2026-04-26T07:59:21.523Z",
+      "completionMode": "code"
     },
     {
       "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-2",
@@ -1453,12 +1456,12 @@
       "acceptance": [
         "Blocking regression remains in the chat PRD review resume path. `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:702` still rebuilds `activeChatPrdDraft` from the original proposal every time the chat card button is clicked, while `src/server/control-plane/control-plane-client.tsx:1958` now exposes that button as `Resume review` for an already-loaded draft. A manager can edit the preserved draft, close/back out of the popup, then click `Resume review` and lose those edits because the form fields and localStorage draft are overwritten with a fresh draft. That still violates the acceptance requirement to preserve the draft for later review. Reuse the existing active draft when the proposal key matches instead of reconstructing it, and add a focused test that exercises edit -> close/back -> resume via the chat card button so this regression is covered."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
       "createdAt": "2026-04-26T07:56:49.559Z",
-      "updatedAt": "2026-04-26T07:56:49.559Z",
-      "startedAt": null,
+      "updatedAt": "2026-04-26T07:59:21.523Z",
+      "startedAt": "2026-04-26T07:59:21.523Z",
       "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent"
     },
     {
@@ -1484,6 +1487,5 @@
       "startedAt": null,
       "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

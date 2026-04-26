@@ -93,6 +93,62 @@ test('chat PRD review popup preserves draft on back and close, and submits throu
   assert.equal(interactive.storage.has(interactive.activeStorageKey), false);
 });
 
+test('chat PRD review resume keeps edited draft changes after closing the popup', async () => {
+  const proposal = normalizePrdProposal({
+    title: 'Draft from chat',
+    problem: 'The user has to copy text manually.',
+    goal: 'Present a dedicated review popup before queueing.',
+    requirements: ['Render a popup review step'],
+    acceptanceCriteria: ['Closing the popup does not queue work'],
+    verification: ['Submit through /api/jobs'],
+    priority: 'medium',
+    source: {
+      repoId: 'alpha',
+      conversationId: 'chat-1',
+      responseMessageId: 'msg-agent',
+    },
+  });
+  const interactive = installInteractiveBrowserStubs({
+    activeDraft: {
+      key: 'proposal-key',
+      proposal: proposal!,
+      title: 'Draft from chat',
+      specification: 'Problem: The user has to copy text manually.\n\nGoal: Present a dedicated review popup before queueing.',
+      requirements: ['Render a popup review step'],
+      sprintId: '',
+      taskSpecsRaw: '',
+      updatedAt: '2026-04-26T08:00:00.000Z',
+    },
+  });
+  const { openChatPrdReviewModal } = await import(
+    `../../src/server/control-plane/control-plane-client.js?resume=${Date.now()}`
+  );
+
+  interactive.elements.prdTitle.value = 'Edited chat PRD title';
+  interactive.elements.prdSpec.value = 'Edited PRD specification.';
+  interactive.elements.prdReq.value = 'Edited requirement';
+  interactive.elements.form.dispatch('input');
+
+  openChatPrdReviewModal();
+  interactive.elements.chatPrdReviewModal.dispatch('click', { target: interactive.elements.chatPrdReviewModal });
+  assert.equal(interactive.elements.chatPrdReviewModal.hidden, true);
+  assert.equal(interactive.storage.get(interactive.activeStorageKey)?.includes('Edited chat PRD title'), true);
+
+  const reviewButton = new FakeButtonElement('review-chat-prd', {
+    action: 'review-chat-prd',
+    proposalKey: 'proposal-key',
+    messageId: 'msg-agent',
+    prdProposal: JSON.stringify(proposal),
+  });
+  interactive.dispatchDocument('click', { target: reviewButton });
+
+  assert.equal(interactive.elements.chatPrdReviewModal.hidden, false);
+  assert.equal(interactive.elements.prdTitle.value, 'Edited chat PRD title');
+  assert.equal(interactive.elements.prdSpec.value, 'Edited PRD specification.');
+  assert.equal(interactive.elements.prdReq.value, 'Edited requirement');
+  assert.equal(interactive.storage.get(interactive.activeStorageKey)?.includes('Edited chat PRD title'), true);
+});
+
 test('chat PRD proposal card renders review and discard actions', async () => {
   installBrowserStubs();
   const { ChatMessage } = await import('../../src/server/control-plane/control-plane-client.js');
@@ -495,6 +551,11 @@ function installInteractiveBrowserStubs({
 
   return {
     activeStorageKey,
+    dispatchDocument: (type: string, event: any = {}) => {
+      for (const listener of docListeners.get(type) || []) {
+        listener(event);
+      }
+    },
     elements,
     fetchCalls,
     storage,
@@ -534,6 +595,21 @@ class FakeElement {
   scrollIntoView() {}
 
   focus() {}
+}
+
+class FakeButtonElement {
+  constructor(
+    public id: string,
+    public dataset: Record<string, string>,
+  ) {}
+
+  closest<T>(_selector: string) {
+    const match = _selector.match(/\[data-action="([^"]+)"\]/);
+    if (match && this.dataset.action === match[1]) {
+      return this as unknown as T;
+    }
+    return null as T;
+  }
 }
 
 function createJsonResponse(body: unknown) {

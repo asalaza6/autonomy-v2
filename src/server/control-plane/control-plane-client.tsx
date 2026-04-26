@@ -700,6 +700,18 @@ async function submitPrd({
 }
 
 function loadChatPrdDraftFromButton(button: HTMLButtonElement) {
+  const buttonProposalKey = String(button.dataset.proposalKey || '').trim();
+  if (buttonProposalKey && activeChatPrdDraft?.key === buttonProposalKey) {
+    writeChatPrdDraftToForm(activeChatPrdDraft);
+    saveActiveChatPrdDraft();
+    renderChatPrdDraftPanel();
+    openChatPrdReviewModal();
+    if (messageEl) {
+      messageEl.textContent = 'Review the chat PRD draft, then submit it or return without queueing.';
+    }
+    return;
+  }
+
   const proposal = readProposalFromButton(button);
   if (!proposal) {
     if (chatMessageEl) {
@@ -707,10 +719,7 @@ function loadChatPrdDraftFromButton(button: HTMLButtonElement) {
     }
     return;
   }
-  const key = String(button.dataset.proposalKey || '').trim() || getPrdProposalStableKey(
-    proposal,
-    String(button.dataset.messageId || '')
-  );
+  const key = buttonProposalKey || getPrdProposalStableKey(proposal, String(button.dataset.messageId || ''));
   const draft = buildChatPrdDraftFormState(key, proposal, entranceContext.repoId);
   activeChatPrdDraft = draft;
   writeChatPrdDraftToForm(draft);
