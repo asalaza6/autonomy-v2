@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1775,14 +1776,24 @@
       "acceptance": [
         "Blocking on missing focused verification. The diff appears scoped to the active-PR link feature and `npm run typecheck` / `npm run lint` passed, but this changes high-risk control-plane UI and PR-selection behavior without a recorded passing run of the relevant tests.\nFocused test execution is missing for the new control-plane progress and PR-selection coverage in `tests/unit/control-plane-progress-ui.test.ts` and `tests/unit/control-plane-status.test.ts`. Per the project context, control-plane UI/status changes require focused tests, and the wrapper only reported `npm run typecheck` and `npm run lint`. Please run and pass the relevant unit coverage for these new paths, then resubmit."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-active-pull-request-c879fc-architecture-agent",
       "createdAt": "2026-04-26T10:06:35.188Z",
-      "updatedAt": "2026-04-26T10:06:35.188Z",
+      "updatedAt": "2026-04-26T10:07:27.283Z",
       "startedAt": "2026-04-26T10:06:35.188Z",
-      "prId": "pr-prd-expose-active-pull-request-c879fc-architecture-agent"
+      "prId": "pr-prd-expose-active-pull-request-c879fc-architecture-agent",
+      "completedAt": "2026-04-26T10:07:27.283Z",
+      "completionMode": "noop",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc941-6122-76a2-a1fd-4dcbb245d617",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T10:07:27.283Z"
+        }
+      },
+      "implementationConversationId": "019dc941-6122-76a2-a1fd-4dcbb245d617"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
