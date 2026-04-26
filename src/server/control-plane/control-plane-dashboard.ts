@@ -105,6 +105,7 @@ function buildRepoDashboard(
       };
 
   const deployJob = jobs.find((job) => job.repoId === repoId && job.type === 'deploy') || null;
+  const prdResetJob = jobs.find((job) => job.repoId === repoId && job.type === 'prd:reset') || null;
   const packageUpdateJob = jobs.find((job) => job.repoId === repoId && job.type === 'package:update') || null;
   const restartJob = jobs.find((job) => job.repoId === repoId && job.type === 'restart') || null;
 
@@ -117,6 +118,7 @@ function buildRepoDashboard(
     deploymentUrl: String(repoConfig?.deploymentUrl || '').trim() || null,
     deploymentLabel: String(repoConfig?.deploymentLabel || '').trim() || 'Deployment site',
     deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
+    prdResetJob: prdResetJob ? summarizeControlPlaneJob(prdResetJob, label) : null,
     packageUpdateJob: packageUpdateJob ? summarizeControlPlaneJob(packageUpdateJob, label) : null,
     restartJob: restartJob ? summarizeControlPlaneJob(restartJob, label) : null,
     versionStatus: buildRepoVersionStatus(repoId, repoStatus, jobs),

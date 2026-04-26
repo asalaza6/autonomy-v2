@@ -212,6 +212,7 @@ type RepoSummary = {
   deploymentUrl?: string | null;
   deploymentLabel?: string | null;
   deployJob?: JobSummary | null;
+  prdResetJob?: JobSummary | null;
   restartJob?: JobSummary | null;
   versionStatus?: VersionStatusSummary | null;
   packageStatus?: PackageStatusSummary | null;
@@ -331,10 +332,12 @@ let latestRepos: RepoRecord[] = [];
 let latestDashboard: DashboardSummary = {};
 let latestConversations: ChatConversationSummary[] = [];
 let deployingRepoIds = new Set<string>();
+let resettingPrdRepoIds = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
 let restartingRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedHistoryPrdId = '';
+let preferredHistoryPrdId = '';
 let prdHistoryContinueMessagePrdId = '';
 let prdHistoryContinueMessage = '';
 let selectedChatConversationId = '';
@@ -472,9 +475,24 @@ function mountControlPlane() {
       return;
     }
 
+    const resetPrdsButton = target ? target.closest<HTMLButtonElement>('[data-action="reset-prds"]') : null;
+    if (resetPrdsButton) {
+      const repoId = String(resetPrdsButton.dataset.repoId || '').trim();
+      if (!repoId) {
+        return;
+      }
+      handlePrdReset(repoId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
     const historyButton = target ? target.closest<HTMLButtonElement>('[data-action="select-prd-history"]') : null;
     if (historyButton) {
       selectedHistoryPrdId = String(historyButton.dataset.prdId || '').trim();
+      preferredHistoryPrdId = '';
       prdHistoryContinueMessagePrdId = '';
       prdHistoryContinueMessage = '';
       renderPrdHistory(latestDashboard);
@@ -1140,6 +1158,51 @@ async function handleRestart(repoId: string) {
   }
 }
 
+async function handlePrdReset(repoId: string) {
+  if (!repoId || resettingPrdRepoIds.has(repoId)) {
+    return;
+  }
+
+  const repo = findRepoSummary(repoId);
+  const activePrd = repo && repo.activePrd ? repo.activePrd : null;
+  const activePrdId = String(activePrd && activePrd.id || '').trim();
+  if (!activePrdId) {
+    throw new Error(`No active PRD to reset for ${repoId}.`);
+  }
+
+  const repoLabel = String(repo && (repo.label || repo.repoId) || repoId);
+  const confirmed = window.confirm(
+    `Reset active PRD ${activePrdId} for ${repoLabel}? This clears repo-local autonomy state and moves the PRD into history.`
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  resettingPrdRepoIds = new Set(resettingPrdRepoIds).add(repoId);
+  preferredHistoryPrdId = activePrdId;
+  if (messageEl) {
+    messageEl.textContent = `Queueing PRD reset for ${repoId}...`;
+  }
+
+  try {
+    await requestJson(`/api/repos/${encodeURIComponent(repoId)}/reset-prds`, {
+      method: 'POST',
+      body: JSON.stringify({
+        repoId,
+        confirmPrdId: activePrdId,
+      }),
+    });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `PRD reset queued for ${repoId}.`;
+    }
+  } finally {
+    const next = new Set(resettingPrdRepoIds);
+    next.delete(repoId);
+    resettingPrdRepoIds = next;
+  }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(resolveApiUrl(url), {
     ...init,
@@ -1292,9 +1355,9 @@ function renderPrdHistory(dashboard: DashboardSummary) {
 
   const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
   const history = repo && Array.isArray(repo.prdHistory) ? repo.prdHistory : [];
-  if (!selectedHistoryPrdId || !history.some((prd) => String(prd.id || '') === selectedHistoryPrdId)) {
-    selectedHistoryPrdId = history.length > 0 ? String(history[0].id || '') : '';
-  }
+  const historySelection = resolveSelectedHistoryState(history, selectedHistoryPrdId, preferredHistoryPrdId);
+  selectedHistoryPrdId = historySelection.selectedPrdId;
+  preferredHistoryPrdId = historySelection.preferredPrdId;
   const selectedPrd = history.find((prd) => String(prd.id || '') === selectedHistoryPrdId) || null;
 
   prdHistorySummaryEl.textContent = history.length > 0
@@ -1316,6 +1379,34 @@ function findHistoryPrdById(dashboard: DashboardSummary, prdId: string) {
   const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
   const history = repo && Array.isArray(repo.prdHistory) ? repo.prdHistory : [];
   return history.find((prd) => String(prd.id || '') === prdId) || null;
+}
+
+function findRepoSummary(repoId: string) {
+  return (latestDashboard.repos || []).find((entry) => String(entry && entry.repoId || '').trim() === repoId) || null;
+}
+
+function resolveSelectedHistoryState(history: PrdSummary[], selectedPrdId: string, preferredPrdId: string) {
+  const historyIds = new Set(history.map((prd) => String(prd.id || '').trim()).filter(Boolean));
+  const preferred = String(preferredPrdId || '').trim();
+  if (preferred && historyIds.has(preferred)) {
+    return {
+      selectedPrdId: preferred,
+      preferredPrdId: '',
+    };
+  }
+
+  const selected = String(selectedPrdId || '').trim();
+  if (selected && historyIds.has(selected)) {
+    return {
+      selectedPrdId: selected,
+      preferredPrdId: preferred,
+    };
+  }
+
+  return {
+    selectedPrdId: history.length > 0 ? String(history[0].id || '') : '',
+    preferredPrdId: preferred,
+  };
 }
 
 function continueSourceChatFromPrd(
@@ -2267,6 +2358,7 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
   const deployment = repo.deployment || null;
   const projectUrl = repo.repoId ? `/project/${encodeURIComponent(repo.repoId)}` : '';
   const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
+  const latestHistoryPrd = Array.isArray(repo.prdHistory) && repo.prdHistory.length > 0 ? repo.prdHistory[0] : null;
 
   return (
     <article className="repo">
@@ -2299,6 +2391,48 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
         <RepoSection title="Package">
           <PackageStatus packageStatus={repo.packageStatus || null} />
           <PackageUpdateButton repo={repo} />
+        </RepoSection>
+        <RepoSection title="PRD">
+          {repo.activePrd ? (
+            <div className="queued-prd">
+              <div className="item-head">
+                <div>
+                  <div className="pill">{repo.activePrd.stateLabel || repo.activePrd.status || 'Active PRD'}</div>
+                  <div className="queue-title" style={{ marginTop: '8px' }}>
+                    {repo.activePrd.title || repo.activePrd.id || 'Active PRD'}
+                  </div>
+                </div>
+              </div>
+              <div className="queue-detail">
+                {repo.activePrd.id || 'unknown PRD'}
+                {repo.activePrd.detail ? ` | ${repo.activePrd.detail}` : ''}
+              </div>
+              {repo.prdResetJob ? (
+                <div className="queue-detail" style={{ marginTop: '8px' }}>
+                  Latest reset job: {repo.prdResetJob.statusLabel || repo.prdResetJob.status || 'queued'}
+                  {repo.prdResetJob.detail ? ` | ${repo.prdResetJob.detail}` : ''}
+                </div>
+              ) : null}
+              <PrdResetButton repo={repo} />
+            </div>
+          ) : latestHistoryPrd ? (
+            <div className="queued-prd">
+              <div className="item-head">
+                <div>
+                  <div className="pill">{latestHistoryPrd.stateLabel || latestHistoryPrd.status || 'Finished PRD'}</div>
+                  <div className="queue-title" style={{ marginTop: '8px' }}>
+                    {latestHistoryPrd.title || latestHistoryPrd.id || 'Latest history item'}
+                  </div>
+                </div>
+              </div>
+              <div className="queue-detail">
+                {latestHistoryPrd.id || 'unknown PRD'}
+                {latestHistoryPrd.detail ? ` | ${latestHistoryPrd.detail}` : ''}
+              </div>
+            </div>
+          ) : (
+            <div className="list-note">No active or finished PRDs recorded yet.</div>
+          )}
         </RepoSection>
         <RepoSection title="Restart">
           <ManagerRestartSummary repo={repo} restartEvidence={restartEvidence} />
@@ -2664,6 +2798,28 @@ function PackageUpdateButton({ repo }: { repo: RepoSummary }) {
   );
 }
 
+function PrdResetButton({ repo }: { repo: RepoSummary }) {
+  const resetState = buildPrdResetButtonState(repo);
+  if (!repo.repoId || !repo.activePrd) {
+    return null;
+  }
+  return (
+    <div className="repo-actions" style={{ marginTop: '12px' }}>
+      <button
+        type="button"
+        className={`secondary deploy-button${resetState.busy ? ' is-loading' : ''}`}
+        data-action="reset-prds"
+        data-repo-id={repo.repoId || ''}
+        disabled={resetState.disabled}
+        aria-busy={resetState.busy}
+      >
+        {resetState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+        <span>{resetState.label}</span>
+      </button>
+    </div>
+  );
+}
+
 function JobStack({ jobs }: { jobs: JobSummary[] }) {
   if (!jobs.length) {
     return <div className="muted">No bridge jobs queued yet.</div>;
@@ -2771,6 +2927,44 @@ function buildPackageUpdateButtonState(repo: RepoSummary | null) {
 
   return {
     label: 'Update package',
+    disabled: false,
+    busy: false,
+  };
+}
+
+function buildPrdResetButtonState(repo: RepoSummary | null) {
+  const repoId = String(repo && repo.repoId || '').trim();
+  const jobStatus = String(repo && repo.prdResetJob && repo.prdResetJob.status || '').trim();
+  const queueing = Boolean(repoId && resettingPrdRepoIds.has(repoId));
+  const resetting = jobStatus === 'claimed' || jobStatus === 'running';
+  const queued = jobStatus === 'queued';
+
+  if (queueing) {
+    return {
+      label: 'Queueing reset...',
+      disabled: true,
+      busy: true,
+    };
+  }
+
+  if (resetting) {
+    return {
+      label: 'Resetting PRD...',
+      disabled: true,
+      busy: true,
+    };
+  }
+
+  if (queued) {
+    return {
+      label: 'Reset queued',
+      disabled: true,
+      busy: false,
+    };
+  }
+
+  return {
+    label: 'Reset PRD',
     disabled: false,
     busy: false,
   };
@@ -2895,6 +3089,7 @@ export {
   isChatNearBottom,
   mountControlPlane,
   openChatPrdReviewModal,
+  resolveSelectedHistoryState,
   resolveChatScrollDecision,
   resolvePrdHistoryContinueChat,
   submitActiveChatPrdDraftReview,

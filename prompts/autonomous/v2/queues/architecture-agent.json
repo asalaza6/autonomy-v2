@@ -1657,12 +1657,14 @@
       "acceptance": [
         "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-2` is complete within the assigned agent scope."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T09:27:56.883Z",
-      "updatedAt": "2026-04-26T09:43:31.274Z",
+      "updatedAt": "2026-04-26T09:50:04.394Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-manager-side-reset-prds-4fb271-architecture-agent",
-      "startedAt": "2026-04-26T09:43:31.274Z"
+      "startedAt": "2026-04-26T09:43:31.274Z",
+      "completedAt": "2026-04-26T09:50:04.394Z",
+      "completionMode": "code"
     }
   ]
 }
