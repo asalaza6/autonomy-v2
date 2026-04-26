@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-add-dedicated-chat-prd-882bd5",
+  "status": "planned",
+  "createdAt": "2026-04-26T07:47:39.350Z",
+  "updatedAt": "2026-04-26T07:47:39.350Z",
+  "plannedTaskIds": [
+    "prd-add-dedicated-chat-prd-882bd5-architecture-agent-1"
+  ]
+}
