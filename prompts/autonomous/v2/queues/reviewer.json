@@ -697,14 +697,14 @@
         "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-1` is complete within the assigned agent scope.",
         "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-2` is complete within the assigned agent scope."
       ],
-      "reviewRound": 1,
-      "status": "changes_requested",
+      "reviewRound": 2,
+      "status": "queued",
       "createdAt": "2026-04-26T09:50:05.449Z",
-      "updatedAt": "2026-04-26T09:52:45.367Z",
-      "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T09:50:09.177Z",
+      "updatedAt": "2026-04-26T09:52:58.860Z",
       "reviewedAt": "2026-04-26T09:52:45.367Z",
-      "lastDecision": "changes_requested"
+      "lastDecision": "changes_requested",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-26T09:50:09.177Z"
     }
   ]
 }
