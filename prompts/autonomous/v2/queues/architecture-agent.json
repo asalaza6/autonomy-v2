@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4524,6 +4523,39 @@
       "completedAt": "2026-04-26T22:53:05.290Z",
       "completionMode": "code",
       "commitSha": "a2b748d3a59ed774e13a757e396a16baf624e062"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Cannot approve for merge into `dev`. The code changes appear aligned with the last requested functional fix, and the deterministic merge blockers are green (`npm run typecheck`, `npm run lint`), but this PR still lacks merge-blocking verification for a high-risk control-plane/sync change.\nFocused automated verification is still missing. This PR changes authoritative PR/PRD reconciliation in `src/sync/review-reconciliation.ts`, `src/autonomy-v2/commands/shared-prds.ts`, and the control-plane status surfaces, and it adds targeted coverage in `tests/unit/review-reconciliation.test.ts:1-117` and `tests/unit/control-plane-status.test.ts:304-582`. The only reported deterministic results are `npm run typecheck` and `npm run lint`; there is no evidence that the relevant status/control-plane tests were executed. Before approval, run and report the focused test target(s) covering these new cases, at minimum the control-plane history/status suite referenced by `package.json:50-52` and the new reconciliation/unit coverage.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Cannot approve for merge into `dev`. The code changes appear aligned with the last requested functional fix, and the deterministic merge blockers are green (`npm run typecheck`, `npm run lint`), but this PR still lacks merge-blocking verification for a high-risk control-plane/sync change.\nFocused automated verification is still missing. This PR changes authoritative PR/PRD reconciliation in `src/sync/review-reconciliation.ts`, `src/autonomy-v2/commands/shared-prds.ts`, and the control-plane status surfaces, and it adds targeted coverage in `tests/unit/review-reconciliation.test.ts:1-117` and `tests/unit/control-plane-status.test.ts:304-582`. The only reported deterministic results are `npm run typecheck` and `npm run lint`; there is no evidence that the relevant status/control-plane tests were executed. Before approval, run and report the focused test target(s) covering these new cases, at minimum the control-plane history/status suite referenced by `package.json:50-52` and the new reconciliation/unit coverage."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "createdAt": "2026-04-26T22:55:14.180Z",
+      "updatedAt": "2026-04-26T22:55:14.180Z",
+      "startedAt": "2026-04-26T22:55:14.180Z",
+      "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T22:55:14.180Z"
+        }
+      },
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
