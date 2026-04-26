@@ -774,29 +774,26 @@
     {
       "id": "review-pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
       "title": "Review [architecture-agent] Make the chat PRD review modal responsive and scroll-safe across supported viewports",
-      "description": "Review pr-prd-fix-chat-prd-review-9f095c-architecture-agent for Make the chat PRD review modal responsive and scroll-safe across supported viewports",
+      "description": "Review pr-prd-fix-chat-prd-review-9f095c-architecture-agent for Address review for [architecture-agent] Make the chat PRD review modal responsive and scroll-safe across supported viewports",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
-      "sourceTaskId": "prd-fix-chat-prd-review-9f095c-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "`src/server/control-plane/control-plane-page.tsx` constrains the chat PRD review modal shell and card to the viewport with responsive spacing and sizing rules that prevent overflow on small and medium screens.",
-        "Long PRD proposal content scrolls inside the modal content region instead of pushing the overall modal, footer, or submit action off-screen.",
-        "The modal header, content region, and footer controls preserve clear separation so Close, Back to chat, and Submit remain keyboard- and pointer-accessible at representative 320x568, 390x844, 768x1024, and desktop viewports.",
-        "Opening the PRD review popup, closing it, backing out to chat, and submitting through the existing PRD flow continue to behave as before after the responsive layout changes.",
-        "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
+        "Blocking on missing focused verification. Against `origin/dev`, the diff stays in scope and the deterministic blockers passed (`npm run typecheck`, `npm run lint`), but this PR changes high-risk control-plane UI behavior in `src/server/control-plane/control-plane-page.tsx:1005` and adds/updates coverage in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:9` and `:38` without any recorded passing run for that focused test file. Per the project context, control-plane UI changes require focused automated verification before merge.\nMissing merge-blocking focused test execution for the responsive PRD review modal change. The modal layout and scroll behavior changed in `src/server/control-plane/control-plane-page.tsx:1005-1095`, and the PR adds targeted assertions in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:9-166`, but the only reported checks are `npm run typecheck` and `npm run lint`. Please run and report a passing focused test command covering `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent command that executes those cases) before this can merge."
       ],
       "reviewRound": 2,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-26T10:34:19.626Z",
-      "updatedAt": "2026-04-26T10:35:57.060Z",
+      "updatedAt": "2026-04-26T10:36:01.416Z",
       "reviewedAt": "2026-04-26T10:35:29.032Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T10:35:58.913Z"
+      "dispatchedAt": "2026-04-26T10:35:58.913Z",
+      "scopeViolations": []
     }
   ]
 }
