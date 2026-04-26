@@ -573,7 +573,7 @@
     {
       "id": "review-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
       "title": "Review [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
-      "description": "Review pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent for Implement Add dedicated chat PRD review popup before submission",
+      "description": "Review pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent for Address review for [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
@@ -597,12 +597,16 @@
         "Allow the popup to be closed directly without submitting.",
         "Do not auto-submit when the popup opens.",
         "Preserve existing PRD queue semantics and payload validation.",
-        "Keep non-PRD chat responses unchanged."
+        "Keep non-PRD chat responses unchanged.",
+        "Found a blocking regression in the new review flow. `npm run typecheck` passed, but the PR is not safe to merge yet.\n`src/server/control-plane/control-plane-client.tsx:702` rebuilds `activeChatPrdDraft` from the original proposal every time the review button is clicked, and `src/server/control-plane/control-plane-client.tsx:1941` now leaves that button enabled as `Resume review`. That means a manager can edit the preserved draft, close the popup, then click `Resume review` and silently lose those edits because the form and localStorage are overwritten with a fresh draft. This breaks the acceptance requirement to preserve the draft for later review. Update the resume path to reopen the existing active draft when the proposal key matches, and add a focused test covering edit -> close/back -> resume without losing changes.",
+        "Blocking regression remains in the chat PRD review resume path. `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:702` still rebuilds `activeChatPrdDraft` from the original proposal every time the chat card button is clicked, while `src/server/control-plane/control-plane-client.tsx:1958` now exposes that button as `Resume review` for an already-loaded draft. A manager can edit the preserved draft, close/back out of the popup, then click `Resume review` and lose those edits because the form fields and localStorage draft are overwritten with a fresh draft. That still violates the acceptance requirement to preserve the draft for later review. Reuse the existing active draft when the proposal key matches instead of reconstructing it, and add a focused test that exercises edit -> close/back -> resume via the chat card button so this regression is covered.",
+        "Blocking required check failure. The branch is not safe to merge into `dev` because `npm run typecheck` fails. The earlier resume-review regression in `src/server/control-plane/control-plane-client.tsx:702` appears addressed, but the required lane check is currently red.\n`npm run typecheck` fails in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:604`. `FakeButtonElement.closest<T>()` returns `this as unknown as T`, and TypeScript rejects that conversion for arbitrary `T`. Fix the test stub typing so the unit test file compiles, then rerun `npm run typecheck`.\nBlocking checks failed: npm run typecheck",
+        "Found a blocking correctness issue in the new chat PRD review flow. The required check `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:866-889` renders the popup from `ChatPrdReviewSummary(draft)`, but `ChatPrdReviewSummary` at `src/server/control-plane/control-plane-client.tsx:1842-1893` still reads the displayed title, requirements, acceptance criteria, and verification from `draft.proposal` rather than the editable draft/form state. The submit path at `src/server/control-plane/control-plane-client.tsx:876-885` queues the current form values instead. That means a manager can edit the preserved draft, reopen the popup, see the original proposal summary, and submit different content than the popup shows. This undermines the explicit review-before-submit requirement. Update the popup to reflect the current draft values that will actually be queued, or otherwise prevent editable divergence, and add a focused test covering edit -> reopen popup -> summary matches submitted payload."
       ],
       "reviewRound": 6,
       "status": "approved",
       "createdAt": "2026-04-26T07:54:06.297Z",
-      "updatedAt": "2026-04-26T08:07:16.932Z",
+      "updatedAt": "2026-04-26T08:08:18.012Z",
       "reviewedAt": "2026-04-26T08:01:57.063Z",
       "lastDecision": "approved",
       "lastMergeFailureCode": "mergeability_unknown",
