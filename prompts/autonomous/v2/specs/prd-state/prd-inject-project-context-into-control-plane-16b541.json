@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-inject-project-context-into-control-plane-16b541",
+  "status": "planned",
+  "createdAt": "2026-04-26T11:18:20.616Z",
+  "updatedAt": "2026-04-26T11:18:20.616Z",
+  "plannedTaskIds": [
+    "prd-inject-project-context-into-control-plane-16b541-architecture-agent-1"
+  ]
+}

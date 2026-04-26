@@ -11,5 +11,23 @@
     "Prefer one consistent prompt path for all turns rather than a separate first-message-only branch unless code constraints require otherwise.",
     "Handle missing or unreadable project-context files gracefully so chat still works and can mention reduced context if needed.",
     "Keep the existing `answer` plus nullable `prdProposal` response contract unchanged."
+  ],
+  "tasks": [
+    {
+      "id": "prd-inject-project-context-into-control-plane-16b541-architecture-agent-1",
+      "title": "Inject project-context into control-plane chat prompt startup flow",
+      "agentId": "architecture-agent",
+      "description": "Update the control-plane chat prompt construction path so the agent receives `prompts/autonomous/v2/project-context.md` from the repo root before generating the first response, while preserving the existing chat response contract and follow-up conversation behavior. Prefer one shared prompt-building path for both first-turn and later-turn requests unless current code structure makes that impractical. Likely change areas include the control-plane chat prompt builder and related chat job flow under `src/server/control-plane/` or adjacent shared prompt utilities. Do not change PM planning behavior or route this work to `main` or `master`; keep integration behavior aligned with `dev`.",
+      "acceptance": [
+        "The control-plane chat prompt path reads `prompts/autonomous/v2/project-context.md` from the repository root and includes its contents in the prompt sent to the chat agent.",
+        "A brand-new chat conversation with empty prior history includes project-context on the first manager message before the first agent response is generated.",
+        "Follow-up chat turns continue to work through the existing conversation history flow without changing the `answer` plus nullable `prdProposal` response schema.",
+        "If `prompts/autonomous/v2/project-context.md` is missing or unreadable, chat request handling does not crash and still returns a normal response with degraded context behavior.",
+        "PM planning behavior and any planning-agent prompt flow remain unchanged.",
+        "Unit coverage is added or updated around `buildAgentChatPrompt` or the equivalent chat job flow to assert project-context inclusion, first-turn empty-history behavior, and missing-file fallback behavior.",
+        "Relevant control-plane tests pass, including chat-focused unit tests and `npm run typecheck`."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }

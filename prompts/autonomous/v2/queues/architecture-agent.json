@@ -4032,6 +4032,34 @@
       "completedAt": "2026-04-26T11:10:57.022Z",
       "completionMode": "noop",
       "commitSha": "70b3ddcf7f6f13f59b4c5f9c55bc2af09720002b"
+    },
+    {
+      "id": "prd-inject-project-context-into-control-plane-16b541-architecture-agent-1",
+      "title": "Inject project-context into control-plane chat prompt startup flow",
+      "description": "Update the control-plane chat prompt construction path so the agent receives `prompts/autonomous/v2/project-context.md` from the repo root before generating the first response, while preserving the existing chat response contract and follow-up conversation behavior. Prefer one shared prompt-building path for both first-turn and later-turn requests unless current code structure makes that impractical. Likely change areas include the control-plane chat prompt builder and related chat job flow under `src/server/control-plane/` or adjacent shared prompt utilities. Do not change PM planning behavior or route this work to `main` or `master`; keep integration behavior aligned with `dev`.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-inject-project-context-into-control-plane-16b541",
+      "laneKey": "prd-inject-project-context-into-control-plane-16b541:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "The control-plane chat prompt path reads `prompts/autonomous/v2/project-context.md` from the repository root and includes its contents in the prompt sent to the chat agent.",
+        "A brand-new chat conversation with empty prior history includes project-context on the first manager message before the first agent response is generated.",
+        "Follow-up chat turns continue to work through the existing conversation history flow without changing the `answer` plus nullable `prdProposal` response schema.",
+        "If `prompts/autonomous/v2/project-context.md` is missing or unreadable, chat request handling does not crash and still returns a normal response with degraded context behavior.",
+        "PM planning behavior and any planning-agent prompt flow remain unchanged.",
+        "Unit coverage is added or updated around `buildAgentChatPrompt` or the equivalent chat job flow to assert project-context inclusion, first-turn empty-history behavior, and missing-file fallback behavior.",
+        "Relevant control-plane tests pass, including chat-focused unit tests and `npm run typecheck`."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-26T11:18:20.509Z",
+      "updatedAt": "2026-04-26T11:18:20.509Z"
     }
   ]
 }
