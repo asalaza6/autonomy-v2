@@ -913,32 +913,26 @@
     {
       "id": "review-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "title": "Review [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
-      "description": "Review pr-prd-make-control-plane-pr-and-027e4d-architecture-agent for Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Review pr-prd-make-control-plane-pr-and-027e4d-architecture-agent for Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
-      "sourceTaskId": "prd-make-control-plane-pr-and-027e4d-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "Status reconciliation uses live GitHub pull request state, when available, as the canonical source for whether a pull request is open, closed, or merged, and preserves degraded behavior when GitHub auth or queries are unavailable.",
-        "Status snapshot generation does not rewrite canonical pull request status to `merged` or any other terminal state solely because linked local tasks appear complete, terminal, or no longer active.",
-        "Any local task-derived inference about a pull request's likely state is kept in separate snapshot metadata from canonical PR state so downstream UI/status consumers can show both without conflation.",
-        "A pull request that remains open on GitHub continues to appear in `pullRequestStatuses` even when all linked local tasks are terminal, including scenarios equivalent to the reported PR #28 drift case.",
-        "PRDs with work in implementation or review remain included in active PRD status until all associated pull requests are actually merged or closed upstream, rather than dropping out based only on active selection or local task completion heuristics.",
-        "The snapshot or related status payload exposes reconciliation source and reasoning metadata for PR and PRD state, including labels or equivalents for `remote`, `inferred`, and `stale`, so a consumer can explain why an item is considered active, resolved, blocked, or stale.",
-        "Drift detection flags disagreements between inferred local state and remote GitHub state for the same pull request without mutating the canonical remote-derived state, and the disagreement is surfaced through logs, snapshot metadata, or equivalent observable status output.",
-        "Automated coverage includes unit tests for open remote PR plus terminal local tasks, closed remote PR, merged remote PR, and missing-auth fallback; snapshot or status-service tests proving implementation/review PRDs remain active and open PRs remain listed; and an integration-style fixture covering the synthetic open-PR scenario described in the PRD. Run `npm run typecheck` and the relevant focused control-plane/sync test targets updated by the change."
+        "Cannot approve for merge into `dev`. `origin/dev` is available and the branch is in scope, but merge-blocking verification is incomplete: `npm run lint` fails, and there is no evidence the focused control-plane/sync test targets added for this high-risk status-reconciliation change were executed.\n`npm run lint` is failing, which is a merge blocker. In [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:129) and [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:133), `isPullRequestMerged` and `isPullRequestClosed` are defined but unused. Remove them or use them so the lane can pass repo-level lint before review can approve.\nThis PR changes high-risk control-plane/sync behavior and adds targeted coverage in [tests/unit/review-reconciliation.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/review-reconciliation.test.ts:1) and [tests/unit/control-plane-status.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/control-plane-status.test.ts:304), but the provided deterministic results only show `npm run typecheck` and a failing lint run. Re-run and report the relevant focused unit/control-plane test targets for the new reconciliation and status-snapshot scenarios before this is safe to merge.\nBlocking checks failed: npm run lint"
       ],
       "reviewRound": 2,
       "status": "queued",
       "createdAt": "2026-04-26T22:46:25.731Z",
-      "updatedAt": "2026-04-26T22:48:12.664Z",
+      "updatedAt": "2026-04-26T22:49:00.478Z",
       "reviewedAt": "2026-04-26T22:47:43.126Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T22:46:29.257Z"
+      "dispatchedAt": "2026-04-26T22:46:29.257Z",
+      "scopeViolations": []
     }
   ]
 }
