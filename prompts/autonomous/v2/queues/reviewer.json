@@ -761,10 +761,10 @@
         "Add or update dashboard or control-plane tests proving the queued PRD fields required by the Main detail view are present in the status/dashboard contract.",
         "Verification includes `npm run typecheck` and the focused unit tests for control-plane client and dashboard behavior affected by this change."
       ],
-      "reviewRound": 3,
-      "status": "changes_requested",
+      "reviewRound": 4,
+      "status": "queued",
       "createdAt": "2026-04-26T10:23:23.773Z",
-      "updatedAt": "2026-04-26T10:27:55.000Z",
+      "updatedAt": "2026-04-26T10:28:21.293Z",
       "reviewedAt": "2026-04-26T10:27:55.000Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
