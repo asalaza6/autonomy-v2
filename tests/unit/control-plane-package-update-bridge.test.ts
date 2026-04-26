@@ -4,14 +4,20 @@ import fs from 'fs';
 import http from 'http';
 import os from 'os';
 import path from 'path';
+import { spawn, type ChildProcess } from 'child_process';
 
 import { runControlPlaneBridgeOnce } from '../../src/server/control-plane/control-plane-bridge.js';
 import {
   completeJob,
   createControlPlaneRestartJob,
   enqueueJob,
+  getControlPlanePaths,
   loadControlPlaneState,
 } from '../../src/server/control-plane/control-plane-store.js';
+import {
+  buildControlPlaneServiceLifecycleMetadata,
+  writeControlPlaneServiceLifecycle,
+} from '../../src/server/control-plane/control-plane-lifecycle.js';
 import {
   createFixtureRepo,
   git,
@@ -778,6 +784,128 @@ test('bridge executes restart jobs independently after completion', async (t) =>
   assert.match(logs.join('\n'), /bridge:restart:deferred-complete/);
 });
 
+test('bridge persists default restart helper evidence back into the hosted restart job', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-restart-default-');
+  const managerRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-manager-default-state-'));
+  const job = enqueueJob(managerRoot, createControlPlaneRestartJob({ repoId: 'default' }));
+  initAutonomyRepo(repoDir);
+
+  const probeScriptPath = writeRestartProbeScript(repoDir);
+  const eventsPath = path.join(repoDir, 'restart-events.log');
+  const serverPidPath = path.join(repoDir, 'server.pid');
+  const bridgePidPath = path.join(repoDir, 'bridge.pid');
+  [eventsPath, serverPidPath, bridgePidPath].forEach((filePath) => fs.rmSync(filePath, { force: true }));
+
+  const serverProcess = startRestartProbe(repoDir, probeScriptPath, 'server', serverPidPath, eventsPath);
+  const bridgeProcess = startRestartProbe(repoDir, probeScriptPath, 'controlBridge', bridgePidPath, eventsPath);
+  t.after(async () => {
+    await stopChild(serverProcess);
+    await stopChild(bridgeProcess);
+  });
+
+  const originalServerPid = await waitForPidFile(serverPidPath);
+  const originalBridgePid = await waitForPidFile(bridgePidPath);
+  writeControlPlaneServiceLifecycle(repoDir, buildProbeLifecycle(
+    'server',
+    repoDir,
+    probeScriptPath,
+    serverPidPath,
+    eventsPath,
+    originalServerPid
+  ));
+  writeControlPlaneServiceLifecycle(repoDir, buildProbeLifecycle(
+    'controlBridge',
+    repoDir,
+    probeScriptPath,
+    bridgePidPath,
+    eventsPath,
+    originalBridgePid
+  ));
+
+  const completedJobs: any[] = [];
+  let jobClaimed = false;
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
+      res.end(JSON.stringify({ job }));
+      return;
+    }
+
+    if (req.url === `/api/jobs/${job.id}/complete` && req.method === 'POST') {
+      const body = JSON.parse(await readRequestText(req));
+      completedJobs.push(body);
+      completeJob(managerRoot, job.id, body);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: job.id, status: 'completed' }));
+      return;
+    }
+
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      await readRequestText(req);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+  });
+
+  await runControlPlaneBridgeOnce(repoDir, {
+    serverUrl,
+    repoRoots: {
+      default: repoDir,
+    },
+  });
+
+  const relaunchedServerPid = await waitForChangedPid(serverPidPath, originalServerPid);
+  const relaunchedBridgePid = await waitForChangedPid(bridgePidPath, originalBridgePid);
+  await waitForFileText(eventsPath, 5000, /controlBridge:started:/);
+
+  assert.equal(completedJobs.length, 2);
+  assert.equal(completedJobs[0].result.restartStatus.status, 'deferred');
+  assert.equal(completedJobs[1].result.restartStatus.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.helperStatus, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.server.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.server.preRestartPid, originalServerPid);
+  assert.equal(completedJobs[1].result.restartStatus.server.postRestartPid, relaunchedServerPid);
+  assert.equal(typeof completedJobs[1].result.restartStatus.server.completedAt, 'string');
+  assert.equal(completedJobs[1].result.restartStatus.controlBridge.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.controlBridge.preRestartPid, originalBridgePid);
+  assert.equal(completedJobs[1].result.restartStatus.controlBridge.postRestartPid, relaunchedBridgePid);
+  assert.equal(typeof completedJobs[1].result.restartStatus.controlBridge.completedAt, 'string');
+  assert.equal(completedJobs[1].result.restartStatus.helperResults.length, 2);
+  assert.deepEqual(completedJobs[1].result.errors, []);
+
+  const storedManagerJob = loadControlPlaneState(managerRoot).jobs.find((entry) => entry.id === job.id);
+  assert.equal(storedManagerJob?.result?.restartStatus?.status, 'restarted');
+  assert.equal(storedManagerJob?.result?.restartStatus?.helperStatus, 'restarted');
+  assert.equal(storedManagerJob?.result?.restartStatus?.server?.postRestartPid, relaunchedServerPid);
+  assert.equal(storedManagerJob?.result?.restartStatus?.controlBridge?.postRestartPid, relaunchedBridgePid);
+
+  const persistedRepoState = JSON.parse(fs.readFileSync(getControlPlanePaths(repoDir).statePath, 'utf8'));
+  const storedRepoJob = persistedRepoState.jobs.find((entry: any) => entry.id === job.id);
+  assert.equal(storedRepoJob?.result?.restartStatus?.status, 'restarted');
+  assert.equal(storedRepoJob?.result?.restartStatus?.helperStatus, 'restarted');
+});
+
 test('bridge reports skipped restart when restart commands and lifecycle metadata are missing', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-restart-missing-');
   initAutonomyRepo(repoDir);
@@ -1030,18 +1158,159 @@ async function captureProcessOutput(callback: () => Promise<void>) {
   return lines;
 }
 
-async function waitForFileText(filePath: string, timeoutMs = 2000) {
+async function waitForFileText(filePath: string, timeoutMs = 2000, pattern?: RegExp) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath, 'utf8');
+      const text = fs.readFileSync(filePath, 'utf8');
+      if (!pattern || pattern.test(text)) {
+        return text;
+      }
     }
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await delay(20);
   }
   throw new Error(`Timed out waiting for ${filePath}.`);
 }
 
 async function assertFileMissingAfter(filePath: string, timeoutMs = 200) {
-  await new Promise((resolve) => setTimeout(resolve, timeoutMs));
+  await delay(timeoutMs);
   assert.equal(fs.existsSync(filePath), false);
+}
+
+function buildProbeLifecycle(
+  kind: 'server' | 'controlBridge',
+  rootDir: string,
+  probeScriptPath: string,
+  pidPath: string,
+  eventsPath: string,
+  pid: number
+) {
+  return buildControlPlaneServiceLifecycleMetadata(kind, {
+    pid,
+    cwd: rootDir,
+    launch: {
+      command: process.execPath,
+      args: [probeScriptPath, kind, pidPath, eventsPath],
+      cwd: rootDir,
+      env: {},
+    },
+    matchTokens: [path.basename(probeScriptPath), kind],
+  });
+}
+
+function writeRestartProbeScript(rootDir: string) {
+  const scriptPath = path.join(rootDir, 'restart-probe.cjs');
+  fs.writeFileSync(scriptPath, [
+    "const fs = require('fs');",
+    'const role = process.argv[2];',
+    'const pidPath = process.argv[3];',
+    'const eventsPath = process.argv[4];',
+    "fs.writeFileSync(pidPath, `${process.pid}\\n`, 'utf8');",
+    "fs.appendFileSync(eventsPath, `${role}:started:${process.pid}\\n`, 'utf8');",
+    'const exitCode = Number(process.env.AUTONOMY_RESTART_PROBE_EXIT_CODE || 0);',
+    'if (exitCode) {',
+    "  fs.appendFileSync(eventsPath, `${role}:exiting:${process.pid}:${exitCode}\\n`, 'utf8');",
+    '  process.exit(exitCode);',
+    '}',
+    'function shutdown() {',
+    "  fs.appendFileSync(eventsPath, `${role}:stopped:${process.pid}\\n`, 'utf8');",
+    '  process.exit(0);',
+    '}',
+    "process.on('SIGTERM', shutdown);",
+    "process.on('SIGINT', shutdown);",
+    'setInterval(() => {}, 1000);',
+    '',
+  ].join('\n'), 'utf8');
+  return scriptPath;
+}
+
+function startRestartProbe(
+  rootDir: string,
+  probeScriptPath: string,
+  kind: 'server' | 'controlBridge',
+  pidPath: string,
+  eventsPath: string
+) {
+  return spawn(process.execPath, [probeScriptPath, kind, pidPath, eventsPath], {
+    cwd: rootDir,
+    stdio: 'ignore',
+  });
+}
+
+async function waitForPidFile(filePath: string, timeoutMs = 5000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const pid = readPidFile(filePath);
+    if (pid && isProcessAlive(pid)) {
+      return pid;
+    }
+    await delay(20);
+  }
+  throw new Error(`Timed out waiting for PID file ${filePath}.`);
+}
+
+async function waitForChangedPid(filePath: string, previousPid: number, timeoutMs = 5000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const pid = readPidFile(filePath);
+    if (pid && pid !== previousPid && isProcessAlive(pid)) {
+      return pid;
+    }
+    await delay(20);
+  }
+  throw new Error(`Timed out waiting for ${filePath} to change from PID ${previousPid}.`);
+}
+
+function readPidFile(filePath: string) {
+  try {
+    const pid = Number(fs.readFileSync(filePath, 'utf8').trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+async function stopChild(child: ChildProcess) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+  if (child.pid) {
+    await stopPid(child.pid);
+  }
+}
+
+async function stopPid(pid: number) {
+  if (!pid || pid === process.pid || !isProcessAlive(pid)) {
+    return;
+  }
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (_) {
+    return;
+  }
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 1000) {
+    if (!isProcessAlive(pid)) {
+      return;
+    }
+    await delay(20);
+  }
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (_) {
+    // The process may have exited between the final poll and forced stop.
+  }
+}
+
+function isProcessAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
