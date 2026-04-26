@@ -1406,10 +1406,128 @@
         "Preserve existing PRD queue semantics and payload validation.",
         "Keep non-PRD chat responses unchanged."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T07:47:39.281Z",
-      "updatedAt": "2026-04-26T07:47:39.281Z"
+      "updatedAt": "2026-04-26T07:54:04.856Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "startedAt": "2026-04-26T07:47:42.457Z",
+      "completedAt": "2026-04-26T07:54:04.791Z",
+      "completionMode": "code",
+      "commitSha": "fd408bd57307f1e0822218c585a5552672c8e728"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
+      "description": "Found a blocking regression in the new review flow. `npm run typecheck` passed, but the PR is not safe to merge yet.\n`src/server/control-plane/control-plane-client.tsx:702` rebuilds `activeChatPrdDraft` from the original proposal every time the review button is clicked, and `src/server/control-plane/control-plane-client.tsx:1941` now leaves that button enabled as `Resume review`. That means a manager can edit the preserved draft, close the popup, then click `Resume review` and silently lose those edits because the form and localStorage are overwritten with a fresh draft. This breaks the acceptance requirement to preserve the draft for later review. Update the resume path to reopen the existing active draft when the proposal key matches, and add a focused test covering edit -> close/back -> resume without losing changes.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-dedicated-chat-prd-882bd5",
+      "laneKey": "prd-add-dedicated-chat-prd-882bd5:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Found a blocking regression in the new review flow. `npm run typecheck` passed, but the PR is not safe to merge yet.\n`src/server/control-plane/control-plane-client.tsx:702` rebuilds `activeChatPrdDraft` from the original proposal every time the review button is clicked, and `src/server/control-plane/control-plane-client.tsx:1941` now leaves that button enabled as `Resume review`. That means a manager can edit the preserved draft, close the popup, then click `Resume review` and silently lose those edits because the form and localStorage are overwritten with a fresh draft. This breaks the acceptance requirement to preserve the draft for later review. Update the resume path to reopen the existing active draft when the proposal key matches, and add a focused test covering edit -> close/back -> resume without losing changes."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "createdAt": "2026-04-26T07:55:34.557Z",
+      "updatedAt": "2026-04-26T07:59:21.587Z",
+      "startedAt": "2026-04-26T07:55:34.557Z",
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "completedAt": "2026-04-26T07:59:21.523Z",
+      "completionMode": "code",
+      "commitSha": "e47ba40b264f9a369112271741a5354ca772cacf"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
+      "description": "Blocking regression remains in the chat PRD review resume path. `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:702` still rebuilds `activeChatPrdDraft` from the original proposal every time the chat card button is clicked, while `src/server/control-plane/control-plane-client.tsx:1958` now exposes that button as `Resume review` for an already-loaded draft. A manager can edit the preserved draft, close/back out of the popup, then click `Resume review` and lose those edits because the form fields and localStorage draft are overwritten with a fresh draft. That still violates the acceptance requirement to preserve the draft for later review. Reuse the existing active draft when the proposal key matches instead of reconstructing it, and add a focused test that exercises edit -> close/back -> resume via the chat card button so this regression is covered.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-dedicated-chat-prd-882bd5",
+      "laneKey": "prd-add-dedicated-chat-prd-882bd5:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking regression remains in the chat PRD review resume path. `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:702` still rebuilds `activeChatPrdDraft` from the original proposal every time the chat card button is clicked, while `src/server/control-plane/control-plane-client.tsx:1958` now exposes that button as `Resume review` for an already-loaded draft. A manager can edit the preserved draft, close/back out of the popup, then click `Resume review` and lose those edits because the form fields and localStorage draft are overwritten with a fresh draft. That still violates the acceptance requirement to preserve the draft for later review. Reuse the existing active draft when the proposal key matches instead of reconstructing it, and add a focused test that exercises edit -> close/back -> resume via the chat card button so this regression is covered."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "createdAt": "2026-04-26T07:56:49.559Z",
+      "updatedAt": "2026-04-26T08:01:17.665Z",
+      "startedAt": "2026-04-26T07:59:21.523Z",
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "completedAt": "2026-04-26T08:01:17.601Z",
+      "completionMode": "code",
+      "commitSha": "4e8e80e5cfb94c9a568fcec5616a0c98f886573a"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
+      "description": "Blocking required check failure. The branch is not safe to merge into `dev` because `npm run typecheck` fails. The earlier resume-review regression in `src/server/control-plane/control-plane-client.tsx:702` appears addressed, but the required lane check is currently red.\n`npm run typecheck` fails in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:604`. `FakeButtonElement.closest<T>()` returns `this as unknown as T`, and TypeScript rejects that conversion for arbitrary `T`. Fix the test stub typing so the unit test file compiles, then rerun `npm run typecheck`.\nBlocking checks failed: npm run typecheck",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-dedicated-chat-prd-882bd5",
+      "laneKey": "prd-add-dedicated-chat-prd-882bd5:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking required check failure. The branch is not safe to merge into `dev` because `npm run typecheck` fails. The earlier resume-review regression in `src/server/control-plane/control-plane-client.tsx:702` appears addressed, but the required lane check is currently red.\n`npm run typecheck` fails in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:604`. `FakeButtonElement.closest<T>()` returns `this as unknown as T`, and TypeScript rejects that conversion for arbitrary `T`. Fix the test stub typing so the unit test file compiles, then rerun `npm run typecheck`.\nBlocking checks failed: npm run typecheck"
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "createdAt": "2026-04-26T07:57:43.956Z",
+      "updatedAt": "2026-04-26T08:02:33.393Z",
+      "startedAt": "2026-04-26T08:01:17.601Z",
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "completedAt": "2026-04-26T08:02:33.334Z",
+      "completionMode": "code",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc8ce-ac8a-73c2-b9b3-c1cf0839fcaf",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T08:02:33.334Z"
+        }
+      },
+      "implementationConversationId": "019dc8ce-ac8a-73c2-b9b3-c1cf0839fcaf",
+      "commitSha": "5c9d39980408724ed64b626cce6f64b3503faf0a"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-4",
+      "title": "Address review for [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
+      "description": "Found a blocking correctness issue in the new chat PRD review flow. The required check `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:866-889` renders the popup from `ChatPrdReviewSummary(draft)`, but `ChatPrdReviewSummary` at `src/server/control-plane/control-plane-client.tsx:1842-1893` still reads the displayed title, requirements, acceptance criteria, and verification from `draft.proposal` rather than the editable draft/form state. The submit path at `src/server/control-plane/control-plane-client.tsx:876-885` queues the current form values instead. That means a manager can edit the preserved draft, reopen the popup, see the original proposal summary, and submit different content than the popup shows. This undermines the explicit review-before-submit requirement. Update the popup to reflect the current draft values that will actually be queued, or otherwise prevent editable divergence, and add a focused test covering edit -> reopen popup -> summary matches submitted payload.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-dedicated-chat-prd-882bd5",
+      "laneKey": "prd-add-dedicated-chat-prd-882bd5:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Found a blocking correctness issue in the new chat PRD review flow. The required check `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:866-889` renders the popup from `ChatPrdReviewSummary(draft)`, but `ChatPrdReviewSummary` at `src/server/control-plane/control-plane-client.tsx:1842-1893` still reads the displayed title, requirements, acceptance criteria, and verification from `draft.proposal` rather than the editable draft/form state. The submit path at `src/server/control-plane/control-plane-client.tsx:876-885` queues the current form values instead. That means a manager can edit the preserved draft, reopen the popup, see the original proposal summary, and submit different content than the popup shows. This undermines the explicit review-before-submit requirement. Update the popup to reflect the current draft values that will actually be queued, or otherwise prevent editable divergence, and add a focused test covering edit -> reopen popup -> summary matches submitted payload."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "createdAt": "2026-04-26T08:00:15.723Z",
+      "updatedAt": "2026-04-26T08:06:04.438Z",
+      "startedAt": "2026-04-26T08:02:33.334Z",
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "completedAt": "2026-04-26T08:06:04.375Z",
+      "completionMode": "code",
+      "commitSha": "f167030285af34bd2796f6dfffac89756468907e"
     }
   ]
 }

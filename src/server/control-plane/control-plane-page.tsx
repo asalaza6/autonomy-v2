@@ -903,6 +903,74 @@ const styles = `
     margin-bottom: 14px;
   }
 
+  .chat-prd-review-trigger {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .chat-prd-review-summary {
+    display: grid;
+    gap: 14px;
+  }
+
+  .chat-prd-review-hero {
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    border-radius: 18px;
+    background:
+      linear-gradient(135deg, rgba(210, 236, 247, 0.92), rgba(255, 247, 231, 0.94));
+    border: 1px solid rgba(36, 91, 117, 0.14);
+  }
+
+  .chat-prd-review-title {
+    font-size: 1.3rem;
+    line-height: 1.15;
+    font-weight: 800;
+  }
+
+  .chat-prd-review-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .chat-prd-review-card {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(31, 26, 21, 0.08);
+    background: rgba(255, 255, 255, 0.82);
+  }
+
+  .chat-prd-review-card.wide {
+    grid-column: 1 / -1;
+  }
+
+  .chat-prd-review-card h3 {
+    margin: 0;
+    font-size: 0.96rem;
+  }
+
+  .chat-prd-review-list {
+    margin: 0;
+    padding-left: 18px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .chat-prd-review-list li,
+  .chat-prd-review-card p {
+    line-height: 1.5;
+  }
+
+  .chat-prd-review-card p {
+    margin: 0;
+  }
+
   .chat-form {
     display: grid;
     gap: 10px;
@@ -913,7 +981,7 @@ const styles = `
   }
 
   @media (max-width: 980px) {
-    .metric-grid, .raw-grid, .grid, .history-layout, .progress-steps { grid-template-columns: 1fr; }
+    .metric-grid, .raw-grid, .grid, .history-layout, .progress-steps, .chat-prd-review-grid { grid-template-columns: 1fr; }
     .main-stage-actions, .progress-head, .progress-foot { align-items: start; }
   }
 `;
@@ -1103,10 +1171,11 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                       <div id="chat-prd-draft-panel" className="chat-prd-draft-panel" hidden>
                         <div>
                           <div className="pill">Chat PRD draft</div>
-                          <h3 id="chat-prd-draft-title" style={{ marginTop: '8px' }}>Review and submit</h3>
+                          <h3 id="chat-prd-draft-title" style={{ marginTop: '8px' }}>Ready for review</h3>
                           <div id="chat-prd-draft-meta" className="chat-prd-proposal-detail" />
                         </div>
-                        <div className="row body-note">
+                        <div className="chat-prd-review-trigger body-note">
+                          <button type="button" className="primary" id="open-chat-prd-review">Open review popup</button>
                           <button type="button" className="secondary" id="discard-chat-prd-draft">Discard draft</button>
                         </div>
                       </div>
@@ -1199,6 +1268,26 @@ function ControlPlanePage(props: ControlPlanePageProps) {
             </>
           )}
         </main>
+
+        {isManager ? null : (
+          <div id="chat-prd-review-modal" className="modal-shell" hidden>
+            <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="chat-prd-review-heading">
+              <div className="modal-head">
+                <div>
+                  <div className="eyebrow">Chat PRD review</div>
+                  <h2 id="chat-prd-review-heading">Review proposed PRD</h2>
+                  <p className="lede muted" id="chat-prd-review-meta">Review the proposal before queueing it.</p>
+                </div>
+                <button type="button" className="secondary" id="close-chat-prd-review">Close</button>
+              </div>
+              <div id="chat-prd-review-content" className="chat-prd-review-summary" />
+              <div className="row body-note">
+                <button type="button" className="secondary" id="back-chat-prd-review">Back to chat</button>
+                <button type="button" className="primary" id="submit-chat-prd-review">Submit</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isManager ? null : (
           <div id="prd-modal" className="modal-shell" hidden>
