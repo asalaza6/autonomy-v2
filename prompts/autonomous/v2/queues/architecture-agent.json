@@ -1708,13 +1708,24 @@
       "acceptance": [
         "`npm run typecheck` and `npm run lint` passed, and the reset handler now aligns its active-PRD selection with the dashboard by calling `selectActivePrd` from `src/autonomy-v2/control-plane/prd-service.ts:170` / `src/autonomy-v2/control-plane/status-view.ts:11-26`. I’m still blocking this round because the regression that previously broke the manager reset flow is not covered by a focused test, so merge safety is still weak in this high-risk control-plane path.\nAdd a focused regression test for the case where a newer `failed` PRD coexists with an older `planned` PRD. The fix now depends on sharing `selectActivePrd` between the UI and backend (`src/autonomy-v2/control-plane/prd-service.ts:170`, `src/autonomy-v2/control-plane/status-view.ts:11-26`), but `tests/unit/control-plane-prd-reset.test.ts:17-152` only covers the happy-path reset and the no-active-PRD noop. Without an assertion for the `failed` + `planned` combination, the exact mismatch that blocked the previous review can regress without detection."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-manager-side-reset-prds-4fb271-architecture-agent",
       "createdAt": "2026-04-26T09:54:58.822Z",
-      "updatedAt": "2026-04-26T09:54:59.096Z",
+      "updatedAt": "2026-04-26T09:56:09.448Z",
       "startedAt": "2026-04-26T09:54:59.096Z",
-      "prId": "pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent"
+      "prId": "pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent",
+      "completedAt": "2026-04-26T09:56:09.448Z",
+      "completionMode": "noop",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc936-d040-74d1-9e11-073b47d3b38d",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T09:56:09.448Z"
+        }
+      },
+      "implementationConversationId": "019dc936-d040-74d1-9e11-073b47d3b38d"
     }
   ]
 }
