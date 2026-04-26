@@ -1,5 +1,5 @@
 import { AGENT_ROLES, TASK_TYPES, getRoleAgentLabel, getRoleLabel } from '../../agents/role-catalog.js';
-import { isPullRequestActive, pullRequestChangesAlreadyApplied } from '../../sync/review-reconciliation.js';
+import { getPullRequestStateReconciliation, isPullRequestActive } from '../../sync/review-reconciliation.js';
 import { normalizeLaneKey } from './shared-core.js';
 import { isTerminalTaskStatus, getImplementationTaskState } from './shared-queues.js';
 
@@ -25,6 +25,7 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
     .filter((pr) => isActivePullRequest(pr, allTasks))
     .sort(comparePullRequestStatuses)
     .map((pr) => {
+      const reconciliation = getPullRequestStateReconciliation(pr, linkedTasksForPr(pr, tasksByPrId, allTasks));
       const linkedTasks = tasksByPrId.get(pr.id) || [];
       const reviewTask = linkedTasks.find((task) => task.type === TASK_TYPES.REVIEW) || null;
       const implementationTask = selectImplementationTaskForStatus(
@@ -44,6 +45,15 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
         action: describePullRequestAction(pr, reviewTask, implementationTask, workerByAgentId),
         url: pr.remote && pr.remote.url ? pr.remote.url : null,
         updatedAt: pr.updatedAt || '',
+        reconciliation,
+        canonicalState: reconciliation.canonicalState,
+        canonicalSource: reconciliation.canonicalSource,
+        canonicalReason: reconciliation.canonicalReason,
+        inferredState: reconciliation.inferredState,
+        inferredReason: reconciliation.inferredReason,
+        reconciliationStatus: reconciliation.reconciliationStatus,
+        drifted: reconciliation.drifted,
+        driftReason: reconciliation.driftReason,
       };
     });
 }
@@ -53,14 +63,14 @@ function listTasks(taskQueues) {
 }
 
 function isActivePullRequest(pr, tasks = []) {
-  if (!isPullRequestActive(pr)) {
-    return false;
+  return isPullRequestActive(pr, tasks);
+}
+
+function linkedTasksForPr(pr, tasksByPrId, allTasks) {
+  if (pr && pr.id && tasksByPrId.has(pr.id)) {
+    return tasksByPrId.get(pr.id) || [];
   }
-  if (String(pr && pr.status || '') === 'changes_requested'
-    && pullRequestChangesAlreadyApplied(pr, tasks)) {
-    return false;
-  }
-  return true;
+  return (allTasks || []).filter((task) => task && task.prId === (pr && pr.id));
 }
 
 function comparePullRequestStatuses(left, right) {
@@ -78,6 +88,11 @@ function comparePullRequestStatuses(left, right) {
 }
 
 function describePullRequestAction(pr, reviewTask, implementationTask, workerByAgentId) {
+  if (pr && pr.reconciliation && pr.reconciliation.drifted) {
+    return pr.reconciliation.driftReason
+      ? `state drift: ${pr.reconciliation.driftReason}`
+      : 'state drift detected between local and remote PR state';
+  }
   if (implementationTask) {
     return describePullRequestImplementationAction(
       implementationTask,

@@ -26,40 +26,121 @@ function isReviewTask(task) {
   return normalizeString(task && task.type) === 'review';
 }
 
-function isPullRequestMerged(pr: AnyRecord | null | undefined) {
-  return Boolean(
-    pr
-      && (
-        normalizeString(pr.status) === 'merged'
-        || pr.mergedAt
-        || (pr.remote && (pr.remote.mergedAt || pr.remote.merged_at))
-      )
-  );
-}
-
-function isPullRequestClosed(pr: AnyRecord | null | undefined) {
-  if (!pr || isPullRequestMerged(pr)) {
-    return false;
+function resolveRemotePullRequestState(pr: AnyRecord | null | undefined) {
+  if (!pr) {
+    return null;
   }
-  const status = normalizeString(pr.status).toLowerCase();
-  const remoteState = normalizeString(pr.remote && pr.remote.state).toLowerCase();
-  return status === 'closed' || remoteState === 'closed';
-}
-
-function isPullRequestResolved(pr: AnyRecord | null | undefined) {
-  return isPullRequestMerged(pr) || isPullRequestClosed(pr);
-}
-
-function isPullRequestActive(pr: AnyRecord | null | undefined) {
-  if (!pr || isPullRequestResolved(pr)) {
-    return false;
+  if (pr.remote && (pr.remote.mergedAt || pr.remote.merged_at)) {
+    return {
+      state: 'merged',
+      source: 'remote',
+      reason: 'remote.mergedAt',
+    };
   }
   const remoteState = normalizeString(pr.remote && pr.remote.state).toLowerCase();
-  if (remoteState) {
-    return remoteState === 'open';
+  if (remoteState === 'open' || remoteState === 'closed') {
+    return {
+      state: remoteState,
+      source: 'remote',
+      reason: `remote.state=${remoteState}`,
+    };
+  }
+  return null;
+}
+
+function inferLocalPullRequestState(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
+  if (!pr) {
+    return null;
   }
   const status = normalizeString(pr.status).toLowerCase();
-  return !status || ACTIVE_PULL_REQUEST_STATUSES.has(status);
+  if (status === 'merged' || pr.mergedAt) {
+    return {
+      state: 'merged',
+      source: 'inferred',
+      reason: status === 'merged' ? 'stored.status=merged' : 'stored.mergedAt',
+    };
+  }
+  if (status === 'closed') {
+    return {
+      state: 'closed',
+      source: 'inferred',
+      reason: 'stored.status=closed',
+    };
+  }
+  if (pullRequestChangesAlreadyApplied(pr, implementationTasks)) {
+    return {
+      state: 'merged',
+      source: 'inferred',
+      reason: 'linked implementation tasks are terminal',
+    };
+  }
+  if (!status || ACTIVE_PULL_REQUEST_STATUSES.has(status)) {
+    return {
+      state: 'open',
+      source: 'inferred',
+      reason: status ? `stored.status=${status}` : 'default-open',
+    };
+  }
+  return null;
+}
+
+function getPullRequestStateReconciliation(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
+  const remote = resolveRemotePullRequestState(pr);
+  const inferred = inferLocalPullRequestState(pr, implementationTasks);
+
+  if (remote) {
+    const drifted = Boolean(inferred && inferred.state && inferred.state !== remote.state);
+    return {
+      canonicalState: remote.state,
+      canonicalSource: 'remote',
+      canonicalReason: remote.reason,
+      inferredState: inferred && inferred.state ? inferred.state : null,
+      inferredReason: inferred && inferred.reason ? inferred.reason : null,
+      reconciliationStatus: drifted ? 'stale' : 'remote',
+      drifted,
+      driftReason: drifted
+        ? `remote ${remote.state} disagrees with local inference ${inferred && inferred.state}`
+        : null,
+    };
+  }
+
+  const canonical = inferred || {
+    state: 'open',
+    source: 'inferred',
+    reason: 'remote state unavailable',
+  };
+  return {
+    canonicalState: canonical.state,
+    canonicalSource: 'inferred',
+    canonicalReason: canonical.reason,
+    inferredState: inferred && inferred.state ? inferred.state : canonical.state,
+    inferredReason: inferred && inferred.reason ? inferred.reason : canonical.reason,
+    reconciliationStatus: 'inferred',
+    drifted: false,
+    driftReason: null,
+  };
+}
+
+function resolveOpenWorkflowStatus(pr: AnyRecord | null | undefined) {
+  const status = normalizeString(pr && pr.status).toLowerCase();
+  return ACTIVE_PULL_REQUEST_STATUSES.has(status) ? status : 'open';
+}
+
+function isPullRequestMerged(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
+  return getPullRequestStateReconciliation(pr, implementationTasks).canonicalState === 'merged';
+}
+
+function isPullRequestClosed(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
+  return getPullRequestStateReconciliation(pr, implementationTasks).canonicalState === 'closed';
+}
+
+function isPullRequestResolved(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
+  const canonicalState = getPullRequestStateReconciliation(pr, implementationTasks).canonicalState;
+  return canonicalState === 'merged' || canonicalState === 'closed';
+}
+
+function isPullRequestActive(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
+  return getPullRequestStateReconciliation(pr, implementationTasks).canonicalState === 'open';
 }
 
 function taskMatchesPullRequest(task: AnyRecord | null | undefined, pr: AnyRecord | null | undefined) {
@@ -93,7 +174,7 @@ function pullRequestChangesAlreadyApplied(pr: AnyRecord | null | undefined, impl
   if (!pr) {
     return false;
   }
-  if (isPullRequestMerged(pr)) {
+  if (normalizeString(pr.status) === 'merged' || pr.mergedAt || (pr.remote && (pr.remote.mergedAt || pr.remote.merged_at))) {
     return true;
   }
 
@@ -163,10 +244,10 @@ function reviewTaskShouldBeResolved(
     return false;
   }
   const hasActionableWork = reviewTaskHasActionableImplementationWork(reviewTask, pr, implementationTasks);
-  if (hasActionableWork && isPullRequestActive(pr)) {
+  if (hasActionableWork && isPullRequestActive(pr, implementationTasks)) {
     return false;
   }
-  if (isPullRequestResolved(pr)) {
+  if (isPullRequestResolved(pr, implementationTasks)) {
     return true;
   }
   if (!pr) {
@@ -175,7 +256,7 @@ function reviewTaskShouldBeResolved(
   if (pullRequestChangesAlreadyApplied(pr, implementationTasks) && !hasActionableWork) {
     return true;
   }
-  return !isPullRequestActive(pr) && !hasActionableWork;
+  return !isPullRequestActive(pr, implementationTasks) && !hasActionableWork;
 }
 
 function resolveMergedAt(reviewTask: AnyRecord, pr: AnyRecord | null | undefined, now: string) {
@@ -218,38 +299,33 @@ function reconcilePullRequestRecord(pr: AnyRecord, implementationTasks: AnyRecor
   if (!pr) {
     return pr;
   }
-  if (isPullRequestMerged(pr)) {
-    return normalizeString(pr.status) === 'merged'
-      ? pr
-      : {
-          ...pr,
-          status: 'merged',
-          mergedAt: resolveMergedAt({}, pr, now),
-          updatedAt: now,
-        };
+  const reconciliation = getPullRequestStateReconciliation(pr, implementationTasks);
+  const nextRecord: AnyRecord = {
+    ...pr,
+    reconciliation,
+  };
+  if (reconciliation.canonicalState === 'merged') {
+    nextRecord.status = 'merged';
+    nextRecord.mergedAt = resolveMergedAt({}, pr, now);
+    nextRecord.updatedAt = now;
+    return nextRecord;
   }
-  if (isPullRequestClosed(pr)) {
-    return normalizeString(pr.status) === 'closed'
-      ? pr
-      : {
-          ...pr,
-          status: 'closed',
-          updatedAt: now,
-        };
+  if (reconciliation.canonicalState === 'closed') {
+    nextRecord.status = 'closed';
+    nextRecord.updatedAt = now;
+    delete nextRecord.mergedAt;
+    return nextRecord;
   }
-  if (normalizeString(pr.status) === 'changes_requested'
-    && pullRequestChangesAlreadyApplied(pr, implementationTasks)) {
-    return {
-      ...pr,
-      status: 'merged',
-      mergedAt: resolveMergedAt({}, pr, now),
-      updatedAt: now,
-    };
+  nextRecord.status = resolveOpenWorkflowStatus(pr);
+  if (normalizeString(nextRecord.status) !== normalizeString(pr.status)) {
+    nextRecord.updatedAt = now;
   }
-  return pr;
+  delete nextRecord.mergedAt;
+  return nextRecord;
 }
 
 export {
+  getPullRequestStateReconciliation,
   isPullRequestActive,
   isPullRequestResolved,
   pullRequestChangesAlreadyApplied,

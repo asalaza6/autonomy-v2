@@ -295,6 +295,7 @@ test('status snapshots derive completed PRD tasks from active PR records', () =>
         remote: {
           number: 7,
           url: 'https://github.com/asalaza6/autonomy-v2/pull/7',
+          state: 'open',
         },
       },
     ],
@@ -303,8 +304,20 @@ test('status snapshots derive completed PRD tasks from active PR records', () =>
   const snapshot = buildStatusSnapshot(repoDir);
   const prd = snapshot.prds.prds.find((candidate) => candidate.id === 'prd-review-001');
   assert.ok(prd);
+  assert.equal(prd.status, 'planned');
+  assert.equal(prd.statusSource, 'remote');
+  assert.equal(prd.reconciliationStatus, 'stale');
   assert.deepEqual(prd.completedTaskSpecIds, [taskOne.id, taskTwo.id]);
+  assert.deepEqual(prd.linkedPullRequestSummary, {
+    total: 1,
+    open: 1,
+    resolved: 0,
+    stale: 1,
+  });
   assert.equal(snapshot.pullRequestStatuses.length, 1);
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalState, 'open');
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalSource, 'remote');
+  assert.equal(snapshot.pullRequestStatuses[0].reconciliationStatus, 'stale');
 
   const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
     schemaVersion: 1,
@@ -478,12 +491,18 @@ test('status snapshots reconcile stale manually resolved review state', () => {
   assert.equal(reviewerQueue.statuses.changes_requested, undefined);
   assert.equal(reviewerQueue.statuses.merged, 1);
   assert.equal(snapshot.taskCounts.changes_requested, undefined);
-  assert.equal(snapshot.prCounts.changes_requested, undefined);
-  assert.equal(snapshot.prCounts.merged, 1);
+  assert.equal(snapshot.prCounts.changes_requested, 1);
+  assert.equal(snapshot.prCounts.merged, undefined);
   assert.equal(reviewerStatus.workerStatus, 'idle');
   assert.equal(reviewerStatus.detail, 'no review tasks');
-  assert.equal(snapshot.pullRequestStatuses.length, 0);
-  assert.equal(prd.status, 'completed');
+  assert.equal(snapshot.pullRequestStatuses.length, 1);
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalState, 'open');
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalSource, 'remote');
+  assert.equal(snapshot.pullRequestStatuses[0].inferredState, 'merged');
+  assert.equal(snapshot.pullRequestStatuses[0].reconciliationStatus, 'stale');
+  assert.equal(prd.status, 'planned');
+  assert.equal(prd.statusSource, 'remote');
+  assert.equal(prd.reconciliationStatus, 'stale');
   assert.deepEqual(prd.completedTaskSpecIds, [task.id]);
 
   const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
@@ -500,8 +519,8 @@ test('status snapshots reconcile stale manually resolved review state', () => {
     },
   } as any);
 
-  assert.equal(dashboard.repos[0].activePrd, null);
-  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'idle');
+  assert.equal(dashboard.repos[0].activePrd.id, 'prd-resolved-review-001');
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'reviewing');
 });
 
 test('status snapshots include deployment branch comparison details', () => {
