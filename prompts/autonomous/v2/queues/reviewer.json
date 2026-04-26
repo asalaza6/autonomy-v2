@@ -673,16 +673,15 @@
         "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
       ],
       "reviewRound": 4,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-26T08:20:30.500Z",
-      "updatedAt": "2026-04-26T08:30:32.840Z",
+      "updatedAt": "2026-04-26T08:30:56.616Z",
       "reviewedAt": "2026-04-26T08:25:27.631Z",
       "lastDecision": "approved",
       "lastMergeFailureCode": "mergeability_unknown",
       "lastMergeFailureMessage": "GitHub is still computing mergeability",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T08:30:28.547Z",
-      "lastError": null
+      "dispatchedAt": "2026-04-26T08:30:28.547Z"
     }
   ]
 }
