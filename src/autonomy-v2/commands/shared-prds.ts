@@ -135,6 +135,37 @@ function isActiveLinkedPullRequest(pr, linkedTasks) {
   return isPullRequestActive(pr, linkedTasks);
 }
 
+function derivePrdStatusSource(
+  linkedPullRequests = [],
+  pullRequestReconciliations = [],
+  plannedTaskIds = [],
+  isQueued = false
+) {
+  if (pullRequestReconciliations.some((entry) => entry && entry.canonicalSource === 'remote')) {
+    return 'remote';
+  }
+  if (linkedPullRequests.length > 0) {
+    return 'inferred';
+  }
+  if (plannedTaskIds.length > 0) {
+    return 'inferred';
+  }
+  if (isQueued) {
+    return 'queued';
+  }
+  return 'inferred';
+}
+
+function derivePrdReconciliationStatus(pullRequestReconciliations = []) {
+  if (pullRequestReconciliations.some((entry) => entry && entry.reconciliationStatus === 'stale')) {
+    return 'stale';
+  }
+  if (pullRequestReconciliations.some((entry) => entry && entry.canonicalSource === 'remote')) {
+    return 'remote';
+  }
+  return 'inferred';
+}
+
 function deriveCompletedTaskSpecIds(plannedTaskIds, linkedTasks = [], linkedPullRequests = []) {
   const plannedIds = normalizeStringIds(plannedTaskIds);
   if (plannedIds.length === 0) {
@@ -209,7 +240,8 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
       const completedTaskSpecIdSet = new Set(completedTaskSpecIds);
       const hasActivePullRequest = linkedPullRequests.some((pr) => isActiveLinkedPullRequest(pr, linkedTasks));
       const pullRequestReconciliations = linkedPullRequests.map((pr) => getPullRequestStateReconciliation(pr, linkedTasks));
-      const hasStalePullRequestState = pullRequestReconciliations.some((entry) => entry && entry.reconciliationStatus === 'stale');
+      const prdStatusSource = derivePrdStatusSource(linkedPullRequests, pullRequestReconciliations, plannedTaskIds, entry.isQueued === true);
+      const prdReconciliationStatus = derivePrdReconciliationStatus(pullRequestReconciliations);
       const hasPendingUncompletedTask = linkedTasks.some((task) => {
         const taskId = String(task && task.id || '').trim();
         if (!taskId || !plannedTaskIdSet.has(taskId) || completedTaskSpecIdSet.has(taskId)) {
@@ -238,15 +270,7 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
         ...entry.spec,
         isQueued: entry.isQueued === true,
         status,
-        statusSource: hasActivePullRequest
-          ? 'remote'
-          : linkedPullRequests.length > 0
-            ? 'inferred'
-            : plannedTaskIds.length > 0
-              ? 'inferred'
-              : entry.isQueued === true
-                ? 'queued'
-                : 'inferred',
+        statusSource: prdStatusSource,
         statusReason: hasActivePullRequest
           ? 'linked pull request remains open upstream'
           : linkedPullRequests.length > 0 && linkedPullRequests.every(isMergedPullRequest)
@@ -256,7 +280,7 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
               : entry.isQueued === true
                 ? 'spec remains queued'
                 : 'tracked PRD status derived from local repo state',
-        reconciliationStatus: hasStalePullRequestState ? 'stale' : (hasActivePullRequest ? 'remote' : 'inferred'),
+        reconciliationStatus: prdReconciliationStatus,
         linkedPullRequestSummary: linkedPullRequests.length > 0 ? {
           total: linkedPullRequests.length,
           open: pullRequestReconciliations.filter((entry) => entry.canonicalState === 'open').length,

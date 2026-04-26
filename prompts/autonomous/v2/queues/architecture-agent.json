@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4504,11 +4505,11 @@
       "acceptance": [
         "Cannot approve for merge into `dev`. The required deterministic checks are now green (`npm run typecheck`, `npm run lint`), but the PR still misreports PRD reconciliation metadata for remotely resolved pull requests, so the control-plane status is not fully authoritative/observable.\n`src/autonomy-v2/commands/shared-prds.ts:241-259` derives PRD-level `statusSource` and `reconciliationStatus` from `hasActivePullRequest`, so any PRD whose linked PRs are remotely `closed` or `merged` is labeled as `inferred` even when `getPullRequestStateReconciliation()` marked those PRs as canonical `remote`. That contradicts the new contract that upstream GitHub state is authoritative and observable for PR/PRD status, and it will hide remote-vs-inferred provenance for resolved PRDs. Please compute PRD-level source/status from the linked PR reconciliation results, not only from whether an open PR exists, and add focused coverage for the remotely resolved PRD case."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "createdAt": "2026-04-26T22:50:51.684Z",
-      "updatedAt": "2026-04-26T22:50:51.684Z",
+      "updatedAt": "2026-04-26T22:53:05.290Z",
       "startedAt": "2026-04-26T22:50:51.684Z",
       "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "conversationReferences": {
@@ -4516,11 +4517,12 @@
           "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-26T22:50:51.684Z"
+          "updatedAt": "2026-04-26T22:53:05.290Z"
         }
       },
-      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6"
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+      "completedAt": "2026-04-26T22:53:05.290Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
