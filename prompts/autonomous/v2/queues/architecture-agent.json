@@ -1580,11 +1580,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
       "createdAt": "2026-04-26T08:22:11.757Z",
-      "updatedAt": "2026-04-26T08:26:14.454Z",
+      "updatedAt": "2026-04-26T08:26:14.516Z",
       "startedAt": "2026-04-26T08:22:11.757Z",
       "prId": "pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
       "completedAt": "2026-04-26T08:26:14.454Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "1a69573fcc3fb488ff6a49a297ce6e33c3dbb5b9"
     },
     {
       "id": "architecture-agent-followup-pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent-2",
