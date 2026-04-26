@@ -628,6 +628,13 @@ const styles = `
     line-height: 1.35;
   }
 
+  .progress-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
   .progress-foot {
     display: flex;
     justify-content: space-between;
@@ -1072,6 +1079,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                         <div className="progress-headline">
                           <h2 id="main-progress-title" className="progress-title">Ready for a new run</h2>
                           <p id="main-progress-detail" className="muted">No active PRD is working through tasks right now.</p>
+                          <div id="main-progress-actions" className="progress-actions" />
                         </div>
                         <div id="main-progress-stats">0 complete · 0 remaining</div>
                       </div>

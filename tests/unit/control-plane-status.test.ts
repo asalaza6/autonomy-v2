@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { buildStatusSnapshot } from '../../src/autonomy-v2/control-plane/status-service.js';
+import { selectActivePullRequestStatusForPrd } from '../../src/autonomy-v2/control-plane/status-view.js';
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
 import {
   addPrdWithTasks,
@@ -230,6 +231,59 @@ test('status snapshots derive completed PRD tasks from active PR records', () =>
     dashboard.repos[0].prdRun.steps.map((step) => step.state),
     ['done', 'done', 'active']
   );
+});
+
+test('active PR selection prefers the most relevant matching PRD record with a valid URL', () => {
+  const activePrd = {
+    id: 'prd-active-001',
+    status: 'planned',
+    plannedTaskCount: 2,
+    completedTaskCount: 1,
+  };
+
+  const selected = selectActivePullRequestStatusForPrd(activePrd, [
+    {
+      prId: 'pr-prd-active-001-approved',
+      prdId: 'prd-active-001',
+      number: 12,
+      status: 'approved',
+      statusLabel: 'approved waiting merge',
+      mergeState: 'waiting',
+      updatedAt: '2026-04-01T12:11:00.000Z',
+      url: 'https://github.com/asalaza6/autonomy-v2/pull/12',
+    },
+    {
+      prId: 'pr-prd-active-001-review',
+      prdId: 'prd-active-001',
+      number: 9,
+      status: 'open',
+      statusLabel: 'review active',
+      updatedAt: '2026-04-01T12:10:00.000Z',
+      url: 'https://github.com/asalaza6/autonomy-v2/pull/9',
+    },
+    {
+      prId: 'pr-prd-active-001-invalid-url',
+      prdId: 'prd-active-001',
+      number: 13,
+      status: 'open',
+      statusLabel: 'review active',
+      updatedAt: '2026-04-01T12:12:00.000Z',
+      url: 'github.com/asalaza6/autonomy-v2/pull/13',
+    },
+    {
+      prId: 'pr-prd-other-001-review',
+      prdId: 'prd-other-001',
+      number: 20,
+      status: 'open',
+      statusLabel: 'review active',
+      updatedAt: '2026-04-01T12:13:00.000Z',
+      url: 'https://github.com/asalaza6/autonomy-v2/pull/20',
+    },
+  ]);
+
+  assert.ok(selected);
+  assert.equal(selected.prId, 'pr-prd-active-001-review');
+  assert.equal(selected.number, 9);
 });
 
 test('status snapshots reconcile stale manually resolved review state', () => {

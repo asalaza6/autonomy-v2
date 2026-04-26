@@ -201,6 +201,23 @@ function selectPullRequestStatusesForPrd(activePrd: any, pullRequestStatuses: an
   return (pullRequestStatuses || []).filter((prStatus) => pullRequestStatusMatchesPrd(prStatus, prdId));
 }
 
+function selectActivePullRequestStatusForPrd(activePrd: any, pullRequestStatuses: any[] = [], queuedPrds: any[] = []) {
+  const prdPullRequestStatuses = selectPullRequestStatusesForPrd(activePrd, pullRequestStatuses)
+    .filter((pullRequestStatus) => hasValidPullRequestUrl(pullRequestStatus && pullRequestStatus.url));
+  if (!activePrd || prdPullRequestStatuses.length === 0) {
+    return null;
+  }
+
+  const currentStepId = resolvePrdRunStep(activePrd, queuedPrds, prdPullRequestStatuses);
+  if (currentStepId !== 'implementing' && currentStepId !== 'reviewing') {
+    return null;
+  }
+
+  return prdPullRequestStatuses
+    .slice()
+    .sort((left, right) => compareActivePullRequestStatuses(left, right, currentStepId))[0] || null;
+}
+
 function pullRequestStatusMatchesPrd(prStatus: any, prdId: string) {
   const explicitPrdId = String(prStatus && prStatus.prdId || '').trim();
   if (explicitPrdId) {
@@ -210,6 +227,61 @@ function pullRequestStatusMatchesPrd(prStatus: any, prdId: string) {
   const prId = String(prStatus && prStatus.prId || '').trim();
   const prdSlug = slugifyIdentifier(prdId);
   return Boolean(prdSlug && (prId === `pr-${prdSlug}` || prId.startsWith(`pr-${prdSlug}-`)));
+}
+
+function compareActivePullRequestStatuses(left: any, right: any, currentStepId: string) {
+  const leftRank = rankActivePullRequestStatus(left, currentStepId);
+  const rightRank = rankActivePullRequestStatus(right, currentStepId);
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  const leftTime = Date.parse(String(left && left.updatedAt || '')) || 0;
+  const rightTime = Date.parse(String(right && right.updatedAt || '')) || 0;
+  if (leftTime !== rightTime) {
+    return rightTime - leftTime;
+  }
+
+  const leftNumber = Number(left && left.number) || 0;
+  const rightNumber = Number(right && right.number) || 0;
+  if (leftNumber !== rightNumber) {
+    return rightNumber - leftNumber;
+  }
+
+  return String(left && left.prId || '').localeCompare(String(right && right.prId || ''));
+}
+
+function rankActivePullRequestStatus(pullRequestStatus: any, currentStepId: string) {
+  const kind = pullRequestStatusKind(pullRequestStatus);
+  if (kind === 'review-active') {
+    return 0;
+  }
+  if (currentStepId === 'reviewing' && kind === 'merge-blocked') {
+    return 1;
+  }
+  if (currentStepId === 'reviewing' && kind === 'approved-waiting') {
+    return 2;
+  }
+  if (currentStepId === 'implementing' && kind === 'merge-blocked') {
+    return 3;
+  }
+  if (currentStepId === 'implementing' && kind === 'approved-waiting') {
+    return 4;
+  }
+  return 9;
+}
+
+function hasValidPullRequestUrl(value: unknown) {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) {
+    return false;
+  }
+  try {
+    const parsedUrl = new URL(rawValue);
+    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function slugifyIdentifier(value: string) {
@@ -812,6 +884,7 @@ export {
   formatStatusLabel,
   formatTimestamp,
   selectActivePrd,
+  selectActivePullRequestStatusForPrd,
   buildLastPrdPromotionSummary,
   selectQueuedPrds,
   summarizeControlPlaneJob,
