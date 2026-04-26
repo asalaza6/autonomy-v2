@@ -4,7 +4,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { validateAutonomyConfig } from '../../src/config/config-main.js';
-import { shouldForceApproveAfterRepeatedReviews } from '../../src/autonomy-v2/runner/gate-support.js';
 import {
   CLI_BIN,
   createFixtureRepo,
@@ -376,69 +375,5 @@ test('validateAutonomyConfig rejects runtime-managed reviewer queue paths', () =
   assert.throws(
     () => validateAutonomyConfig(config, 'fixtures/agents.json'),
     /review agent "reviewer" cannot use runtime-managed taskQueue paths/
-  );
-});
-
-test('reviewer auto-approves on 4th+ review cycle regardless of review reasons', () => {
-  const cleanCheckResults = [
-    { command: 'npm run typecheck', status: 'passed' },
-    { command: 'npm run test', status: 'passed' },
-  ];
-  const failedCheckResults = [
-    { command: 'npm run test', status: 'failed' },
-  ];
-  const prWithFourReviews = {
-    reviews: [
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-    ],
-  };
-  const prWithThreeReviews = {
-    reviews: [
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-    ],
-  };
-  const prWithFiveReviews = {
-    reviews: [
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-      { decision: 'changes-requested' },
-    ],
-  };
-  const prWithTwoReviews = {
-    reviews: [{ decision: 'changes-requested' }, { decision: 'changes-requested' }],
-  };
-  const inScopeResult = { ok: true, violations: [] };
-  const outOfScopeResult = { ok: false, violations: [{ file: 'src/forbidden.ts', reason: 'outside scope' }] };
-
-  assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithFourReviews, cleanCheckResults, inScopeResult),
-    true
-  );
-  assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithThreeReviews, cleanCheckResults, inScopeResult),
-    false
-  );
-  assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithTwoReviews, cleanCheckResults, inScopeResult),
-    false
-  );
-  assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithFiveReviews, cleanCheckResults, inScopeResult),
-    true
-  );
-  assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithFourReviews, failedCheckResults, inScopeResult),
-    true
-  );
-  assert.equal(
-    shouldForceApproveAfterRepeatedReviews(prWithFourReviews, cleanCheckResults, outOfScopeResult),
-    true
   );
 });

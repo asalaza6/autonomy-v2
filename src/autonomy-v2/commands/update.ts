@@ -148,7 +148,7 @@ function assertSupportedPackageManager(value: string, source: string): PackageMa
   throw new Error(`Unsupported package manager "${value}" from ${source}. Supported values: npm, pnpm, yarn.`);
 }
 
-function resolveDependencyType(manifest: AnyRecord): DependencyType {
+function resolveDependencyType(_manifest: AnyRecord): DependencyType {
   // Keep autonomy-v2 out of the hard install path so consumers can omit it on
   // hosted builds that do not have GitHub Packages auth available.
   return 'optionalDependency';

@@ -1064,23 +1064,6 @@ console.log('release patch published');
   return fakeBinDir;
 }
 
-function buildSelfRestartProbeScript() {
-  return [
-    "const fs = require('fs');",
-    'const statusMarker = process.env.AUTONOMY_TEST_STATUS_MARKER;',
-    'const completeMarker = process.env.AUTONOMY_TEST_COMPLETE_MARKER;',
-    'const bridgeMarker = process.env.AUTONOMY_TEST_BRIDGE_MARKER;',
-    'const earlySignalMarker = process.env.AUTONOMY_TEST_EARLY_SIGNAL_MARKER;',
-    'const targetPid = Number(process.env.AUTONOMY_TEST_TARGET_PID);',
-    'if (!fs.existsSync(statusMarker) || !fs.existsSync(completeMarker)) {',
-    "  fs.writeFileSync(earlySignalMarker, 'early restart\\n', 'utf8');",
-    "  process.kill(targetPid, 'SIGTERM');",
-    '  process.exit(1);',
-    '}',
-    "fs.writeFileSync(bridgeMarker, 'bridge restarted\\n', 'utf8');",
-  ].join('\n');
-}
-
 function restartMarkerExists(...filePaths: string[]) {
   return filePaths.some((filePath) => fs.existsSync(filePath));
 }

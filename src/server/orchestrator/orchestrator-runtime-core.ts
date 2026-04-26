@@ -18,7 +18,7 @@ import type {
 import { acquireStateLock } from '../../lock/lock-main.js';
 import { createScheduleAgentExecutionContext } from './orchestrator-agent-context.js';
 import { BACKLOG_GRACE_MS, WORKER_PATH } from './orchestrator-constants.js';
-import { getAgent, implementationTaskNeedsDispatch, listPrds, listTasks } from './helpers.js';
+import { getAgent, implementationTaskNeedsDispatch, listTasks } from './helpers.js';
 import { resolveImplementationQueueContext, writeQueueAndAggregate } from './queues.js';
 import { loadRuntime, writeRuntime } from './orchestrator-state.js';
 

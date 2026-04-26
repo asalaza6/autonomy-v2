@@ -11,6 +11,11 @@ import {
   getPullRequestCommitCount,
   shouldRetryApprovedPrMerge,
 } from '../autonomy-v2/commands/merge-watchdog.js';
+import {
+  buildScopeSafeApprovalSummary,
+  isScopeOnlyReviewFeedback,
+  resolveReviewCheckCommands,
+} from '../autonomy-v2/runner/gate-support.js';
 import type { AgentConfig, AutonomyConfig, PullRequestRecord, TaskRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedReviewWork, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
 
@@ -57,7 +62,8 @@ class ReviewAgentDefinition extends AgentDefinition {
       '',
       '- Never gate your own authored work.',
       '- Do not implement feature changes while gating.',
-      '- Treat missing required checks as blocking.',
+      '- Treat missing or failing merge-blocking checks as blocking.',
+      '- Include repo-level merge blockers such as lint/typecheck when the repository defines them, not only lane wrapper checks.',
       `- Never target \`${productionBranch}\` or \`master\`.`,
       '',
       '## Review Priorities',
@@ -278,8 +284,11 @@ class ReviewAgentDefinition extends AgentDefinition {
           task: { id: pr.taskId },
         })
       : { ok: true, violations: [] };
-    context.scm.ensureCheckEnvironment?.(reviewContext.worktreePath, pr.checks || []);
-    const checkResults = context.scm.runCheckCommands ? context.scm.runCheckCommands(reviewContext.worktreePath, pr.checks || []) : [];
+    const reviewCheckCommands = resolveReviewCheckCommands(reviewContext.worktreePath, pr.checks || []);
+    context.scm.ensureCheckEnvironment?.(reviewContext.worktreePath, reviewCheckCommands);
+    const checkResults = context.scm.runCheckCommands
+      ? context.scm.runCheckCommands(reviewContext.worktreePath, reviewCheckCommands)
+      : [];
     const codexReview = context.codex.reviewPr
       ? await this.executeCodexReview(context, {
           rootDir: context.rootDir,
@@ -313,31 +322,25 @@ class ReviewAgentDefinition extends AgentDefinition {
     });
 
     const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
-    const shouldForceApproveAfterThreeRounds = this.shouldForceApproveAfterRepeatedReviews(pr);
-    const scopeConcernOnly = scopeResult.ok && this.isScopeOnlyReviewFeedback(codexReview);
+    const scopeConcernOnly = scopeResult.ok && isScopeOnlyReviewFeedback(codexReview);
     const checkExpectationOnly = failedChecks.length === 0
-      && this.isCheckExpectationOnlyReviewFeedback(codexReview, checkResults, pr.checks || []);
-    const decision = shouldForceApproveAfterThreeRounds
-      ? 'approve'
-      : failedChecks.length > 0
+      && this.isCheckExpectationOnlyReviewFeedback(codexReview, checkResults, reviewCheckCommands);
+    const decision = failedChecks.length > 0
+      ? 'changes-requested'
+      : !scopeResult.ok
         ? 'changes-requested'
-        : !scopeResult.ok
-          ? 'changes-requested'
-          : scopeConcernOnly
+        : scopeConcernOnly
+          ? 'approve'
+          : checkExpectationOnly
             ? 'approve'
-            : checkExpectationOnly
-              ? 'approve'
-            : codexReview.decision === 'approved'
-              ? 'approve'
-              : 'changes-requested';
+          : codexReview.decision === 'approved'
+            ? 'approve'
+            : 'changes-requested';
     const summaryParts = scopeConcernOnly
-      ? [this.buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
+      ? [buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
       : checkExpectationOnly
-        ? [this.buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
+        ? [buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
         : [codexReview.summary].concat(codexReview.concerns || []);
-    if (shouldForceApproveAfterThreeRounds) {
-      summaryParts.push('Auto-approval threshold reached: 4+ reviewer rounds with passing checks/scope.');
-    }
     if (failedChecks.length > 0) {
       summaryParts.push(`Blocking checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
     }
@@ -538,67 +541,6 @@ class ReviewAgentDefinition extends AgentDefinition {
 
   private resolveReturnedReviewConversationId(value: AnyRecord | null | undefined): string {
     return resolveReturnedConversationId(value);
-  }
-
-  private shouldForceApproveAfterRepeatedReviews(pr: PullRequestRecord): boolean {
-    const reviewCount = Number.isFinite(Number(pr && pr.reviews && pr.reviews.length))
-      ? Number(pr.reviews.length)
-      : 0;
-    return reviewCount >= 4;
-  }
-
-  private isScopeOnlyReviewFeedback(codexReview: AnyRecord): boolean {
-    if (!codexReview || codexReview.decision !== 'changes_requested') {
-      return false;
-    }
-    const summaryText = String(codexReview.summary || '').trim().toLowerCase();
-    const concerns = Array.isArray(codexReview.concerns)
-      ? codexReview.concerns.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean)
-      : [];
-    const scopeOnlyTexts = concerns.length > 0 ? concerns : (summaryText ? [summaryText] : []);
-    if (scopeOnlyTexts.length === 0) {
-      return false;
-    }
-    const scopeSignals = [
-      /out-of-scope/,
-      /outside (?:the )?(?:agent|lane) scope/,
-      /agent scope/,
-      /scope violation/,
-      /extra file/,
-      /unexpected file/,
-      /unreviewed file/,
-      /unreviewed diff/,
-      /git diff --name-status/,
-    ];
-    const blockingSignals = [
-      /blocking/,
-      /not safe to merge/,
-      /unimplemented/,
-      /missing/,
-      /absent/,
-      /not present/,
-      /placeholder/,
-      /does not/,
-      /never /,
-      /still has/,
-      /still lacks/,
-      /gap/,
-      /fails?/,
-    ];
-    if ([summaryText].concat(scopeOnlyTexts).some((entry) => blockingSignals.some((pattern) => pattern.test(entry)))) {
-      return false;
-    }
-    return scopeOnlyTexts.every((entry) => scopeSignals.some((pattern) => pattern.test(entry)));
-  }
-
-  private buildScopeSafeApprovalSummary(pr: PullRequestRecord, diffFiles: string[], checkResults: AnyRecord[]): string {
-    const changed = diffFiles.length > 0 ? diffFiles.join(', ') : 'no file changes';
-    const passedChecks = checkResults
-      .filter((entry) => entry.status === 'passed')
-      .map((entry) => entry.command)
-      .join(', ');
-    const checksText = passedChecks ? ` The provided required checks passed: ${passedChecks}.` : '';
-    return `Approved. Compared against origin/${pr.baseBranch}, the diff stays within the lane agent scope (${changed}).${checksText}`;
   }
 
   private summarizeText(value: unknown): string {

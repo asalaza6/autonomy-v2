@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'child_process';
-import fs from 'fs';
 import net from 'net';
 import path from 'path';
 

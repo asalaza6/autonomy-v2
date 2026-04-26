@@ -528,14 +528,19 @@ function buildReviewRunnerContext(
   options: {
     reviewTaskOverrides?: Record<string, unknown>;
     prOverrides?: Record<string, unknown>;
+    rootDir?: string;
+    worktreePath?: string;
+    runCheckCommands?: (worktreePath: string, commands: string[]) => any[];
   } = {}
 ) {
   const reviewTask = buildReviewTask(options.reviewTaskOverrides || {});
   const pr = buildPr(options.prOverrides || {});
   const recordedReviews: any[] = [];
+  const rootDir = options.rootDir || '/tmp/example';
+  const worktreePath = options.worktreePath || path.join(rootDir, '.autonomy', 'worktrees', 'reviewer', 'pr-prd-conversation-architecture-agent');
   const context: any = {
     phase: 'runner',
-    rootDir: '/tmp/example',
+    rootDir,
     agent: {
       id: 'reviewer',
       role: AGENT_ROLES.REVIEW,
@@ -585,7 +590,7 @@ function buildReviewRunnerContext(
       ensureReviewContext() {
         return {
           branch: pr.headBranch,
-          worktreePath: '/tmp/example/.autonomy/worktrees/reviewer/pr-prd-conversation-architecture-agent',
+          worktreePath,
         };
       },
       listBranchCommits() {
@@ -595,7 +600,10 @@ function buildReviewRunnerContext(
         return ['src/example.ts'];
       },
       ensureCheckEnvironment() {},
-      runCheckCommands() {
+      runCheckCommands(checkPath: string, commands: string[]) {
+        if (options.runCheckCommands) {
+          return options.runCheckCommands(checkPath, commands);
+        }
         return [];
       },
       tryMergeWithRetry() {
@@ -761,4 +769,44 @@ test('reviewer runner does not resume implementation conversation references', a
   assert.equal(calls.length, 1);
   assert.equal(calls[0].resumeConversationId, undefined);
   assert.equal(calls[0].disableConversationResume, undefined);
+});
+
+test('reviewer runner includes repo merge-blocking lint and typecheck scripts in executed checks', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-review-checks-'));
+  const worktreePath = path.join(rootDir, '.autonomy', 'worktrees', 'reviewer', 'pr-prd-conversation-architecture-agent');
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, 'package.json'), `${JSON.stringify({
+    name: 'review-check-fixture',
+    scripts: {
+      lint: 'eslint src',
+      typecheck: 'tsc --noEmit',
+    },
+  }, null, 2)}\n`, 'utf8');
+
+  const seenCommands: string[][] = [];
+  const { context, recordedReviews } = buildReviewRunnerContext(async () => ({
+    decision: 'approved',
+    summary: 'Looks good.',
+    concerns: [],
+  }), {
+    rootDir,
+    worktreePath,
+    prOverrides: {
+      checks: ['npm run test'],
+    },
+    runCheckCommands(_checkPath, commands) {
+      seenCommands.push(commands);
+      return commands.map((command) => ({
+        command,
+        status: command === 'npm run lint' ? 'failed' : 'passed',
+        output: command === 'npm run lint' ? 'lint failed' : '',
+      }));
+    },
+  });
+
+  await runReview(context);
+
+  assert.deepEqual(seenCommands[0], ['npm run test', 'npm run typecheck', 'npm run lint']);
+  assert.equal(recordedReviews[0].decision, 'changes-requested');
+  assert.match(recordedReviews[0].summary, /Blocking checks failed: npm run lint/);
 });

@@ -8,8 +8,9 @@ import {
 } from '../../agents/role-catalog.js';
 import { hasGithubAuth, resolveGithubAuthToken } from '../../github/github-main.js';
 import { resolveGithubRepo, postIssueComment } from './net.js';
-import { REVIEW_AUTO_APPROVAL_THRESHOLD } from './runner-constants.js';
 import { normalizeNonEmptyString, uniqueStrings } from './runner-shared.js';
+
+const REVIEW_MERGE_BLOCKING_SCRIPTS = ['typecheck', 'lint'];
 
 function runCheckCommands(worktreePath, commands) {
   return uniqueStrings(commands).map((command) => {
@@ -53,6 +54,30 @@ function ensureCheckEnvironment(worktreePath, commands) {
 
 function requiresNodeInstall(commands) {
   return uniqueStrings(commands).some((command) => /(^|\s)(npm|npx)\s/.test(command));
+}
+
+function readPackageScripts(worktreePath) {
+  const manifestPath = path.join(worktreePath, 'package.json');
+  if (!fs.existsSync(manifestPath)) {
+    return {};
+  }
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return manifest && typeof manifest.scripts === 'object' && manifest.scripts
+      ? manifest.scripts
+      : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function resolveReviewCheckCommands(worktreePath, configuredChecks) {
+  const commands = uniqueStrings(configuredChecks || []);
+  const scripts = readPackageScripts(worktreePath);
+  const repoChecks = REVIEW_MERGE_BLOCKING_SCRIPTS
+    .filter((scriptName) => typeof scripts[scriptName] === 'string' && scripts[scriptName].trim())
+    .map((scriptName) => `npm run ${scriptName}`);
+  return uniqueStrings(commands.concat(repoChecks));
 }
 
 function isScopeOnlyReviewFeedback(codexReview) {
@@ -107,57 +132,8 @@ function buildScopeSafeApprovalSummary(pr, diffFiles, checkResults) {
     .filter((entry) => entry.status === 'passed')
     .map((entry) => entry.command)
     .join(', ');
-  const checksText = passedChecks ? ` The provided required checks passed: ${passedChecks}.` : '';
+  const checksText = passedChecks ? ` The merge-blocking checks passed: ${passedChecks}.` : '';
   return `Approved. Compared against origin/${pr.baseBranch}, the diff stays within the lane agent scope (${changed}).${checksText}`;
-}
-
-function resolveCheckCommands({ task, existingPr, remainingLaneTasks, completedLaneTasks }) {
-  if (existingPr) {
-    return uniqueStrings([
-      ...(existingPr.checks || []),
-      ...(task.checks || []),
-    ]);
-  }
-  if (remainingLaneTasks.length === 0) {
-    return uniqueStrings([
-      ...completedLaneTasks.flatMap((candidate) => candidate.checks || []),
-      ...(task.checks || []),
-    ]);
-  }
-  return uniqueStrings(task.checks || []);
-}
-
-function shouldRetryApprovedPrMerge(pr, reviewerTask) {
-  if (latestReviewDecision(pr) !== 'approved') {
-    return false;
-  }
-  if (pr && pr.mergedAt) {
-    return false;
-  }
-  if (pr && pr.remote && pr.remote.mergedAt) {
-    return false;
-  }
-  const reviewedCommitCount = Number(reviewerTask && reviewerTask.reviewedCommitCount);
-  const currentCommitCount = getPrCommitCount(pr);
-  if (Number.isFinite(reviewedCommitCount) && reviewedCommitCount > 0) {
-    return currentCommitCount <= reviewedCommitCount;
-  }
-  return true;
-}
-
-function shouldForceApproveAfterRepeatedReviews(pr, _checkResults, _scopeResult) {
-  const normalizedPr = pr || {};
-  const reviewCount = Number.isFinite(Number(normalizedPr.reviews && normalizedPr.reviews.length))
-    ? Number(normalizedPr.reviews.length)
-    : 0;
-  return reviewCount >= REVIEW_AUTO_APPROVAL_THRESHOLD;
-}
-
-function latestReviewDecision(pr) {
-  if (!pr || !Array.isArray(pr.reviews) || pr.reviews.length === 0) {
-    return '';
-  }
-  return String(pr.reviews[pr.reviews.length - 1].decision || '');
 }
 
 function getPrCommitCount(pr) {
@@ -195,9 +171,11 @@ function buildMergeFollowupComment(mergeMessage) {
 }
 
 export {
+  buildScopeSafeApprovalSummary,
   ensureCheckEnvironment,
   publishMergeFollowupCommentIfNeeded,
+  isScopeOnlyReviewFeedback,
+  resolveReviewCheckCommands,
   runCheckCommands,
   getPrCommitCount,
-  shouldForceApproveAfterRepeatedReviews,
 };
