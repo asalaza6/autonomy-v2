@@ -1554,11 +1554,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-26T08:15:15.091Z",
-      "updatedAt": "2026-04-26T08:20:29.398Z",
+      "updatedAt": "2026-04-26T08:20:29.465Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
       "startedAt": "2026-04-26T08:15:17.264Z",
       "completedAt": "2026-04-26T08:20:29.398Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "3fcc428eef3827bd5928a9855327d00155bd3c0c"
     }
   ]
 }
