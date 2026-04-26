@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-fix-chat-prd-review-9f095c",
+  "status": "planned",
+  "createdAt": "2026-04-26T10:32:09.875Z",
+  "updatedAt": "2026-04-26T10:32:09.875Z",
+  "plannedTaskIds": [
+    "prd-fix-chat-prd-review-9f095c-architecture-agent-1"
+  ]
+}

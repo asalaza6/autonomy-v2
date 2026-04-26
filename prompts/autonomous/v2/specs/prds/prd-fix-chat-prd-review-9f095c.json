@@ -14,5 +14,21 @@
     "content",
     "and footer controls.",
     "Preserve existing chat PRD review functionality and submission flow."
+  ],
+  "tasks": [
+    {
+      "id": "prd-fix-chat-prd-review-9f095c-architecture-agent-1",
+      "title": "Make the chat PRD review modal responsive and scroll-safe across supported viewports",
+      "agentId": "architecture-agent",
+      "description": "Update the control-plane chat PRD review modal in `src/server/control-plane/control-plane-page.tsx` so the dialog fits within the viewport on mobile, tablet, and desktop sizes, uses a bounded internal scroll region for long proposal content, and keeps the primary submit action reachable without changing the existing review and submission flow.",
+      "acceptance": [
+        "`src/server/control-plane/control-plane-page.tsx` constrains the chat PRD review modal shell and card to the viewport with responsive spacing and sizing rules that prevent overflow on small and medium screens.",
+        "Long PRD proposal content scrolls inside the modal content region instead of pushing the overall modal, footer, or submit action off-screen.",
+        "The modal header, content region, and footer controls preserve clear separation so Close, Back to chat, and Submit remain keyboard- and pointer-accessible at representative 320x568, 390x844, 768x1024, and desktop viewports.",
+        "Opening the PRD review popup, closing it, backing out to chat, and submitting through the existing PRD flow continue to behave as before after the responsive layout changes.",
+        "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
