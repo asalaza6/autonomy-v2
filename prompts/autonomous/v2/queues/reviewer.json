@@ -762,13 +762,14 @@
         "Verification includes `npm run typecheck` and the focused unit tests for control-plane client and dashboard behavior affected by this change."
       ],
       "reviewRound": 5,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-26T10:23:23.773Z",
-      "updatedAt": "2026-04-26T10:31:05.266Z",
+      "updatedAt": "2026-04-26T10:31:10.172Z",
       "reviewedAt": "2026-04-26T10:31:05.266Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T10:29:24.181Z"
+      "dispatchedAt": "2026-04-26T10:29:24.181Z",
+      "mergedAt": "2026-04-26T10:31:10.172Z"
     }
   ]
 }
