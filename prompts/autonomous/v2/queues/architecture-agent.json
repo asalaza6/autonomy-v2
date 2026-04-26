@@ -4448,11 +4448,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-26T22:37:33.815Z",
-      "updatedAt": "2026-04-26T22:46:24.672Z",
+      "updatedAt": "2026-04-26T22:46:24.742Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "startedAt": "2026-04-26T22:37:52.256Z",
       "completedAt": "2026-04-26T22:46:24.672Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "3e30f531982f6c3604c14866d77d69906a11018f"
     }
   ]
 }
