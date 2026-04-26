@@ -1,6 +1,6 @@
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/config-main.js';
-import { isPullRequestActive, isPullRequestResolved, pullRequestChangesAlreadyApplied } from '../../sync/review-reconciliation.js';
+import { getPullRequestStateReconciliation, isPullRequestActive, isPullRequestResolved } from '../../sync/review-reconciliation.js';
 import { buildPrdStateRelativePath } from '../../sync/sync-prd.js';
 import { commitTrackedFilesToIntegrationBranch, listArchivedPrdSpecs, listTrackedPrdSpecs, readTrackedPrdStateMap } from '../../sync/sync-git.js';
 import type { AnyRecord, AutonomyConfig, BranchLocksState, PrState, QueueMap, TrackedPrdRecord } from '../autonomy-types.js';
@@ -132,14 +132,38 @@ function selectLinkedPullRequestSummary(linkedPullRequests = []) {
 }
 
 function isActiveLinkedPullRequest(pr, linkedTasks) {
-  if (!isPullRequestActive(pr)) {
-    return false;
+  return isPullRequestActive(pr, linkedTasks);
+}
+
+function derivePrdStatusSource(
+  linkedPullRequests = [],
+  pullRequestReconciliations = [],
+  plannedTaskIds = [],
+  isQueued = false
+) {
+  if (pullRequestReconciliations.some((entry) => entry && entry.canonicalSource === 'remote')) {
+    return 'remote';
   }
-  if (String(pr && pr.status || '') === 'changes_requested'
-    && pullRequestChangesAlreadyApplied(pr, linkedTasks)) {
-    return false;
+  if (linkedPullRequests.length > 0) {
+    return 'inferred';
   }
-  return true;
+  if (plannedTaskIds.length > 0) {
+    return 'inferred';
+  }
+  if (isQueued) {
+    return 'queued';
+  }
+  return 'inferred';
+}
+
+function derivePrdReconciliationStatus(pullRequestReconciliations = []) {
+  if (pullRequestReconciliations.some((entry) => entry && entry.reconciliationStatus === 'stale')) {
+    return 'stale';
+  }
+  if (pullRequestReconciliations.some((entry) => entry && entry.canonicalSource === 'remote')) {
+    return 'remote';
+  }
+  return 'inferred';
 }
 
 function deriveCompletedTaskSpecIds(plannedTaskIds, linkedTasks = [], linkedPullRequests = []) {
@@ -215,6 +239,9 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
       const plannedTaskIdSet = new Set(normalizeStringIds(plannedTaskIds));
       const completedTaskSpecIdSet = new Set(completedTaskSpecIds);
       const hasActivePullRequest = linkedPullRequests.some((pr) => isActiveLinkedPullRequest(pr, linkedTasks));
+      const pullRequestReconciliations = linkedPullRequests.map((pr) => getPullRequestStateReconciliation(pr, linkedTasks));
+      const prdStatusSource = derivePrdStatusSource(linkedPullRequests, pullRequestReconciliations, plannedTaskIds, entry.isQueued === true);
+      const prdReconciliationStatus = derivePrdReconciliationStatus(pullRequestReconciliations);
       const hasPendingUncompletedTask = linkedTasks.some((task) => {
         const taskId = String(task && task.id || '').trim();
         if (!taskId || !plannedTaskIdSet.has(taskId) || completedTaskSpecIdSet.has(taskId)) {
@@ -243,6 +270,23 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
         ...entry.spec,
         isQueued: entry.isQueued === true,
         status,
+        statusSource: prdStatusSource,
+        statusReason: hasActivePullRequest
+          ? 'linked pull request remains open upstream'
+          : linkedPullRequests.length > 0 && linkedPullRequests.every(isMergedPullRequest)
+            ? 'all linked pull requests are resolved upstream'
+            : plannedTaskIds.length > 0 && completedTaskSpecIds.length >= plannedTaskIds.length
+              ? 'all planned tasks are complete locally'
+              : entry.isQueued === true
+                ? 'spec remains queued'
+                : 'tracked PRD status derived from local repo state',
+        reconciliationStatus: prdReconciliationStatus,
+        linkedPullRequestSummary: linkedPullRequests.length > 0 ? {
+          total: linkedPullRequests.length,
+          open: pullRequestReconciliations.filter((entry) => entry.canonicalState === 'open').length,
+          resolved: pullRequestReconciliations.filter((entry) => entry.canonicalState !== 'open').length,
+          stale: pullRequestReconciliations.filter((entry) => entry.reconciliationStatus === 'stale').length,
+        } : undefined,
         plannedTaskIds: plannedTaskIds.length > 0 ? plannedTaskIds : undefined,
         completedTaskSpecIds: completedTaskSpecIds.length > 0 ? completedTaskSpecIds : undefined,
         lastError: trackedState && trackedState.lastError ? trackedState.lastError : undefined,

@@ -4445,10 +4445,155 @@
         "Drift detection flags disagreements between inferred local state and remote GitHub state for the same pull request without mutating the canonical remote-derived state, and the disagreement is surfaced through logs, snapshot metadata, or equivalent observable status output.",
         "Automated coverage includes unit tests for open remote PR plus terminal local tasks, closed remote PR, merged remote PR, and missing-auth fallback; snapshot or status-service tests proving implementation/review PRDs remain active and open PRs remain listed; and an integration-style fixture covering the synthetic open-PR scenario described in the PRD. Run `npm run typecheck` and the relevant focused control-plane/sync test targets updated by the change."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T22:37:33.815Z",
-      "updatedAt": "2026-04-26T22:37:33.815Z"
+      "updatedAt": "2026-04-26T22:46:24.742Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "startedAt": "2026-04-26T22:37:52.256Z",
+      "completedAt": "2026-04-26T22:46:24.672Z",
+      "completionMode": "code",
+      "commitSha": "3e30f531982f6c3604c14866d77d69906a11018f"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Cannot approve for merge into `dev`. `origin/dev` is available and the branch is in scope, but merge-blocking verification is incomplete: `npm run lint` fails, and there is no evidence the focused control-plane/sync test targets added for this high-risk status-reconciliation change were executed.\n`npm run lint` is failing, which is a merge blocker. In [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:129) and [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:133), `isPullRequestMerged` and `isPullRequestClosed` are defined but unused. Remove them or use them so the lane can pass repo-level lint before review can approve.\nThis PR changes high-risk control-plane/sync behavior and adds targeted coverage in [tests/unit/review-reconciliation.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/review-reconciliation.test.ts:1) and [tests/unit/control-plane-status.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/control-plane-status.test.ts:304), but the provided deterministic results only show `npm run typecheck` and a failing lint run. Re-run and report the relevant focused unit/control-plane test targets for the new reconciliation and status-snapshot scenarios before this is safe to merge.\nBlocking checks failed: npm run lint",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Cannot approve for merge into `dev`. `origin/dev` is available and the branch is in scope, but merge-blocking verification is incomplete: `npm run lint` fails, and there is no evidence the focused control-plane/sync test targets added for this high-risk status-reconciliation change were executed.\n`npm run lint` is failing, which is a merge blocker. In [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:129) and [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:133), `isPullRequestMerged` and `isPullRequestClosed` are defined but unused. Remove them or use them so the lane can pass repo-level lint before review can approve.\nThis PR changes high-risk control-plane/sync behavior and adds targeted coverage in [tests/unit/review-reconciliation.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/review-reconciliation.test.ts:1) and [tests/unit/control-plane-status.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/control-plane-status.test.ts:304), but the provided deterministic results only show `npm run typecheck` and a failing lint run. Re-run and report the relevant focused unit/control-plane test targets for the new reconciliation and status-snapshot scenarios before this is safe to merge.\nBlocking checks failed: npm run lint"
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "createdAt": "2026-04-26T22:47:43.126Z",
+      "updatedAt": "2026-04-26T22:48:59.492Z",
+      "startedAt": "2026-04-26T22:47:43.126Z",
+      "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "completedAt": "2026-04-26T22:48:59.427Z",
+      "completionMode": "code",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T22:48:59.427Z"
+        }
+      },
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+      "commitSha": "6c5d312ec11dcf4c393acfc0ca1ce372af23f69b"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Cannot approve for merge into `dev`. The required deterministic checks are now green (`npm run typecheck`, `npm run lint`), but the PR still misreports PRD reconciliation metadata for remotely resolved pull requests, so the control-plane status is not fully authoritative/observable.\n`src/autonomy-v2/commands/shared-prds.ts:241-259` derives PRD-level `statusSource` and `reconciliationStatus` from `hasActivePullRequest`, so any PRD whose linked PRs are remotely `closed` or `merged` is labeled as `inferred` even when `getPullRequestStateReconciliation()` marked those PRs as canonical `remote`. That contradicts the new contract that upstream GitHub state is authoritative and observable for PR/PRD status, and it will hide remote-vs-inferred provenance for resolved PRDs. Please compute PRD-level source/status from the linked PR reconciliation results, not only from whether an open PR exists, and add focused coverage for the remotely resolved PRD case.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Cannot approve for merge into `dev`. The required deterministic checks are now green (`npm run typecheck`, `npm run lint`), but the PR still misreports PRD reconciliation metadata for remotely resolved pull requests, so the control-plane status is not fully authoritative/observable.\n`src/autonomy-v2/commands/shared-prds.ts:241-259` derives PRD-level `statusSource` and `reconciliationStatus` from `hasActivePullRequest`, so any PRD whose linked PRs are remotely `closed` or `merged` is labeled as `inferred` even when `getPullRequestStateReconciliation()` marked those PRs as canonical `remote`. That contradicts the new contract that upstream GitHub state is authoritative and observable for PR/PRD status, and it will hide remote-vs-inferred provenance for resolved PRDs. Please compute PRD-level source/status from the linked PR reconciliation results, not only from whether an open PR exists, and add focused coverage for the remotely resolved PRD case."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "createdAt": "2026-04-26T22:50:51.684Z",
+      "updatedAt": "2026-04-26T22:53:05.358Z",
+      "startedAt": "2026-04-26T22:50:51.684Z",
+      "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T22:53:05.290Z"
+        }
+      },
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+      "completedAt": "2026-04-26T22:53:05.290Z",
+      "completionMode": "code",
+      "commitSha": "a2b748d3a59ed774e13a757e396a16baf624e062"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Cannot approve for merge into `dev`. The code changes appear aligned with the last requested functional fix, and the deterministic merge blockers are green (`npm run typecheck`, `npm run lint`), but this PR still lacks merge-blocking verification for a high-risk control-plane/sync change.\nFocused automated verification is still missing. This PR changes authoritative PR/PRD reconciliation in `src/sync/review-reconciliation.ts`, `src/autonomy-v2/commands/shared-prds.ts`, and the control-plane status surfaces, and it adds targeted coverage in `tests/unit/review-reconciliation.test.ts:1-117` and `tests/unit/control-plane-status.test.ts:304-582`. The only reported deterministic results are `npm run typecheck` and `npm run lint`; there is no evidence that the relevant status/control-plane tests were executed. Before approval, run and report the focused test target(s) covering these new cases, at minimum the control-plane history/status suite referenced by `package.json:50-52` and the new reconciliation/unit coverage.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Cannot approve for merge into `dev`. The code changes appear aligned with the last requested functional fix, and the deterministic merge blockers are green (`npm run typecheck`, `npm run lint`), but this PR still lacks merge-blocking verification for a high-risk control-plane/sync change.\nFocused automated verification is still missing. This PR changes authoritative PR/PRD reconciliation in `src/sync/review-reconciliation.ts`, `src/autonomy-v2/commands/shared-prds.ts`, and the control-plane status surfaces, and it adds targeted coverage in `tests/unit/review-reconciliation.test.ts:1-117` and `tests/unit/control-plane-status.test.ts:304-582`. The only reported deterministic results are `npm run typecheck` and `npm run lint`; there is no evidence that the relevant status/control-plane tests were executed. Before approval, run and report the focused test target(s) covering these new cases, at minimum the control-plane history/status suite referenced by `package.json:50-52` and the new reconciliation/unit coverage."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "createdAt": "2026-04-26T22:55:14.180Z",
+      "updatedAt": "2026-04-26T22:55:46.552Z",
+      "startedAt": "2026-04-26T22:55:14.180Z",
+      "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T22:55:46.489Z"
+        }
+      },
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+      "completedAt": "2026-04-26T22:55:46.489Z",
+      "completionMode": "noop",
+      "commitSha": "b3afd5b76774b8b9e645ad5701029b36023328d6"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-4",
+      "title": "Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Cannot approve for merge into `dev`. The deterministic merge blockers are green (`npm run typecheck`, `npm run lint`), and the current diff looks aligned with the requested reconciliation fix, but merge-blocking verification is still incomplete for this high-risk control-plane/sync change. The PR changes authoritative PR/PRD reconciliation in `src/sync/review-reconciliation.ts`, `src/autonomy-v2/commands/shared-prds.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, and related status surfaces, while adding targeted coverage in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`. There is still no evidence that the focused tests covering those new cases were actually executed. Before approval, run and report the relevant focused suites, at minimum `npm run test:control-plane-history` and a focused run that includes `dist/tests/unit/review-reconciliation.test.js` after build.\nMissing merge-blocking focused verification. This PR changes high-risk control-plane/sync status reconciliation behavior and adds new assertions in `tests/unit/control-plane-status.test.ts` and `tests/unit/review-reconciliation.test.ts`, but the provided deterministic results only show `npm run typecheck` and `npm run lint`. Run and report the focused control-plane history/status suite (`npm run test:control-plane-history`) plus the new reconciliation unit coverage (for example `npm run build && node --test dist/tests/unit/review-reconciliation.test.js`) before this is safe to merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Cannot approve for merge into `dev`. The deterministic merge blockers are green (`npm run typecheck`, `npm run lint`), and the current diff looks aligned with the requested reconciliation fix, but merge-blocking verification is still incomplete for this high-risk control-plane/sync change. The PR changes authoritative PR/PRD reconciliation in `src/sync/review-reconciliation.ts`, `src/autonomy-v2/commands/shared-prds.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, and related status surfaces, while adding targeted coverage in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`. There is still no evidence that the focused tests covering those new cases were actually executed. Before approval, run and report the relevant focused suites, at minimum `npm run test:control-plane-history` and a focused run that includes `dist/tests/unit/review-reconciliation.test.js` after build.\nMissing merge-blocking focused verification. This PR changes high-risk control-plane/sync status reconciliation behavior and adds new assertions in `tests/unit/control-plane-status.test.ts` and `tests/unit/review-reconciliation.test.ts`, but the provided deterministic results only show `npm run typecheck` and `npm run lint`. Run and report the focused control-plane history/status suite (`npm run test:control-plane-history`) plus the new reconciliation unit coverage (for example `npm run build && node --test dist/tests/unit/review-reconciliation.test.js`) before this is safe to merge."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "createdAt": "2026-04-26T22:56:52.793Z",
+      "updatedAt": "2026-04-26T22:57:32.159Z",
+      "startedAt": "2026-04-26T22:56:52.793Z",
+      "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T22:57:32.093Z"
+        }
+      },
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+      "completedAt": "2026-04-26T22:57:32.093Z",
+      "completionMode": "noop",
+      "commitSha": "728025defc6c766b456d8638ceb89e64ae2cfe2b"
     }
   ]
 }

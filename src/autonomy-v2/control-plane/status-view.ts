@@ -13,7 +13,8 @@ function selectActivePrd(prds: any[] = []) {
   const candidates = (prds || [])
     .filter((prd) => {
       const status = String(prd && prd.status || '');
-      return !prd.isQueued && (status === 'planning' || status === 'planned');
+      const openPullRequestCount = Number(prd && prd.linkedPullRequestSummary && prd.linkedPullRequestSummary.open || 0);
+      return !prd.isQueued && (status === 'planning' || status === 'planned' || openPullRequestCount > 0);
     })
     .slice()
     .sort((left, right) => {
@@ -96,6 +97,9 @@ function describePrd(prd: any) {
   if (prd && prd.lastError) {
     details.push(`last error: ${summarizeText(prd.lastError)}`);
   }
+  if (prd && prd.statusReason) {
+    details.push(`state reason: ${summarizeText(prd.statusReason)}`);
+  }
   if (status === 'reset' && prd && prd.archive && prd.archive.reason) {
     details.push(`reason: ${summarizeText(prd.archive.reason)}`);
   }
@@ -132,6 +136,10 @@ function describePrd(prd: any) {
     remainingTaskCount,
     progressPercent,
     requirementCount,
+    statusSource: prd && prd.statusSource ? String(prd.statusSource) : null,
+    statusReason: prd && prd.statusReason ? String(prd.statusReason) : null,
+    reconciliationStatus: prd && prd.reconciliationStatus ? String(prd.reconciliationStatus) : null,
+    linkedPullRequestSummary: prd && prd.linkedPullRequestSummary ? { ...prd.linkedPullRequestSummary } : null,
     createdAt: prd && prd.createdAt ? String(prd.createdAt) : null,
     updatedAt: prd && prd.updatedAt ? String(prd.updatedAt) : null,
     isQueued: prd && prd.isQueued === true,
