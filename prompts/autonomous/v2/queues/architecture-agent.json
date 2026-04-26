@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -2006,6 +2005,30 @@
       "completedAt": "2026-04-26T10:23:22.622Z",
       "completionMode": "code",
       "commitSha": "4a7e4d39481e4c9f8158b601ff21aa26058de2ee"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement selectable queued PRD detail view in Main using existing dashboard data",
+      "description": "Blocking on missing focused verification. The diff appears scoped and `npm run typecheck` plus `npm run lint` passed, but this change touches high-risk control-plane UI/status behavior and adds new targeted coverage in `tests/unit/control-plane-queued-prd-ui.test.ts:6` and contract assertions in `tests/unit/control-plane-dashboard.test.ts:7` without any recorded passing run for those focused tests.\nMissing merge-blocking focused test verification for the new queued-PRD Main view behavior. The implementation adds selection/fallback/detail logic in `src/server/control-plane/control-plane-client.tsx:1337` and extends the dashboard/status contract checked in `tests/unit/control-plane-dashboard.test.ts:7`, but the only recorded passing checks are `npm run typecheck` and `npm run lint`. Please run and report the focused unit tests covering the changed paths, at minimum `tests/unit/control-plane-queued-prd-ui.test.ts` and `tests/unit/control-plane-dashboard.test.ts`, before this is merged.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-selectable-queued-prd-a6fbed",
+      "laneKey": "prd-add-selectable-queued-prd-a6fbed:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on missing focused verification. The diff appears scoped and `npm run typecheck` plus `npm run lint` passed, but this change touches high-risk control-plane UI/status behavior and adds new targeted coverage in `tests/unit/control-plane-queued-prd-ui.test.ts:6` and contract assertions in `tests/unit/control-plane-dashboard.test.ts:7` without any recorded passing run for those focused tests.\nMissing merge-blocking focused test verification for the new queued-PRD Main view behavior. The implementation adds selection/fallback/detail logic in `src/server/control-plane/control-plane-client.tsx:1337` and extends the dashboard/status contract checked in `tests/unit/control-plane-dashboard.test.ts:7`, but the only recorded passing checks are `npm run typecheck` and `npm run lint`. Please run and report the focused unit tests covering the changed paths, at minimum `tests/unit/control-plane-queued-prd-ui.test.ts` and `tests/unit/control-plane-dashboard.test.ts`, before this is merged."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-selectable-queued-prd-a6fbed-architecture-agent",
+      "createdAt": "2026-04-26T10:24:20.100Z",
+      "updatedAt": "2026-04-26T10:24:20.100Z",
+      "startedAt": "2026-04-26T10:24:20.100Z",
+      "prId": "pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
