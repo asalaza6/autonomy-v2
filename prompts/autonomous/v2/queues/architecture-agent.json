@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -2111,6 +2110,39 @@
       "completedAt": "2026-04-26T10:28:32.811Z",
       "completionMode": "noop",
       "commitSha": "bc6499e217b2ce055f770eb9b1746001b1172dd0"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent-4",
+      "title": "Address review for [architecture-agent] Implement selectable queued PRD detail view in Main using existing dashboard data",
+      "description": "Blocking on missing merge-blocking focused verification. Against `origin/dev`, the diff remains scoped to the queued-PRD Main view work and the deterministic blockers passed (`npm run typecheck`, `npm run lint`), but this PR still changes high-risk control-plane UI/status behavior in `src/server/control-plane/control-plane-client.tsx` and `src/autonomy-v2/control-plane/status-view.ts` without any recorded passing run for the new focused coverage in `tests/unit/control-plane-queued-prd-ui.test.ts` and the expanded dashboard contract assertions in `tests/unit/control-plane-dashboard.test.ts`. This cannot merge until those focused tests, or an equivalent focused command covering those exact paths, are reported passing.\nMissing required focused verification for a high-risk control-plane change. The implementation adds queued-PRD selection/fallback/detail rendering in `src/server/control-plane/control-plane-client.tsx` and new queued PRD field shaping in `src/autonomy-v2/control-plane/status-view.ts`, but the only recorded passing checks are `npm run typecheck` and `npm run lint`. Please run and report passing results for `tests/unit/control-plane-queued-prd-ui.test.ts` and `tests/unit/control-plane-dashboard.test.ts` (or an equivalent focused command covering those files) before this can merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-selectable-queued-prd-a6fbed",
+      "laneKey": "prd-add-selectable-queued-prd-a6fbed:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on missing merge-blocking focused verification. Against `origin/dev`, the diff remains scoped to the queued-PRD Main view work and the deterministic blockers passed (`npm run typecheck`, `npm run lint`), but this PR still changes high-risk control-plane UI/status behavior in `src/server/control-plane/control-plane-client.tsx` and `src/autonomy-v2/control-plane/status-view.ts` without any recorded passing run for the new focused coverage in `tests/unit/control-plane-queued-prd-ui.test.ts` and the expanded dashboard contract assertions in `tests/unit/control-plane-dashboard.test.ts`. This cannot merge until those focused tests, or an equivalent focused command covering those exact paths, are reported passing.\nMissing required focused verification for a high-risk control-plane change. The implementation adds queued-PRD selection/fallback/detail rendering in `src/server/control-plane/control-plane-client.tsx` and new queued PRD field shaping in `src/autonomy-v2/control-plane/status-view.ts`, but the only recorded passing checks are `npm run typecheck` and `npm run lint`. Please run and report passing results for `tests/unit/control-plane-queued-prd-ui.test.ts` and `tests/unit/control-plane-dashboard.test.ts` (or an equivalent focused command covering those files) before this can merge."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-selectable-queued-prd-a6fbed-architecture-agent",
+      "createdAt": "2026-04-26T10:29:10.522Z",
+      "updatedAt": "2026-04-26T10:29:10.522Z",
+      "startedAt": "2026-04-26T10:29:10.522Z",
+      "prId": "pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc951-a0d0-7640-9d45-de228b4b08a6",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T10:29:10.522Z"
+        }
+      },
+      "implementationConversationId": "019dc951-a0d0-7640-9d45-de228b4b08a6"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
