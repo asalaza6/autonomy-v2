@@ -29,6 +29,7 @@ import {
 import { isImplementationRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
 import { buildPrdSpecRelativePath, buildPrdStateRelativePath } from '../../sync/sync-prd.js';
 import { listTrackedPrdSpecs } from '../../sync/sync-git.js';
+import { selectActivePrd } from './status-view.js';
 
 function executePrdAdd(rootDir, options = {}) {
   ensureInitialized(rootDir);
@@ -166,7 +167,7 @@ function executePrdReset(rootDir, options = {}) {
     taskQueues: state.taskQueues,
     prs: state.prs,
   });
-  const activePrd = selectResettablePrd(trackedPrds.prds || []);
+  const activePrd = selectActivePrd(trackedPrds.prds || []);
 
   if (!activePrd) {
     return {
@@ -408,16 +409,6 @@ function executePrdReset(rootDir, options = {}) {
     clearedPullRequestCount: activePrIds.size,
     detachedWorkers,
   };
-}
-
-function selectResettablePrd(prds = []) {
-  return (prds || [])
-    .filter((prd) => prd && prd.isQueued !== true)
-    .filter((prd) => String(prd.status || '').trim() !== 'completed')
-    .sort((left, right) => {
-      return (Date.parse(String(right.updatedAt || right.createdAt || '')) || 0)
-        - (Date.parse(String(left.updatedAt || left.createdAt || '')) || 0);
-    })[0] || null;
 }
 
 function applyLocalQueueUpdates(rootDir, queueFileUpdates) {

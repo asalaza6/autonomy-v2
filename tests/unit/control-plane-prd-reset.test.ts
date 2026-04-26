@@ -150,3 +150,62 @@ test('reset returns a no-op result when no active PRD exists', () => {
   assert.equal(result.noop, true);
   assert.match(result.message, /No active PRD exists/);
 });
+
+test('reset targets the same planned PRD the manager shows when a newer failed PRD also exists', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-prd-reset-selection-');
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'init autonomy fixture']);
+  git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
+
+  const task = {
+    id: 'prd-reset-planned-001-architecture-agent-1',
+    title: 'Build reset flow',
+    agentId: 'architecture-agent',
+    acceptance: ['Reset flow is complete.'],
+  };
+  addPrdWithTasks(repoDir, 'prd-reset-planned-001', 'Planned PRD', [task]);
+  git(repoDir, ['checkout', 'dev']);
+
+  const plannedStatePath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'specs', 'prd-state', 'prd-reset-planned-001.json');
+  fs.writeFileSync(plannedStatePath, `${JSON.stringify({
+    schemaVersion: 1,
+    prdId: 'prd-reset-planned-001',
+    status: 'planned',
+    plannedTaskIds: [task.id],
+    createdAt: '2026-04-26T08:00:00.000Z',
+    updatedAt: '2026-04-26T08:00:00.000Z',
+  }, null, 2)}\n`, 'utf8');
+
+  const failedSpecPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'prd-reset-failed-001.json');
+  fs.writeFileSync(failedSpecPath, `${JSON.stringify({
+    id: 'prd-reset-failed-001',
+    title: 'Failed PRD',
+    createdAt: '2026-04-26T09:00:00.000Z',
+    requirements: [],
+    tasks: [],
+  }, null, 2)}\n`, 'utf8');
+  const failedStatePath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'specs', 'prd-state', 'prd-reset-failed-001.json');
+  fs.writeFileSync(failedStatePath, `${JSON.stringify({
+    schemaVersion: 1,
+    prdId: 'prd-reset-failed-001',
+    status: 'failed',
+    createdAt: '2026-04-26T09:00:00.000Z',
+    updatedAt: '2026-04-26T09:30:00.000Z',
+    lastError: 'planning failed',
+  }, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', 'prompts/autonomous/v2/specs/prds/prd-reset-failed-001.json', 'prompts/autonomous/v2/specs/prd-state/prd-reset-failed-001.json', 'prompts/autonomous/v2/specs/prd-state/prd-reset-planned-001.json']);
+  git(repoDir, ['commit', '-m', 'add planned and failed prds for reset selection']);
+
+  const result = executePrdReset(repoDir, {
+    'confirm-prd-id': 'prd-reset-planned-001',
+  });
+
+  assert.equal(result.noop, false);
+  assert.equal(result.prdId, 'prd-reset-planned-001');
+  assert.throws(() => git(repoDir, ['show', 'dev:prompts/autonomous/v2/specs/prds/prd-reset-planned-001.json']));
+  const archivedPlannedPrd = readGitJson(repoDir, 'dev:prompts/autonomous/v2/specs/prds/archived/prd-reset-planned-001.json');
+  assert.equal(archivedPlannedPrd.archive.kind, 'reset');
+  const failedPrd = readGitJson(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-reset-failed-001.json');
+  assert.equal(failedPrd.id, 'prd-reset-failed-001');
+});
