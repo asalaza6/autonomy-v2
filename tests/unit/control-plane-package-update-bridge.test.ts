@@ -665,8 +665,8 @@ test('bridge executes restart jobs independently after completion', async (t) =>
     ].join('\n')],
   };
   fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
-  let completedJob: any = null;
-  let markerExistedAtComplete = false;
+  const completedJobs: any[] = [];
+  const markerStatesAtComplete: boolean[] = [];
   let markerExistedAtHeartbeat = false;
   const requestEvents: string[] = [];
   let jobClaimed = false;
@@ -697,8 +697,8 @@ test('bridge executes restart jobs independently after completion', async (t) =>
 
     if (req.url === '/api/jobs/job-restart-1/complete' && req.method === 'POST') {
       requestEvents.push('complete');
-      markerExistedAtComplete = restartMarkerExists(bridgeMarkerPath, serverMarkerPath);
-      completedJob = JSON.parse(await readRequestText(req));
+      markerStatesAtComplete.push(restartMarkerExists(bridgeMarkerPath, serverMarkerPath));
+      completedJobs.push(JSON.parse(await readRequestText(req)));
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ id: 'job-restart-1', status: 'completed' }));
       return;
@@ -738,23 +738,36 @@ test('bridge executes restart jobs independently after completion', async (t) =>
     });
   });
 
-  assert.equal(markerExistedAtComplete, false);
+  assert.equal(markerStatesAtComplete[0], false);
   assert.equal(markerExistedAtHeartbeat, false);
+  assert.equal(completedJobs.length, 2);
   assert.ok(requestEvents.indexOf('status') >= 0);
   assert.ok(requestEvents.indexOf('status') < requestEvents.indexOf('complete'));
   assert.ok(requestEvents.indexOf('complete') < requestEvents.indexOf('heartbeat'));
   assert.equal(await waitForFileText(serverMarkerPath), 'server restarted\n');
   assert.equal(await waitForFileText(bridgeMarkerPath), 'bridge restarted\n');
   assert.equal(await waitForFileText(sequencePath), 'server\nbridge\n');
-  assert.equal(completedJob.status, 'completed');
-  assert.equal(completedJob.result.restartStatus.status, 'deferred');
-  assert.equal(completedJob.result.restartStatus.controlBridge.status, 'deferred');
-  assert.equal(completedJob.result.restartStatus.controlBridge.reason, 'after-job-completion');
-  assert.equal(completedJob.result.restartStatus.server.status, 'deferred');
-  assert.equal(completedJob.result.restartStatus.server.reason, 'after-job-completion');
-  assert.deepEqual(completedJob.result.errors, []);
+  assert.equal(completedJobs[0].status, 'completed');
+  assert.equal(completedJobs[0].result.restartStatus.status, 'deferred');
+  assert.equal(completedJobs[0].result.restartStatus.controlBridge.status, 'deferred');
+  assert.equal(completedJobs[0].result.restartStatus.controlBridge.reason, 'after-job-completion');
+  assert.equal(completedJobs[0].result.restartStatus.server.status, 'deferred');
+  assert.equal(completedJobs[0].result.restartStatus.server.reason, 'after-job-completion');
+  assert.equal(completedJobs[1].status, 'completed');
+  assert.equal(completedJobs[1].result.restartStatus.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.controlBridge.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.controlBridge.reason, undefined);
+  assert.equal(typeof completedJobs[1].result.restartStatus.controlBridge.completedAt, 'string');
+  assert.equal(typeof completedJobs[1].result.restartStatus.controlBridge.postRestartPid, 'number');
+  assert.equal(completedJobs[1].result.restartStatus.server.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.server.reason, undefined);
+  assert.equal(typeof completedJobs[1].result.restartStatus.server.completedAt, 'string');
+  assert.equal(typeof completedJobs[1].result.restartStatus.server.postRestartPid, 'number');
+  assert.equal(typeof completedJobs[1].result.restartStatus.completedAt, 'string');
+  assert.deepEqual(completedJobs[1].result.errors, []);
   assert.match(logs.join('\n'), /bridge:restart:start/);
   assert.match(logs.join('\n'), /bridge:restart:deferred-launch/);
+  assert.match(logs.join('\n'), /bridge:restart:deferred-complete/);
 });
 
 test('bridge reports skipped restart when restart commands and lifecycle metadata are missing', async (t) => {

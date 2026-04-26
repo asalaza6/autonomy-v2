@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1275,13 +1276,15 @@
       "acceptance": [
         "Configured restart mode still does not persist final per-target restart evidence, so the PR does not fully satisfy the acceptance criteria for `configured` and `default` restart modes.\nBlocking: configured restart targets are still recorded as `status: 'deferred'` with `reason: 'after-job-completion'`, and they never receive a per-target completion timestamp or explicit post-restart PID/unavailable state. In [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-package-update.ts:399), configured targets only capture `preRestartPid`/`recordedAt`. Then in [src/server/control-plane/control-plane-bridge.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-bridge.ts:231) and [src/server/control-plane/control-plane-bridge.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-bridge.ts:290), deferred configured launches are only queued and logged; their results are not written back into `job.result.restartStatus`. That means the dashboard/UI cannot expose final restart evidence for configured mode, which the acceptance explicitly requires.\nVerification gap: the existing bridge test still codifies the old configured-mode behavior instead of the required evidence model. [tests/unit/control-plane-package-update-bridge.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/tests/unit/control-plane-package-update-bridge.test.ts:750) asserts the completed restart job remains `deferred` for both targets after the commands have run. Please update the implementation to persist the final configured-mode outcome and add focused coverage for that path."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
       "createdAt": "2026-04-26T06:43:11.677Z",
-      "updatedAt": "2026-04-26T06:43:11.677Z",
+      "updatedAt": "2026-04-26T06:47:55.768Z",
       "startedAt": "2026-04-26T06:43:11.677Z",
-      "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent"
+      "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
+      "completedAt": "2026-04-26T06:47:55.768Z",
+      "completionMode": "code"
     },
     {
       "id": "architecture-agent-followup-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent-2",
@@ -1298,12 +1301,12 @@
       "acceptance": [
         "Configured restart mode still does not persist final per-target restart evidence after the deferred commands run, so the PR still misses the acceptance requirement to expose definitive restart proof for both `configured` and `default` modes. `npm run typecheck` passed, but the configured bridge path remains functionally incomplete and under-verified.\nBlocking: configured restart targets are still completed as placeholder `deferred` entries instead of final evidence records. In [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-package-update.ts:399), configured targets are initialized with `status: 'deferred'`, `reason: 'after-job-completion'`, and only pre-restart metadata. Then [src/server/control-plane/control-plane-bridge.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-bridge.ts:231) only queues those deferred commands after `/complete`, and [src/server/control-plane/control-plane-bridge.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-bridge.ts:290) only logs launch results. Nothing writes the configured-mode post-restart PID / explicit unavailable state / per-target completion timestamp back into `job.result.restartStatus`, so the dashboard and UI still cannot show final configured restart proof.\nVerification gap: the focused bridge test still asserts the old incomplete behavior instead of the required persisted evidence model. [tests/unit/control-plane-package-update-bridge.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/tests/unit/control-plane-package-update-bridge.test.ts:750) expects the completed restart job to remain `deferred` for both configured targets even after both restart commands have run. Please update the implementation to persist final configured-mode outcomes and add coverage that asserts the stored restart result contains target-level completion data and explicit post-restart PID or unavailable-state evidence."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
       "createdAt": "2026-04-26T06:44:37.856Z",
-      "updatedAt": "2026-04-26T06:44:37.856Z",
-      "startedAt": null,
+      "updatedAt": "2026-04-26T06:47:55.768Z",
+      "startedAt": "2026-04-26T06:47:55.768Z",
       "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent"
     },
     {
@@ -1329,6 +1332,5 @@
       "startedAt": null,
       "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

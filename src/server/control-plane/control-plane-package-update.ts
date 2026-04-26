@@ -54,6 +54,8 @@ interface DeferredRestartLaunchResult {
   cwd: string;
   status: 'launched' | 'failed';
   targets?: RestartTarget[];
+  postRestartPid?: number | null;
+  completedAt: string;
   error?: string;
 }
 
@@ -578,6 +580,8 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
       settle({
         ...base,
         status: 'failed',
+        completedAt: new Date().toISOString(),
+        postRestartPid: null,
         error: formatErrorMessage(error),
       });
       return;
@@ -587,12 +591,16 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
       settle({
         ...base,
         status: 'launched',
+        postRestartPid: child.pid || null,
+        completedAt: new Date().toISOString(),
       });
     });
     child.once('error', (error) => {
       settle({
         ...base,
         status: 'failed',
+        postRestartPid: child.pid || null,
+        completedAt: new Date().toISOString(),
         error: error.message,
       });
     });
@@ -632,6 +640,8 @@ function startDetachedDefaultRestartHelper(deferredCommand: DefaultDeferredResta
       settle({
         ...base,
         status: 'failed',
+        completedAt: new Date().toISOString(),
+        postRestartPid: null,
         error: formatErrorMessage(error),
       });
       return;
@@ -641,12 +651,16 @@ function startDetachedDefaultRestartHelper(deferredCommand: DefaultDeferredResta
       settle({
         ...base,
         status: 'launched',
+        postRestartPid: child.pid || null,
+        completedAt: new Date().toISOString(),
       });
     });
     child.once('error', (error) => {
       settle({
         ...base,
         status: 'failed',
+        postRestartPid: child.pid || null,
+        completedAt: new Date().toISOString(),
         error: error.message,
       });
     });

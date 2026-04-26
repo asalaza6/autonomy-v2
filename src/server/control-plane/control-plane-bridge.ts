@@ -35,6 +35,83 @@ function parseRepoMap(value: string | undefined) {
   return repoMap;
 }
 
+function mergeDeferredRestartLaunchResults(
+  result: Record<string, unknown>,
+  launchResults: Array<{
+    target: 'server' | 'controlBridge' | 'default';
+    mode: 'configured' | 'default';
+    status: 'launched' | 'failed';
+    completedAt: string;
+    postRestartPid?: number | null;
+    error?: string;
+  }>
+) {
+  const nextResult = {
+    ...result,
+  };
+  const restartStatus = nextResult.restartStatus && typeof nextResult.restartStatus === 'object'
+    ? { ...(nextResult.restartStatus as Record<string, unknown>) }
+    : {};
+  let latestCompletedAt = String(restartStatus.completedAt || '').trim() || null;
+
+  launchResults.forEach((launchResult) => {
+    if (launchResult.mode !== 'configured') {
+      return;
+    }
+    if (launchResult.target !== 'server' && launchResult.target !== 'controlBridge') {
+      return;
+    }
+    const previousTarget = restartStatus[launchResult.target] && typeof restartStatus[launchResult.target] === 'object'
+      ? restartStatus[launchResult.target] as Record<string, unknown>
+      : {};
+    const nextTarget: Record<string, unknown> = {
+      ...previousTarget,
+      status: launchResult.status === 'launched' ? 'restarted' : 'failed',
+      postRestartPid: launchResult.postRestartPid ?? null,
+      completedAt: launchResult.completedAt,
+    };
+    if (launchResult.error) {
+      nextTarget.error = launchResult.error;
+    } else {
+      delete nextTarget.error;
+    }
+    delete nextTarget.reason;
+    restartStatus[launchResult.target] = nextTarget;
+    if (!latestCompletedAt || Date.parse(launchResult.completedAt) >= Date.parse(latestCompletedAt)) {
+      latestCompletedAt = launchResult.completedAt;
+    }
+  });
+
+  const targetStatuses = [restartStatus.controlBridge, restartStatus.server]
+    .map((entry) => entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).status || '').trim() : '')
+    .filter(Boolean);
+  restartStatus.status = summarizeRestartStatus(targetStatuses);
+  if (latestCompletedAt && restartStatus.status !== 'deferred') {
+    restartStatus.completedAt = latestCompletedAt;
+  }
+  nextResult.restartStatus = restartStatus;
+  nextResult.errors = [restartStatus.controlBridge, restartStatus.server]
+    .map((entry) => entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).error || '').trim() : '')
+    .filter(Boolean);
+  return nextResult;
+}
+
+function summarizeRestartStatus(targetStatuses: string[]) {
+  if (targetStatuses.includes('failed') || targetStatuses.includes('relaunch-failed') || targetStatuses.includes('stale-pid')) {
+    return 'failed';
+  }
+  if (targetStatuses.includes('deferred')) {
+    return 'deferred';
+  }
+  if (targetStatuses.includes('restarted')) {
+    return 'restarted';
+  }
+  if (targetStatuses.length > 0 && targetStatuses.every((status) => status === 'skipped')) {
+    return 'skipped';
+  }
+  return targetStatuses[0] || 'skipped';
+}
+
 async function runControlPlaneBridgeOnce(rootDir: string, options: {
   serverUrl: string;
   repoRoots: Record<string, string>;
@@ -47,6 +124,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     jobId: string;
     repoId: string;
     commands: Parameters<typeof runDeferredControlPlaneRestartCommands>[0];
+    result: Record<string, unknown>;
   }> = [];
   while (registeredRepoIds.length > 0) {
     const claimed = await requestJson(`${options.serverUrl}/api/jobs/claim-next`, {
@@ -233,6 +311,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           jobId: job.id,
           repoId: job.repoId,
           commands: deferredRestartCommandsForJob,
+          result,
         });
       } else if (deferredRestartCommandsForJob.length > 0) {
         logBridgeEvent('bridge:restart:deferred-skipped', {
@@ -300,6 +379,18 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         command: result.command,
         error: result.error || '',
       });
+    });
+    const updated = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(restart.jobId)}/complete`, {
+      method: 'POST',
+      body: {
+        status: 'completed',
+        result: mergeDeferredRestartLaunchResults(restart.result, results),
+      },
+    }).catch(() => null);
+    logBridgeEvent('bridge:restart:deferred-complete', {
+      jobId: restart.jobId,
+      repoId: restart.repoId,
+      status: getResponseStatus(updated) || 'unacknowledged',
     });
   }
 
