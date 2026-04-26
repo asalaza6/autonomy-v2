@@ -5,6 +5,7 @@ import net from 'net';
 import path from 'path';
 
 import {
+  addPrdWithTasks,
   CONTROL_BIN,
   createFixtureRepo,
   git,
@@ -336,6 +337,108 @@ test('local control plane can bootstrap a direct remote API base URL for browser
     assert.equal(devMeta.devMode, true);
   } finally {
     await stopLocalServer();
+  }
+});
+
+test('control plane reset endpoint validates confirmation and clears active PRD state after bridge execution', async () => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-reset-');
+  initAutonomyRepo(repoDir);
+  addPrdWithTasks(repoDir, 'prd-reset-api-001', 'Reset API PRD', [{
+    id: 'prd-reset-api-001-architecture-agent-1',
+    title: 'Implement reset endpoint',
+    agentId: 'architecture-agent',
+    acceptance: ['Reset endpoint is complete.'],
+  }]);
+
+  const port = await getFreePort();
+  const server = spawn(process.execPath, [
+    CONTROL_BIN,
+    'serve',
+    '--root',
+    repoDir,
+    '--port',
+    String(port),
+  ], {
+    cwd: path.join(repoDir, '.'),
+    env: {
+      ...process.env,
+      AUTONOMY_CONTROL_PLANE_PERSIST: '0',
+      PATH: process.env.PATH || '',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stopServer = async () => {
+    if (server.exitCode !== null || server.signalCode !== null) {
+      return;
+    }
+    server.kill('SIGTERM');
+    await onceExit(server);
+  };
+
+  try {
+    await waitForHttp(`http://127.0.0.1:${port}/api/repos`);
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ]);
+
+    const invalidResponse = await fetch(`http://127.0.0.1:${port}/api/repos/default/reset-prds`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        repoId: 'default',
+      }),
+    });
+    assert.equal(invalidResponse.status, 400);
+    assert.match(await invalidResponse.text(), /confirmPrdId/);
+
+    const resetResponse = await fetch(`http://127.0.0.1:${port}/api/repos/default/reset-prds`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        repoId: 'default',
+        confirmPrdId: 'prd-reset-api-001',
+        reason: 'Reset from control plane test.',
+      }),
+    });
+    assert.equal(resetResponse.status, 201);
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ]);
+
+    const state = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state`);
+    assert.equal(state.jobs.length, 1);
+    assert.equal(state.jobs[0].type, 'prd:reset');
+    assert.equal(state.jobs[0].status, 'completed');
+    assert.equal(state.repoStatuses.default.snapshot.prds.prds.length, 0);
+    assert.equal(state.repoStatuses.default.snapshot.prdHistory.prds[0].id, 'prd-reset-api-001');
+    assert.equal(state.repoStatuses.default.snapshot.prdHistory.prds[0].status, 'reset');
+    assert.equal(state.repoStatuses.default.snapshot.prdHistory.prds[0].archive.kind, 'reset');
+    assert.equal(state.dashboard.repos[0].activePrd, null);
+
+    const archivedPrd = git(repoDir, ['show', 'dev:prompts/autonomous/v2/specs/prds/archived/prd-reset-api-001.json']);
+    assert.match(archivedPrd, /"kind": "reset"/);
+  } finally {
+    await stopServer();
   }
 });
 

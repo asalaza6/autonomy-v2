@@ -144,6 +144,36 @@ test('manager and project restart views render successful, skipped, and failed e
   assert.match(failedManagerHtml, /server failed \(stale pid\) \| pid 222/);
 });
 
+test('manager repo card renders reset controls and reset job state for active PRDs', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?reset=${Date.now()}`);
+
+  const html = renderToHtml(h(client.ManagerRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      activePrd: {
+        id: 'prd-reset-001',
+        title: 'Resettable PRD',
+        stateLabel: 'In progress',
+        detail: '2 tasks remaining',
+      },
+      prdResetJob: {
+        status: 'queued',
+        statusLabel: 'Queued',
+        detail: 'Waiting for bridge claim',
+      },
+      prdHistory: [],
+    },
+  }));
+
+  assert.match(html, /Resettable PRD/);
+  assert.match(html, /data-action="reset-prds"/);
+  assert.match(html, /Reset queued/);
+  assert.match(html, /Latest reset job: Queued/);
+  assert.match(html, /Waiting for bridge claim/);
+});
+
 function installBrowserStubs() {
   const storage = new Map<string, string>();
   (globalThis as any).window = {

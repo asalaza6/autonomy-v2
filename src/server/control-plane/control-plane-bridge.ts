@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { loadAutonomyEnv } from '../../env/env-main.js';
-import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord } from '../../types.js';
-import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
+import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord, ControlPlanePrdResetPayload } from '../../types.js';
+import { executePrdAdd, buildPrdAddCliOptions, executePrdReset } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
@@ -354,6 +354,32 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         });
         deferredRestartCommandsForJob = execution.deferredRestartCommands;
         result = execution.result;
+      } else if (job.type === 'prd:reset') {
+        logBridgeEvent('bridge:prd:reset:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          root: repoRoot,
+        });
+        const execution = executePrdReset(repoRoot, {
+          'confirm-prd-id': (job.payload as ControlPlanePrdResetPayload).confirmPrdId,
+          reason: (job.payload as ControlPlanePrdResetPayload).reason || '',
+        });
+        const snapshot = buildStatusSnapshot(repoRoot);
+        await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+          method: 'POST',
+          body: {
+            repo: registration.repo,
+            snapshot,
+          },
+        });
+        logBridgeEvent('bridge:prd:reset:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          prdId: execution.prdId || '',
+          noop: execution.noop ? 'yes' : 'no',
+          commitSha: execution.commitSha || '',
+        });
+        result = execution;
       } else {
         logBridgeEvent('bridge:prd:add:start', {
           jobId: job.id,

@@ -55,7 +55,18 @@ function normalizeTaskSpecs(taskSpecs: AnyRecord[], options: AnyRecord = {}) {
   });
 }
 
-function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requirements }: AnyRecord): PrdSpecPayload {
+function normalizePrdArchiveMetadata(value: AnyRecord = {}) {
+  return {
+    kind: String(value.kind || '').trim() || undefined,
+    status: String(value.status || '').trim() || undefined,
+    archivedAt: String(value.archivedAt || '').trim() || undefined,
+    reason: String(value.reason || '').trim() || undefined,
+    fromStatus: String(value.fromStatus || '').trim() || undefined,
+    actor: String(value.actor || '').trim() || undefined,
+  };
+}
+
+function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requirements, archive }: AnyRecord): PrdSpecPayload {
   const normalizedSpecification = typeof specification === 'string' ? specification.trim() : '';
   const normalizedRequirements = normalizeStringList(requirements);
   const normalizedTasks = Array.isArray(tasks) && tasks.length > 0
@@ -71,6 +82,9 @@ function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requi
     specification: normalizedSpecification || undefined,
     requirements: normalizedRequirements.length > 0 ? normalizedRequirements : undefined,
   };
+  if (archive && typeof archive === 'object') {
+    payload.archive = normalizePrdArchiveMetadata(archive);
+  }
   if (normalizedTasks.length > 0) {
     payload.tasks = normalizedTasks;
   }
@@ -99,6 +113,7 @@ function parsePrdSpec(rawContent: string, sourcePath: string): PrdSpecPayload {
     createdAt: parsed.createdAt,
     specification: parsed.specification,
     requirements: parsed.requirements,
+    archive: parsed.archive,
   });
 }
 

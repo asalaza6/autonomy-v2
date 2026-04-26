@@ -4,6 +4,7 @@ import type {
   ControlPlaneDeployPayload,
   ControlPlanePackageUpdatePayload,
   ControlPlanePrdAddPayload,
+  ControlPlanePrdResetPayload,
   ControlPlaneRestartPayload,
   ControlPlaneRepoRecord,
 } from '../../types.js';
@@ -131,6 +132,25 @@ function validateDeploySubmission(
   };
 }
 
+function validatePrdResetSubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlanePrdResetPayload> = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
+  const confirmPrdId = String(submission.confirmPrdId || '').trim();
+  if (!confirmPrdId) {
+    throw new Error('Provide confirmPrdId for the active PRD being reset.');
+  }
+  return {
+    repo,
+    payload: {
+      repoId: repo.repoId,
+      confirmPrdId,
+      reason: String(submission.reason || '').trim() || undefined,
+    },
+  };
+}
+
 function validatePackageUpdateSubmission(
   repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
   submission: Partial<ControlPlanePackageUpdatePayload> = {}
@@ -248,5 +268,6 @@ export {
   validateDeploySubmission,
   validatePackageUpdateSubmission,
   validatePrdAddSubmission,
+  validatePrdResetSubmission,
   validateRestartSubmission,
 };

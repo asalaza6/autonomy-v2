@@ -5,6 +5,7 @@ import type {
   ControlPlaneRepoRecord,
   ControlPlanePrdAddPayload,
   ControlPlaneDeployPayload,
+  ControlPlanePrdResetPayload,
   ControlPlanePackageUpdatePayload,
   ControlPlaneRestartPayload,
   ControlPlaneAgentChatMessagePayload,
@@ -218,6 +219,9 @@ function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null
   if (normalized === 'deploy') {
     return 'deploy' as const;
   }
+  if (normalized === 'prd:reset') {
+    return 'prd:reset' as const;
+  }
   if (normalized === 'agent:chat') {
     return 'agent:chat' as const;
   }
@@ -239,6 +243,14 @@ function normalizeJobPayload(
     return {
       repoId: String((payload as ControlPlaneDeployPayload).repoId || repoId).trim() || repoId,
     } as ControlPlaneDeployPayload;
+  }
+
+  if (type === 'prd:reset') {
+    return {
+      repoId: String((payload as ControlPlanePrdResetPayload).repoId || repoId).trim() || repoId,
+      confirmPrdId: String((payload as ControlPlanePrdResetPayload).confirmPrdId || '').trim(),
+      reason: String((payload as ControlPlanePrdResetPayload).reason || '').trim() || undefined,
+    } as ControlPlanePrdResetPayload;
   }
 
   if (type === 'package:update') {
@@ -631,6 +643,23 @@ function createControlPlaneDeployJob(payload: ControlPlaneDeployPayload): Contro
   return job;
 }
 
+function createControlPlanePrdResetJob(payload: ControlPlanePrdResetPayload): ControlPlaneJobRecord {
+  const job: ControlPlaneJobRecord = {
+    id: createControlPlaneRecordId('job'),
+    type: 'prd:reset' as const,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+      confirmPrdId: payload.confirmPrdId,
+      reason: payload.reason,
+    },
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
 function createControlPlanePackageUpdateJob(payload: ControlPlanePackageUpdatePayload): ControlPlaneJobRecord {
   const job: ControlPlaneJobRecord = {
     id: createControlPlaneRecordId('job'),
@@ -820,6 +849,7 @@ export {
   createControlPlaneJob,
   createControlPlaneDeployJob,
   createControlPlanePackageUpdateJob,
+  createControlPlanePrdResetJob,
   createControlPlaneRestartJob,
   ensureControlPlaneDataDir,
   enqueueJob,
