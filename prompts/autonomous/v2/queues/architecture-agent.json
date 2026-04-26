@@ -1612,6 +1612,50 @@
       "completedAt": "2026-04-26T08:30:02.331Z",
       "completionMode": "code",
       "commitSha": "a7e08450d0815f457149094571b6995c5e28a71e"
+    },
+    {
+      "id": "prd-add-manager-side-reset-prds-4fb271-architecture-agent-1",
+      "title": "Add PRD reset/archive backend flow for active repo autonomy state",
+      "description": "",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-manager-side-reset-prds-4fb271",
+      "laneKey": "prd-add-manager-side-reset-prds-4fb271:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-26T09:27:56.883Z",
+      "updatedAt": "2026-04-26T09:27:56.883Z"
+    },
+    {
+      "id": "prd-add-manager-side-reset-prds-4fb271-architecture-agent-2",
+      "title": "Add manager control-plane Reset PRDs UI and history/status refresh behavior",
+      "description": "",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-manager-side-reset-prds-4fb271",
+      "laneKey": "prd-add-manager-side-reset-prds-4fb271:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-2` is complete within the assigned agent scope."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-26T09:27:56.883Z",
+      "updatedAt": "2026-04-26T09:27:56.883Z"
     }
   ]
 }

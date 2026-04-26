@@ -14,5 +14,27 @@
     "Keep an audit trail visible in PRD History",
     "including reset timestamp and reason if provided.",
     "Refresh manager/project status views immediately after reset so no stale active PRD remains visible."
+  ],
+  "tasks": [
+    {
+      "id": "prd-add-manager-side-reset-prds-4fb271-architecture-agent-1",
+      "title": "Add PRD reset/archive backend flow for active repo autonomy state",
+      "agentId": "architecture-agent",
+      "description": "",
+      "acceptance": [
+        "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-1` is complete within the assigned agent scope."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-add-manager-side-reset-prds-4fb271-architecture-agent-2",
+      "title": "Add manager control-plane Reset PRDs UI and history/status refresh behavior",
+      "agentId": "architecture-agent",
+      "description": "",
+      "acceptance": [
+        "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-2` is complete within the assigned agent scope."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
