@@ -12,5 +12,23 @@
     "such as the PR number or 'Open pull request'.",
     "Do not show the control if there is no matching PR URL for the active PRD.",
     "Keep existing progress stats and step rendering intact."
+  ],
+  "tasks": [
+    {
+      "id": "prd-expose-active-pull-request-c879fc-architecture-agent-1",
+      "title": "Show the active pull request link in the main progress area",
+      "agentId": "architecture-agent",
+      "description": "Update the control-plane progress UI so the active PRD shows a visible pull request action in the main progress area during implementation and review states. Reuse existing `pullRequestStatuses` data, add or refine a helper that selects the most relevant active implementation or review pull request for the active PRD, and keep existing progress stats, step rendering, and separate pull request list behavior unchanged. Likely touch the project/control-plane progress UI and any status-selection utilities or view models that already derive active PRD and pull request state.",
+      "acceptance": [
+        "When the active PRD is in an implementation or review-related state and `pullRequestStatuses` contains a matching valid URL, the main progress area renders a visible clickable pull request control near the existing progress detail or action area.",
+        "The rendered control opens the matching GitHub pull request URL and uses clear copy with pull request context, such as the PR number when available or equivalent open-pull-request wording.",
+        "When the active PRD has no matching pull request with a valid URL, or the active PRD is not in an implementation or review-related state, the main progress area does not render the pull request control.",
+        "If multiple pull request status records exist for the active PRD, the implementation uses deterministic selection logic that prefers the currently active implementation or review pull request over less relevant entries.",
+        "Existing progress metrics, step rendering, and the separate pull request list continue to render and behave as before.",
+        "Automated coverage is added or updated for active pull request selection logic and for progress-section rendering that shows and hides the link based on PRD state and URL presence.",
+        "Verification includes `npm run typecheck` and the relevant unit coverage for the control-plane progress UI or status-selection logic."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
