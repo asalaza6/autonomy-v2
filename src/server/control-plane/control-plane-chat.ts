@@ -11,7 +11,7 @@ import {
   buildRepoAssistantGithubCodexConfigOverrides,
   buildRepoAssistantGithubEnv,
   buildRepoAssistantGithubPromptContext,
-  readRepoAssistantGithubEnvFromApprovedFiles,
+  resolveRepoAssistantGithubEnv,
   resolveRepoAssistantGithubCapability,
 } from './control-plane-github.js';
 
@@ -81,7 +81,7 @@ async function answerControlPlaneAgentChat({
   const githubCapability = resolveRepoAssistantGithubCapability(repoRoot, {
     includePullRequestData: true,
   });
-  const runtimeGithubEnv = readRepoAssistantGithubEnvFromApprovedFiles(repoRoot).env;
+  const runtimeGithubEnv = resolveRepoAssistantGithubEnv(repoRoot).env;
   const repoAssistantEnv = githubCapability.available === true
     ? buildRepoAssistantGithubEnv(runtimeGithubEnv)
     : {};

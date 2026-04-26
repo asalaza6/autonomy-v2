@@ -50,12 +50,35 @@ function readRepoAssistantGithubEnvFromApprovedFiles(rootDir: string) {
       return;
     }
     loadedFrom.push(fileName);
-    Object.assign(raw, parseEnvFile(filePath));
+    Object.entries(parseEnvFile(filePath)).forEach(([key, value]) => {
+      if (!Object.prototype.hasOwnProperty.call(raw, key)) {
+        raw[key] = value;
+      }
+    });
   });
 
   return {
     env: selectRepoAssistantGithubEnv(raw as NodeJS.ProcessEnv),
     loadedFrom,
+  };
+}
+
+function resolveRepoAssistantGithubEnv(
+  rootDir: string,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const runtimeEnv = selectRepoAssistantGithubEnv(env);
+  if (Object.keys(runtimeEnv).length > 0) {
+    return {
+      env: runtimeEnv,
+      loadedFrom: [] as string[],
+      authSource: 'runtime-env',
+    };
+  }
+
+  return {
+    ...readRepoAssistantGithubEnvFromApprovedFiles(rootDir),
+    authSource: 'approved-runtime-secret' as const,
   };
 }
 
@@ -117,13 +140,12 @@ function resolveRepoAssistantGithubCapability(
     ? {
         env: selectRepoAssistantGithubEnv(options.env),
         loadedFrom: [] as string[],
+        authSource: 'runtime-env' as const,
       }
-    : readRepoAssistantGithubEnvFromApprovedFiles(rootDir);
+    : resolveRepoAssistantGithubEnv(rootDir, env);
   const githubEnv = approvedRuntimeSecrets.env;
   const authEnvKeys = Object.keys(githubEnv);
-  const authSource = authEnvKeys.length > 0
-    ? (approvedRuntimeSecrets.loadedFrom.length > 0 ? 'approved-runtime-secret' : 'runtime-env')
-    : 'approved-runtime-secret';
+  const authSource = approvedRuntimeSecrets.authSource;
   let repo = options.repository || null;
   if (!repo) {
     try {
@@ -528,6 +550,7 @@ export {
   buildRepoAssistantGithubEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
+  resolveRepoAssistantGithubEnv,
   resolveRepoAssistantGithubCapability,
   selectRepoAssistantGithubEnv,
 };

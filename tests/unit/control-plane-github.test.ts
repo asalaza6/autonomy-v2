@@ -10,6 +10,7 @@ import {
   buildRepoAssistantGithubEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
+  resolveRepoAssistantGithubEnv,
   resolveRepoAssistantGithubCapability,
   selectRepoAssistantGithubEnv,
 } from '../../src/server/control-plane/control-plane-github.js';
@@ -59,24 +60,132 @@ test('repo assistant GitHub approved secret reader ignores arbitrary env files',
   });
 });
 
-test('repo assistant GitHub capability requires approved runtime secret files when no explicit env is injected', () => {
+test('repo assistant GitHub approved secret reader preserves .env.autonomy.local precedence', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-repo-assistant-github-capability-'));
+  fs.writeFileSync(path.join(rootDir, '.env.autonomy.local'), 'GITHUB_TOKEN=local-token\n', 'utf8');
+  fs.writeFileSync(path.join(rootDir, '.env.autonomy'), 'GITHUB_TOKEN=base-token\n', 'utf8');
+
+  const injected = readRepoAssistantGithubEnvFromApprovedFiles(rootDir);
+
+  assert.deepEqual(injected.loadedFrom, ['.env.autonomy.local', '.env.autonomy']);
+  assert.deepEqual(injected.env, {
+    GITHUB_TOKEN: 'local-token',
+    GH_TOKEN: 'local-token',
+  });
+});
+
+test('repo assistant GitHub capability accepts fileless runtime-injected tokens when no explicit env is injected', () => {
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+
+  process.env.GITHUB_TOKEN = 'runtime-secret-token';
+  delete process.env.GH_TOKEN;
+
+  try {
+    const capability: any = resolveRepoAssistantGithubCapability('/tmp/fixture', {
+      repository: TEST_REPO,
+      validationPullNumber: 27,
+      githubApiRunner(args, options) {
+        assert.equal(options.token, 'runtime-secret-token');
+        if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}`) {
+          return JSON.stringify({
+            private: false,
+            visibility: 'public',
+            default_branch: 'dev',
+          });
+        }
+        if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}/pulls/27`) {
+          return JSON.stringify({
+            number: 27,
+            title: 'Runtime-injected secret validation',
+            state: 'open',
+            html_url: 'https://github.com/asalaza6/autonomy-v2/pull/27',
+            user: { login: 'asalaza6' },
+            base: { ref: 'dev' },
+            head: { ref: 'feature/repo-assistant' },
+          });
+        }
+        if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+          return '[]';
+        }
+        if (args[0] === 'graphql') {
+          return JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  reviewThreads: {
+                    nodes: [],
+                  },
+                },
+              },
+            },
+          });
+        }
+        throw new Error(`Unexpected route: ${args[0]}`);
+      },
+    });
+
+    assert.equal(capability.available, true);
+    assert.equal(capability.authSource, 'runtime-env');
+    assert.deepEqual(capability.authFiles, []);
+    assert.doesNotMatch(JSON.stringify(capability), /runtime-secret-token/);
+
+    const resolved = resolveRepoAssistantGithubEnv('/tmp/fixture');
+    assert.equal(resolved.authSource, 'runtime-env');
+    assert.deepEqual(resolved.env, {
+      GITHUB_TOKEN: 'runtime-secret-token',
+      GH_TOKEN: 'runtime-secret-token',
+    });
+  } finally {
+    if (typeof originalGithubToken === 'string') {
+      process.env.GITHUB_TOKEN = originalGithubToken;
+    } else {
+      delete process.env.GITHUB_TOKEN;
+    }
+    if (typeof originalGhToken === 'string') {
+      process.env.GH_TOKEN = originalGhToken;
+    } else {
+      delete process.env.GH_TOKEN;
+    }
+  }
+});
+
+test('repo assistant GitHub capability reports missing token when no approved runtime token is available', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-repo-assistant-github-capability-'));
   fs.writeFileSync(path.join(rootDir, '.env'), 'GITHUB_TOKEN=wrong-source-token\n', 'utf8');
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
 
-  const capability: any = resolveRepoAssistantGithubCapability(rootDir, {
-    repository: TEST_REPO,
-    validationPullNumber: 27,
-    githubApiRunner() {
-      throw new Error('should not run without an approved token');
-    },
-  });
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GH_TOKEN;
 
-  assert.equal(capability.available, false);
-  assert.equal(capability.status, 'missing-token');
-  assert.equal(capability.authSource, 'approved-runtime-secret');
-  assert.deepEqual(capability.authFiles, []);
-  assert.match(capability.detail, /approved runtime GitHub token/i);
-  assert.doesNotMatch(JSON.stringify(capability), /wrong-source-token/);
+  try {
+    const capability: any = resolveRepoAssistantGithubCapability(rootDir, {
+      repository: TEST_REPO,
+      validationPullNumber: 27,
+      githubApiRunner() {
+        throw new Error('should not run without an approved token');
+      },
+    });
+
+    assert.equal(capability.available, false);
+    assert.equal(capability.status, 'missing-token');
+    assert.equal(capability.authSource, 'approved-runtime-secret');
+    assert.deepEqual(capability.authFiles, []);
+    assert.match(capability.detail, /approved runtime GitHub token/i);
+    assert.doesNotMatch(JSON.stringify(capability), /wrong-source-token/);
+  } finally {
+    if (typeof originalGithubToken === 'string') {
+      process.env.GITHUB_TOKEN = originalGithubToken;
+    } else {
+      delete process.env.GITHUB_TOKEN;
+    }
+    if (typeof originalGhToken === 'string') {
+      process.env.GH_TOKEN = originalGhToken;
+    } else {
+      delete process.env.GH_TOKEN;
+    }
+  }
 });
 
 test('repo assistant GitHub capability reports missing token without exposing secret-looking values', () => {
@@ -251,59 +360,148 @@ test('repo assistant GitHub capability loads approved runtime secrets from .env.
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-repo-assistant-github-approved-'));
   fs.writeFileSync(path.join(rootDir, '.env.autonomy'), 'GH_TOKEN=approved-secret-token\n', 'utf8');
   const calls: string[] = [];
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
 
-  const capability: any = resolveRepoAssistantGithubCapability(rootDir, {
-    repository: TEST_REPO,
-    validationPullNumber: 27,
-    githubApiRunner(args, options) {
-      calls.push(args.join(' '));
-      assert.equal(options.token, 'approved-secret-token');
-      if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}`) {
-        return JSON.stringify({
-          private: false,
-          visibility: 'public',
-          default_branch: 'dev',
-        });
-      }
-      if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}/pulls/27`) {
-        return JSON.stringify({
-          number: 27,
-          title: 'Approved runtime secret validation',
-          state: 'open',
-          html_url: 'https://github.com/asalaza6/autonomy-v2/pull/27',
-          user: { login: 'asalaza6' },
-          base: { ref: 'dev' },
-          head: { ref: 'feature/repo-assistant' },
-        });
-      }
-      if (args[0].includes('/files?per_page=100')) {
-        return '[]';
-      }
-      if (args[0].includes('/comments?per_page=100')) {
-        return '[]';
-      }
-      if (args[0].includes('/reviews?per_page=100')) {
-        return '[]';
-      }
-      if (args[0] === 'graphql') {
-        return JSON.stringify({
-          data: {
-            repository: {
-              pullRequest: {
-                reviewThreads: {
-                  nodes: [],
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GH_TOKEN;
+
+  try {
+    const capability: any = resolveRepoAssistantGithubCapability(rootDir, {
+      repository: TEST_REPO,
+      validationPullNumber: 27,
+      githubApiRunner(args, options) {
+        calls.push(args.join(' '));
+        assert.equal(options.token, 'approved-secret-token');
+        if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}`) {
+          return JSON.stringify({
+            private: false,
+            visibility: 'public',
+            default_branch: 'dev',
+          });
+        }
+        if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}/pulls/27`) {
+          return JSON.stringify({
+            number: 27,
+            title: 'Approved runtime secret validation',
+            state: 'open',
+            html_url: 'https://github.com/asalaza6/autonomy-v2/pull/27',
+            user: { login: 'asalaza6' },
+            base: { ref: 'dev' },
+            head: { ref: 'feature/repo-assistant' },
+          });
+        }
+        if (args[0].includes('/files?per_page=100')) {
+          return '[]';
+        }
+        if (args[0].includes('/comments?per_page=100')) {
+          return '[]';
+        }
+        if (args[0].includes('/reviews?per_page=100')) {
+          return '[]';
+        }
+        if (args[0] === 'graphql') {
+          return JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  reviewThreads: {
+                    nodes: [],
+                  },
                 },
               },
             },
-          },
-        });
-      }
-      throw new Error(`Unexpected route: ${args[0]}`);
-    },
-  });
+          });
+        }
+        throw new Error(`Unexpected route: ${args[0]}`);
+      },
+    });
 
-  assert.equal(capability.available, true);
-  assert.equal(capability.authSource, 'approved-runtime-secret');
-  assert.deepEqual(capability.authFiles, ['.env.autonomy']);
-  assert.equal(calls.length > 0, true);
+    assert.equal(capability.available, true);
+    assert.equal(capability.authSource, 'approved-runtime-secret');
+    assert.deepEqual(capability.authFiles, ['.env.autonomy']);
+    assert.equal(calls.length > 0, true);
+  } finally {
+    if (typeof originalGithubToken === 'string') {
+      process.env.GITHUB_TOKEN = originalGithubToken;
+    } else {
+      delete process.env.GITHUB_TOKEN;
+    }
+    if (typeof originalGhToken === 'string') {
+      process.env.GH_TOKEN = originalGhToken;
+    } else {
+      delete process.env.GH_TOKEN;
+    }
+  }
+});
+
+test('repo assistant GitHub capability prefers .env.autonomy.local over .env.autonomy during validation', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-repo-assistant-github-approved-precedence-'));
+  fs.writeFileSync(path.join(rootDir, '.env.autonomy.local'), 'GH_TOKEN=local-approved-secret\n', 'utf8');
+  fs.writeFileSync(path.join(rootDir, '.env.autonomy'), 'GH_TOKEN=base-approved-secret\n', 'utf8');
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GH_TOKEN;
+
+  try {
+    const capability: any = resolveRepoAssistantGithubCapability(rootDir, {
+      repository: TEST_REPO,
+      validationPullNumber: 27,
+      githubApiRunner(args, options) {
+        assert.equal(options.token, 'local-approved-secret');
+        if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}`) {
+          return JSON.stringify({
+            private: false,
+            visibility: 'public',
+            default_branch: 'dev',
+          });
+        }
+        if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}/pulls/27`) {
+          return JSON.stringify({
+            number: 27,
+            title: 'Approved runtime secret precedence',
+            state: 'open',
+            html_url: 'https://github.com/asalaza6/autonomy-v2/pull/27',
+            user: { login: 'asalaza6' },
+            base: { ref: 'dev' },
+            head: { ref: 'feature/repo-assistant' },
+          });
+        }
+        if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+          return '[]';
+        }
+        if (args[0] === 'graphql') {
+          return JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  reviewThreads: {
+                    nodes: [],
+                  },
+                },
+              },
+            },
+          });
+        }
+        throw new Error(`Unexpected route: ${args[0]}`);
+      },
+    });
+
+    assert.equal(capability.available, true);
+    assert.equal(capability.authSource, 'approved-runtime-secret');
+    assert.deepEqual(capability.authFiles, ['.env.autonomy.local', '.env.autonomy']);
+  } finally {
+    if (typeof originalGithubToken === 'string') {
+      process.env.GITHUB_TOKEN = originalGithubToken;
+    } else {
+      delete process.env.GITHUB_TOKEN;
+    }
+    if (typeof originalGhToken === 'string') {
+      process.env.GH_TOKEN = originalGhToken;
+    } else {
+      delete process.env.GH_TOKEN;
+    }
+  }
 });

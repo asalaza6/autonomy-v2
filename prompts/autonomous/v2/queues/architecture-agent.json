@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4383,14 +4384,15 @@
       "acceptance": [
         "`npm run typecheck` and `npm run lint` are reported passing, but the branch is not safe to merge into `dev`. I found two blockers in the GitHub secret-source handling for repo-assistant sessions.\n`src/server/control-plane/control-plane-github.ts:43-58,105-122` only reads GitHub auth from `.env.autonomy.local` / `.env.autonomy` when the production callers omit `options.env`, and both real call sites do omit it (`src/server/control-plane/control-plane-chat.ts:75-89`, `src/autonomy-v2/control-plane/status-service.ts:54-58`). That means a host-provided runtime `GITHUB_TOKEN`/`GH_TOKEN` is ignored unless those repo files also exist, so the feature does not satisfy the acceptance contract for runtime-injected approved secrets. The current test `tests/unit/control-plane-github.test.ts:62-80` actually locks in that incorrect behavior. The fix should make the live startup/status path accept approved runtime-injected credentials without requiring repo secret files, and add focused coverage for the fileless injected-secret case.\n`src/server/control-plane/control-plane-github.ts:47-54` merges approved files in the wrong precedence order: it reads `.env.autonomy.local` first and then overwrites it with `.env.autonomy` via `Object.assign`. The repo’s existing env loader gives `.env.autonomy.local` higher precedence (`src/env/env-main.ts:4-19,35-47`), so a repo with both files can validate/inject the wrong GitHub token and show the wrong access state in the control plane. Add a focused test for the two-file case and preserve the established `.env.autonomy.local` > `.env.autonomy` precedence."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "createdAt": "2026-04-26T22:22:05.528Z",
-      "updatedAt": "2026-04-26T22:22:05.528Z",
+      "updatedAt": "2026-04-26T22:27:02.798Z",
       "startedAt": "2026-04-26T22:22:05.528Z",
-      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent"
+      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
+      "completedAt": "2026-04-26T22:27:02.798Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
