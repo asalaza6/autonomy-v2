@@ -2197,7 +2197,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "createdAt": "2026-04-26T10:35:29.032Z",
-      "updatedAt": "2026-04-26T10:35:57.277Z",
+      "updatedAt": "2026-04-26T10:35:57.338Z",
       "startedAt": "2026-04-26T10:35:29.032Z",
       "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
       "completedAt": "2026-04-26T10:35:57.277Z",
@@ -2210,7 +2210,8 @@
           "updatedAt": "2026-04-26T10:35:57.277Z"
         }
       },
-      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7"
+      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7",
+      "commitSha": "22d882643c956e5f071bb1ef81b7809a4a574928"
     }
   ]
 }
