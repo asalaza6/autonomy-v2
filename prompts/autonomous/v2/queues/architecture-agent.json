@@ -1602,13 +1602,15 @@
       "acceptance": [
         "`npm run typecheck` passed, but this branch is still not safe to merge. The automatic promotion path still selects the first queued spec in git path order instead of the repository’s established queue order, so it can promote the wrong PRD when multiple queued PRDs exist.\nBlocking: `src/sync/syncer.ts:243-246` still uses `remoteSpecs.find((remoteSpec) => remoteSpec.isQueued)` to choose the PRD to promote. `remoteSpecs` is built from `git ls-tree` results, which are path-sorted, not queue-sorted. The existing queue/status logic defines queued order by timestamp (`src/autonomy-v2/control-plane/status-view.ts:27-33`), so two queued PRDs created out of lexical ID order can still be promoted incorrectly, violating the acceptance criterion that the first queued PRD is promoted.\nBlocking verification gap: the new coverage in `tests/smoke/package-smoke.test.ts:326-349` proves promotion metadata and idempotent polling for a single queued PRD, but it still does not add the focused multi-queued case requested in the prior review. Add coverage with at least two queued PRDs whose IDs sort differently from their creation order, and assert that the earliest queued PRD is the one promoted."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
       "createdAt": "2026-04-26T08:23:40.679Z",
-      "updatedAt": "2026-04-26T08:26:14.454Z",
+      "updatedAt": "2026-04-26T08:30:02.331Z",
       "startedAt": "2026-04-26T08:26:14.454Z",
-      "prId": "pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent"
+      "prId": "pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
+      "completedAt": "2026-04-26T08:30:02.331Z",
+      "completionMode": "code"
     }
   ]
 }
