@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-enable-repo-assistant-sessions-to-67a11c",
+  "title": "Enable repo-assistant sessions to use whitelisted GitHub auth from .env.autonomy for live PR reads",
+  "createdAt": "2026-04-26T11:13:45.330Z",
+  "specification": "# PRD: Enable repo-assistant sessions to use whitelisted GitHub auth from .env.autonomy for live PR reads\n\nPriority: high\n\n## Problem\nRepo-assistant sessions can inspect local files but cannot read live GitHub pull request metadata, review comments, or threads because session startup does not expose authenticated GitHub access and network permissions, even though the project already loads GitHub tokens from `.env.autonomy`.\n\n## Goal\nAllow repo-assistant sessions to automatically use a whitelisted GitHub token from `.env.autonomy` at startup so they can read live PR data for the current repository without per-session manual configuration.\n\n## Requirements\n- At session launch, load only whitelisted auth env vars such as `GITHUB_TOKEN` or `GH_TOKEN` from `.env.autonomy` or equivalent runtime secret source.\n- Provide repo-assistant sessions outbound GitHub network access limited to required GitHub API endpoints.\n- Bind the GitHub tool/plugin in-session using the loaded credential.\n- Validate that the credential has read access to the target repository and PR resources before enabling GitHub-backed PR inspection.\n- Surface a clear runtime status in the control panel when GitHub access is unavailable, misconfigured, or unauthorized.\n- Avoid exposing raw secret values to the assistant transcript, logs, or UI.\n- Prefer runtime secret injection over reading arbitrary env files from within the assistant session.\n\n## Acceptance Criteria\n- A newly started repo-assistant session for `asalaza6/autonomy-v2` can read live PR metadata for a known PR without manual token entry.\n- The session can retrieve PR diff, top-level comments, reviews, and unresolved review threads through the GitHub tools.\n- When the token is missing or invalid, the control panel shows a clear failure reason instead of silent fallback.\n- Secret values are never displayed in assistant responses or persisted in logs.\n- No per-session manager action is required beyond maintaining a valid repo-scoped credential in the approved secret source.\n\n## Verification\n- Start a fresh repo-assistant session and confirm it can fetch PR info for `asalaza6/autonomy-v2#27`.\n- Verify the session can call PR metadata, diff, comments, reviews, and review-thread reads successfully.\n- Test failure cases with missing token, invalid token, and token lacking repo access; confirm user-visible error states.\n- Review logs and transcript output to confirm token values are redacted and never exposed.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777200518877_c28cd05e57e4d\nManager message: msg_1777201974292_f6a1143cfda1d\nAgent message: msg_1777201974292_ff17b18e618b4\nCreated: 2026-04-26T11:13:14.558Z",
+  "requirements": [
+    "At session launch",
+    "load only whitelisted auth env vars such as `GITHUB_TOKEN` or `GH_TOKEN` from `.env.autonomy` or equivalent runtime secret source.",
+    "Provide repo-assistant sessions outbound GitHub network access limited to required GitHub API endpoints.",
+    "Bind the GitHub tool/plugin in-session using the loaded credential.",
+    "Validate that the credential has read access to the target repository and PR resources before enabling GitHub-backed PR inspection.",
+    "Surface a clear runtime status in the control panel when GitHub access is unavailable",
+    "misconfigured",
+    "or unauthorized.",
+    "Avoid exposing raw secret values to the assistant transcript",
+    "logs",
+    "or UI.",
+    "Prefer runtime secret injection over reading arbitrary env files from within the assistant session."
+  ]
+}
