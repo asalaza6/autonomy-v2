@@ -126,14 +126,6 @@ function resolveOpenWorkflowStatus(pr: AnyRecord | null | undefined) {
   return ACTIVE_PULL_REQUEST_STATUSES.has(status) ? status : 'open';
 }
 
-function isPullRequestMerged(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
-  return getPullRequestStateReconciliation(pr, implementationTasks).canonicalState === 'merged';
-}
-
-function isPullRequestClosed(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
-  return getPullRequestStateReconciliation(pr, implementationTasks).canonicalState === 'closed';
-}
-
 function isPullRequestResolved(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
   const canonicalState = getPullRequestStateReconciliation(pr, implementationTasks).canonicalState;
   return canonicalState === 'merged' || canonicalState === 'closed';
