@@ -104,9 +104,13 @@ function workerIsRunning(runtime, agentId) {
 
 function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap, branchLocks: BranchLocksState, prds: { prds: TrackedPrdRecord[] }, runtime: RuntimeState, options: AnyRecord = {}) {
   const due = [];
+  const schedulingRuntime: RuntimeState = {
+    ...runtime,
+    workers: { ...(runtime && runtime.workers || {}) },
+  };
 
   (config.agents || []).forEach((agent) => {
-    if (workerIsRunning(runtime, agent.id)) {
+    if (workerIsRunning(schedulingRuntime, agent.id)) {
       return;
     }
     const definition = getAgentDefinition(agent);
@@ -114,7 +118,7 @@ function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap
       queues,
       branchLocks,
       prds,
-      runtime,
+      runtime: schedulingRuntime,
     }, {
       suppressNonPmDispatch: options.suppressNonPmDispatch === true,
     });
@@ -122,6 +126,13 @@ function findDueAgents(rootDir: string, config: AutonomyConfig, queues: QueueMap
       return;
     }
     due.push({ agentId: agent.id, reason: getDueReason(agent.role) });
+    setWorkerState(schedulingRuntime, agent.id, {
+      status: 'running',
+      mode: 'schedule',
+      startedAt: new Date().toISOString(),
+      pid: null,
+      reason: getDueReason(agent.role),
+    });
   });
 
   return due;
