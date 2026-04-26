@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4489,6 +4488,39 @@
       },
       "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
       "commitSha": "6c5d312ec11dcf4c393acfc0ca1ce372af23f69b"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Cannot approve for merge into `dev`. The required deterministic checks are now green (`npm run typecheck`, `npm run lint`), but the PR still misreports PRD reconciliation metadata for remotely resolved pull requests, so the control-plane status is not fully authoritative/observable.\n`src/autonomy-v2/commands/shared-prds.ts:241-259` derives PRD-level `statusSource` and `reconciliationStatus` from `hasActivePullRequest`, so any PRD whose linked PRs are remotely `closed` or `merged` is labeled as `inferred` even when `getPullRequestStateReconciliation()` marked those PRs as canonical `remote`. That contradicts the new contract that upstream GitHub state is authoritative and observable for PR/PRD status, and it will hide remote-vs-inferred provenance for resolved PRDs. Please compute PRD-level source/status from the linked PR reconciliation results, not only from whether an open PR exists, and add focused coverage for the remotely resolved PRD case.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Cannot approve for merge into `dev`. The required deterministic checks are now green (`npm run typecheck`, `npm run lint`), but the PR still misreports PRD reconciliation metadata for remotely resolved pull requests, so the control-plane status is not fully authoritative/observable.\n`src/autonomy-v2/commands/shared-prds.ts:241-259` derives PRD-level `statusSource` and `reconciliationStatus` from `hasActivePullRequest`, so any PRD whose linked PRs are remotely `closed` or `merged` is labeled as `inferred` even when `getPullRequestStateReconciliation()` marked those PRs as canonical `remote`. That contradicts the new contract that upstream GitHub state is authoritative and observable for PR/PRD status, and it will hide remote-vs-inferred provenance for resolved PRDs. Please compute PRD-level source/status from the linked PR reconciliation results, not only from whether an open PR exists, and add focused coverage for the remotely resolved PRD case."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "createdAt": "2026-04-26T22:50:51.684Z",
+      "updatedAt": "2026-04-26T22:50:51.684Z",
+      "startedAt": "2026-04-26T22:50:51.684Z",
+      "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T22:50:51.684Z"
+        }
+      },
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
