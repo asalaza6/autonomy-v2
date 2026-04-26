@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4222,11 +4223,11 @@
       "acceptance": [
         "Blocking on missing focused verification. I re-checked the current branch against `origin/dev`: the only remaining diff is `prompts/autonomous/v2/queues/architecture-agent.json`, while the reported required checks are still only `npm run typecheck` and `npm run lint`. Per `prompts/autonomous/v2/project-context.md`, control-plane UI changes require focused automated verification before merge, and there is still no recorded passing focused run covering the PRD review modal tests.\nMissing merge-blocking focused verification for the prior control-plane UI change. The current branch does not add any new code or test changes beyond queue metadata, and the reported checks still do not include a passing focused command for `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent focused control-plane test target). Please run and report that focused test successfully before this can merge."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "createdAt": "2026-04-26T11:16:23.537Z",
-      "updatedAt": "2026-04-26T11:16:23.537Z",
+      "updatedAt": "2026-04-26T11:16:45.850Z",
       "startedAt": "2026-04-26T11:16:23.537Z",
       "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
       "conversationReferences": {
@@ -4234,11 +4235,12 @@
           "conversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-26T11:16:23.537Z"
+          "updatedAt": "2026-04-26T11:16:45.850Z"
         }
       },
-      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7"
+      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7",
+      "completedAt": "2026-04-26T11:16:45.850Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
