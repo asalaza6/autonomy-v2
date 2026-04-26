@@ -310,6 +310,7 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
   const status = String(job && job.status || 'queued');
   const jobType = String(job && job.type || 'prd:add');
   const statusLabelMap: Record<string, string> = buildJobStatusLabelMap(jobType);
+  const restartEvidence = jobType === 'restart' ? buildRestartEvidence(job) : null;
   const details = [];
   if (repoLabel) {
     details.push(repoLabel);
@@ -337,7 +338,7 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
       ? job.result.restartStatus.status
       : 'skipped';
     details.push(`restart ${restartStatus}`);
-    const restartDetail = summarizeRestartTargets(job.result.restartStatus || {});
+    const restartDetail = summarizeRestartTargets(restartEvidence);
     if (restartDetail) {
       details.push(restartDetail);
     }
@@ -360,6 +361,7 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     detail: details.join(' | '),
     createdAt: job && job.createdAt ? String(job.createdAt) : null,
     updatedAt: job && job.updatedAt ? String(job.updatedAt) : null,
+    ...(restartEvidence ? { restartEvidence } : {}),
   };
 }
 
@@ -400,22 +402,125 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
   };
 }
 
-function summarizeRestartTargets(restartStatus: any) {
-  const labels: Record<string, string> = {
-    server: 'server',
-    controlBridge: 'bridge',
-  };
-  return ['server', 'controlBridge']
-    .map((target) => {
-      const status = String(restartStatus && restartStatus[target] && restartStatus[target].status || '').trim();
-      if (!status) {
-        return '';
-      }
-      const reason = String(restartStatus && restartStatus[target] && restartStatus[target].reason || '').trim();
-      return `${labels[target]} ${status}${reason ? ` (${reason})` : ''}`;
-    })
+function summarizeRestartTargets(restartEvidence: any) {
+  const targets = Array.isArray(restartEvidence && restartEvidence.targets) ? restartEvidence.targets : [];
+  return targets
+    .map((target) => String(target && target.compactLabel || '').trim())
     .filter(Boolean)
     .join(', ');
+}
+
+function buildRestartEvidence(job: any) {
+  const restartStatus = job && job.result && job.result.restartStatus && typeof job.result.restartStatus === 'object'
+    ? job.result.restartStatus
+    : {};
+  const completedAt = String(restartStatus.completedAt || job && (job.completedAt || job.updatedAt) || '').trim() || null;
+  const targets = ['server', 'controlBridge']
+    .map((target) => buildRestartTargetEvidence(target, restartStatus && restartStatus[target], completedAt))
+    .filter(Boolean);
+  if (targets.length === 0 && !String(restartStatus.status || '').trim()) {
+    return null;
+  }
+  const restartedTargets = targets.filter((target) => target.status === 'restarted');
+  const pidChangedTargets = restartedTargets.filter((target) => target.pidChanged === true);
+  return {
+    status: String(restartStatus.status || 'skipped').trim() || 'skipped',
+    statusLabel: formatRestartStatusLabel(String(restartStatus.status || 'skipped').trim() || 'skipped'),
+    completedAt,
+    helperStatus: String(restartStatus.helperStatus || '').trim() || null,
+    targets,
+    compactSummary: targets.map((target) => target.compactLabel).filter(Boolean).join(', '),
+    allTargetsRelaunched: targets.length > 0 && targets.every((target) => target.status === 'restarted'),
+    allTargetsChangedPid: targets.length > 0 && targets.every((target) => target.pidChanged === true),
+    relaunchedTargetCount: restartedTargets.length,
+    pidChangedTargetCount: pidChangedTargets.length,
+  };
+}
+
+function buildRestartTargetEvidence(target: string, raw: any, fallbackCompletedAt: string | null) {
+  const status = String(raw && raw.status || '').trim();
+  if (!status) {
+    return null;
+  }
+  const label = target === 'controlBridge' ? 'bridge' : 'server';
+  const mode = String(raw && raw.mode || '').trim() || null;
+  const reason = String(raw && raw.reason || '').trim() || null;
+  const preRestartPid = normalizeOptionalNumber(raw && (raw.preRestartPid ?? raw.pid));
+  const postRestartPid = normalizeOptionalNumber(raw && raw.postRestartPid);
+  const recordedAt = String(raw && raw.recordedAt || '').trim() || null;
+  const completedAt = String(raw && raw.completedAt || fallbackCompletedAt || '').trim() || null;
+  const pidChanged = preRestartPid !== null && postRestartPid !== null ? preRestartPid !== postRestartPid : null;
+  return {
+    target,
+    label,
+    status,
+    statusLabel: formatRestartStatusLabel(status),
+    reason,
+    reasonLabel: reason ? formatRestartReason(reason) : null,
+    mode,
+    modeLabel: mode ? formatStatusLabel(mode) : null,
+    command: String(raw && raw.command || '').trim() || null,
+    cwd: String(raw && raw.cwd || '').trim() || null,
+    preRestartPid,
+    postRestartPid,
+    recordedAt,
+    completedAt,
+    error: String(raw && raw.error || '').trim() || null,
+    pidChanged,
+    compactLabel: buildRestartCompactLabel(label, status, reason, preRestartPid, postRestartPid),
+  };
+}
+
+function buildRestartCompactLabel(
+  label: string,
+  status: string,
+  reason: string | null,
+  preRestartPid: number | null,
+  postRestartPid: number | null
+) {
+  if (status === 'restarted') {
+    return `${label} pid ${formatPidValue(preRestartPid)} -> ${formatPidValue(postRestartPid)}`;
+  }
+  const lifecycle = preRestartPid === null ? 'pid missing' : `pid ${preRestartPid}`;
+  return `${label} ${formatRestartStatusLabel(status).toLowerCase()}${reason ? ` (${formatRestartReason(reason)})` : ''} | ${lifecycle}`;
+}
+
+function formatRestartStatusLabel(status: string) {
+  if (status === 'restarted') {
+    return 'Restarted';
+  }
+  if (status === 'relaunch-failed') {
+    return 'Relaunch failed';
+  }
+  if (status === 'stale-pid') {
+    return 'Stale PID';
+  }
+  return formatStatusLabel(status);
+}
+
+function formatRestartReason(reason: string) {
+  if (reason === 'missing-metadata') {
+    return 'missing metadata';
+  }
+  if (reason === 'default-lifecycle-metadata') {
+    return 'default lifecycle metadata';
+  }
+  if (reason === 'after-job-completion') {
+    return 'after job completion';
+  }
+  if (reason === 'post-restart-pid-unavailable') {
+    return 'post-restart pid unavailable';
+  }
+  return formatStatusLabel(reason);
+}
+
+function formatPidValue(pid: number | null) {
+  return pid === null ? 'missing' : String(pid);
+}
+
+function normalizeOptionalNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
 }
 
 function formatControlPlaneJobTitle(job: any, jobType: string) {
