@@ -601,14 +601,13 @@
       "reviewRound": 6,
       "status": "approved",
       "createdAt": "2026-04-26T06:40:50.509Z",
-      "updatedAt": "2026-04-26T07:13:52.510Z",
+      "updatedAt": "2026-04-26T07:14:24.371Z",
       "reviewedAt": "2026-04-26T06:50:38.488Z",
       "lastDecision": "approved",
       "lastMergeFailureCode": "mergeability_unknown",
       "lastMergeFailureMessage": "GitHub is still computing mergeability",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T07:01:38.796Z",
-      "lastError": null
+      "dispatchedAt": "2026-04-26T07:01:38.796Z"
     }
   ]
 }
