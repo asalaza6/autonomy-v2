@@ -1528,6 +1528,33 @@
       "completedAt": "2026-04-26T08:06:04.375Z",
       "completionMode": "code",
       "commitSha": "f167030285af34bd2796f6dfffac89756468907e"
+    },
+    {
+      "id": "prd-auto-promote-next-queued-prd-abaf6c-architecture-agent-1",
+      "title": "Implement automatic promotion of the next queued PRD when no active PRD exists",
+      "description": "Add the repo/runtime logic that evaluates PRD state, automatically promotes the next queued PRD into `activePrds` when no active PRD exists, triggers the normal PM planning flow after promotion, and exposes the promotion outcome in control-plane status or activity reporting. Likely touch points include PRD/queue state handling under `src/autonomy-v2/commands/` or `src/sync/`, runtime status/control-plane summaries under `src/autonomy-v2/control-plane/` or `src/server/control-plane/`, and focused tests covering queue promotion and idempotent polling behavior.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-auto-promote-next-queued-prd-abaf6c",
+      "laneKey": "prd-auto-promote-next-queued-prd-abaf6c:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "When evaluation runs with `activePrds` empty and at least one queued PRD present, the first queued PRD by existing queue order is promoted automatically without any manual manager action.",
+        "After auto-promotion completes, the promoted PRD is removed from `queuedPrds`, appears in `activePrds`, and no later queued PRD is promoted in the same evaluation cycle.",
+        "When evaluation runs while an active PRD already exists, the queued PRD list remains unchanged and no auto-promotion occurs.",
+        "The promotion path triggers the same downstream PM/planning behavior expected for an active PRD so the PM agent begins normal planning on the promoted PRD.",
+        "Repeated refreshes or polling over unchanged state are idempotent: once a queued PRD has been promoted, subsequent evaluations do not duplicate the promotion or add a second active PRD.",
+        "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-26T08:15:15.091Z",
+      "updatedAt": "2026-04-26T08:15:15.091Z"
     }
   ]
 }

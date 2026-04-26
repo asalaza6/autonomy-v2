@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-auto-promote-next-queued-prd-abaf6c",
+  "status": "planned",
+  "createdAt": "2026-04-26T08:15:15.171Z",
+  "updatedAt": "2026-04-26T08:15:15.171Z",
+  "plannedTaskIds": [
+    "prd-auto-promote-next-queued-prd-abaf6c-architecture-agent-1"
+  ]
+}
