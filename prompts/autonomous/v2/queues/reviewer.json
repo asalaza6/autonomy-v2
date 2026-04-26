@@ -673,9 +673,9 @@
         "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
       ],
       "reviewRound": 2,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-26T08:20:30.500Z",
-      "updatedAt": "2026-04-26T08:22:21.581Z",
+      "updatedAt": "2026-04-26T08:22:51.988Z",
       "reviewedAt": "2026-04-26T08:22:11.757Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
