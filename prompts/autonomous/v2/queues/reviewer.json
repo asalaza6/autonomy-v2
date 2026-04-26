@@ -711,7 +711,7 @@
     {
       "id": "review-pr-prd-expose-active-pull-request-c879fc-architecture-agent",
       "title": "Review [architecture-agent] Show the active pull request link in the main progress area",
-      "description": "Review pr-prd-expose-active-pull-request-c879fc-architecture-agent for Address review for [architecture-agent] Show the active pull request link in the main progress area",
+      "description": "Review pr-prd-expose-active-pull-request-c879fc-architecture-agent for Show the active pull request link in the main progress area",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-expose-active-pull-request-c879fc-architecture-agent",
@@ -720,17 +720,22 @@
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-expose-active-pull-request-c879fc-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "Blocking on missing focused verification. The diff appears scoped to the active-PR link feature and `npm run typecheck` / `npm run lint` passed, but this changes high-risk control-plane UI and PR-selection behavior without a recorded passing run of the relevant tests.\nFocused test execution is missing for the new control-plane progress and PR-selection coverage in `tests/unit/control-plane-progress-ui.test.ts` and `tests/unit/control-plane-status.test.ts`. Per the project context, control-plane UI/status changes require focused tests, and the wrapper only reported `npm run typecheck` and `npm run lint`. Please run and pass the relevant unit coverage for these new paths, then resubmit."
+        "When the active PRD is in an implementation or review-related state and `pullRequestStatuses` contains a matching valid URL, the main progress area renders a visible clickable pull request control near the existing progress detail or action area.",
+        "The rendered control opens the matching GitHub pull request URL and uses clear copy with pull request context, such as the PR number when available or equivalent open-pull-request wording.",
+        "When the active PRD has no matching pull request with a valid URL, or the active PRD is not in an implementation or review-related state, the main progress area does not render the pull request control.",
+        "If multiple pull request status records exist for the active PRD, the implementation uses deterministic selection logic that prefers the currently active implementation or review pull request over less relevant entries.",
+        "Existing progress metrics, step rendering, and the separate pull request list continue to render and behave as before.",
+        "Automated coverage is added or updated for active pull request selection logic and for progress-section rendering that shows and hides the link based on PRD state and URL presence.",
+        "Verification includes `npm run typecheck` and the relevant unit coverage for the control-plane progress UI or status-selection logic."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "merged",
       "createdAt": "2026-04-26T10:04:29.733Z",
-      "updatedAt": "2026-04-26T10:07:28.537Z",
+      "updatedAt": "2026-04-26T10:07:34.157Z",
       "reviewedAt": "2026-04-26T10:06:35.188Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T10:07:05.558Z",
-      "scopeViolations": []
+      "dispatchedAt": "2026-04-26T10:07:05.558Z"
     }
   ]
 }
