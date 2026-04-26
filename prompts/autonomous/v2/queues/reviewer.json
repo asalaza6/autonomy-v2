@@ -580,7 +580,7 @@
       "sourceTaskId": "prd-expose-visual-restart-proof-1c94e7-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T06:40:50.509Z",
       "updatedAt": "2026-04-26T06:40:50.509Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
@@ -602,7 +602,9 @@
         "If there is no prior PID or no relaunched PID",
         "render that explicitly rather than implying success."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-26T06:40:55.939Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
