@@ -8,6 +8,7 @@ import {
   CHAT_RESPONSE_SCHEMA,
   buildAgentChatPrompt,
   normalizeChatPrdProposal,
+  readProjectContextForChatPrompt,
 } from '../../src/server/control-plane/control-plane-chat.js';
 import {
   buildPrdSubmissionFromProposal,
@@ -41,6 +42,39 @@ test('control plane chat structured output schema supports optional PRD proposal
     }, {}),
     /Set prdProposal to null/
   );
+});
+
+test('control plane chat prompt includes project context for a first-turn conversation', () => {
+  const prompt = buildAgentChatPrompt('alpha', {
+    repoId: 'alpha',
+    conversationId: 'conversation-001',
+    messageId: 'message-001',
+    responseMessageId: 'message-002',
+    prompt: 'Summarize the repo.',
+    history: [],
+  }, {}, '# Project Context\n\nRepo default: dev');
+
+  assert.match(prompt, /Project context:/);
+  assert.match(prompt, /Repo default: dev/);
+  assert.match(prompt, /Conversation history:\n\[\]/);
+  assert.match(prompt, /Current manager message:\nSummarize the repo\./);
+});
+
+test('control plane chat project context loader degrades cleanly when the file is missing', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-context-'));
+
+  await assert.doesNotReject(() => readProjectContextForChatPrompt(rootDir));
+  assert.equal(await readProjectContextForChatPrompt(rootDir), null);
+
+  const degradedPrompt = buildAgentChatPrompt('alpha', {
+    repoId: 'alpha',
+    conversationId: 'conversation-001',
+    messageId: 'message-001',
+    responseMessageId: 'message-002',
+    prompt: 'Summarize the repo.',
+  }, {}, null);
+
+  assert.match(degradedPrompt, /project-context\.md was unavailable/i);
 });
 
 function assertStructuredOutputObjectRequirements(schema: any, path = 'schema') {

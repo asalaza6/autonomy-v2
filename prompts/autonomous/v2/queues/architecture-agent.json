@@ -4056,10 +4056,23 @@
         "Unit coverage is added or updated around `buildAgentChatPrompt` or the equivalent chat job flow to assert project-context inclusion, first-turn empty-history behavior, and missing-file fallback behavior.",
         "Relevant control-plane tests pass, including chat-focused unit tests and `npm run typecheck`."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T11:18:20.509Z",
-      "updatedAt": "2026-04-26T11:18:20.509Z"
+      "updatedAt": "2026-04-26T11:21:20.943Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-inject-project-context-into-control-plane-16b541-architecture-agent",
+      "startedAt": "2026-04-26T11:18:24.450Z",
+      "completedAt": "2026-04-26T11:21:20.943Z",
+      "completionMode": "code",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc984-5e10-7fa0-8764-1205fa1012a9",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T11:21:20.943Z"
+        }
+      },
+      "implementationConversationId": "019dc984-5e10-7fa0-8764-1205fa1012a9"
     }
   ]
 }

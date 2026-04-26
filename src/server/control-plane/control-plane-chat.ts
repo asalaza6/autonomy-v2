@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
 import { runCodexStructured } from '../../codex/cli.js';
 import type { AnyRecord, ControlPlaneAgentChatMessagePayload } from '../../types.js';
 import {
@@ -67,11 +70,12 @@ async function answerControlPlaneAgentChat({
     return buildStubAgentChatAnswer(repoId, payload, snapshot);
   }
 
+  const projectContext = await readProjectContextForChatPrompt(repoRoot);
   const output = await runCodexStructured({
     cwd: repoRoot,
     readOnly: true,
     schema: CHAT_RESPONSE_SCHEMA,
-    prompt: buildAgentChatPrompt(repoId, payload, snapshot),
+    prompt: buildAgentChatPrompt(repoId, payload, snapshot, projectContext),
   });
 
   const answer = String(output && output.answer || '').trim();
@@ -85,7 +89,8 @@ async function answerControlPlaneAgentChat({
 function buildAgentChatPrompt(
   repoId: string,
   payload: ControlPlaneAgentChatMessagePayload,
-  snapshot: AnyRecord
+  snapshot: AnyRecord,
+  projectContext?: string | null
 ) {
   return [
     'You are the read-only repo assistant inside the Autonomy v2 control panel.',
@@ -101,6 +106,11 @@ function buildAgentChatPrompt(
     '',
     `Repo id: ${repoId}`,
     '',
+    'Project context:',
+    projectContext
+      ? projectContext
+      : 'Project context file prompts/autonomous/v2/project-context.md was unavailable. Continue with the repo status and conversation context.',
+    '',
     'Conversation history:',
     JSON.stringify(normalizePromptHistory(payload.history), null, 2),
     '',
@@ -112,6 +122,17 @@ function buildAgentChatPrompt(
     '',
     'Return JSON only with answer and prdProposal fields. Set prdProposal to null unless you are recommending a new PRD.',
   ].join('\n');
+}
+
+async function readProjectContextForChatPrompt(repoRoot: string) {
+  try {
+    const projectContextPath = path.join(repoRoot, 'prompts', 'autonomous', 'v2', 'project-context.md');
+    const content = await fs.readFile(projectContextPath, 'utf8');
+    const normalized = content.trim();
+    return normalized || null;
+  } catch {
+    return null;
+  }
 }
 
 function buildRepoChatContext(snapshot: AnyRecord = {}) {
@@ -211,4 +232,5 @@ export {
   buildAgentChatPrompt,
   buildRepoChatContext,
   normalizeChatPrdProposal,
+  readProjectContextForChatPrompt,
 };
