@@ -2026,7 +2026,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-selectable-queued-prd-a6fbed-architecture-agent",
       "createdAt": "2026-04-26T10:24:20.100Z",
-      "updatedAt": "2026-04-26T10:25:16.425Z",
+      "updatedAt": "2026-04-26T10:25:16.491Z",
       "startedAt": "2026-04-26T10:24:20.100Z",
       "prId": "pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent",
       "completedAt": "2026-04-26T10:25:16.425Z",
@@ -2039,7 +2039,8 @@
           "updatedAt": "2026-04-26T10:25:16.425Z"
         }
       },
-      "implementationConversationId": "019dc951-a0d0-7640-9d45-de228b4b08a6"
+      "implementationConversationId": "019dc951-a0d0-7640-9d45-de228b4b08a6",
+      "commitSha": "1887867996b3c420734d81f12e1b8b4972d34196"
     }
   ]
 }
