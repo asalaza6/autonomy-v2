@@ -4420,6 +4420,35 @@
       "completedAt": "2026-04-26T22:34:28.809Z",
       "completionMode": "code",
       "commitSha": "0d4095cfa24d48c17cf783eedc2435785914500f"
+    },
+    {
+      "id": "prd-make-control-plane-pr-and-027e4d-architecture-agent-1",
+      "title": "Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Update the control-plane status/reconciliation flow so pull request state comes from live GitHub data when available, snapshot assembly remains read-only with respect to canonical PR status, local task-derived inference is preserved as separate metadata, and active PRD selection continues through implementation/review until linked pull requests are actually resolved upstream. Likely touch points include PR and PRD reconstruction under `src/sync/`, runtime snapshot assembly under `src/autonomy-v2/control-plane/`, any related control-plane server/status surfaces under `src/server/control-plane/`, and focused unit or smoke coverage in `tests/unit/` and relevant integration-style fixtures.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Status reconciliation uses live GitHub pull request state, when available, as the canonical source for whether a pull request is open, closed, or merged, and preserves degraded behavior when GitHub auth or queries are unavailable.",
+        "Status snapshot generation does not rewrite canonical pull request status to `merged` or any other terminal state solely because linked local tasks appear complete, terminal, or no longer active.",
+        "Any local task-derived inference about a pull request's likely state is kept in separate snapshot metadata from canonical PR state so downstream UI/status consumers can show both without conflation.",
+        "A pull request that remains open on GitHub continues to appear in `pullRequestStatuses` even when all linked local tasks are terminal, including scenarios equivalent to the reported PR #28 drift case.",
+        "PRDs with work in implementation or review remain included in active PRD status until all associated pull requests are actually merged or closed upstream, rather than dropping out based only on active selection or local task completion heuristics.",
+        "The snapshot or related status payload exposes reconciliation source and reasoning metadata for PR and PRD state, including labels or equivalents for `remote`, `inferred`, and `stale`, so a consumer can explain why an item is considered active, resolved, blocked, or stale.",
+        "Drift detection flags disagreements between inferred local state and remote GitHub state for the same pull request without mutating the canonical remote-derived state, and the disagreement is surfaced through logs, snapshot metadata, or equivalent observable status output.",
+        "Automated coverage includes unit tests for open remote PR plus terminal local tasks, closed remote PR, merged remote PR, and missing-auth fallback; snapshot or status-service tests proving implementation/review PRDs remain active and open PRs remain listed; and an integration-style fixture covering the synthetic open-PR scenario described in the PRD. Run `npm run typecheck` and the relevant focused control-plane/sync test targets updated by the change."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-26T22:37:33.815Z",
+      "updatedAt": "2026-04-26T22:37:33.815Z"
     }
   ]
 }

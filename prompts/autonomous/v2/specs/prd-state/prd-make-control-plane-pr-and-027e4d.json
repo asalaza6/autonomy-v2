@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-make-control-plane-pr-and-027e4d",
+  "status": "planned",
+  "createdAt": "2026-04-26T22:37:33.902Z",
+  "updatedAt": "2026-04-26T22:37:33.902Z",
+  "plannedTaskIds": [
+    "prd-make-control-plane-pr-and-027e4d-architecture-agent-1"
+  ]
+}
