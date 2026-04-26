@@ -4094,7 +4094,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-inject-project-context-into-control-plane-16b541-architecture-agent",
       "createdAt": "2026-04-26T11:23:10.880Z",
-      "updatedAt": "2026-04-26T11:23:48.319Z",
+      "updatedAt": "2026-04-26T11:23:48.382Z",
       "startedAt": "2026-04-26T11:23:10.880Z",
       "prId": "pr-prd-inject-project-context-into-control-plane-16b541-architecture-agent",
       "conversationReferences": {
@@ -4107,7 +4107,8 @@
       },
       "implementationConversationId": "019dc984-5e10-7fa0-8764-1205fa1012a9",
       "completedAt": "2026-04-26T11:23:48.319Z",
-      "completionMode": "noop"
+      "completionMode": "noop",
+      "commitSha": "638aaa6cff0b7f38c7f2bbee317120899ff68f80"
     }
   ]
 }
