@@ -1354,13 +1354,24 @@
       "acceptance": [
         "`npm run typecheck` is failing, so the required lane check is not satisfied and this branch is not merge-safe for `dev`. The current failure is in the restart-evidence changes around deferred restart launch results.\nBlocking: the required `npm run typecheck` check failed. TypeScript reports that the failed-result objects passed to `DeferredRestartLaunchResult` are missing the required `completedAt` field in [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-package-update.ts:580) and [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-package-update.ts:638). Update the deferred restart launch result construction so every path satisfies the `DeferredRestartLaunchResult` contract, then rerun `npm run typecheck`.\nBlocking checks failed: npm run typecheck"
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
       "createdAt": "2026-04-26T06:47:56.030Z",
-      "updatedAt": "2026-04-26T07:00:27.881Z",
+      "updatedAt": "2026-04-26T07:01:17.855Z",
       "startedAt": "2026-04-26T07:00:27.881Z",
-      "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent"
+      "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
+      "completedAt": "2026-04-26T07:01:17.855Z",
+      "completionMode": "noop",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc896-f84a-7821-ab54-e455eca4540e",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T07:01:17.855Z"
+        }
+      },
+      "implementationConversationId": "019dc896-f84a-7821-ab54-e455eca4540e"
     }
   ]
 }
