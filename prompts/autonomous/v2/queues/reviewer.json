@@ -848,7 +848,7 @@
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-show-associated-pull-request-5ed56d-architecture-agent",
-      "sourceTaskId": "architecture-agent-followup-pr-prd-show-associated-pull-request-5ed56d-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-show-associated-pull-request-5ed56d-architecture-agent-2",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
       "baseBranch": "dev",
@@ -862,9 +862,9 @@
         "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
       ],
       "reviewRound": 3,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:44:49.716Z",
+      "updatedAt": "2026-04-26T21:45:20.127Z",
       "reviewedAt": "2026-04-26T21:44:33.624Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
@@ -874,7 +874,7 @@
           "conversationId": "019dcbbf-5388-7e50-8713-ff0a627b9928",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-26T21:44:49.716Z"
+          "updatedAt": "2026-04-26T21:45:20.127Z"
         }
       }
     }
