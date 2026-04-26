@@ -856,13 +856,13 @@
         "Blocking on verification. The diff is scoped correctly and the required `npm run typecheck`/`npm run lint` checks passed, but this change modifies high-risk control-plane status/history shaping and History detail UI without evidence that the focused control-plane tests were actually run.\nMissing merge-blocking verification for the changed control-plane paths. This PR updates history snapshot shaping in `src/autonomy-v2/commands/shared-prds.ts` and History detail rendering in `src/server/control-plane/control-plane-client.tsx`, and the acceptance criteria explicitly require relevant focused tests in addition to `npm run typecheck`. The wrapper results only show `npm run typecheck` and `npm run lint`, so please run and report the focused tests that cover this behavior, at minimum the updated suites in `tests/unit/control-plane-status.test.ts`, `tests/unit/control-plane-dashboard.test.ts`, and `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent narrower command that executes those cases)."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T21:40:37.882Z",
       "updatedAt": "2026-04-26T21:43:20.711Z",
       "reviewedAt": "2026-04-26T21:42:18.923Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T21:40:41.301Z",
+      "dispatchedAt": "2026-04-26T21:43:22.646Z",
       "scopeViolations": []
     }
   ]
