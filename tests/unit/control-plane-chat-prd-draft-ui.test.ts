@@ -607,7 +607,7 @@ class FakeButtonElement {
   closest(_selector: string) {
     const match = _selector.match(/\[data-action="([^"]+)"\]/);
     if (match && this.dataset.action === match[1]) {
-      return this;
+      return { dataset: this.dataset };
     }
     return null;
   }
