@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4574,11 +4575,11 @@
       "acceptance": [
         "Cannot approve for merge into `dev`. The deterministic merge blockers are green (`npm run typecheck`, `npm run lint`), and the current diff looks aligned with the requested reconciliation fix, but merge-blocking verification is still incomplete for this high-risk control-plane/sync change. The PR changes authoritative PR/PRD reconciliation in `src/sync/review-reconciliation.ts`, `src/autonomy-v2/commands/shared-prds.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, and related status surfaces, while adding targeted coverage in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`. There is still no evidence that the focused tests covering those new cases were actually executed. Before approval, run and report the relevant focused suites, at minimum `npm run test:control-plane-history` and a focused run that includes `dist/tests/unit/review-reconciliation.test.js` after build.\nMissing merge-blocking focused verification. This PR changes high-risk control-plane/sync status reconciliation behavior and adds new assertions in `tests/unit/control-plane-status.test.ts` and `tests/unit/review-reconciliation.test.ts`, but the provided deterministic results only show `npm run typecheck` and `npm run lint`. Run and report the focused control-plane history/status suite (`npm run test:control-plane-history`) plus the new reconciliation unit coverage (for example `npm run build && node --test dist/tests/unit/review-reconciliation.test.js`) before this is safe to merge."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "createdAt": "2026-04-26T22:56:52.793Z",
-      "updatedAt": "2026-04-26T22:56:52.793Z",
+      "updatedAt": "2026-04-26T22:57:32.093Z",
       "startedAt": "2026-04-26T22:56:52.793Z",
       "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "conversationReferences": {
@@ -4586,11 +4587,12 @@
           "conversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-26T22:56:52.793Z"
+          "updatedAt": "2026-04-26T22:57:32.093Z"
         }
       },
-      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6"
+      "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
+      "completedAt": "2026-04-26T22:57:32.093Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
