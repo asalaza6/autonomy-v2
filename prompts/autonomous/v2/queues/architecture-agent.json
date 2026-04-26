@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -2822,11 +2823,11 @@
       "acceptance": [
         "Blocking on missing focused verification. Against `origin/dev`, the diff remains lane-scoped and the deterministic blockers passed (`npm run typecheck`, `npm run lint`), but this PR still changes high-risk control-plane UI behavior in `src/server/control-plane/control-plane-page.tsx` and updates the related assertions in `tests/unit/control-plane-chat-prd-draft-ui.test.ts` without any recorded passing run for that focused test file. Per `prompts/autonomous/v2/project-context.md`, control-plane UI changes require focused automated verification before merge.\nMissing merge-blocking focused test execution for the PRD review modal change. The responsive modal shell/card and internal scroll behavior changed in `src/server/control-plane/control-plane-page.tsx:1002` and the targeted coverage was updated in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:20` and `tests/unit/control-plane-chat-prd-draft-ui.test.ts:70`, but the branch still only records `npm run typecheck` and `npm run lint`. Please run and report a passing focused test command covering `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent focused control-plane test target) before this can merge."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "createdAt": "2026-04-26T10:46:33.364Z",
-      "updatedAt": "2026-04-26T10:46:33.364Z",
+      "updatedAt": "2026-04-26T10:46:58.314Z",
       "startedAt": "2026-04-26T10:46:33.364Z",
       "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
       "conversationReferences": {
@@ -2834,11 +2835,12 @@
           "conversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-26T10:46:33.364Z"
+          "updatedAt": "2026-04-26T10:46:58.314Z"
         }
       },
-      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7"
+      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7",
+      "completedAt": "2026-04-26T10:46:58.314Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
