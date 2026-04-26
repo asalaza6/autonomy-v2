@@ -919,10 +919,6 @@
       "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "sourceTaskId": "prd-make-control-plane-pr-and-027e4d-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-26T22:46:25.731Z",
-      "updatedAt": "2026-04-26T22:46:25.731Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -935,9 +931,12 @@
         "Drift detection flags disagreements between inferred local state and remote GitHub state for the same pull request without mutating the canonical remote-derived state, and the disagreement is surfaced through logs, snapshot metadata, or equivalent observable status output.",
         "Automated coverage includes unit tests for open remote PR plus terminal local tasks, closed remote PR, merged remote PR, and missing-auth fallback; snapshot or status-service tests proving implementation/review PRDs remain active and open PRs remain listed; and an integration-style fixture covering the synthetic open-PR scenario described in the PRD. Run `npm run typecheck` and the relevant focused control-plane/sync test targets updated by the change."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-26T22:46:29.257Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-26T22:46:25.731Z",
+      "updatedAt": "2026-04-26T22:46:41.762Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-26T22:46:29.257Z"
     }
   ]
 }
