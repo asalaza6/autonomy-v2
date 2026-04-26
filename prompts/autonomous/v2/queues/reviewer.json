@@ -862,13 +862,11 @@
         "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
       ],
       "reviewRound": 6,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:48:24.310Z",
+      "updatedAt": "2026-04-26T21:50:25.761Z",
       "reviewedAt": "2026-04-26T21:47:49.043Z",
       "lastDecision": "approved",
-      "lastMergeFailureCode": "mergeability_unknown",
-      "lastMergeFailureMessage": "GitHub is still computing mergeability",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-26T21:47:31.361Z",
       "conversationReferences": {
@@ -878,7 +876,8 @@
           "role": "review",
           "updatedAt": "2026-04-26T21:48:24.310Z"
         }
-      }
+      },
+      "mergedAt": "2026-04-26T21:50:25.761Z"
     }
   ]
 }
