@@ -675,13 +675,14 @@
       "reviewRound": 4,
       "status": "approved",
       "createdAt": "2026-04-26T08:20:30.500Z",
-      "updatedAt": "2026-04-26T09:10:40.802Z",
+      "updatedAt": "2026-04-26T09:13:22.763Z",
       "reviewedAt": "2026-04-26T08:25:27.631Z",
       "lastDecision": "approved",
-      "lastMergeFailureCode": "mergeability_unknown",
-      "lastMergeFailureMessage": "GitHub is still computing mergeability",
+      "lastMergeFailureCode": "merge_rejected",
+      "lastMergeFailureMessage": "ERROR: Timed out acquiring autonomy state lock at /Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/state-lock",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T08:30:28.547Z"
+      "dispatchedAt": "2026-04-26T08:30:28.547Z",
+      "lastError": null
     }
   ]
 }
