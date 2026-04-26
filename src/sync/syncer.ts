@@ -158,6 +158,12 @@ function promoteQueuedPrdSpec(rootDir: string, integrationBranch: string, queued
   });
 }
 
+function compareQueuedPrdSpecsForPromotion(left: AnyRecord, right: AnyRecord) {
+  const leftTimestamp = String(left && left.spec && (left.spec.createdAt || left.spec.updatedAt) || '');
+  const rightTimestamp = String(right && right.spec && (right.spec.createdAt || right.spec.updatedAt) || '');
+  return (Date.parse(leftTimestamp) || 0) - (Date.parse(rightTimestamp) || 0);
+}
+
 function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: string, options: AnyRecord = {}) {
   const paths = getSyncPaths(rootDir);
   const fetchStartedAt = Date.now();
@@ -241,7 +247,10 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
   });
 
   if (specFiles.length === 0 && options.skipQueuePromotion !== true) {
-    const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued);
+    const queuedSpecToPromote = remoteSpecs
+      .filter((remoteSpec) => remoteSpec.isQueued)
+      .slice()
+      .sort(compareQueuedPrdSpecsForPromotion)[0];
     if (queuedSpecToPromote) {
       promoteQueuedPrdSpec(rootDir, integrationBranch, queuedSpecToPromote);
       const queuedPromotion = {
