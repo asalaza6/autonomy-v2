@@ -1997,10 +1997,14 @@
         "Add or update dashboard or control-plane tests proving the queued PRD fields required by the Main detail view are present in the status/dashboard contract.",
         "Verification includes `npm run typecheck` and the focused unit tests for control-plane client and dashboard behavior affected by this change."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T10:18:31.888Z",
-      "updatedAt": "2026-04-26T10:18:31.888Z"
+      "updatedAt": "2026-04-26T10:23:22.622Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-selectable-queued-prd-a6fbed-architecture-agent",
+      "startedAt": "2026-04-26T10:18:35.158Z",
+      "completedAt": "2026-04-26T10:23:22.622Z",
+      "completionMode": "code"
     }
   ]
 }

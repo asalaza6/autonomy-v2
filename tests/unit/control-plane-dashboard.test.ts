@@ -56,7 +56,25 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
                 title: 'Queued PRD',
                 status: 'queued',
                 isQueued: true,
+                specification: `## Problem
+Queued work needs a selectable detail view.
+
+## Acceptance Criteria
+- Main shows queued PRD details without navigation
+- Selection survives refresh until queue membership changes
+
+## Verification
+- Run queued PRD UI tests
+- Run dashboard contract tests
+
+## Source Chat Message
+Repo: alpha
+Conversation: chat-queued
+Manager message: msg-manager-queued
+Agent message: msg-agent-queued
+Created: 2026-04-01T12:01:00.000Z`,
                 requirements: ['one'],
+                createdAt: '2026-04-01T12:01:00.000Z',
                 updatedAt: '2026-04-01T12:09:00.000Z',
               },
             ],
@@ -184,6 +202,22 @@ Created: 2026-04-01T11:59:00.000Z`,
     ['done', 'active', 'pending']
   );
   assert.equal(dashboard.repos[0].queuedPrds[0].title, 'Queued PRD');
+  assert.equal(dashboard.repos[0].queuedPrds[0].problem, 'Queued work needs a selectable detail view.');
+  assert.deepEqual(dashboard.repos[0].queuedPrds[0].acceptanceCriteria, [
+    'Main shows queued PRD details without navigation',
+    'Selection survives refresh until queue membership changes',
+  ]);
+  assert.deepEqual(dashboard.repos[0].queuedPrds[0].verification, [
+    'Run queued PRD UI tests',
+    'Run dashboard contract tests',
+  ]);
+  assert.deepEqual(dashboard.repos[0].queuedPrds[0].sourceChat, {
+    repoId: 'alpha',
+    conversationId: 'chat-queued',
+    managerMessageId: 'msg-manager-queued',
+    agentMessageId: 'msg-agent-queued',
+    createdAt: '2026-04-01T12:01:00.000Z',
+  });
   assert.equal(dashboard.repos[0].prdHistory[0].title, 'Finished PRD');
   assert.match(dashboard.repos[0].prdHistory[0].specification, /Ship the completed workflow/);
   assert.deepEqual(dashboard.repos[0].prdHistory[0].sourceChat, {

@@ -48,6 +48,7 @@ function selectPrdHistory(snapshot: any, prds: any[] = []) {
 
 function describePrd(prd: any) {
   const status = String(prd && prd.status || 'queued');
+  const structuredContent = extractStructuredPrdContent(prd);
   const plannedTaskCount = Array.isArray(prd && prd.plannedTaskIds)
     ? prd.plannedTaskIds.length
     : Array.isArray(prd && prd.tasks)
@@ -109,8 +110,11 @@ function describePrd(prd: any) {
     status,
     stateLabel,
     detail: details.join(' | '),
-    specification: prd && prd.specification ? String(prd.specification) : '',
+    problem: structuredContent.problem,
+    specification: structuredContent.specification,
     requirements: Array.isArray(prd && prd.requirements) ? prd.requirements.map((entry) => String(entry || '')) : [],
+    acceptanceCriteria: structuredContent.acceptanceCriteria,
+    verification: structuredContent.verification,
     tasks: Array.isArray(prd && prd.tasks)
       ? prd.tasks.map((task) => ({
         id: String(task && task.id || ''),
@@ -143,6 +147,76 @@ function describePrd(prd: any) {
       : null,
     ...(sourceChat ? { sourceChat } : {}),
   };
+}
+
+function extractStructuredPrdContent(prd: any) {
+  const specification = prd && prd.specification ? String(prd.specification) : '';
+  const sections = parseStructuredPrdSections(specification);
+  return {
+    problem: cleanStructuredText(prd && prd.problem) || cleanStructuredText(sections.problem?.join('\n\n')) || '',
+    specification,
+    acceptanceCriteria: normalizeStructuredList(
+      Array.isArray(prd && prd.acceptanceCriteria) ? prd.acceptanceCriteria : sections.acceptanceCriteria
+    ),
+    verification: normalizeStructuredList(
+      Array.isArray(prd && prd.verification) ? prd.verification : sections.verification
+    ),
+  };
+}
+
+function parseStructuredPrdSections(specification: string) {
+  const text = String(specification || '');
+  if (!text.trim()) {
+    return {};
+  }
+
+  const sections: Record<string, string[]> = {};
+  let currentSection = '';
+  for (const rawLine of text.split(/\r?\n/)) {
+    const headingMatch = rawLine.match(/^\s{0,3}#{1,6}\s+(.+?)\s*$/);
+    if (headingMatch) {
+      currentSection = normalizeStructuredSectionHeading(headingMatch[1]);
+      if (currentSection && !sections[currentSection]) {
+        sections[currentSection] = [];
+      }
+      continue;
+    }
+    if (!currentSection) {
+      continue;
+    }
+    sections[currentSection].push(rawLine);
+  }
+  return sections;
+}
+
+function normalizeStructuredSectionHeading(value: string) {
+  const normalized = String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  if (normalized === 'problem') {
+    return 'problem';
+  }
+  if (normalized === 'acceptance criteria') {
+    return 'acceptanceCriteria';
+  }
+  if (normalized === 'verification') {
+    return 'verification';
+  }
+  return '';
+}
+
+function cleanStructuredText(value: unknown) {
+  return String(value || '').trim();
+}
+
+function normalizeStructuredList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => String(entry || '').replace(/^\s*[-*]\s*/, '').trim())
+    .filter(Boolean);
 }
 
 function buildPrdRunSummary(activePrd: any, queuedPrds: any[] = [], pullRequestStatuses: any[] = []) {
