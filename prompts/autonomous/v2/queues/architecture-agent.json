@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -2352,6 +2351,39 @@
       "completedAt": "2026-04-26T10:39:49.015Z",
       "completionMode": "noop",
       "commitSha": "2971fb37ebc19e422b259583839e27aec4ca780f"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-6",
+      "title": "Address review for [architecture-agent] Make the chat PRD review modal responsive and scroll-safe across supported viewports",
+      "description": "Blocking on missing focused verification. Against `origin/dev`, the diff remains lane-scoped and the deterministic blockers passed (`npm run typecheck`, `npm run lint`), but this PR still changes high-risk control-plane UI behavior in `src/server/control-plane/control-plane-page.tsx` and updates the related assertions in `tests/unit/control-plane-chat-prd-draft-ui.test.ts` without any recorded passing run for that focused test file. Per `prompts/autonomous/v2/project-context.md`, control-plane UI changes require focused automated verification before merge.\nMissing merge-blocking focused test execution for the PRD review modal change. The responsive modal shell/card and internal scroll behavior changed in `src/server/control-plane/control-plane-page.tsx:1002` and the targeted coverage was updated in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:20` and `tests/unit/control-plane-chat-prd-draft-ui.test.ts:70`, but the branch still only records `npm run typecheck` and `npm run lint`. Please run and report a passing focused test command covering `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent focused control-plane test target) before this can merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-fix-chat-prd-review-9f095c",
+      "laneKey": "prd-fix-chat-prd-review-9f095c:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on missing focused verification. Against `origin/dev`, the diff remains lane-scoped and the deterministic blockers passed (`npm run typecheck`, `npm run lint`), but this PR still changes high-risk control-plane UI behavior in `src/server/control-plane/control-plane-page.tsx` and updates the related assertions in `tests/unit/control-plane-chat-prd-draft-ui.test.ts` without any recorded passing run for that focused test file. Per `prompts/autonomous/v2/project-context.md`, control-plane UI changes require focused automated verification before merge.\nMissing merge-blocking focused test execution for the PRD review modal change. The responsive modal shell/card and internal scroll behavior changed in `src/server/control-plane/control-plane-page.tsx:1002` and the targeted coverage was updated in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:20` and `tests/unit/control-plane-chat-prd-draft-ui.test.ts:70`, but the branch still only records `npm run typecheck` and `npm run lint`. Please run and report a passing focused test command covering `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent focused control-plane test target) before this can merge."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
+      "createdAt": "2026-04-26T10:39:57.666Z",
+      "updatedAt": "2026-04-26T10:39:57.666Z",
+      "startedAt": "2026-04-26T10:39:57.666Z",
+      "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T10:39:57.666Z"
+        }
+      },
+      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
