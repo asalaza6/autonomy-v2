@@ -864,9 +864,11 @@
       "reviewRound": 6,
       "status": "approved",
       "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:48:20.169Z",
+      "updatedAt": "2026-04-26T21:48:24.310Z",
       "reviewedAt": "2026-04-26T21:47:49.043Z",
       "lastDecision": "approved",
+      "lastMergeFailureCode": "mergeability_unknown",
+      "lastMergeFailureMessage": "GitHub is still computing mergeability",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-26T21:47:31.361Z",
       "conversationReferences": {
@@ -874,12 +876,9 @@
           "conversationId": "019dcbbf-5388-7e50-8713-ff0a627b9928",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-26T21:47:52.632Z"
+          "updatedAt": "2026-04-26T21:48:24.310Z"
         }
-      },
-      "lastMergeFailureCode": "mergeability_unknown",
-      "lastMergeFailureMessage": "GitHub is still computing mergeability",
-      "lastError": null
+      }
     }
   ]
 }
