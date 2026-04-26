@@ -850,10 +850,6 @@
       "prId": "pr-prd-show-associated-pull-request-5ed56d-architecture-agent",
       "sourceTaskId": "prd-show-associated-pull-request-5ed56d-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:40:37.882Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -865,9 +861,12 @@
         "Add or update focused tests covering history snapshot shaping with and without associated pull request metadata and the conditional History detail rendering of the pull-request action.",
         "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-26T21:40:41.301Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-26T21:40:37.882Z",
+      "updatedAt": "2026-04-26T21:40:48.103Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-26T21:40:41.301Z"
     }
   ]
 }
