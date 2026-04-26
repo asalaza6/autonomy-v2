@@ -943,6 +943,7 @@ const styles = `
   .chat-prd-review-summary {
     display: grid;
     gap: 14px;
+    min-width: 0;
   }
 
   .chat-prd-review-hero {
@@ -1001,6 +1002,57 @@ const styles = `
     margin: 0;
   }
 
+  .chat-prd-review-modal-shell {
+    padding: clamp(12px, 3vw, 24px);
+    align-items: center;
+    justify-items: center;
+    overflow: auto;
+  }
+
+  .chat-prd-review-modal-card {
+    width: min(880px, 100%);
+    max-height: min(100dvh - clamp(24px, 6vw, 48px), 100%);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 0;
+    padding: clamp(16px, 3vw, 24px);
+    overflow: hidden;
+  }
+
+  .chat-prd-review-modal-head {
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(31, 26, 21, 0.08);
+  }
+
+  .chat-prd-review-modal-head > div {
+    min-width: 0;
+  }
+
+  .chat-prd-review-modal-content {
+    min-height: 0;
+    overflow: auto;
+    padding: 16px 4px 16px 0;
+    margin-right: -4px;
+  }
+
+  .chat-prd-review-modal-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    padding-top: 16px;
+    border-top: 1px solid rgba(31, 26, 21, 0.08);
+  }
+
+  .chat-prd-review-modal-actions > * {
+    flex: 0 1 auto;
+  }
+
+  .chat-prd-review-modal-actions button {
+    min-height: 44px;
+  }
+
   .chat-form {
     display: grid;
     gap: 10px;
@@ -1013,6 +1065,34 @@ const styles = `
   @media (max-width: 980px) {
     .metric-grid, .raw-grid, .grid, .history-layout, .progress-steps, .chat-prd-review-grid, .main-queue-layout { grid-template-columns: 1fr; }
     .main-stage-actions, .progress-head, .progress-foot { align-items: start; }
+  }
+
+  @media (max-width: 640px) {
+    .chat-prd-review-modal-shell {
+      padding: 12px;
+      align-items: start;
+    }
+
+    .chat-prd-review-modal-card {
+      width: 100%;
+      max-height: calc(100dvh - 24px);
+      border-radius: 20px;
+    }
+
+    .chat-prd-review-modal-head {
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .chat-prd-review-modal-actions {
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
+
+    .chat-prd-review-modal-actions > * {
+      flex-basis: auto;
+      width: 100%;
+    }
   }
 `;
 
@@ -1315,9 +1395,14 @@ function ControlPlanePage(props: ControlPlanePageProps) {
         </main>
 
         {isManager ? null : (
-          <div id="chat-prd-review-modal" className="modal-shell" hidden>
-            <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="chat-prd-review-heading">
-              <div className="modal-head">
+          <div id="chat-prd-review-modal" className="modal-shell chat-prd-review-modal-shell" hidden>
+            <div
+              className="modal-card chat-prd-review-modal-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="chat-prd-review-heading"
+            >
+              <div className="modal-head chat-prd-review-modal-head">
                 <div>
                   <div className="eyebrow">Chat PRD review</div>
                   <h2 id="chat-prd-review-heading">Review proposed PRD</h2>
@@ -1325,8 +1410,8 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                 </div>
                 <button type="button" className="secondary" id="close-chat-prd-review">Close</button>
               </div>
-              <div id="chat-prd-review-content" className="chat-prd-review-summary" />
-              <div className="row body-note">
+              <div id="chat-prd-review-content" className="chat-prd-review-summary chat-prd-review-modal-content" />
+              <div className="chat-prd-review-modal-actions">
                 <button type="button" className="secondary" id="back-chat-prd-review">Back to chat</button>
                 <button type="button" className="primary" id="submit-chat-prd-review">Submit</button>
               </div>
