@@ -376,6 +376,7 @@ export interface RuntimeState extends AnyRecord {
   workers: Record<string, WorkerRuntime>;
   backlogGraceConsumed?: boolean;
   backlogGraceUntil?: string;
+  lastPrdPromotion?: AnyRecord | null;
 }
 
 export interface TraceContext extends AnyRecord {

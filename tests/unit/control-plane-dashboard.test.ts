@@ -143,6 +143,17 @@ Created: 2026-04-01T11:59:00.000Z`,
             declaredVersion: '^1.4.45',
             installedVersion: '1.4.45',
           },
+          runtime: {
+            workers: {},
+            lastPrdPromotion: {
+              id: 'prd-active-001',
+              title: 'Active PRD',
+              source: 'prompts/autonomous/v2/specs/prds/queue/prd-active-001.json',
+              destination: 'prompts/autonomous/v2/specs/prds/prd-active-001.json',
+              promotedAt: '2026-04-01T12:07:00.000Z',
+              trigger: 'automatic-queue-promotion',
+            },
+          },
           branchLockCount: 1,
         },
       },
@@ -159,7 +170,10 @@ Created: 2026-04-01T11:59:00.000Z`,
   assert.equal(dashboard.bridgeHeartbeat.status, 'stale');
   assert.match(dashboard.repos[0].overview, /Active PRD/);
   assert.match(dashboard.repos[0].overview, /queued PRD/i);
+  assert.match(dashboard.repos[0].overview, /Auto-promoted Active PRD/);
   assert.equal(dashboard.repos[0].activePrd.title, 'Active PRD');
+  assert.equal(dashboard.repos[0].lastPrdPromotion.id, 'prd-active-001');
+  assert.equal(dashboard.repos[0].lastPrdPromotion.title, 'Active PRD');
   assert.equal(dashboard.repos[0].activePrd.plannedTaskCount, 3);
   assert.equal(dashboard.repos[0].activePrd.completedTaskCount, 1);
   assert.equal(dashboard.repos[0].activePrd.remainingTaskCount, 2);

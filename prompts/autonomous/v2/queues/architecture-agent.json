@@ -1551,10 +1551,14 @@
         "Repeated refreshes or polling over unchanged state are idempotent: once a queued PRD has been promoted, subsequent evaluations do not duplicate the promotion or add a second active PRD.",
         "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T08:15:15.091Z",
-      "updatedAt": "2026-04-26T08:15:15.091Z"
+      "updatedAt": "2026-04-26T08:20:29.398Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
+      "startedAt": "2026-04-26T08:15:17.264Z",
+      "completedAt": "2026-04-26T08:20:29.398Z",
+      "completionMode": "code"
     }
   ]
 }

@@ -617,6 +617,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const activePrdSummary = activePrd ? describePrd(activePrd) : null;
   const queuedPrds = selectQueuedPrds(prds).map(describePrd);
   const prdHistory = selectPrdHistory(snapshot, prds).map(describePrd);
+  const lastPrdPromotion = buildLastPrdPromotionSummary(snapshot.runtime && snapshot.runtime.lastPrdPromotion, prds);
   const agentStatuses = Array.isArray(snapshot.agentStatuses) ? snapshot.agentStatuses : [];
   const pullRequestStatuses = Array.isArray(snapshot.pullRequestStatuses) ? snapshot.pullRequestStatuses : [];
   const runningAgents = agentStatuses.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
@@ -628,6 +629,9 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   overviewParts.push(queuedPrds.length > 0
     ? `${queuedPrds.length} queued PRD${queuedPrds.length === 1 ? '' : 's'}`
     : 'No queued PRDs');
+  if (lastPrdPromotion) {
+    overviewParts.push(`Auto-promoted ${lastPrdPromotion.title}`);
+  }
   if (runningAgents > 0) {
     overviewParts.push(`${runningAgents} agent${runningAgents === 1 ? '' : 's'} running`);
   }
@@ -657,6 +661,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     overview: overviewParts.join(' | '),
     activePrd: activePrdSummary,
     queuedPrds,
+    lastPrdPromotion,
     prdRun: buildPrdRunSummary(activePrdSummary, queuedPrds, pullRequestStatuses),
     prdHistory,
     agentStatuses,
@@ -667,6 +672,28 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     freshnessStatusLabel: freshness.statusLabel,
     freshnessDetail: freshness.detail,
     freshnessUpdatedAt: freshness.updatedAt,
+  };
+}
+
+function buildLastPrdPromotionSummary(lastPrdPromotion: any, prds: any[] = []) {
+  if (!lastPrdPromotion || !lastPrdPromotion.id) {
+    return null;
+  }
+  const promotedPrd = (prds || []).find((prd) => String(prd && prd.id || '') === String(lastPrdPromotion.id)) || null;
+  const title = String(
+    lastPrdPromotion.title
+    || (promotedPrd && promotedPrd.title)
+    || lastPrdPromotion.id
+    || 'Queued PRD'
+  );
+  return {
+    id: String(lastPrdPromotion.id),
+    title,
+    source: lastPrdPromotion.source ? String(lastPrdPromotion.source) : null,
+    destination: lastPrdPromotion.destination ? String(lastPrdPromotion.destination) : null,
+    promotedAt: lastPrdPromotion.promotedAt ? String(lastPrdPromotion.promotedAt) : null,
+    trigger: lastPrdPromotion.trigger ? String(lastPrdPromotion.trigger) : 'automatic-queue-promotion',
+    detail: `Automatically promoted from queue${title ? `: ${title}` : ''}.`,
   };
 }
 
@@ -749,6 +776,7 @@ export {
   formatStatusLabel,
   formatTimestamp,
   selectActivePrd,
+  buildLastPrdPromotionSummary,
   selectQueuedPrds,
   summarizeControlPlaneJob,
   summarizeRepoStatus,

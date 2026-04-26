@@ -184,6 +184,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
     skipped: [],
     invalid: [],
     fetchMessage: fetchResult.message || '',
+    queuedPromotion: null,
   };
 
   if (!ref) {
@@ -243,15 +244,24 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
     const queuedSpecToPromote = remoteSpecs.find((remoteSpec) => remoteSpec.isQueued);
     if (queuedSpecToPromote) {
       promoteQueuedPrdSpec(rootDir, integrationBranch, queuedSpecToPromote);
-      emitSyncProgress(options, 'sync:specs:queue:promoted', {
-        id: queuedSpecToPromote.spec.id,
+      const queuedPromotion = {
+        id: String(queuedSpecToPromote.spec.id),
+        title: String(queuedSpecToPromote.spec.title || queuedSpecToPromote.spec.id || ''),
         source: queuedSpecToPromote.relativePath,
         destination: buildPrdSpecRelativePath(queuedSpecToPromote.spec.id),
+        promotedAt: new Date().toISOString(),
+      };
+      emitSyncProgress(options, 'sync:specs:queue:promoted', {
+        ...queuedPromotion,
       });
-      return syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, {
+      const promotionResult = syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, {
         ...options,
         skipQueuePromotion: true,
       });
+      return {
+        ...promotionResult,
+        queuedPromotion,
+      };
     }
   }
 

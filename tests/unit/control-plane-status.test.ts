@@ -47,6 +47,47 @@ test('status snapshots include the current runtime and PRD state', () => {
   assert.match(output, /Active PRD:/);
 });
 
+test('status snapshots and CLI surface the latest automatic queued PRD promotion', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-promotion-');
+  initAutonomyRepo(repoDir);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-promoted-001',
+    '--title',
+    'Promoted PRD',
+    '--specification',
+    'Show the latest queue promotion in status output.',
+  ]);
+
+  const runtimePath = path.join(repoDir, '.autonomy', 'runtime', 'state', 'runtime.json');
+  fs.writeFileSync(runtimePath, `${JSON.stringify({
+    workers: {},
+    lastPrdPromotion: {
+      id: 'prd-promoted-001',
+      title: 'Promoted PRD',
+      source: 'prompts/autonomous/v2/specs/prds/queue/prd-promoted-001.json',
+      destination: 'prompts/autonomous/v2/specs/prds/prd-promoted-001.json',
+      promotedAt: '2026-04-26T08:20:00.000Z',
+      trigger: 'automatic-queue-promotion',
+    },
+  }, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  assert.equal(snapshot.runtime.lastPrdPromotion.id, 'prd-promoted-001');
+  assert.equal(snapshot.runtime.lastPrdPromotion.title, 'Promoted PRD');
+
+  const output = runNode(CLI_BIN, [
+    'status',
+    '--root',
+    repoDir,
+  ]);
+  assert.match(output, /Last auto-promotion: Promoted PRD/);
+});
+
 test('status snapshots include installed autonomy package version separately from deploy version', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-package-version-');
   initAutonomyRepo(repoDir);

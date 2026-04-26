@@ -18,6 +18,16 @@ function emitSchedulerProgress(options, event, payload = {}) {
   }
 }
 
+function updateRuntimePromotion(runtime: AnyRecord, sync: AnyRecord) {
+  if (!runtime || !sync || !sync.queuedPromotion) {
+    return;
+  }
+  runtime.lastPrdPromotion = {
+    ...sync.queuedPromotion,
+    trigger: 'automatic-queue-promotion',
+  };
+}
+
 function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   const { config: syncConfig } = loadConfig(rootDir);
   const syncStartedAt = Date.now();
@@ -73,6 +83,7 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     const branchLocks = loadBranchLocks(rootDir);
     const prds = loadPrds(rootDir, config, { queues });
     runtime = loadRuntime(rootDir);
+    updateRuntimePromotion(runtime, sync);
     emitSchedulerProgress(options, 'state:loaded', {
       agents: (config.agents || []).length,
       queues: Object.keys(queues).length,

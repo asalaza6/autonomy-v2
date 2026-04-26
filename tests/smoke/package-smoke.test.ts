@@ -323,6 +323,8 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
       AUTONOMY_CODEX_STUB: '1',
     },
   }));
+  assert.equal(secondTick.sync.queuedPromotion.id, 'prd-queue-promo-002');
+  assert.equal(secondTick.sync.queuedPromotion.title, 'Queued PRD');
   assert.equal(secondTick.started.some((entry) => entry.agentId === 'pm-agent'), true);
   assert.equal(
     fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-002.json'),
@@ -335,6 +337,17 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
   assert.equal(
     fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-queue-promo-002.json'),
     true
+  );
+
+  const thirdTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+  assert.equal(thirdTick.sync.queuedPromotion, null);
+  assert.equal(
+    thirdTick.started.filter((entry) => entry.agentId === 'pm-agent').length,
+    0
   );
 });
 
