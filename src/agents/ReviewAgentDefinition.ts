@@ -88,14 +88,17 @@ class ReviewAgentDefinition extends AgentDefinition {
     if (!queue) {
       return false;
     }
-    return (context.queueStore.listTasks?.(queue) || []).some((task) => task.status === 'queued');
+    const runtime = context.current && context.current.runtime ? context.current.runtime : null;
+    return (context.queueStore.listTasks?.(queue) || []).some((task) => this.reviewTaskIsReady(task, runtime));
   }
 
   claimWork(context: AgentExecutionContext): ClaimedWork | null {
     if (context.phase !== 'worker' || !context.queueStore.claimQueuedReviewTask) {
       return null;
     }
-    const reviewTask = context.queueStore.claimQueuedReviewTask(context.agent.id);
+    const reviewTask = context.queueStore.claimQueuedReviewTask(context.agent.id, {
+      requireSourceAgentIdle: true,
+    });
     if (!reviewTask) {
       return null;
     }
@@ -108,6 +111,18 @@ class ReviewAgentDefinition extends AgentDefinition {
       sourceAgentId: String(reviewTask.sourceAgentId || ''),
       reviewTask,
     };
+  }
+
+  private reviewTaskIsReady(task: TaskRecord | null | undefined, runtime: AnyRecord | null | undefined): boolean {
+    if (!task || task.status !== 'queued') {
+      return false;
+    }
+    const sourceAgentId = String(task.sourceAgentId || '').trim();
+    if (!sourceAgentId) {
+      return true;
+    }
+    const worker = runtime && runtime.workers && runtime.workers[sourceAgentId];
+    return !(worker && worker.status === 'running');
   }
 
   execute(context: AgentExecutionContext, work: ClaimedWork): ExecutionResult | Promise<ExecutionResult> {

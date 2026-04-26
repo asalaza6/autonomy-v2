@@ -8,7 +8,7 @@ import { CLI_PATH, DEFAULT_RUNNER_PATH } from './orchestrator-constants.js';
 import { executeRunnerCommand } from './orchestrator-git.js';
 import { buildTaskLaneKey, buildTaskQueueState, getAgent, implementationTaskNeedsDispatch, listPrds, listTasks, selectImplementationTask } from './helpers.js';
 import { getRunnerErrorReportPath, readJson, writeJson } from './paths.js';
-import { loadBranchLocks, loadPrds } from './orchestrator-state.js';
+import { loadBranchLocks, loadPrds, loadRuntime } from './orchestrator-state.js';
 import { loadQueues, resolveImplementationQueueContext, writeQueueAndAggregate } from './queues.js';
 import { commitPrdSpecToIntegrationBranch, commitTrackedFilesToIntegrationBranch, commitTrackedPrdStateToIntegrationBranch, readTrackedPrdStateMap } from '../../sync/sync-git.js';
 
@@ -150,12 +150,27 @@ function createWorkerAgentExecutionContext(rootDir: string, config: AutonomyConf
   };
 }
 
-function claimQueuedReviewTask(rootDir: string, config: AutonomyConfig, agentId: string): TaskRecord | null {
+function claimQueuedReviewTask(rootDir: string, config: AutonomyConfig, agentId: string, options: AnyRecord = {}): TaskRecord | null {
   const release = acquireStateLock(rootDir);
   try {
     const queues = loadQueues(rootDir, config);
     const reviewerQueue = queues[agentId];
-    const reviewTask = listTasks(reviewerQueue).find((task) => task.status === 'queued');
+    const runtime = loadRuntime(rootDir);
+    const requireSourceAgentIdle = options.requireSourceAgentIdle === true;
+    const reviewTask = listTasks(reviewerQueue).find((task) => {
+      if (task.status !== 'queued') {
+        return false;
+      }
+      if (!requireSourceAgentIdle) {
+        return true;
+      }
+      const sourceAgentId = String(task.sourceAgentId || '').trim();
+      if (!sourceAgentId) {
+        return true;
+      }
+      const sourceWorker = runtime && runtime.workers ? runtime.workers[sourceAgentId] : null;
+      return !(sourceWorker && sourceWorker.status === 'running');
+    });
     if (!reviewTask) {
       return null;
     }

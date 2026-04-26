@@ -257,3 +257,42 @@ test('review definition reports runnable when a queued review task exists', () =
 
   assert.equal(definition.canRun(context), true);
 });
+
+test('review definition waits for the source implementation agent to finish before running', () => {
+  const definition = getAgentDefinition(AGENT_ROLES.REVIEW);
+  const baseContext = buildBaseContext({
+    agent: { id: 'gate', role: AGENT_ROLES.REVIEW, gitIdentity: { name: 'gate', email: 'gate@example.com' } },
+    current: {
+      queues: {
+        gate: {
+          agentId: 'gate',
+          role: AGENT_ROLES.REVIEW,
+          tasks: [{ id: 'review-1', status: 'queued', sourceAgentId: 'builder' }],
+        },
+      },
+      runtime: {
+        workers: {
+          builder: { agentId: 'builder', status: 'running' },
+        },
+      },
+    },
+    queueStore: {
+      listTasks(queue) {
+        return queue.tasks || [];
+      },
+    },
+  });
+
+  assert.equal(definition.canRun(baseContext), false);
+  assert.equal(definition.canRun({
+    ...baseContext,
+    current: {
+      ...baseContext.current,
+      runtime: {
+        workers: {
+          builder: { agentId: 'builder', status: 'idle' },
+        },
+      },
+    },
+  }), true);
+});
