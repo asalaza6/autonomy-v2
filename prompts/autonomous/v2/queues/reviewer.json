@@ -878,6 +878,33 @@
         }
       },
       "mergedAt": "2026-04-26T21:50:25.761Z"
+    },
+    {
+      "id": "review-pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
+      "title": "Review [architecture-agent] Enable authenticated GitHub PR reads for repo-assistant sessions using whitelisted runtime secrets",
+      "description": "Review pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent for Enable authenticated GitHub PR reads for repo-assistant sessions using whitelisted runtime secrets",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
+      "sourceTaskId": "prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-26T22:06:56.730Z",
+      "updatedAt": "2026-04-26T22:06:56.730Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "A freshly started repo-assistant session for `asalaza6/autonomy-v2` automatically receives only whitelisted GitHub auth variables such as `GITHUB_TOKEN` or `GH_TOKEN` from the approved runtime secret source, without requiring any manual token entry inside the session.",
+        "The assistant session does not read arbitrary env files directly for this feature; credential delivery is performed by runtime injection or equivalent pre-session secret shaping controlled by the host process.",
+        "When a valid repo-scoped credential is present, the session can use the GitHub tool/plugin to read live PR data for `asalaza6/autonomy-v2#27`, including PR metadata, diff, top-level comments, reviews, and unresolved review threads.",
+        "Before GitHub-backed PR inspection is marked available, startup performs a read-access validation against the target repository and PR resources; if validation fails, GitHub inspection remains disabled rather than silently falling back.",
+        "Repo-assistant sessions receive outbound network permission only for the GitHub endpoints required to perform the supported PR read operations, and the implementation documents or enforces that narrower allowlist in the relevant runtime configuration.",
+        "The control panel or equivalent runtime status surface shows a clear, user-visible state for GitHub access success and for each failure mode tested here: missing token, invalid token, and token lacking repository access.",
+        "Raw secret values are never emitted into assistant transcript content, structured status payloads, logs, or UI output; any error or debug reporting uses redacted or non-secret-safe messaging only.",
+        "Focused automated coverage exercises successful GitHub capability enablement plus the missing-token, invalid-token, and unauthorized-token failure paths, and the implementation runs `npm run typecheck` along with the relevant control-plane, runner, or smoke tests covering session startup and status reporting."
+      ],
+      "scopeViolations": []
     }
   ]
 }
