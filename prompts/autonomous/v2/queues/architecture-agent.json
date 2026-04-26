@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4409,14 +4410,15 @@
       "acceptance": [
         "`npm run typecheck` and `npm run lint` are reported passing, but the branch is not safe to merge into `dev`. I found one blocking regression in the new GitHub capability wiring, and the required focused verification for this high-risk control-plane change is still missing from the reported checks.\n`src/autonomy-v2/control-plane/status-service.ts:57-60` now calls `resolveRepoAssistantGithubCapability(...)` during every status snapshot, and `src/server/control-plane/control-plane-github.ts:228-241` plus `334-386` make that validation perform synchronous `gh api` reads for the repo, PR metadata, files, comments, reviews, and review threads even when `includePullRequestData` is `false`. `buildStatusSnapshot` is used by the bridge, CLI status, and control-plane refresh paths, so ordinary status rendering now depends on multiple blocking live GitHub round-trips per repo and can stall or rate-limit normal control-plane operation. This should be moved off the hot status path (for example: cache startup validation results, persist capability state, or make the status path use a lightweight/non-network snapshot), and it needs focused regression coverage for repeated status refreshes.\nThe acceptance criteria require focused automated coverage for successful enablement plus the missing-token, invalid-token, and unauthorized-token startup/status paths, but the only reported executed checks are `npm run typecheck` and `npm run lint`. There is no evidence that the added control-plane tests were actually run. Before approval, run and report the relevant focused tests covering the new GitHub/session behavior, at minimum the new unit suites such as `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-chat.test.ts`, and `tests/unit/codex-cli.test.ts` (or the repo’s equivalent targeted test commands)."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "createdAt": "2026-04-26T22:29:33.307Z",
-      "updatedAt": "2026-04-26T22:29:33.307Z",
+      "updatedAt": "2026-04-26T22:34:28.809Z",
       "startedAt": "2026-04-26T22:29:33.307Z",
-      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent"
+      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
+      "completedAt": "2026-04-26T22:34:28.809Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

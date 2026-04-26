@@ -9,7 +9,7 @@ import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
 import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapshot } from '../commands/deploy-version.js';
 import { readAutonomyPackageStatus } from '../commands/update.js';
 import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../sync/review-reconciliation.js';
-import { resolveRepoAssistantGithubCapability } from '../../server/control-plane/control-plane-github.js';
+import { resolveRepoAssistantGithubCapabilityStatus } from '../../server/control-plane/control-plane-github.js';
 
 function buildStatusSnapshot(rootDir) {
   ensureInitialized(rootDir);
@@ -55,9 +55,7 @@ function buildStatusSnapshot(rootDir) {
     branchLocks,
   });
   const repoAssistant = {
-    github: resolveRepoAssistantGithubCapability(rootDir, {
-      includePullRequestData: false,
-    }),
+    github: resolveRepoAssistantGithubCapabilityStatus(rootDir),
   };
 
   return {

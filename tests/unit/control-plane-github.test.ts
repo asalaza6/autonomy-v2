@@ -12,6 +12,7 @@ import {
   readRepoAssistantGithubEnvFromApprovedFiles,
   resolveRepoAssistantGithubEnv,
   resolveRepoAssistantGithubCapability,
+  resolveRepoAssistantGithubCapabilityStatus,
   selectRepoAssistantGithubEnv,
 } from '../../src/server/control-plane/control-plane-github.js';
 
@@ -504,4 +505,82 @@ test('repo assistant GitHub capability prefers .env.autonomy.local over .env.aut
       delete process.env.GH_TOKEN;
     }
   }
+});
+
+test('repo assistant GitHub status capability stays lightweight until validation runs', () => {
+  let githubApiCalls = 0;
+
+  const pending: any = resolveRepoAssistantGithubCapabilityStatus('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'status-only-token',
+    } as NodeJS.ProcessEnv,
+    repository: TEST_REPO,
+    validationPullNumber: 27,
+  });
+
+  assert.equal(pending.available, false);
+  assert.equal(pending.status, 'validation-pending');
+  assert.match(pending.detail, /validated when a repo assistant session starts/i);
+
+  const validated: any = resolveRepoAssistantGithubCapability('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'status-only-token',
+    } as NodeJS.ProcessEnv,
+    repository: TEST_REPO,
+    validationPullNumber: 27,
+    githubApiRunner(args) {
+      githubApiCalls += 1;
+      if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}`) {
+        return JSON.stringify({
+          private: false,
+          visibility: 'public',
+          default_branch: 'dev',
+        });
+      }
+      if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}/pulls/27`) {
+        return JSON.stringify({
+          number: 27,
+          title: 'Cached validation',
+          state: 'open',
+          html_url: 'https://github.com/asalaza6/autonomy-v2/pull/27',
+          user: { login: 'asalaza6' },
+          base: { ref: 'dev' },
+          head: { ref: 'feature/repo-assistant' },
+        });
+      }
+      if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+        return '[]';
+      }
+      if (args[0] === 'graphql') {
+        return JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  nodes: [],
+                },
+              },
+            },
+          },
+        });
+      }
+      throw new Error(`Unexpected route: ${args[0]}`);
+    },
+  });
+
+  assert.equal(validated.available, true);
+  assert.equal(githubApiCalls, 6);
+
+  const statusAfterValidation: any = resolveRepoAssistantGithubCapabilityStatus('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'status-only-token',
+    } as NodeJS.ProcessEnv,
+    repository: TEST_REPO,
+    validationPullNumber: 27,
+  });
+
+  assert.equal(statusAfterValidation.available, true);
+  assert.equal(statusAfterValidation.status, 'enabled');
+  assert.equal(statusAfterValidation.pullRequest.summary.fileCount, 0);
+  assert.equal(githubApiCalls, 6);
 });

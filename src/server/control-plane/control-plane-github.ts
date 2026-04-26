@@ -8,6 +8,7 @@ const REPO_ASSISTANT_GITHUB_ENV_KEYS = ['GITHUB_TOKEN', 'GH_TOKEN'] as const;
 const REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS = ['api.github.com'] as const;
 const REPO_ASSISTANT_GITHUB_SECRET_FILES = ['.env.autonomy.local', '.env.autonomy'] as const;
 const DEFAULT_AUTONOMY_REPO_VALIDATION_PR = 27;
+const repoAssistantGithubCapabilityCache = new Map<string, Record<string, any>>();
 
 type GithubApiRunner = (args: string[], options: {
   token: string;
@@ -134,7 +135,107 @@ function resolveRepoAssistantGithubCapability(
     githubApiRunner?: GithubApiRunner;
     repository?: { owner: string; repo: string } | null;
   } = {},
-) {
+): any {
+  const resolved = resolveRepoAssistantGithubCapabilityBase(rootDir, options);
+  if ('result' in resolved) {
+    return resolved.result;
+  }
+  const { env, githubEnv, pullNumber, repo, base } = resolved;
+  const cacheKey = buildRepoAssistantGithubCapabilityCacheKey(base, githubEnv.GITHUB_TOKEN);
+  const cachedCapability = repoAssistantGithubCapabilityCache.get(cacheKey);
+  if (cachedCapability) {
+    return {
+      ...cachedCapability,
+      validation: {
+        ...cachedCapability.validation,
+        pullRequestNumber: pullNumber,
+      },
+    };
+  }
+
+  const token = githubEnv.GITHUB_TOKEN;
+  const runner = options.githubApiRunner || defaultGithubApiRunner;
+  try {
+    const repositoryMetadata = readGithubJson(
+      runner,
+      [`repos/${repo.owner}/${repo.repo}`],
+      { token, baseEnv: env },
+    );
+    const pullRequestBundle = readPullRequestBundle(
+      runner,
+      repo,
+      pullNumber,
+      token,
+      env,
+      options.includePullRequestData === true,
+    );
+    const capability = {
+      ...base,
+      available: true,
+      status: 'enabled',
+      statusLabel: 'GitHub access ready',
+      detail: `Validated GitHub read access for ${repo.owner}/${repo.repo}#${pullNumber}.`,
+      repositoryMetadata: {
+        private: repositoryMetadata.private === true,
+        visibility: String(repositoryMetadata.visibility || '').trim() || null,
+        defaultBranch: String(repositoryMetadata.default_branch || '').trim() || null,
+      },
+      validation: {
+        ...base.validation,
+        validatedAt: new Date().toISOString(),
+      },
+      ...(pullRequestBundle ? { pullRequest: pullRequestBundle } : {}),
+    };
+    repoAssistantGithubCapabilityCache.set(cacheKey, capability);
+    return capability;
+  } catch (error) {
+    const capability = buildGithubCapabilityFailure(base, error, pullNumber);
+    repoAssistantGithubCapabilityCache.set(cacheKey, capability);
+    return capability;
+  }
+}
+
+function resolveRepoAssistantGithubCapabilityStatus(
+  rootDir: string,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    validationPullNumber?: number | null;
+    repository?: { owner: string; repo: string } | null;
+  } = {},
+): any {
+  const resolved = resolveRepoAssistantGithubCapabilityBase(rootDir, options);
+  if ('result' in resolved) {
+    return resolved.result;
+  }
+  const { githubEnv, pullNumber, base } = resolved;
+  const cacheKey = buildRepoAssistantGithubCapabilityCacheKey(base, githubEnv.GITHUB_TOKEN);
+  const cachedCapability = repoAssistantGithubCapabilityCache.get(cacheKey);
+  if (cachedCapability) {
+    return {
+      ...cachedCapability,
+      validation: {
+        ...cachedCapability.validation,
+        pullRequestNumber: pullNumber,
+      },
+    };
+  }
+  return {
+    ...base,
+    available: false,
+    status: 'validation-pending',
+    statusLabel: 'GitHub validation pending',
+    detail: 'GitHub access will be validated when a repo assistant session starts.',
+  };
+}
+
+function resolveRepoAssistantGithubCapabilityBase(
+  rootDir: string,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    validationPullNumber?: number | null;
+    repository?: { owner: string; repo: string } | null;
+  } = {},
+): any {
   const env = options.env || process.env;
   const approvedRuntimeSecrets = options.env
     ? {
@@ -152,37 +253,13 @@ function resolveRepoAssistantGithubCapability(
       repo = resolveGithubRepo(rootDir);
     } catch {
       return {
-        provider: 'gh',
-        authSource,
-        authEnvKeys,
-        authFiles: approvedRuntimeSecrets.loadedFrom,
-        allowedHosts: [...REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS],
-        repository: null,
-        validation: {
-          pullRequestNumber: null,
-        },
-        available: false,
-        status: 'repo-unavailable',
-        statusLabel: 'GitHub repo unavailable',
-        detail: 'The repo assistant could not resolve a GitHub origin for this repository.',
+        result: buildRepoAssistantGithubRepoUnavailable(authSource, authEnvKeys, approvedRuntimeSecrets.loadedFrom),
       };
     }
   }
   if (!repo) {
     return {
-      provider: 'gh',
-      authSource,
-      authEnvKeys,
-      authFiles: approvedRuntimeSecrets.loadedFrom,
-      allowedHosts: [...REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS],
-      repository: null,
-      validation: {
-        pullRequestNumber: null,
-      },
-      available: false,
-      status: 'repo-unavailable',
-      statusLabel: 'GitHub repo unavailable',
-      detail: 'The repo assistant could not resolve a GitHub origin for this repository.',
+      result: buildRepoAssistantGithubRepoUnavailable(authSource, authEnvKeys, approvedRuntimeSecrets.loadedFrom),
     };
   }
   const pullNumber = resolveValidationPullNumber(repo, options.validationPullNumber);
@@ -203,62 +280,71 @@ function resolveRepoAssistantGithubCapability(
 
   if (!githubEnv.GITHUB_TOKEN) {
     return {
-      ...base,
-      available: false,
-      status: 'missing-token',
-      statusLabel: 'GitHub access unavailable',
-      detail: approvedRuntimeSecrets.loadedFrom.length > 0
-        ? `No whitelisted GitHub token is configured in ${approvedRuntimeSecrets.loadedFrom.join(' or ')} for repo assistant PR inspection.`
-        : 'No approved runtime GitHub token is available for repo assistant PR inspection.',
+      result: {
+        ...base,
+        available: false,
+        status: 'missing-token',
+        statusLabel: 'GitHub access unavailable',
+        detail: approvedRuntimeSecrets.loadedFrom.length > 0
+          ? `No whitelisted GitHub token is configured in ${approvedRuntimeSecrets.loadedFrom.join(' or ')} for repo assistant PR inspection.`
+          : 'No approved runtime GitHub token is available for repo assistant PR inspection.',
+      },
     };
   }
 
   if (!pullNumber) {
     return {
-      ...base,
-      available: false,
-      status: 'validation-unconfigured',
-      statusLabel: 'GitHub validation unavailable',
-      detail: 'No validation pull request is configured for repo assistant GitHub inspection.',
+      result: {
+        ...base,
+        available: false,
+        status: 'validation-unconfigured',
+        statusLabel: 'GitHub validation unavailable',
+        detail: 'No validation pull request is configured for repo assistant GitHub inspection.',
+      },
     };
   }
 
-  const token = githubEnv.GITHUB_TOKEN;
-  const runner = options.githubApiRunner || defaultGithubApiRunner;
-  try {
-    const repositoryMetadata = readGithubJson(
-      runner,
-      [`repos/${repo.owner}/${repo.repo}`],
-      { token, baseEnv: env },
-    );
-    const pullRequestBundle = readPullRequestBundle(
-      runner,
-      repo,
-      pullNumber,
-      token,
-      env,
-      options.includePullRequestData === true,
-    );
-    return {
-      ...base,
-      available: true,
-      status: 'enabled',
-      statusLabel: 'GitHub access ready',
-      detail: `Validated GitHub read access for ${repo.owner}/${repo.repo}#${pullNumber}.`,
-      repositoryMetadata: {
-        private: repositoryMetadata.private === true,
-        visibility: String(repositoryMetadata.visibility || '').trim() || null,
-        defaultBranch: String(repositoryMetadata.default_branch || '').trim() || null,
-      },
-      validation: {
-        ...base.validation,
-        validatedAt: new Date().toISOString(),
-      },
-      ...(pullRequestBundle ? { pullRequest: pullRequestBundle } : {}),
-    };
-  } catch (error) {
-    return buildGithubCapabilityFailure(base, error, pullNumber);
-  }
+  return {
+    env,
+    githubEnv,
+    pullNumber,
+    repo,
+    base,
+  };
+}
+
+function buildRepoAssistantGithubRepoUnavailable(
+  authSource: string,
+  authEnvKeys: string[],
+  authFiles: string[],
+) {
+  return {
+    provider: 'gh',
+    authSource,
+    authEnvKeys,
+    authFiles,
+    allowedHosts: [...REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS],
+    repository: null,
+    validation: {
+      pullRequestNumber: null,
+    },
+    available: false,
+    status: 'repo-unavailable',
+    statusLabel: 'GitHub repo unavailable',
+    detail: 'The repo assistant could not resolve a GitHub origin for this repository.',
+  };
+}
+
+function buildRepoAssistantGithubCapabilityCacheKey(base: Record<string, any>, token: string) {
+  const repository = base.repository || {};
+  return JSON.stringify({
+    owner: repository.owner || '',
+    repo: repository.repo || '',
+    pullRequestNumber: base.validation && base.validation.pullRequestNumber || null,
+    authSource: base.authSource || '',
+    authFiles: Array.isArray(base.authFiles) ? base.authFiles : [],
+    token,
+  });
 }
 
 function buildRepoAssistantGithubPromptContext(capability: Record<string, any> | null | undefined) {
@@ -550,6 +636,7 @@ export {
   buildRepoAssistantGithubEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
+  resolveRepoAssistantGithubCapabilityStatus,
   resolveRepoAssistantGithubEnv,
   resolveRepoAssistantGithubCapability,
   selectRepoAssistantGithubEnv,

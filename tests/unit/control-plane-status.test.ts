@@ -48,6 +48,42 @@ test('status snapshots include the current runtime and PRD state', () => {
   assert.match(output, /Active PRD:/);
 });
 
+test('status snapshots do not perform live GitHub validation during repeated refreshes', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-github-lightweight-');
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['remote', 'add', 'origin', 'https://github.com/asalaza6/autonomy-v2.git']);
+
+  process.env.GITHUB_TOKEN = 'status-refresh-token';
+  delete process.env.GH_TOKEN;
+
+  try {
+    const firstSnapshot = buildStatusSnapshot(repoDir);
+    const secondSnapshot = buildStatusSnapshot(repoDir);
+
+    assert.equal(firstSnapshot.repoAssistant.github.available, false);
+    assert.equal(firstSnapshot.repoAssistant.github.status, 'validation-pending');
+    assert.equal(secondSnapshot.repoAssistant.github.available, false);
+    assert.equal(secondSnapshot.repoAssistant.github.status, 'validation-pending');
+    assert.deepEqual(secondSnapshot.repoAssistant.github.repository, {
+      owner: 'asalaza6',
+      repo: 'autonomy-v2',
+    });
+  } finally {
+    if (typeof originalGithubToken === 'string') {
+      process.env.GITHUB_TOKEN = originalGithubToken;
+    } else {
+      delete process.env.GITHUB_TOKEN;
+    }
+    if (typeof originalGhToken === 'string') {
+      process.env.GH_TOKEN = originalGhToken;
+    } else {
+      delete process.env.GH_TOKEN;
+    }
+  }
+});
+
 test('status snapshots and CLI surface the latest automatic queued PRD promotion', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-promotion-');
   initAutonomyRepo(repoDir);
