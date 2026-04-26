@@ -599,14 +599,14 @@
         "Preserve existing PRD queue semantics and payload validation.",
         "Keep non-PRD chat responses unchanged."
       ],
-      "reviewRound": 1,
-      "status": "changes_requested",
+      "reviewRound": 2,
+      "status": "queued",
       "createdAt": "2026-04-26T07:54:06.297Z",
-      "updatedAt": "2026-04-26T07:55:34.557Z",
-      "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T07:54:10.925Z",
+      "updatedAt": "2026-04-26T07:56:00.562Z",
       "reviewedAt": "2026-04-26T07:55:34.557Z",
-      "lastDecision": "changes_requested"
+      "lastDecision": "changes_requested",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-26T07:54:10.925Z"
     },
     {
       "id": "review-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
