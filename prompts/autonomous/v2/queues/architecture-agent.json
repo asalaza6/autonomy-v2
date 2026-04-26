@@ -1754,11 +1754,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-26T09:58:23.215Z",
-      "updatedAt": "2026-04-26T10:04:28.552Z",
+      "updatedAt": "2026-04-26T10:04:28.621Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-active-pull-request-c879fc-architecture-agent",
       "startedAt": "2026-04-26T09:58:25.771Z",
       "completedAt": "2026-04-26T10:04:28.552Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "0fb8efdcdc7fd94f8c0447284802ed051b2ee2c8"
     }
   ]
 }
