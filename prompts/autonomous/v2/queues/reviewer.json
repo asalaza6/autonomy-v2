@@ -728,10 +728,10 @@
         "Automated coverage is added or updated for active pull request selection logic and for progress-section rendering that shows and hides the link based on PRD state and URL presence.",
         "Verification includes `npm run typecheck` and the relevant unit coverage for the control-plane progress UI or status-selection logic."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-26T10:04:29.733Z",
-      "updatedAt": "2026-04-26T10:08:24.149Z",
+      "updatedAt": "2026-04-26T10:08:34.727Z",
       "reviewedAt": "2026-04-26T10:08:24.149Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
