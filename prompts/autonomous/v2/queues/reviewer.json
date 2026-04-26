@@ -814,31 +814,26 @@
     {
       "id": "review-pr-prd-inject-project-context-into-control-plane-16b541-architecture-agent",
       "title": "Review [architecture-agent] Inject project-context into control-plane chat prompt startup flow",
-      "description": "Review pr-prd-inject-project-context-into-control-plane-16b541-architecture-agent for Inject project-context into control-plane chat prompt startup flow",
+      "description": "Review pr-prd-inject-project-context-into-control-plane-16b541-architecture-agent for Address review for [architecture-agent] Inject project-context into control-plane chat prompt startup flow",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-inject-project-context-into-control-plane-16b541-architecture-agent",
-      "sourceTaskId": "prd-inject-project-context-into-control-plane-16b541-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-inject-project-context-into-control-plane-16b541-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-inject-project-context-into-control-plane-16b541-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "The control-plane chat prompt path reads `prompts/autonomous/v2/project-context.md` from the repository root and includes its contents in the prompt sent to the chat agent.",
-        "A brand-new chat conversation with empty prior history includes project-context on the first manager message before the first agent response is generated.",
-        "Follow-up chat turns continue to work through the existing conversation history flow without changing the `answer` plus nullable `prdProposal` response schema.",
-        "If `prompts/autonomous/v2/project-context.md` is missing or unreadable, chat request handling does not crash and still returns a normal response with degraded context behavior.",
-        "PM planning behavior and any planning-agent prompt flow remain unchanged.",
-        "Unit coverage is added or updated around `buildAgentChatPrompt` or the equivalent chat job flow to assert project-context inclusion, first-turn empty-history behavior, and missing-file fallback behavior.",
-        "Relevant control-plane tests pass, including chat-focused unit tests and `npm run typecheck`."
+        "Blocking on verification. The code changes look scoped and `npm run typecheck`/`npm run lint` passed, but this PR changes a high-risk control-plane chat path and the required chat-focused unit test pass is not provided.\nRequired focused verification is missing for the changed control-plane chat flow. Acceptance explicitly requires relevant control-plane chat tests to pass, but the deterministic results only include `npm run typecheck` and `npm run lint`. Please run and attach a passing result for the chat-focused unit suite covering this change, such as `dist/tests/unit/control-plane-chat.test.js` after build or the repo’s equivalent test command. I attempted the compiled unit test in this sandbox, but it was inconclusive because the sandbox blocks the test file’s temp-directory writes (`mkdtemp` EPERM), so the PR still lacks merge-grade evidence for this high-risk path."
       ],
       "reviewRound": 2,
       "status": "queued",
       "createdAt": "2026-04-26T11:21:22.082Z",
-      "updatedAt": "2026-04-26T11:23:21.762Z",
+      "updatedAt": "2026-04-26T11:23:49.737Z",
       "reviewedAt": "2026-04-26T11:23:10.880Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T11:21:27.799Z"
+      "dispatchedAt": "2026-04-26T11:21:27.799Z",
+      "scopeViolations": []
     }
   ]
 }
