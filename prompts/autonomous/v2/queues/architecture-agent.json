@@ -4162,7 +4162,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
       "createdAt": "2026-04-26T21:42:18.923Z",
-      "updatedAt": "2026-04-26T21:43:19.240Z",
+      "updatedAt": "2026-04-26T21:43:19.304Z",
       "startedAt": "2026-04-26T21:42:18.923Z",
       "prId": "pr-prd-show-associated-pull-request-5ed56d-architecture-agent",
       "completedAt": "2026-04-26T21:43:19.240Z",
@@ -4175,7 +4175,8 @@
           "updatedAt": "2026-04-26T21:43:19.240Z"
         }
       },
-      "implementationConversationId": "019dcbbe-5689-7142-8515-3497415df800"
+      "implementationConversationId": "019dcbbe-5689-7142-8515-3497415df800",
+      "commitSha": "065acb9ad4d6f856bb14f7a309be6948c7cd00ff"
     }
   ]
 }
