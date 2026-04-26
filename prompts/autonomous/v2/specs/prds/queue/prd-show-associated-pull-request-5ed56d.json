@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-show-associated-pull-request-5ed56d",
+  "title": "Show associated pull request button in PRD History when available",
+  "createdAt": "2026-04-26T10:13:47.971Z",
+  "specification": "# PRD: Show associated pull request button in PRD History when available\n\nPriority: medium\n\n## Problem\nFinished PRDs in the History tab do not expose their associated pull request, so managers cannot open the PR directly from the selected history item even when one exists.\n\n## Goal\nLet managers open the pull request associated with a historical PRD from the History detail view whenever PR data is available.\n\n## Requirements\n- Extend the PRD history data model to carry associated pull request metadata when a PR exists, including at minimum PR number and URL.\n- Populate that PR metadata when building repo status/history snapshots for completed or reviewed PRDs.\n- Update the History detail pane to render an `Open pull request` button or link when the selected PRD has associated PR metadata.\n- Hide the pull request action entirely when no PR is associated with the PRD.\n- Keep existing History selection and source-chat actions unchanged.\n\n## Acceptance Criteria\n- Selecting a PRD in History shows an `Open pull request` action when that PRD has a linked PR.\n- Clicking the action opens the correct GitHub pull request URL.\n- Selecting a PRD with no linked PR shows no empty placeholder or broken action.\n- Existing History details, including source chat continuation, still work as before.\n\n## Verification\n- Inspect the History detail rendering path and confirm PR action is conditional on PR metadata.\n- Validate a repo snapshot containing a historical PRD with linked PR metadata renders the button with the correct URL.\n- Validate a historical PRD without PR metadata renders no pull-request action.\n- Run the relevant control-plane UI tests if present; otherwise add or update focused coverage for History detail conditional actions.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777197170562_031d22146e8de\nManager message: msg_1777198129314_de98544eb47558\nAgent message: msg_1777198129314_8209f4e5e5846\nCreated: 2026-04-26T10:09:34.397Z",
+  "requirements": [
+    "Extend the PRD history data model to carry associated pull request metadata when a PR exists",
+    "including at minimum PR number and URL.",
+    "Populate that PR metadata when building repo status/history snapshots for completed or reviewed PRDs.",
+    "Update the History detail pane to render an `Open pull request` button or link when the selected PRD has associated PR metadata.",
+    "Hide the pull request action entirely when no PR is associated with the PRD.",
+    "Keep existing History selection and source-chat actions unchanged."
+  ]
+}
