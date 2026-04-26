@@ -790,11 +790,13 @@
         "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-04-26T10:34:19.626Z",
-      "updatedAt": "2026-04-26T10:34:26.301Z",
+      "updatedAt": "2026-04-26T10:35:29.032Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T10:34:23.730Z"
+      "dispatchedAt": "2026-04-26T10:34:23.730Z",
+      "reviewedAt": "2026-04-26T10:35:29.032Z",
+      "lastDecision": "changes_requested"
     }
   ]
 }
