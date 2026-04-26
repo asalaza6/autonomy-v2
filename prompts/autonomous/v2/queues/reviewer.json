@@ -864,7 +864,7 @@
       "reviewRound": 6,
       "status": "approved",
       "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:47:52.506Z",
+      "updatedAt": "2026-04-26T21:48:20.169Z",
       "reviewedAt": "2026-04-26T21:47:49.043Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
@@ -877,8 +877,9 @@
           "updatedAt": "2026-04-26T21:47:52.632Z"
         }
       },
-      "lastMergeFailureCode": "pending_checks",
-      "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge"
+      "lastMergeFailureCode": "mergeability_unknown",
+      "lastMergeFailureMessage": "GitHub is still computing mergeability",
+      "lastError": null
     }
   ]
 }
