@@ -600,16 +600,15 @@
         "Keep non-PRD chat responses unchanged."
       ],
       "reviewRound": 6,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-26T07:54:06.297Z",
-      "updatedAt": "2026-04-26T08:06:20.198Z",
+      "updatedAt": "2026-04-26T08:06:46.065Z",
       "reviewedAt": "2026-04-26T08:01:57.063Z",
       "lastDecision": "approved",
       "lastMergeFailureCode": "mergeability_unknown",
       "lastMergeFailureMessage": "GitHub is still computing mergeability",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T08:06:16.479Z",
-      "lastError": null
+      "dispatchedAt": "2026-04-26T08:06:16.479Z"
     },
     {
       "id": "review-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
