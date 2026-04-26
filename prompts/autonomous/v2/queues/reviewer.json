@@ -599,13 +599,13 @@
         "render that explicitly rather than implying success."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T06:40:50.509Z",
       "updatedAt": "2026-04-26T06:43:28.210Z",
       "reviewedAt": "2026-04-26T06:43:11.677Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T06:40:55.939Z"
+      "dispatchedAt": "2026-04-26T06:43:29.957Z"
     }
   ]
 }
