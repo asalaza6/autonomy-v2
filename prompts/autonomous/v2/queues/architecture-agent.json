@@ -4509,7 +4509,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "createdAt": "2026-04-26T22:50:51.684Z",
-      "updatedAt": "2026-04-26T22:53:05.290Z",
+      "updatedAt": "2026-04-26T22:53:05.358Z",
       "startedAt": "2026-04-26T22:50:51.684Z",
       "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent",
       "conversationReferences": {
@@ -4522,7 +4522,8 @@
       },
       "implementationConversationId": "019dcbfa-36a0-7e81-90b8-41ce5de72ab6",
       "completedAt": "2026-04-26T22:53:05.290Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "a2b748d3a59ed774e13a757e396a16baf624e062"
     }
   ]
 }
