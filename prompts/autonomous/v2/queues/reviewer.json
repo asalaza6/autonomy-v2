@@ -901,11 +901,13 @@
         "Focused automated coverage exercises successful GitHub capability enablement plus the missing-token, invalid-token, and unauthorized-token failure paths, and the implementation runs `npm run typecheck` along with the relevant control-plane, runner, or smoke tests covering session startup and status reporting."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-04-26T22:06:56.730Z",
-      "updatedAt": "2026-04-26T22:07:01.240Z",
+      "updatedAt": "2026-04-26T22:08:49.333Z",
       "dispatchedAt": "2026-04-26T22:07:03.119Z",
-      "dispatcher": "scheduler"
+      "dispatcher": "scheduler",
+      "reviewedAt": "2026-04-26T22:08:49.333Z",
+      "lastDecision": "changes_requested"
     }
   ]
 }
