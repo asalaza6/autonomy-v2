@@ -12,7 +12,7 @@ import { extractExecError } from '../../sync/git-shared.js';
 import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../types.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import type { ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
-import { validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
+import { loadControlPlaneLifecycle, validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import type { DefaultRestartHelperPlan } from './control-plane-restart-helper.js';
 
 type RestartTarget = 'controlBridge' | 'server';
@@ -373,6 +373,7 @@ function prepareRestartTarget(
   target: RestartTarget,
   value: DeployCommandConfig | null | undefined
 ) {
+  const lifecycleMetadata = readLifecycleMetadata(rootDir, target);
   let commandConfig: NormalizedControlPlaneCommandConfig | null;
   try {
     commandConfig = normalizeRestartCommandConfig(value, rootDir);
@@ -382,6 +383,10 @@ function prepareRestartTarget(
         target,
         status: 'failed' as const,
         error: formatErrorMessage(error),
+        mode: 'configured' as const,
+        preRestartPid: lifecycleMetadata?.pid,
+        recordedAt: lifecycleMetadata?.recordedAt,
+        completedAt: new Date().toISOString(),
       },
       configuredCommand: null,
       defaultTarget: null,
@@ -392,16 +397,18 @@ function prepareRestartTarget(
   }
 
   return {
-    status: {
-      target,
-      status: 'deferred' as const,
-      reason: 'after-job-completion',
-      mode: 'configured' as const,
-      command: commandConfig.displayCommand,
-      cwd: path.relative(rootDir, commandConfig.cwd) || '.',
-    },
-    configuredCommand: {
-      mode: 'configured' as const,
+      status: {
+        target,
+        status: 'deferred' as const,
+        reason: 'after-job-completion',
+        mode: 'configured' as const,
+        command: commandConfig.displayCommand,
+        cwd: path.relative(rootDir, commandConfig.cwd) || '.',
+        preRestartPid: lifecycleMetadata?.pid,
+        recordedAt: lifecycleMetadata?.recordedAt,
+      },
+      configuredCommand: {
+        mode: 'configured' as const,
       target,
       commandConfig,
     },
@@ -417,6 +424,8 @@ function prepareDefaultRestartTarget(rootDir: string, target: RestartTarget) {
         target,
         status: 'skipped' as const,
         reason: 'missing-metadata',
+        mode: 'default' as const,
+        completedAt: new Date().toISOString(),
       },
       configuredCommand: null,
       defaultTarget: null,
@@ -430,6 +439,9 @@ function prepareDefaultRestartTarget(rootDir: string, target: RestartTarget) {
         mode: 'default' as const,
         reason: validation.reason || 'stale-pid',
         error: validation.error || `${target} lifecycle PID is stale.`,
+        preRestartPid: validation.metadata?.pid,
+        recordedAt: validation.metadata?.recordedAt,
+        completedAt: new Date().toISOString(),
       },
       configuredCommand: null,
       defaultTarget: null,
@@ -437,15 +449,16 @@ function prepareDefaultRestartTarget(rootDir: string, target: RestartTarget) {
   }
 
   return {
-    status: {
-      target,
-      status: 'deferred' as const,
-      mode: 'default' as const,
-      reason: 'default-lifecycle-metadata',
-      pid: validation.metadata.pid,
-      command: validation.metadata.launchCommand,
-      cwd: path.relative(rootDir, validation.metadata.launch.cwd) || '.',
-      recordedAt: validation.metadata.recordedAt,
+      status: {
+        target,
+        status: 'deferred' as const,
+        mode: 'default' as const,
+        reason: 'default-lifecycle-metadata',
+        pid: validation.metadata.pid,
+        preRestartPid: validation.metadata.pid,
+        command: validation.metadata.launchCommand,
+        cwd: path.relative(rootDir, validation.metadata.launch.cwd) || '.',
+        recordedAt: validation.metadata.recordedAt,
     },
     configuredCommand: null,
     defaultTarget: {
@@ -453,6 +466,11 @@ function prepareDefaultRestartTarget(rootDir: string, target: RestartTarget) {
       metadata: validation.metadata,
     },
   };
+}
+
+function readLifecycleMetadata(rootDir: string, target: RestartTarget) {
+  const lifecycle = loadControlPlaneLifecycle(rootDir);
+  return lifecycle.services[target] || null;
 }
 
 function buildDeferredRestartCommands(

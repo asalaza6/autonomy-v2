@@ -281,6 +281,82 @@ test('control plane dashboard keeps partially completed PRDs in implementing whi
   );
 });
 
+test('restart job summaries preserve target PID evidence for the dashboard model', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {
+      server: {
+        kind: 'server',
+        updatedAt: '2026-04-22T01:06:00.000Z',
+      },
+      bridge: {
+        kind: 'bridge',
+        updatedAt: '2026-04-22T01:06:30.000Z',
+      },
+    },
+    jobs: [
+      {
+        id: 'job-restart-001',
+        type: 'restart',
+        repoId: 'alpha',
+        payload: {
+          repoId: 'alpha',
+        },
+        status: 'completed',
+        createdAt: '2026-04-22T01:00:00.000Z',
+        updatedAt: '2026-04-22T01:06:30.000Z',
+        completedAt: '2026-04-22T01:06:30.000Z',
+        result: {
+          restartStatus: {
+            status: 'restarted',
+            completedAt: '2026-04-22T01:06:30.000Z',
+            server: {
+              target: 'server',
+              status: 'restarted',
+              mode: 'default',
+              preRestartPid: 123,
+              postRestartPid: 456,
+              recordedAt: '2026-04-22T01:00:00.000Z',
+              completedAt: '2026-04-22T01:06:10.000Z',
+            },
+            controlBridge: {
+              target: 'controlBridge',
+              status: 'skipped',
+              mode: 'default',
+              reason: 'missing-metadata',
+              recordedAt: '2026-04-22T01:00:01.000Z',
+              completedAt: '2026-04-22T01:06:20.000Z',
+            },
+          },
+        },
+      },
+    ],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: '2026-04-22T01:06:30.000Z',
+        snapshot: {
+          prds: {
+            prds: [],
+          },
+        },
+      },
+    },
+  } as any);
+
+  const restartJob = dashboard.repos[0].restartJob;
+  assert.ok(restartJob);
+  assert.match(restartJob.detail, /server pid 123 -> 456/);
+  assert.match(restartJob.detail, /bridge skipped \(missing metadata\) \| pid missing/);
+  assert.equal(restartJob.restartEvidence.status, 'restarted');
+  assert.equal(restartJob.restartEvidence.targets[0].preRestartPid, 123);
+  assert.equal(restartJob.restartEvidence.targets[0].postRestartPid, 456);
+  assert.equal(restartJob.restartEvidence.targets[0].pidChanged, true);
+  assert.equal(restartJob.restartEvidence.targets[1].reason, 'missing-metadata');
+  assert.equal(restartJob.restartEvidence.targets[1].postRestartPid, null);
+});
+
 test('control plane dashboard distinguishes active review from approved merge states', () => {
   const buildDashboardForPullRequest = (pullRequestStatus: any) => buildControlPlaneDashboard('/tmp/hosted-control-plane', {
     schemaVersion: 1,

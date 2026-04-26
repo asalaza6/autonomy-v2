@@ -28,10 +28,14 @@ interface DefaultRestartTargetOutcome {
   target: ControlPlaneServiceKind;
   status: RestartOutcomeStatus;
   pid?: number;
+  preRestartPid?: number;
+  postRestartPid?: number;
   command?: string;
   cwd?: string;
   reason?: string;
   error?: string;
+  recordedAt?: string;
+  completedAt?: string;
 }
 
 interface DefaultRestartOutcome {
@@ -62,10 +66,13 @@ async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Pr
         target: target.target,
         status,
         pid: target.metadata.pid,
+        preRestartPid: target.metadata.pid,
         command: target.metadata.launchCommand,
         cwd: target.metadata.cwd,
         reason: validation.reason,
         error: validation.error,
+        recordedAt: target.metadata.recordedAt,
+        completedAt: new Date().toISOString(),
       });
       continue;
     }
@@ -122,6 +129,8 @@ async function stopRegisteredProcess(
       status: 'missing-metadata',
       reason: 'missing-pid',
       error: `${formatTargetLabel(target.target)} lifecycle metadata does not include a PID.`,
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
     };
   }
   if (metadata.pid === process.pid) {
@@ -129,8 +138,11 @@ async function stopRegisteredProcess(
       target: target.target,
       status: 'failed',
       pid: metadata.pid,
+      preRestartPid: metadata.pid,
       reason: 'helper-self-protection',
       error: `Refusing to stop helper process PID ${metadata.pid}.`,
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
     };
   }
 
@@ -142,17 +154,23 @@ async function stopRegisteredProcess(
         target: target.target,
         status: 'stale-pid',
         pid: metadata.pid,
+        preRestartPid: metadata.pid,
         reason: 'stale-pid',
         error: `${formatTargetLabel(target.target)} PID ${metadata.pid} exited before restart.`,
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
       };
     }
     return {
-      target: target.target,
-      status: 'failed',
-      pid: metadata.pid,
-      reason: 'stop-failed',
-      error: formatErrorMessage(error),
-    };
+        target: target.target,
+        status: 'failed',
+        pid: metadata.pid,
+        preRestartPid: metadata.pid,
+        reason: 'stop-failed',
+        error: formatErrorMessage(error),
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
+      };
   }
 
   const exited = await waitForProcessExit(metadata.pid, stopTimeoutMs);
@@ -161,7 +179,10 @@ async function stopRegisteredProcess(
       target: target.target,
       status: 'skipped',
       pid: metadata.pid,
+      preRestartPid: metadata.pid,
       reason: 'stopped',
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
     };
   }
 
@@ -173,8 +194,11 @@ async function stopRegisteredProcess(
         target: target.target,
         status: 'failed',
         pid: metadata.pid,
+        preRestartPid: metadata.pid,
         reason: 'force-stop-failed',
         error: formatErrorMessage(error),
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
       };
     }
   }
@@ -185,14 +209,20 @@ async function stopRegisteredProcess(
       target: target.target,
       status: 'skipped',
       pid: metadata.pid,
+      preRestartPid: metadata.pid,
       reason: 'force-stopped',
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
     }
     : {
       target: target.target,
       status: 'failed',
       pid: metadata.pid,
+      preRestartPid: metadata.pid,
       reason: 'stop-timeout',
       error: `${formatTargetLabel(target.target)} PID ${metadata.pid} did not exit.`,
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
     };
 }
 
@@ -228,6 +258,9 @@ function relaunchService(
         cwd: launch.cwd,
         reason: 'spawn-threw',
         error: formatErrorMessage(error),
+        preRestartPid: metadata.pid,
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
       });
       return;
     }
@@ -248,6 +281,9 @@ function relaunchService(
         cwd: launch.cwd,
         reason: 'spawn-error',
         error: error.message,
+        preRestartPid: metadata.pid,
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
       });
     });
   });
@@ -281,10 +317,14 @@ function waitForRelaunchReadiness(
         target: target.target,
         status: 'relaunch-failed',
         pid: child.pid || undefined,
+        preRestartPid: metadata.pid,
+        postRestartPid: child.pid || undefined,
         command: metadata.launchCommand,
         cwd: launch.cwd,
         reason: 'early-exit',
         error: `${formatTargetLabel(target.target)} relaunched${child.pid ? ` as PID ${child.pid}` : ''} but exited with ${formatExitStatus(code, signal)} before readiness.`,
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
       });
     };
 
@@ -295,10 +335,14 @@ function waitForRelaunchReadiness(
           target: target.target,
           status: 'relaunch-failed',
           pid: child.pid,
+          preRestartPid: metadata.pid,
+          postRestartPid: child.pid,
           command: metadata.launchCommand,
           cwd: launch.cwd,
           reason: 'early-exit',
           error: `${formatTargetLabel(target.target)} relaunched as PID ${child.pid} but exited before readiness.`,
+          recordedAt: metadata.recordedAt,
+          completedAt: new Date().toISOString(),
         });
         return;
       }
@@ -306,8 +350,12 @@ function waitForRelaunchReadiness(
         target: target.target,
         status: 'restarted',
         pid: child.pid || undefined,
+        preRestartPid: metadata.pid,
+        postRestartPid: child.pid || undefined,
         command: metadata.launchCommand,
         cwd: launch.cwd,
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
       });
     }, observedReadyTimeoutMs);
   });
