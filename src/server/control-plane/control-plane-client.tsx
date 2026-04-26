@@ -269,7 +269,14 @@ const prdTaskSpecsEl = document.getElementById('prd-task-specs') as HTMLTextArea
 const chatPrdDraftPanelEl = document.getElementById('chat-prd-draft-panel');
 const chatPrdDraftTitleEl = document.getElementById('chat-prd-draft-title');
 const chatPrdDraftMetaEl = document.getElementById('chat-prd-draft-meta');
+const openChatPrdReviewButton = document.getElementById('open-chat-prd-review');
 const discardChatPrdDraftButton = document.getElementById('discard-chat-prd-draft');
+const chatPrdReviewModalEl = document.getElementById('chat-prd-review-modal');
+const chatPrdReviewMetaEl = document.getElementById('chat-prd-review-meta');
+const chatPrdReviewContentEl = document.getElementById('chat-prd-review-content');
+const closeChatPrdReviewButton = document.getElementById('close-chat-prd-review');
+const backChatPrdReviewButton = document.getElementById('back-chat-prd-review');
+const submitChatPrdReviewButton = document.getElementById('submit-chat-prd-review');
 const refreshButton = document.getElementById('refresh-button');
 const dashboardMetricsEl = document.getElementById('dashboard-metrics');
 const dashboardReposEl = document.getElementById('dashboard-repos');
@@ -332,6 +339,7 @@ let prdHistoryContinueMessagePrdId = '';
 let prdHistoryContinueMessage = '';
 let selectedChatConversationId = '';
 let activeChatPrdDraft: ChatPrdDraftState | null = null;
+let chatPrdReviewModalOpen = false;
 let forceChatScrollToLatest = false;
 let chatJumpLatestVisible = false;
 let lastRenderedChatConversationId = '';
@@ -353,6 +361,24 @@ function mountControlPlane() {
   }
   if (discardChatPrdDraftButton) {
     discardChatPrdDraftButton.addEventListener('click', () => discardChatPrdDraft());
+  }
+  if (openChatPrdReviewButton) {
+    openChatPrdReviewButton.addEventListener('click', () => openChatPrdReviewModal());
+  }
+  if (closeChatPrdReviewButton) {
+    closeChatPrdReviewButton.addEventListener('click', () => closeChatPrdReviewModal());
+  }
+  if (backChatPrdReviewButton) {
+    backChatPrdReviewButton.addEventListener('click', () => closeChatPrdReviewModal());
+  }
+  if (submitChatPrdReviewButton) {
+    submitChatPrdReviewButton.addEventListener('click', () => {
+      submitActiveChatPrdDraftReview().catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+    });
   }
   if (quickPrdForm) {
     quickPrdForm.addEventListener('submit', handleQuickSubmit);
@@ -487,8 +513,16 @@ function mountControlPlane() {
       }
     });
   }
+  if (chatPrdReviewModalEl) {
+    chatPrdReviewModalEl.addEventListener('click', (event) => {
+      if (event.target === chatPrdReviewModalEl) {
+        closeChatPrdReviewModal();
+      }
+    });
+  }
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
+      closeChatPrdReviewModal();
       closePrdModal();
     }
   });
@@ -682,11 +716,9 @@ function loadChatPrdDraftFromButton(button: HTMLButtonElement) {
   writeChatPrdDraftToForm(draft);
   saveActiveChatPrdDraft();
   renderChatPrdDraftPanel();
-  setActiveTab('advanced');
-  (form?.querySelector('details') as HTMLDetailsElement | null)?.setAttribute('open', 'true');
-  form?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  openChatPrdReviewModal();
   if (messageEl) {
-    messageEl.textContent = 'Review the chat PRD draft, edit anything needed, then queue it.';
+    messageEl.textContent = 'Review the chat PRD draft, then submit it or return without queueing.';
   }
 }
 
@@ -759,6 +791,7 @@ function persistActiveChatPrdDraftFromForm() {
   };
   saveActiveChatPrdDraft();
   renderChatPrdDraftPanel();
+  renderChatPrdReviewModal();
 }
 
 function renderChatPrdDraftPanel() {
@@ -771,15 +804,81 @@ function renderChatPrdDraftPanel() {
     return;
   }
   if (chatPrdDraftTitleEl) {
-    chatPrdDraftTitleEl.textContent = draft.title || 'Review and submit';
+    chatPrdDraftTitleEl.textContent = draft.title || 'Ready for review';
   }
   if (chatPrdDraftMetaEl) {
     chatPrdDraftMetaEl.textContent = [
-      'Review and submit',
+      'Draft preserved for later review',
       draft.proposal.source?.conversationId ? `conversation ${draft.proposal.source.conversationId}` : '',
       draft.proposal.source?.responseMessageId ? `message ${draft.proposal.source.responseMessageId}` : '',
     ].filter(Boolean).join(' | ');
   }
+}
+
+function openChatPrdReviewModal() {
+  if (!activeChatPrdDraft) {
+    if (messageEl) {
+      messageEl.textContent = 'No chat PRD draft is ready to review.';
+    }
+    return;
+  }
+  chatPrdReviewModalOpen = true;
+  renderChatPrdReviewModal();
+}
+
+function closeChatPrdReviewModal() {
+  if (!chatPrdReviewModalOpen) {
+    return;
+  }
+  chatPrdReviewModalOpen = false;
+  renderChatPrdReviewModal();
+  if (messageEl && activeChatPrdDraft) {
+    messageEl.textContent = 'Chat PRD draft preserved for later review.';
+  }
+}
+
+function renderChatPrdReviewModal() {
+  if (!chatPrdReviewModalEl) {
+    return;
+  }
+  const draft = activeChatPrdDraft;
+  const visible = Boolean(draft && chatPrdReviewModalOpen);
+  chatPrdReviewModalEl.hidden = !visible;
+  if (!draft || !visible) {
+    return;
+  }
+  if (chatPrdReviewMetaEl) {
+    chatPrdReviewMetaEl.textContent = [
+      draft.proposal.priority ? `Priority ${draft.proposal.priority}` : '',
+      draft.proposal.source?.conversationId ? `Conversation ${draft.proposal.source.conversationId}` : '',
+      draft.proposal.source?.responseMessageId ? `Message ${draft.proposal.source.responseMessageId}` : '',
+    ].filter(Boolean).join(' | ') || 'Review the proposal before queueing it.';
+  }
+  if (chatPrdReviewContentEl) {
+    chatPrdReviewContentEl.innerHTML = renderToHtml(<ChatPrdReviewSummary draft={draft} />);
+  }
+}
+
+async function submitActiveChatPrdDraftReview() {
+  if (!activeChatPrdDraft || !messageEl || !form) {
+    return;
+  }
+  messageEl.textContent = 'Queueing...';
+  const job = await submitPrd({
+    title: prdTitleEl?.value.trim() || '',
+    specification: prdSpecEl?.value.trim() || '',
+    requirements: (prdReqEl?.value || '')
+      .split('\n')
+      .map((value) => value.trim())
+      .filter(Boolean),
+    sprintId: prdSprintEl?.value.trim() || '',
+    taskSpecsRaw: prdTaskSpecsEl?.value.trim() || '',
+  });
+  const submittedChatDraftKey = activeChatPrdDraft.key || '';
+  form.reset();
+  closeChatPrdReviewModal();
+  clearActiveChatPrdDraft(submittedChatDraftKey);
+  messageEl.textContent = buildQueuedMessage(job);
 }
 
 function restoreActiveChatPrdDraft() {
@@ -815,6 +914,7 @@ function restoreActiveChatPrdDraft() {
     activeChatPrdDraft = null;
   }
   renderChatPrdDraftPanel();
+  renderChatPrdReviewModal();
 }
 
 function discardChatPrdDraft(proposalKey = '') {
@@ -824,9 +924,11 @@ function discardChatPrdDraft(proposalKey = '') {
   }
   if (!proposalKey || activeChatPrdDraft?.key === proposalKey) {
     activeChatPrdDraft = null;
+    chatPrdReviewModalOpen = false;
     safeLocalStorageRemove(getActiveChatPrdDraftStorageKey());
     form?.reset();
     renderChatPrdDraftPanel();
+    renderChatPrdReviewModal();
   }
   renderChat(latestConversations);
   if (messageEl) {
@@ -839,8 +941,10 @@ function clearActiveChatPrdDraft(proposalKey = '') {
     dismissChatPrdProposal(proposalKey);
   }
   activeChatPrdDraft = null;
+  chatPrdReviewModalOpen = false;
   safeLocalStorageRemove(getActiveChatPrdDraftStorageKey());
   renderChatPrdDraftPanel();
+  renderChatPrdReviewModal();
   renderChat(latestConversations);
 }
 
@@ -1726,6 +1830,61 @@ function ChatThread({ conversation }: { conversation: ChatConversationSummary | 
   );
 }
 
+function ChatPrdReviewSummary({ draft }: { draft: ChatPrdDraftState }) {
+  const proposal = draft.proposal;
+  const meta = [
+    proposal.priority ? `Priority ${proposal.priority}` : '',
+    proposal.source?.repoId ? `Repo ${proposal.source.repoId}` : '',
+  ].filter(Boolean).join(' | ');
+  return (
+    <div className="chat-prd-review-summary">
+      <div className="chat-prd-review-hero">
+        <div className="pill">PRD proposal</div>
+        <div className="chat-prd-review-title">{proposal.title || draft.title || 'Untitled PRD proposal'}</div>
+        {meta ? <div className="chat-prd-proposal-detail">{meta}</div> : null}
+      </div>
+      <div className="chat-prd-review-grid">
+        {proposal.problem ? (
+          <section className="chat-prd-review-card">
+            <h3>Problem</h3>
+            <p>{proposal.problem}</p>
+          </section>
+        ) : null}
+        {proposal.goal ? (
+          <section className="chat-prd-review-card">
+            <h3>Goal</h3>
+            <p>{proposal.goal}</p>
+          </section>
+        ) : null}
+        {proposal.requirements.length > 0 ? (
+          <section className="chat-prd-review-card wide">
+            <h3>Requirements</h3>
+            <ul className="chat-prd-review-list">
+              {proposal.requirements.map((requirement) => <li>{requirement}</li>)}
+            </ul>
+          </section>
+        ) : null}
+        {proposal.acceptanceCriteria.length > 0 ? (
+          <section className="chat-prd-review-card">
+            <h3>Acceptance Criteria</h3>
+            <ul className="chat-prd-review-list">
+              {proposal.acceptanceCriteria.map((item) => <li>{item}</li>)}
+            </ul>
+          </section>
+        ) : null}
+        {proposal.verification.length > 0 ? (
+          <section className="chat-prd-review-card">
+            <h3>Verification</h3>
+            <ul className="chat-prd-review-list">
+              {proposal.verification.map((item) => <li>{item}</li>)}
+            </ul>
+          </section>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ChatMessage({ message }: { message: ChatMessageSummary }) {
   const role = message.role === 'agent' ? 'agent' : 'manager';
   const status = String(message.status || 'complete');
@@ -1786,9 +1945,8 @@ function ChatPrdProposalCard({
           data-message-id={messageId}
           data-proposal-key={proposalKey}
           data-prd-proposal={JSON.stringify(proposal)}
-          disabled={active}
         >
-          {active ? 'Draft loaded' : 'Review PRD draft'}
+          {active ? 'Resume review' : 'Review PRD draft'}
         </button>
         <button
           type="button"
@@ -2584,6 +2742,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 
 export {
   ChatMessage,
+  ChatPrdReviewSummary,
   ManagerRepoCard,
   ChatPrdProposalCard,
   PackageUpdateButton,
@@ -2591,9 +2750,12 @@ export {
   ProjectRepoCard,
   buildChatPrdDraftFormState,
   captureChatScrollSnapshot,
+  closeChatPrdReviewModal,
   continueSourceChatFromPrd,
   isChatNearBottom,
   mountControlPlane,
+  openChatPrdReviewModal,
   resolveChatScrollDecision,
   resolvePrdHistoryContinueChat,
+  submitActiveChatPrdDraftReview,
 };
