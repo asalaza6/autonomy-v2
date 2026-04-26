@@ -862,11 +862,11 @@
         "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
       ],
       "reviewRound": 5,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:46:51.441Z",
-      "reviewedAt": "2026-04-26T21:46:48.561Z",
-      "lastDecision": "changes_requested",
+      "updatedAt": "2026-04-26T21:47:49.043Z",
+      "reviewedAt": "2026-04-26T21:47:49.043Z",
+      "lastDecision": "approved",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-26T21:47:31.361Z",
       "conversationReferences": {
@@ -874,7 +874,7 @@
           "conversationId": "019dcbbf-5388-7e50-8713-ff0a627b9928",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-26T21:46:51.441Z"
+          "updatedAt": "2026-04-26T21:47:49.043Z"
         }
       }
     }
