@@ -663,7 +663,7 @@
       "sourceTaskId": "prd-auto-promote-next-queued-prd-abaf6c-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T08:20:30.500Z",
       "updatedAt": "2026-04-26T08:20:30.500Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
@@ -676,7 +676,9 @@
         "Repeated refreshes or polling over unchanged state are idempotent: once a queued PRD has been promoted, subsequent evaluations do not duplicate the promotion or add a second active PRD.",
         "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-26T08:20:34.255Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
