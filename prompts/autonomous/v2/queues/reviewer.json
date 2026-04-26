@@ -569,6 +569,40 @@
       "reviewedAt": "2026-04-25T00:52:36.048Z",
       "lastDecision": "approved",
       "mergedAt": "2026-04-25T00:52:41.005Z"
+    },
+    {
+      "id": "review-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
+      "title": "Review [architecture-agent] Implement Expose visual restart proof for control-plane server and bridge",
+      "description": "Review pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent for Implement Expose visual restart proof for control-plane server and bridge",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
+      "sourceTaskId": "prd-expose-visual-restart-proof-1c94e7-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-26T06:40:50.509Z",
+      "updatedAt": "2026-04-26T06:40:50.509Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Persist per-target restart evidence for `server` and `controlBridge`",
+        "including pre-restart PID",
+        "post-restart PID",
+        "recorded lifecycle timestamp",
+        "restart completion timestamp",
+        "and restart mode (`configured` or `default`).",
+        "Expose that evidence in the repo dashboard data model instead of collapsing it to status/reason text only.",
+        "Render a restart evidence panel on the project page and a compact summary on the manager page.",
+        "Show clear target-level labels such as `server pid 123 -> 456` and `bridge pid 789 -> 812` after a successful restart.",
+        "When restart is skipped or fails",
+        "render the reason and last known lifecycle metadata state.",
+        "Keep the current heartbeat indicators",
+        "but visually tie them to the latest restart event so managers can correlate `new pid` with `online heartbeat`.",
+        "If there is no prior PID or no relaunched PID",
+        "render that explicitly rather than implying success."
+      ],
+      "scopeViolations": []
     }
   ]
 }
