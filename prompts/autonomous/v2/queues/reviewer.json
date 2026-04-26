@@ -900,10 +900,10 @@
         "Raw secret values are never emitted into assistant transcript content, structured status payloads, logs, or UI output; any error or debug reporting uses redacted or non-secret-safe messaging only.",
         "Focused automated coverage exercises successful GitHub capability enablement plus the missing-token, invalid-token, and unauthorized-token failure paths, and the implementation runs `npm run typecheck` along with the relevant control-plane, runner, or smoke tests covering session startup and status reporting."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-26T22:06:56.730Z",
-      "updatedAt": "2026-04-26T22:16:45.706Z",
+      "updatedAt": "2026-04-26T22:17:03.480Z",
       "reviewedAt": "2026-04-26T22:16:45.706Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
