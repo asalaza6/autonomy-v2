@@ -701,8 +701,12 @@ async function submitPrd({
 
 function loadChatPrdDraftFromButton(button: HTMLButtonElement) {
   const buttonProposalKey = String(button.dataset.proposalKey || '').trim();
-  if (buttonProposalKey && activeChatPrdDraft?.key === buttonProposalKey) {
-    writeChatPrdDraftToForm(activeChatPrdDraft);
+  const existingDraft = buttonProposalKey
+    ? resolveChatPrdDraftForProposalKey(buttonProposalKey)
+    : null;
+  if (existingDraft) {
+    activeChatPrdDraft = existingDraft;
+    writeChatPrdDraftToForm(existingDraft);
     saveActiveChatPrdDraft();
     renderChatPrdDraftPanel();
     openChatPrdReviewModal();
@@ -891,20 +895,39 @@ async function submitActiveChatPrdDraftReview() {
 }
 
 function restoreActiveChatPrdDraft() {
+  activeChatPrdDraft = readStoredActiveChatPrdDraft();
+  if (activeChatPrdDraft) {
+    writeChatPrdDraftToForm(activeChatPrdDraft);
+  }
+  renderChatPrdDraftPanel();
+  renderChatPrdReviewModal();
+}
+
+function resolveChatPrdDraftForProposalKey(proposalKey: string) {
+  if (!proposalKey) {
+    return null;
+  }
+  if (activeChatPrdDraft?.key === proposalKey) {
+    return activeChatPrdDraft;
+  }
+  const storedDraft = readStoredActiveChatPrdDraft();
+  return storedDraft?.key === proposalKey ? storedDraft : null;
+}
+
+function readStoredActiveChatPrdDraft() {
   const raw = safeLocalStorageGet(getActiveChatPrdDraftStorageKey());
   if (!raw) {
-    renderChatPrdDraftPanel();
-    return;
+    return null;
   }
   try {
     const parsed = JSON.parse(raw) as Partial<ChatPrdDraftState>;
     const proposal = normalizePrdProposal(parsed.proposal, { repoId: entranceContext.repoId });
     const key = String(parsed.key || '').trim();
     if (!proposal || !key || isChatPrdProposalDismissed(key)) {
-      clearActiveChatPrdDraft(key);
-      return;
+      safeLocalStorageRemove(getActiveChatPrdDraftStorageKey());
+      return null;
     }
-    activeChatPrdDraft = {
+    return {
       key,
       proposal,
       title: String(hasOwn(parsed, 'title') ? parsed.title : proposal.title || '').trim(),
@@ -917,13 +940,11 @@ function restoreActiveChatPrdDraft() {
       sprintId: String(parsed.sprintId || '').trim(),
       taskSpecsRaw: String(parsed.taskSpecsRaw || '').trim(),
       updatedAt: String(parsed.updatedAt || new Date().toISOString()),
-    };
-    writeChatPrdDraftToForm(activeChatPrdDraft);
+    } satisfies ChatPrdDraftState;
   } catch {
-    activeChatPrdDraft = null;
+    safeLocalStorageRemove(getActiveChatPrdDraftStorageKey());
+    return null;
   }
-  renderChatPrdDraftPanel();
-  renderChatPrdReviewModal();
 }
 
 function discardChatPrdDraft(proposalKey = '') {

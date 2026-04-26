@@ -128,6 +128,7 @@ test('chat PRD review resume keeps edited draft changes after closing the popup'
   interactive.elements.prdSpec.value = 'Edited PRD specification.';
   interactive.elements.prdReq.value = 'Edited requirement';
   interactive.elements.form.dispatch('input');
+  assert.equal(interactive.storage.get(interactive.activeStorageKey)?.includes('Edited chat PRD title'), true);
 
   openChatPrdReviewModal();
   interactive.elements.chatPrdReviewModal.dispatch('click', { target: interactive.elements.chatPrdReviewModal });
@@ -603,12 +604,12 @@ class FakeButtonElement {
     public dataset: Record<string, string>,
   ) {}
 
-  closest<T>(_selector: string) {
+  closest(_selector: string) {
     const match = _selector.match(/\[data-action="([^"]+)"\]/);
     if (match && this.dataset.action === match[1]) {
-      return this as unknown as T;
+      return this;
     }
-    return null as T;
+    return null;
   }
 }
 
