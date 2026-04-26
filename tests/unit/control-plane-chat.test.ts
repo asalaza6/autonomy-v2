@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 
 import {
   CHAT_RESPONSE_SCHEMA,
+  answerControlPlaneAgentChat,
   buildAgentChatPrompt,
   normalizeChatPrdProposal,
   readProjectContextForChatPrompt,
@@ -121,6 +123,75 @@ test('repo assistant GitHub prompt context stays secret-safe', () => {
   assert.doesNotMatch(JSON.stringify(context), /ghp_|github_pat_/);
 });
 
+test('control plane chat launches disabled GitHub sessions without inheriting host secrets', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-chat-env-'));
+  const capturePath = path.join(rootDir, 'capture.json');
+  const fakeCodexPath = path.join(rootDir, 'fake-codex.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+  const originalUnrelatedSecret = process.env.UNRELATED_SECRET;
+
+  execFileSync('git', ['init'], { cwd: rootDir, stdio: 'ignore' });
+  execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/asalaza6/autonomy-v2.git'], {
+    cwd: rootDir,
+    stdio: 'ignore',
+  });
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    "import fs from 'fs';",
+    'const args = process.argv.slice(2);',
+    "const outputIndex = args.indexOf('--output-last-message');",
+    'const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : "";',
+    `const capturePath = ${JSON.stringify(capturePath)};`,
+    'fs.writeFileSync(capturePath, JSON.stringify({',
+    '  env: {',
+    "    GITHUB_TOKEN: process.env.GITHUB_TOKEN || null,",
+    "    GH_TOKEN: process.env.GH_TOKEN || null,",
+    "    UNRELATED_SECRET: process.env.UNRELATED_SECRET || null,",
+    "    PATH: process.env.PATH || null,",
+    '  },',
+    '}, null, 2));',
+    'fs.writeFileSync(outputPath, JSON.stringify({ answer: "ok", prdProposal: null }));',
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+  process.env.GITHUB_TOKEN = 'host-github-token';
+  process.env.GH_TOKEN = 'host-gh-token';
+  process.env.UNRELATED_SECRET = 'host-only-secret';
+
+  try {
+    const response = await answerControlPlaneAgentChat({
+      repoRoot: rootDir,
+      repoId: 'alpha',
+      payload: {
+        repoId: 'alpha',
+        conversationId: 'conversation-001',
+        messageId: 'message-001',
+        responseMessageId: 'message-002',
+        prompt: 'Summarize the repo.',
+        history: [],
+      },
+      snapshot: {},
+    });
+
+    assert.equal(response.answer, 'ok');
+
+    const captured = JSON.parse(fs.readFileSync(capturePath, 'utf8'));
+    assert.equal(captured.env.GITHUB_TOKEN, null);
+    assert.equal(captured.env.GH_TOKEN, null);
+    assert.equal(captured.env.UNRELATED_SECRET, null);
+    assert.equal(typeof captured.env.PATH, 'string');
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
+    restoreEnv('GITHUB_TOKEN', originalGithubToken);
+    restoreEnv('GH_TOKEN', originalGhToken);
+    restoreEnv('UNRELATED_SECRET', originalUnrelatedSecret);
+  }
+});
+
 function assertStructuredOutputObjectRequirements(schema: any, path = 'schema') {
   if (!schema || typeof schema !== 'object') {
     return;
@@ -180,6 +251,14 @@ test('control plane chat detects structured PRD proposals without treating norma
     null
   );
 });
+
+function restoreEnv(key: string, value: string | undefined) {
+  if (typeof value === 'undefined') {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}
 
 test('control plane chat parses machine-readable PRD proposal blocks from answer text', () => {
   const proposal = extractPrdProposalFromText(`

@@ -82,15 +82,16 @@ async function answerControlPlaneAgentChat({
     includePullRequestData: true,
   });
   const runtimeGithubEnv = readRepoAssistantGithubEnvFromApprovedFiles(repoRoot).env;
+  const repoAssistantEnv = githubCapability.available === true
+    ? buildRepoAssistantGithubEnv(runtimeGithubEnv)
+    : {};
   const output = await runCodexStructured({
     cwd: repoRoot,
     readOnly: true,
     schema: CHAT_RESPONSE_SCHEMA,
     prompt: buildAgentChatPrompt(repoId, payload, snapshot, projectContext, githubCapability),
-    env: githubCapability.available === true
-      ? buildRepoAssistantGithubEnv(runtimeGithubEnv)
-      : undefined,
-    inheritHostEnv: githubCapability.available !== true,
+    env: repoAssistantEnv,
+    inheritHostEnv: false,
     configOverrides: githubCapability.available === true
       ? buildRepoAssistantGithubCodexConfigOverrides()
       : [],
