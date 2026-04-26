@@ -8,6 +8,7 @@ import {
   normalizePrdProposal,
 } from './control-plane-prd-proposal.js';
 import {
+  buildRepoAssistantGithubCodexConfigOverrides,
   buildRepoAssistantGithubEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
@@ -89,6 +90,10 @@ async function answerControlPlaneAgentChat({
     env: githubCapability.available === true
       ? buildRepoAssistantGithubEnv(runtimeGithubEnv)
       : undefined,
+    inheritHostEnv: githubCapability.available !== true,
+    configOverrides: githubCapability.available === true
+      ? buildRepoAssistantGithubCodexConfigOverrides()
+      : [],
   });
 
   const answer = String(output && output.answer || '').trim();

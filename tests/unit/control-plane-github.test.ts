@@ -6,6 +6,7 @@ import path from 'path';
 
 import {
   REPO_ASSISTANT_GITHUB_SECRET_FILES,
+  buildRepoAssistantGithubCodexConfigOverrides,
   buildRepoAssistantGithubEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
@@ -37,6 +38,10 @@ test('repo assistant GitHub env selection only forwards whitelisted auth vars', 
     GH_TOKEN: 'token-456',
   });
   assert.deepEqual(REPO_ASSISTANT_GITHUB_SECRET_FILES, ['.env.autonomy.local', '.env.autonomy']);
+  assert.deepEqual(buildRepoAssistantGithubCodexConfigOverrides(), [
+    'experimental_network.allowed_domains=["api.github.com"]',
+    'experimental_network.open_world_enabled=false',
+  ]);
 });
 
 test('repo assistant GitHub approved secret reader ignores arbitrary env files', () => {

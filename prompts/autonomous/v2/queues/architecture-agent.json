@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4331,14 +4332,15 @@
       "acceptance": [
         "Blocking issues remain in the repo-assistant GitHub auth/session wiring. `npm run typecheck` and `npm run lint` were reported passed by the wrapper, but I found two merge blockers in the current diff. I also could not run the added unit tests in this read-only review environment because `npm test` needs to write `dist/` artifacts.\n`src/codex/cli.ts:261-303` still spawns Codex with `env: { ...process.env, ...(env || {}) }`. That means a repo-assistant session inherits the full host environment, not just the whitelisted GitHub auth vars prepared in `answerControlPlaneAgentChat`. This violates the acceptance requirement that the session receive only approved GitHub auth variables and risks leaking unrelated runtime secrets into the assistant process. The fix needs to launch the repo-assistant with a shaped env that explicitly limits forwarded secrets, and add focused coverage for the spawned env contract.\n`src/server/control-plane/control-plane-github.ts:7-8,125-165,243-250` defines `REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS`, but that allowlist is only reported in status/prompt context. `src/server/control-plane/control-plane-chat.ts:84-91` and `src/codex/cli.ts:187-223` do not enforce any GitHub-only network permission when starting the repo-assistant session. As written, the feature documents `api.github.com` but does not actually grant or restrict outbound access accordingly, so the acceptance criterion about narrow GitHub endpoint permission is unmet. The fix needs real runtime enforcement/configuration for the assistant session network policy, plus verification that the enabled path can read PR data while non-allowlisted network access remains unavailable."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "createdAt": "2026-04-26T22:08:49.333Z",
-      "updatedAt": "2026-04-26T22:08:49.333Z",
+      "updatedAt": "2026-04-26T22:15:05.951Z",
       "startedAt": "2026-04-26T22:08:49.333Z",
-      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent"
+      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
+      "completedAt": "2026-04-26T22:15:05.951Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

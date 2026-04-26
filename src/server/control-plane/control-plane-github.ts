@@ -33,6 +33,13 @@ function buildRepoAssistantGithubEnv(env: NodeJS.ProcessEnv = process.env) {
   };
 }
 
+function buildRepoAssistantGithubCodexConfigOverrides() {
+  return [
+    `experimental_network.allowed_domains=${JSON.stringify([...REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS])}`,
+    'experimental_network.open_world_enabled=false',
+  ];
+}
+
 function readRepoAssistantGithubEnvFromApprovedFiles(rootDir: string) {
   const raw: Record<string, string> = {};
   const loadedFrom: string[] = [];
@@ -514,6 +521,7 @@ function truncateText(value: string, limit: number) {
 }
 
 export {
+  buildRepoAssistantGithubCodexConfigOverrides,
   REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS,
   REPO_ASSISTANT_GITHUB_ENV_KEYS,
   REPO_ASSISTANT_GITHUB_SECRET_FILES,
