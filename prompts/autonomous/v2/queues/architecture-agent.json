@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4137,6 +4136,39 @@
       "completedAt": "2026-04-26T11:14:27.920Z",
       "completionMode": "noop",
       "commitSha": "34685739c01eaf996f4f92da8b419e408c5a1eaa"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-57",
+      "title": "Address review for [architecture-agent] Make the chat PRD review modal responsive and scroll-safe across supported viewports",
+      "description": "Blocking on missing focused verification. I re-checked the current branch against `origin/dev`: the only remaining diff is `prompts/autonomous/v2/queues/architecture-agent.json`, while the reported required checks are still only `npm run typecheck` and `npm run lint`. Per `prompts/autonomous/v2/project-context.md`, control-plane UI changes require focused automated verification before merge, and there is still no recorded passing focused run covering the PRD review modal tests.\nMissing merge-blocking focused verification for the prior control-plane UI change. The current branch does not add any new code or test changes beyond queue metadata, and the reported checks still do not include a passing focused command for `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent focused control-plane test target). Please run and report that focused test successfully before this can merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-fix-chat-prd-review-9f095c",
+      "laneKey": "prd-fix-chat-prd-review-9f095c:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on missing focused verification. I re-checked the current branch against `origin/dev`: the only remaining diff is `prompts/autonomous/v2/queues/architecture-agent.json`, while the reported required checks are still only `npm run typecheck` and `npm run lint`. Per `prompts/autonomous/v2/project-context.md`, control-plane UI changes require focused automated verification before merge, and there is still no recorded passing focused run covering the PRD review modal tests.\nMissing merge-blocking focused verification for the prior control-plane UI change. The current branch does not add any new code or test changes beyond queue metadata, and the reported checks still do not include a passing focused command for `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent focused control-plane test target). Please run and report that focused test successfully before this can merge."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
+      "createdAt": "2026-04-26T11:14:44.043Z",
+      "updatedAt": "2026-04-26T11:14:44.043Z",
+      "startedAt": "2026-04-26T11:14:44.043Z",
+      "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-26T11:14:44.043Z"
+        }
+      },
+      "implementationConversationId": "019dc95b-d5e3-7141-a2ce-93ffc574bab7"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
