@@ -737,6 +737,35 @@
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-26T10:15:42.944Z",
       "mergedAt": "2026-04-26T10:17:31.970Z"
+    },
+    {
+      "id": "review-pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent",
+      "title": "Review [architecture-agent] Implement selectable queued PRD detail view in Main using existing dashboard data",
+      "description": "Review pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent for Implement selectable queued PRD detail view in Main using existing dashboard data",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent",
+      "sourceTaskId": "prd-add-selectable-queued-prd-a6fbed-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-26T10:23:23.773Z",
+      "updatedAt": "2026-04-26T10:23:23.773Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-add-selectable-queued-prd-a6fbed-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "When Main receives one or more queued PRDs in the existing dashboard/status payload, it renders a selectable queued-PRD list plus a visible detail panel or modal for the currently selected queued PRD without navigating away from Main.",
+        "The queued-PRD detail view renders the queued PRD's title, id, status, problem or specification content, requirements, acceptance criteria, verification, timestamps, and source chat metadata whenever those fields are present in the payload.",
+        "Selecting a different queued PRD from the Main view updates the detail view to that queued PRD's information while preserving a stable current selection until the queue contents actually change.",
+        "If the selected queued PRD is removed from the queue on refresh or status update, Main falls back gracefully to another queued PRD by queue order when available, or to a clear no-queued-PRDs empty state when none remain.",
+        "When no queued PRDs exist, Main shows a clear empty state instead of a broken selector or stale detail content.",
+        "The implementation reuses queued PRD data already included in the dashboard/status response and does not introduce a separate queued-PRD fetch path for the Main detail view.",
+        "Existing finished-PRD History interactions continue to behave as before, with queued-PRD selection isolated to the Main view.",
+        "Add or update client UI tests covering queued-PRD selection, detail rendering, empty-state behavior, and selected-item fallback when a queued PRD disappears.",
+        "Add or update dashboard or control-plane tests proving the queued PRD fields required by the Main detail view are present in the status/dashboard contract.",
+        "Verification includes `npm run typecheck` and the focused unit tests for control-plane client and dashboard behavior affected by this change."
+      ],
+      "scopeViolations": []
     }
   ]
 }
