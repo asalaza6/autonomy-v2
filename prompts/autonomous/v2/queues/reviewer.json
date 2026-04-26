@@ -604,15 +604,14 @@
         "Found a blocking correctness issue in the new chat PRD review flow. The required check `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:866-889` renders the popup from `ChatPrdReviewSummary(draft)`, but `ChatPrdReviewSummary` at `src/server/control-plane/control-plane-client.tsx:1842-1893` still reads the displayed title, requirements, acceptance criteria, and verification from `draft.proposal` rather than the editable draft/form state. The submit path at `src/server/control-plane/control-plane-client.tsx:876-885` queues the current form values instead. That means a manager can edit the preserved draft, reopen the popup, see the original proposal summary, and submit different content than the popup shows. This undermines the explicit review-before-submit requirement. Update the popup to reflect the current draft values that will actually be queued, or otherwise prevent editable divergence, and add a focused test covering edit -> reopen popup -> summary matches submitted payload."
       ],
       "reviewRound": 6,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-26T07:54:06.297Z",
-      "updatedAt": "2026-04-26T08:08:18.012Z",
+      "updatedAt": "2026-04-26T08:08:21.603Z",
       "reviewedAt": "2026-04-26T08:01:57.063Z",
       "lastDecision": "approved",
-      "lastMergeFailureCode": "mergeability_unknown",
-      "lastMergeFailureMessage": "GitHub is still computing mergeability",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T08:06:16.479Z"
+      "dispatchedAt": "2026-04-26T08:06:16.479Z",
+      "mergedAt": "2026-04-26T08:08:04Z"
     },
     {
       "id": "review-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
