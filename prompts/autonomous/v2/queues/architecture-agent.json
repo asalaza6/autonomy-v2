@@ -1751,10 +1751,14 @@
         "Automated coverage is added or updated for active pull request selection logic and for progress-section rendering that shows and hides the link based on PRD state and URL presence.",
         "Verification includes `npm run typecheck` and the relevant unit coverage for the control-plane progress UI or status-selection logic."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T09:58:23.215Z",
-      "updatedAt": "2026-04-26T09:58:23.215Z"
+      "updatedAt": "2026-04-26T10:04:28.552Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-active-pull-request-c879fc-architecture-agent",
+      "startedAt": "2026-04-26T09:58:25.771Z",
+      "completedAt": "2026-04-26T10:04:28.552Z",
+      "completionMode": "code"
     }
   ]
 }

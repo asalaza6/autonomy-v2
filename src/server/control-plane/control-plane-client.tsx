@@ -10,6 +10,7 @@ import {
   getPrdProposalStableKey,
   normalizePrdProposal,
 } from './control-plane-prd-proposal.js';
+import { selectActivePullRequestStatusForPrd } from '../../autonomy-v2/control-plane/status-view.js';
 import type { ControlPlanePrdProposal, ControlPlanePrdSourceChat } from '../../types.js';
 
 declare global {
@@ -85,6 +86,8 @@ type AgentSummary = {
 type PullRequestSummary = {
   title?: string;
   prId?: string;
+  prdId?: string | null;
+  number?: number | null;
   statusLabel?: string;
   status?: string;
   mergeState?: string;
@@ -242,6 +245,11 @@ type StateSnapshot = {
   [key: string]: unknown;
 };
 
+type ProjectProgressPullRequestAction = {
+  href: string;
+  label: string;
+};
+
 type EntranceContext = {
   entrance: 'manager' | 'project';
   repoId: string;
@@ -295,6 +303,7 @@ const mainProgressDetailEl = document.getElementById('main-progress-detail');
 const mainProgressStatsEl = document.getElementById('main-progress-stats');
 const mainProgressFillEl = document.getElementById('main-progress-fill');
 const mainProgressStepsEl = document.getElementById('main-progress-steps');
+const mainProgressActionsEl = document.getElementById('main-progress-actions');
 const mainDeployActionsEl = document.getElementById('main-deploy-actions');
 const prdHistorySummaryEl = document.getElementById('prd-history-summary');
 const prdHistoryListEl = document.getElementById('prd-history-list');
@@ -1338,6 +1347,9 @@ function renderProjectMain(dashboard: DashboardSummary) {
   if (mainProgressStepsEl) {
     mainProgressStepsEl.innerHTML = renderToHtml(<PrdRunSteps run={repo && repo.prdRun ? repo.prdRun : null} />);
   }
+  if (mainProgressActionsEl) {
+    mainProgressActionsEl.innerHTML = renderToHtml(<ProjectMainProgressActions progress={progress} />);
+  }
   if (mainDeployActionsEl) {
     mainDeployActionsEl.innerHTML = renderToHtml(<ProjectMainDeployActions repo={repo} />);
   }
@@ -1690,6 +1702,7 @@ function setActiveTab(tabName: string) {
 function resolveProjectProgress(repo: RepoSummary | null) {
   const activePrd = repo && repo.activePrd ? repo.activePrd : null;
   const prdRun = repo && repo.prdRun ? repo.prdRun : null;
+  const pullRequestAction = resolveProjectProgressPullRequestAction(repo);
   if (activePrd) {
     const totalTasks = Number(activePrd.plannedTaskCount || 0);
     const completedTasks = Math.min(totalTasks, Number(activePrd.completedTaskCount || 0));
@@ -1717,6 +1730,7 @@ function resolveProjectProgress(repo: RepoSummary | null) {
         ? `${completedTasks} complete · ${remainingTasks} remaining`
         : 'Waiting for planned tasks',
       percent,
+      pullRequestAction,
     };
   }
 
@@ -1726,6 +1740,7 @@ function resolveProjectProgress(repo: RepoSummary | null) {
       detail: prdRun && prdRun.detail ? prdRun.detail : 'Queued and waiting to start',
       stats: `${repo.queuedPrds.length} PRD${repo.queuedPrds.length === 1 ? '' : 's'} in queue`,
       percent: 0,
+      pullRequestAction: null,
     };
   }
 
@@ -1734,7 +1749,51 @@ function resolveProjectProgress(repo: RepoSummary | null) {
     detail: 'No active PRD is working through tasks right now.',
     stats: '0 complete · 0 remaining',
     percent: 0,
+    pullRequestAction: null,
   };
+}
+
+function resolveProjectProgressPullRequestAction(repo: RepoSummary | null): ProjectProgressPullRequestAction | null {
+  const activePrd = repo && repo.activePrd ? repo.activePrd : null;
+  const pullRequestStatus = selectActivePullRequestStatusForPrd(
+    activePrd,
+    repo && Array.isArray(repo.pullRequestStatuses) ? repo.pullRequestStatuses : [],
+    repo && Array.isArray(repo.queuedPrds) ? repo.queuedPrds : []
+  );
+  const href = String(pullRequestStatus && pullRequestStatus.url || '').trim();
+  if (!href) {
+    return null;
+  }
+  return {
+    href,
+    label: formatProjectProgressPullRequestLabel(pullRequestStatus),
+  };
+}
+
+function formatProjectProgressPullRequestLabel(pullRequestStatus: PullRequestSummary | null) {
+  const number = Number(pullRequestStatus && pullRequestStatus.number);
+  if (Number.isFinite(number) && number > 0) {
+    return `Open pull request #${number}`;
+  }
+  return 'Open active pull request';
+}
+
+function ProjectMainProgressActions(
+  { progress }: { progress: ReturnType<typeof resolveProjectProgress> }
+) {
+  if (!progress.pullRequestAction) {
+    return null;
+  }
+  return (
+    <a
+      className="action-link"
+      href={progress.pullRequestAction.href}
+      target="_blank"
+      rel="noreferrer"
+    >
+      {progress.pullRequestAction.label}
+    </a>
+  );
 }
 
 function ProjectMainDeployActions({ repo }: { repo: RepoSummary | null }) {
@@ -3080,6 +3139,7 @@ export {
   ManagerRepoCard,
   ChatPrdProposalCard,
   PackageUpdateButton,
+  ProjectMainProgressActions,
   PrdHistoryDetail,
   ProjectRepoCard,
   buildChatPrdDraftFormState,
@@ -3089,6 +3149,7 @@ export {
   isChatNearBottom,
   mountControlPlane,
   openChatPrdReviewModal,
+  resolveProjectProgress,
   resolveSelectedHistoryState,
   resolveChatScrollDecision,
   resolvePrdHistoryContinueChat,
