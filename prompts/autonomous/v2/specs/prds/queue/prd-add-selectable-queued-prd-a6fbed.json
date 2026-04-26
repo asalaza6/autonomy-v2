@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-add-selectable-queued-prd-a6fbed",
+  "title": "Add selectable queued PRD detail view in Main",
+  "createdAt": "2026-04-26T09:58:26.970Z",
+  "specification": "# PRD: Add selectable queued PRD detail view in Main\n\nPriority: medium\n\n## Problem\nManagers can see queued PRD cards in Main, but cannot select a queued PRD and inspect its full details there. This makes the queue hard to review before planning starts, even though queued PRD data is already present in the dashboard model.\n\n## Goal\nLet managers select queued PRDs from Main and view their details in a dedicated detail panel or modal without leaving the main status view.\n\n## Requirements\n- Add selection state for queued PRDs in the Main project/repo view.\n- Render a queued PRD detail view showing at least title, id, status, problem/specification, requirements, acceptance criteria, verification, timestamps, and source chat metadata when available.\n- Allow switching between multiple queued PRDs in order without losing the current selection unexpectedly.\n- Show a clear empty state when no queued PRDs exist.\n- Reuse existing queued PRD data from the dashboard/status payload where possible instead of introducing a separate fetch path.\n- Keep the existing finished-PRD History interaction intact.\n\n## Acceptance Criteria\n- When one or more queued PRDs exist, Main shows a selectable list and a visible detail view for the selected queued PRD.\n- Selecting a different queued PRD updates the detail panel to that PRD's information.\n- If the selected queued PRD disappears from the queue, the UI falls back gracefully to another queued PRD or an empty state.\n- Managers can inspect all currently queued PRDs from Main without navigating to History or raw state views.\n\n## Verification\n- Add/update client UI tests covering queued PRD selection and detail rendering in Main.\n- Add/update dashboard/control-plane tests proving queued PRD fields required by the detail view are present.\n- Run `npm run typecheck` and the focused unit tests for control-plane client/dashboard behavior.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777197170562_031d22146e8de\nManager message: msg_1777197170562_d2fae94d36c18\nAgent message: msg_1777197170562_558eff08d2b928\nCreated: 2026-04-26T09:53:41.431Z",
+  "requirements": [
+    "Add selection state for queued PRDs in the Main project/repo view.",
+    "Render a queued PRD detail view showing at least title",
+    "id",
+    "status",
+    "problem/specification",
+    "requirements",
+    "acceptance criteria",
+    "verification",
+    "timestamps",
+    "and source chat metadata when available.",
+    "Allow switching between multiple queued PRDs in order without losing the current selection unexpectedly.",
+    "Show a clear empty state when no queued PRDs exist.",
+    "Reuse existing queued PRD data from the dashboard/status payload where possible instead of introducing a separate fetch path.",
+    "Keep the existing finished-PRD History interaction intact."
+  ]
+}
