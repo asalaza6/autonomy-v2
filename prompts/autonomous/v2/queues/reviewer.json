@@ -778,7 +778,7 @@
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
-      "sourceTaskId": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-57",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-58",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "baseBranch": "dev",
@@ -796,7 +796,7 @@
       "reviewRound": 59,
       "status": "queued",
       "createdAt": "2026-04-26T10:34:19.626Z",
-      "updatedAt": "2026-04-26T11:15:35.115Z",
+      "updatedAt": "2026-04-26T11:16:06.335Z",
       "reviewedAt": "2026-04-26T11:15:20.978Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
@@ -806,7 +806,7 @@
           "conversationId": "019dc95d-402a-7ca1-ae90-f56d444c6b3c",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-26T11:15:35.115Z"
+          "updatedAt": "2026-04-26T11:16:06.335Z"
         }
       }
     }
