@@ -600,11 +600,11 @@
         "Keep non-PRD chat responses unchanged."
       ],
       "reviewRound": 5,
-      "status": "queued",
+      "status": "approved",
       "createdAt": "2026-04-26T07:54:06.297Z",
-      "updatedAt": "2026-04-26T08:01:39.708Z",
-      "reviewedAt": "2026-04-26T08:00:15.723Z",
-      "lastDecision": "changes_requested",
+      "updatedAt": "2026-04-26T08:01:57.063Z",
+      "reviewedAt": "2026-04-26T08:01:57.063Z",
+      "lastDecision": "approved",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-26T08:00:39.770Z"
     },
