@@ -652,6 +652,31 @@
       "lastDecision": "approved",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-26T07:01:38.796Z"
+    },
+    {
+      "id": "review-pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
+      "title": "Review [architecture-agent] Implement automatic promotion of the next queued PRD when no active PRD exists",
+      "description": "Review pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent for Implement automatic promotion of the next queued PRD when no active PRD exists",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
+      "sourceTaskId": "prd-auto-promote-next-queued-prd-abaf6c-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-26T08:20:30.500Z",
+      "updatedAt": "2026-04-26T08:20:30.500Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "When evaluation runs with `activePrds` empty and at least one queued PRD present, the first queued PRD by existing queue order is promoted automatically without any manual manager action.",
+        "After auto-promotion completes, the promoted PRD is removed from `queuedPrds`, appears in `activePrds`, and no later queued PRD is promoted in the same evaluation cycle.",
+        "When evaluation runs while an active PRD already exists, the queued PRD list remains unchanged and no auto-promotion occurs.",
+        "The promotion path triggers the same downstream PM/planning behavior expected for an active PRD so the PM agent begins normal planning on the promoted PRD.",
+        "Repeated refreshes or polling over unchanged state are idempotent: once a queued PRD has been promoted, subsequent evaluations do not duplicate the promotion or add a second active PRD.",
+        "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
+      ],
+      "scopeViolations": []
     }
   ]
 }
