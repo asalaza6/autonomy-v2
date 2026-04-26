@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-auto-promote-next-queued-prd-abaf6c",
+  "title": "Auto-promote next queued PRD when no active PRD exists",
+  "createdAt": "2026-04-26T08:12:21.239Z",
+  "specification": "# PRD: Auto-promote next queued PRD when no active PRD exists\n\nPriority: high\n\n## Problem\nQueued PRDs can remain stalled when there is no active PRD and the PM agent is idle, requiring manual promotion.\n\n## Goal\nAutomatically promote the next queued PRD into the active slot whenever the repo has no active PRD and at least one queued PRD is available.\n\n## Requirements\n- Detect the state where `activePrds` is empty and `queuedPrds` has at least one item.\n- Automatically select the next queued PRD using the existing queue ordering.\n- Promote that PRD to active without requiring a manual manager action.\n- Ensure the PM/planning flow is triggered after promotion.\n- Avoid promoting a second PRD if one becomes active during the same evaluation cycle.\n- Surface the promotion event in the control panel status or activity log.\n\n## Acceptance Criteria\n- When `activePrds` is empty and at least one PRD is queued, the first queued PRD is promoted automatically.\n- When an active PRD already exists, no queued PRD is auto-promoted.\n- After promotion, the promoted PRD is no longer listed in `queuedPrds` and appears in `activePrds`.\n- The PM agent reflects the new active PRD and begins normal planning behavior.\n- No duplicate promotions occur during refreshes or repeated evaluations.\n\n## Verification\n- Test state transition from no active PRD plus non-empty queue to a single promoted active PRD.\n- Test that the queue order is preserved when multiple PRDs are queued.\n- Test that no promotion occurs when an active PRD already exists.\n- Test repeated polling/refresh behavior to confirm idempotency.\n- Verify the control panel shows the promotion outcome clearly.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777190956605_90ab151bcff448\nManager message: msg_1777190956605_2a42b9b8e18aa\nAgent message: msg_1777190956605_dcffeecc2c3e2\nCreated: 2026-04-26T08:09:33.781Z",
+  "requirements": [
+    "Detect the state where `activePrds` is empty and `queuedPrds` has at least one item.",
+    "Automatically select the next queued PRD using the existing queue ordering.",
+    "Promote that PRD to active without requiring a manual manager action.",
+    "Ensure the PM/planning flow is triggered after promotion.",
+    "Avoid promoting a second PRD if one becomes active during the same evaluation cycle.",
+    "Surface the promotion event in the control panel status or activity log."
+  ]
+}
