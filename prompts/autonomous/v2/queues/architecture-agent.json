@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4454,6 +4453,30 @@
       "completedAt": "2026-04-26T22:46:24.672Z",
       "completionMode": "code",
       "commitSha": "3e30f531982f6c3604c14866d77d69906a11018f"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-control-plane-pr-and-027e4d-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Make control-plane PR and active PRD status authoritative, read-only, and observable",
+      "description": "Cannot approve for merge into `dev`. `origin/dev` is available and the branch is in scope, but merge-blocking verification is incomplete: `npm run lint` fails, and there is no evidence the focused control-plane/sync test targets added for this high-risk status-reconciliation change were executed.\n`npm run lint` is failing, which is a merge blocker. In [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:129) and [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:133), `isPullRequestMerged` and `isPullRequestClosed` are defined but unused. Remove them or use them so the lane can pass repo-level lint before review can approve.\nThis PR changes high-risk control-plane/sync behavior and adds targeted coverage in [tests/unit/review-reconciliation.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/review-reconciliation.test.ts:1) and [tests/unit/control-plane-status.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/control-plane-status.test.ts:304), but the provided deterministic results only show `npm run typecheck` and a failing lint run. Re-run and report the relevant focused unit/control-plane test targets for the new reconciliation and status-snapshot scenarios before this is safe to merge.\nBlocking checks failed: npm run lint",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-control-plane-pr-and-027e4d",
+      "laneKey": "prd-make-control-plane-pr-and-027e4d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Cannot approve for merge into `dev`. `origin/dev` is available and the branch is in scope, but merge-blocking verification is incomplete: `npm run lint` fails, and there is no evidence the focused control-plane/sync test targets added for this high-risk status-reconciliation change were executed.\n`npm run lint` is failing, which is a merge blocker. In [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:129) and [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:133), `isPullRequestMerged` and `isPullRequestClosed` are defined but unused. Remove them or use them so the lane can pass repo-level lint before review can approve.\nThis PR changes high-risk control-plane/sync behavior and adds targeted coverage in [tests/unit/review-reconciliation.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/review-reconciliation.test.ts:1) and [tests/unit/control-plane-status.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/control-plane-status.test.ts:304), but the provided deterministic results only show `npm run typecheck` and a failing lint run. Re-run and report the relevant focused unit/control-plane test targets for the new reconciliation and status-snapshot scenarios before this is safe to merge.\nBlocking checks failed: npm run lint"
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-control-plane-pr-and-027e4d-architecture-agent",
+      "createdAt": "2026-04-26T22:47:43.126Z",
+      "updatedAt": "2026-04-26T22:47:43.126Z",
+      "startedAt": "2026-04-26T22:47:43.126Z",
+      "prId": "pr-prd-make-control-plane-pr-and-027e4d-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
