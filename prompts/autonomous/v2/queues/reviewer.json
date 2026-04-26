@@ -603,15 +603,14 @@
         "`npm run typecheck` is failing, so the required lane check is not satisfied and this branch is not merge-safe for `dev`. The current failure is in the restart-evidence changes around deferred restart launch results.\nBlocking: the required `npm run typecheck` check failed. TypeScript reports that the failed-result objects passed to `DeferredRestartLaunchResult` are missing the required `completedAt` field in [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-package-update.ts:580) and [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-package-update.ts:638). Update the deferred restart launch result construction so every path satisfies the `DeferredRestartLaunchResult` contract, then rerun `npm run typecheck`.\nBlocking checks failed: npm run typecheck"
       ],
       "reviewRound": 6,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-26T06:40:50.509Z",
-      "updatedAt": "2026-04-26T07:17:59.028Z",
+      "updatedAt": "2026-04-26T07:18:00.312Z",
       "reviewedAt": "2026-04-26T06:50:38.488Z",
       "lastDecision": "approved",
-      "lastMergeFailureCode": "mergeability_unknown",
-      "lastMergeFailureMessage": "GitHub is still computing mergeability",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T07:01:38.796Z"
+      "dispatchedAt": "2026-04-26T07:01:38.796Z",
+      "mergedAt": "2026-04-26T07:17:38Z"
     }
   ]
 }
