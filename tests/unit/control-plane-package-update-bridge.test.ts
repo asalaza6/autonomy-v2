@@ -7,6 +7,12 @@ import path from 'path';
 
 import { runControlPlaneBridgeOnce } from '../../src/server/control-plane/control-plane-bridge.js';
 import {
+  completeJob,
+  createControlPlaneRestartJob,
+  enqueueJob,
+  loadControlPlaneState,
+} from '../../src/server/control-plane/control-plane-store.js';
+import {
   createFixtureRepo,
   git,
   initAutonomyRepo,
@@ -636,6 +642,8 @@ test('bridge commits package update changes even when unrelated files were alrea
 
 test('bridge executes restart jobs independently after completion', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-restart-');
+  const managerRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-manager-state-'));
+  const job = enqueueJob(managerRoot, createControlPlaneRestartJob({ repoId: 'default' }));
   initAutonomyRepo(repoDir);
   const bridgeMarkerPath = path.join(os.tmpdir(), `autonomy-v2-bridge-restart-${Date.now()}.txt`);
   const serverMarkerPath = path.join(os.tmpdir(), `autonomy-v2-server-restart-${Date.now()}.txt`);
@@ -679,28 +687,18 @@ test('bridge executes restart jobs independently after completion', async (t) =>
         return;
       }
       jobClaimed = true;
-      res.end(JSON.stringify({
-        job: {
-          id: 'job-restart-1',
-          type: 'restart',
-          repoId: 'default',
-          payload: {
-            repoId: 'default',
-          },
-          status: 'claimed',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      }));
+      res.end(JSON.stringify({ job }));
       return;
     }
 
-    if (req.url === '/api/jobs/job-restart-1/complete' && req.method === 'POST') {
+    if (req.url === `/api/jobs/${job.id}/complete` && req.method === 'POST') {
       requestEvents.push('complete');
       markerStatesAtComplete.push(restartMarkerExists(bridgeMarkerPath, serverMarkerPath));
-      completedJobs.push(JSON.parse(await readRequestText(req)));
+      const body = JSON.parse(await readRequestText(req));
+      completedJobs.push(body);
+      completeJob(managerRoot, job.id, body);
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-restart-1', status: 'completed' }));
+      res.end(JSON.stringify({ id: job.id, status: 'completed' }));
       return;
     }
 
@@ -765,6 +763,16 @@ test('bridge executes restart jobs independently after completion', async (t) =>
   assert.equal(typeof completedJobs[1].result.restartStatus.server.postRestartPid, 'number');
   assert.equal(typeof completedJobs[1].result.restartStatus.completedAt, 'string');
   assert.deepEqual(completedJobs[1].result.errors, []);
+  const storedJob = loadControlPlaneState(managerRoot).jobs.find((entry) => entry.id === job.id);
+  assert.equal(storedJob?.status, 'completed');
+  assert.equal(storedJob?.result?.restartStatus?.status, 'restarted');
+  assert.equal(storedJob?.result?.restartStatus?.controlBridge?.status, 'restarted');
+  assert.equal(typeof storedJob?.result?.restartStatus?.controlBridge?.completedAt, 'string');
+  assert.equal(typeof storedJob?.result?.restartStatus?.controlBridge?.postRestartPid, 'number');
+  assert.equal(storedJob?.result?.restartStatus?.server?.status, 'restarted');
+  assert.equal(typeof storedJob?.result?.restartStatus?.server?.completedAt, 'string');
+  assert.equal(typeof storedJob?.result?.restartStatus?.server?.postRestartPid, 'number');
+  assert.deepEqual(storedJob?.result?.errors, []);
   assert.match(logs.join('\n'), /bridge:restart:start/);
   assert.match(logs.join('\n'), /bridge:restart:deferred-launch/);
   assert.match(logs.join('\n'), /bridge:restart:deferred-complete/);

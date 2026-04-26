@@ -64,10 +64,11 @@ function mergeDeferredRestartLaunchResults(
     const previousTarget = restartStatus[launchResult.target] && typeof restartStatus[launchResult.target] === 'object'
       ? restartStatus[launchResult.target] as Record<string, unknown>
       : {};
+    const postRestartPid = launchResult.postRestartPid ?? null;
     const nextTarget: Record<string, unknown> = {
       ...previousTarget,
       status: launchResult.status === 'launched' ? 'restarted' : 'failed',
-      postRestartPid: launchResult.postRestartPid ?? null,
+      postRestartPid,
       completedAt: launchResult.completedAt,
     };
     if (launchResult.error) {
@@ -75,7 +76,11 @@ function mergeDeferredRestartLaunchResults(
     } else {
       delete nextTarget.error;
     }
-    delete nextTarget.reason;
+    if (launchResult.status === 'launched' && postRestartPid === null) {
+      nextTarget.reason = 'post-restart-pid-unavailable';
+    } else {
+      delete nextTarget.reason;
+    }
     restartStatus[launchResult.target] = nextTarget;
     if (!latestCompletedAt || Date.parse(launchResult.completedAt) >= Date.parse(latestCompletedAt)) {
       latestCompletedAt = launchResult.completedAt;

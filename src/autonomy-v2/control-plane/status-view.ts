@@ -508,6 +508,9 @@ function formatRestartReason(reason: string) {
   if (reason === 'after-job-completion') {
     return 'after job completion';
   }
+  if (reason === 'post-restart-pid-unavailable') {
+    return 'post-restart pid unavailable';
+  }
   return formatStatusLabel(reason);
 }
 

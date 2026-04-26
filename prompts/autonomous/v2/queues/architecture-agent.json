@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1301,13 +1302,15 @@
       "acceptance": [
         "Configured restart mode still does not persist final per-target restart evidence after the deferred commands run, so the PR still misses the acceptance requirement to expose definitive restart proof for both `configured` and `default` modes. `npm run typecheck` passed, but the configured bridge path remains functionally incomplete and under-verified.\nBlocking: configured restart targets are still completed as placeholder `deferred` entries instead of final evidence records. In [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-package-update.ts:399), configured targets are initialized with `status: 'deferred'`, `reason: 'after-job-completion'`, and only pre-restart metadata. Then [src/server/control-plane/control-plane-bridge.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-bridge.ts:231) only queues those deferred commands after `/complete`, and [src/server/control-plane/control-plane-bridge.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/src/server/control-plane/control-plane-bridge.ts:290) only logs launch results. Nothing writes the configured-mode post-restart PID / explicit unavailable state / per-target completion timestamp back into `job.result.restartStatus`, so the dashboard and UI still cannot show final configured restart proof.\nVerification gap: the focused bridge test still asserts the old incomplete behavior instead of the required persisted evidence model. [tests/unit/control-plane-package-update-bridge.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-expose-visual-restart-proof-1c94e7-architecture-agent/tests/unit/control-plane-package-update-bridge.test.ts:750) expects the completed restart job to remain `deferred` for both configured targets even after both restart commands have run. Please update the implementation to persist final configured-mode outcomes and add coverage that asserts the stored restart result contains target-level completion data and explicit post-restart PID or unavailable-state evidence."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
       "createdAt": "2026-04-26T06:44:37.856Z",
-      "updatedAt": "2026-04-26T06:47:55.768Z",
+      "updatedAt": "2026-04-26T06:52:41.425Z",
       "startedAt": "2026-04-26T06:47:55.768Z",
-      "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent"
+      "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
+      "completedAt": "2026-04-26T06:52:41.425Z",
+      "completionMode": "code"
     },
     {
       "id": "architecture-agent-followup-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent-3",
@@ -1324,12 +1327,12 @@
       "acceptance": [
         "`npm run typecheck` passed, but the PR still does not satisfy the restart-evidence acceptance criteria for configured restarts. Configured targets are still persisted as placeholder `deferred` entries and never updated with final per-target completion evidence, so this branch is not safe to merge into `dev`.\nBlocking: configured restart targets are still initialized as `status: 'deferred'` with `reason: 'after-job-completion'` in `src/server/control-plane/control-plane-package-update.ts:401-417`, and the bridge still only launches those deferred commands and logs the result in `src/server/control-plane/control-plane-bridge.ts:290-303`. Nothing writes the configured-mode post-restart PID, explicit unavailable state, or per-target completion timestamp back into `job.result.restartStatus`, so the dashboard/UI cannot actually expose final configured restart proof for `server` and `controlBridge` as required.\nVerification gap: the focused bridge test still encodes the incomplete behavior instead of the required final evidence model. `tests/unit/control-plane-package-update-bridge.test.ts:749-757` still expects the completed restart job to remain `deferred` for both configured targets after both commands have run. Please update the implementation and coverage so configured-mode jobs persist final target-level evidence, including completion data and post-restart PID or explicit missing/unavailable state."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
       "createdAt": "2026-04-26T06:46:11.514Z",
-      "updatedAt": "2026-04-26T06:46:11.514Z",
-      "startedAt": null,
+      "updatedAt": "2026-04-26T06:52:41.425Z",
+      "startedAt": "2026-04-26T06:52:41.425Z",
       "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent"
     },
     {
@@ -1355,6 +1358,5 @@
       "startedAt": null,
       "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
