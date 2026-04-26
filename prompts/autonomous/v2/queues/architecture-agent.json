@@ -1686,11 +1686,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-manager-side-reset-prds-4fb271-architecture-agent",
       "createdAt": "2026-04-26T09:52:45.367Z",
-      "updatedAt": "2026-04-26T09:54:59.096Z",
+      "updatedAt": "2026-04-26T09:54:59.159Z",
       "startedAt": "2026-04-26T09:52:45.367Z",
       "prId": "pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent",
       "completedAt": "2026-04-26T09:54:59.096Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "bd55eacccf91c5adc4d045f8a05b8ebbafdc6ee7"
     },
     {
       "id": "architecture-agent-followup-pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent-2",
