@@ -844,31 +844,26 @@
     {
       "id": "review-pr-prd-show-associated-pull-request-5ed56d-architecture-agent",
       "title": "Review [architecture-agent] Add linked pull request metadata and conditional History action for completed PRDs",
-      "description": "Review pr-prd-show-associated-pull-request-5ed56d-architecture-agent for Add linked pull request metadata and conditional History action for completed PRDs",
+      "description": "Review pr-prd-show-associated-pull-request-5ed56d-architecture-agent for Address review for [architecture-agent] Add linked pull request metadata and conditional History action for completed PRDs",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-show-associated-pull-request-5ed56d-architecture-agent",
-      "sourceTaskId": "prd-show-associated-pull-request-5ed56d-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-show-associated-pull-request-5ed56d-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "The PRD history data model used by the control-plane status or dashboard payload supports associated pull request metadata for historical PRDs, including at minimum a pull request number and URL when a linked PR exists.",
-        "The History detail rendering path in `src/server/control-plane/` shows an `Open pull request` action for the selected historical PRD only when associated pull request metadata is present.",
-        "Activating the History detail pull request action opens or targets the exact associated GitHub pull request URL carried in the selected PRD's metadata.",
-        "Selecting a historical PRD with no associated pull request metadata renders no empty placeholder, disabled control, or broken pull-request action in the History detail pane.",
-        "Existing History detail content, selection behavior, and source-chat continuation actions remain unchanged for PRDs regardless of whether pull request metadata exists.",
-        "Add or update focused tests covering history snapshot shaping with and without associated pull request metadata and the conditional History detail rendering of the pull-request action.",
-        "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
+        "Blocking on verification. The diff is scoped correctly and the required `npm run typecheck`/`npm run lint` checks passed, but this change modifies high-risk control-plane status/history shaping and History detail UI without evidence that the focused control-plane tests were actually run.\nMissing merge-blocking verification for the changed control-plane paths. This PR updates history snapshot shaping in `src/autonomy-v2/commands/shared-prds.ts` and History detail rendering in `src/server/control-plane/control-plane-client.tsx`, and the acceptance criteria explicitly require relevant focused tests in addition to `npm run typecheck`. The wrapper results only show `npm run typecheck` and `npm run lint`, so please run and report the focused tests that cover this behavior, at minimum the updated suites in `tests/unit/control-plane-status.test.ts`, `tests/unit/control-plane-dashboard.test.ts`, and `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent narrower command that executes those cases)."
       ],
       "reviewRound": 2,
       "status": "queued",
       "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:42:48.734Z",
+      "updatedAt": "2026-04-26T21:43:20.711Z",
       "reviewedAt": "2026-04-26T21:42:18.923Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T21:40:41.301Z"
+      "dispatchedAt": "2026-04-26T21:40:41.301Z",
+      "scopeViolations": []
     }
   ]
 }
