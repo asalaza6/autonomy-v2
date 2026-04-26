@@ -76,6 +76,8 @@ function describePrd(prd: any) {
     stateLabel = 'Waiting in queue';
   } else if (status === 'completed') {
     stateLabel = 'Completed';
+  } else if (status === 'reset') {
+    stateLabel = 'Reset / abandoned';
   } else if (status === 'failed') {
     stateLabel = 'Needs attention';
   }
@@ -91,6 +93,9 @@ function describePrd(prd: any) {
   }
   if (prd && prd.lastError) {
     details.push(`last error: ${summarizeText(prd.lastError)}`);
+  }
+  if (status === 'reset' && prd && prd.archive && prd.archive.reason) {
+    details.push(`reason: ${summarizeText(prd.archive.reason)}`);
   }
   if (prd && prd.updatedAt) {
     details.push(`updated ${formatTimestamp(prd.updatedAt)}`);
@@ -126,6 +131,16 @@ function describePrd(prd: any) {
     isQueued: prd && prd.isQueued === true,
     archived: prd && prd.archived === true,
     archivePath: prd && prd.archivePath ? String(prd.archivePath) : null,
+    archive: prd && prd.archive && typeof prd.archive === 'object'
+      ? {
+        kind: prd.archive.kind ? String(prd.archive.kind) : null,
+        status: prd.archive.status ? String(prd.archive.status) : null,
+        archivedAt: prd.archive.archivedAt ? String(prd.archive.archivedAt) : null,
+        reason: prd.archive.reason ? String(prd.archive.reason) : null,
+        fromStatus: prd.archive.fromStatus ? String(prd.archive.fromStatus) : null,
+        actor: prd.archive.actor ? String(prd.archive.actor) : null,
+      }
+      : null,
     ...(sourceChat ? { sourceChat } : {}),
   };
 }
@@ -342,6 +357,15 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     if (restartDetail) {
       details.push(restartDetail);
     }
+  } else if (status === 'completed' && jobType === 'prd:reset' && job && job.result) {
+    if (job.result.noop) {
+      details.push(String(job.result.message || 'No active PRD to reset.'));
+    } else {
+      details.push(`PRD ${job.result.prdId || 'unknown'} reset`);
+      if (job.result.reason) {
+        details.push(`reason: ${summarizeText(job.result.reason)}`);
+      }
+    }
   } else if (status === 'completed' && job && job.result && job.result.prdId) {
     details.push(`PRD ${job.result.prdId} committed`);
   } else if (job && job.claimedAt) {
@@ -391,6 +415,15 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
       running: 'Restarting services',
       completed: 'Restart recorded',
       failed: 'Restart failed',
+    };
+  }
+  if (jobType === 'prd:reset') {
+    return {
+      queued: 'Waiting to reset PRDs',
+      claimed: 'Reset claimed by bridge',
+      running: 'Resetting PRD state',
+      completed: 'PRD reset recorded',
+      failed: 'Reset failed',
     };
   }
   return {
@@ -532,6 +565,9 @@ function formatControlPlaneJobTitle(job: any, jobType: string) {
   }
   if (jobType === 'restart') {
     return 'Restart Autonomy v2 services';
+  }
+  if (jobType === 'prd:reset') {
+    return 'Reset active PRD state';
   }
   if (jobType === 'agent:chat') {
     return `Repo chat: ${summarizeText(job && job.payload && job.payload.prompt || job && job.id || 'message')}`;

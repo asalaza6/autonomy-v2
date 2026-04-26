@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import {
   appendAgentLog,
   ensureInitialized,
@@ -7,12 +9,13 @@ import {
   getStringOption,
   readJson,
   requireOption,
+  writeJson,
 } from '../commands/shared-core.js';
 import {
   buildTrackedImplementationQueueUpdates,
   sanitizePlannedTaskSpecs,
 } from '../commands/shared-queues.js';
-import { loadTrackedPrds } from '../commands/shared-prds.js';
+import { loadAllState, loadTrackedPrds } from '../commands/shared-prds.js';
 import {
   buildPrdSpecPayload,
   commitPrdSpecToIntegrationBranch,
@@ -23,6 +26,9 @@ import {
   validateAutonomyConfig,
   AGENT_ROLES,
 } from '../commands/command-dependencies.js';
+import { isImplementationRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
+import { buildPrdSpecRelativePath, buildPrdStateRelativePath } from '../../sync/sync-prd.js';
+import { listTrackedPrdSpecs } from '../../sync/sync-git.js';
 
 function executePrdAdd(rootDir, options = {}) {
   ensureInitialized(rootDir);
@@ -148,6 +154,301 @@ function buildPrdAddCliOptions(payload) {
   return options;
 }
 
+function executePrdReset(rootDir, options = {}) {
+  ensureInitialized(rootDir);
+  const paths = getAutonomyPaths(rootDir);
+  const config = readJson(paths.agentsConfig);
+  const now = new Date().toISOString();
+  const confirmPrdId = requireOption(options, 'confirm-prd-id');
+  const reason = getStringOption(options, 'reason', '').trim();
+  const state = loadAllState(rootDir);
+  const trackedPrds = loadTrackedPrds(rootDir, state.config, {
+    taskQueues: state.taskQueues,
+    prs: state.prs,
+  });
+  const activePrd = selectResettablePrd(trackedPrds.prds || []);
+
+  if (!activePrd) {
+    return {
+      noop: true,
+      message: 'No active PRD exists to reset.',
+      resetAt: now,
+      prdId: null,
+      commitSha: null,
+    };
+  }
+  if (confirmPrdId !== activePrd.id) {
+    throw new Error(`Confirmation must match the active PRD id "${activePrd.id}".`);
+  }
+
+  const specEntries = listTrackedPrdSpecs(rootDir, config.integrationBranch);
+  const activeSpecEntry = specEntries.find((entry) => entry.spec && entry.spec.id === activePrd.id && entry.isQueued !== true) || null;
+  if (!activeSpecEntry) {
+    throw new Error(`Could not locate the active PRD spec for "${activePrd.id}" on ${config.integrationBranch}.`);
+  }
+
+  const removedTaskIds = new Set<string>();
+  const removedReviewTaskIds = new Set<string>();
+  const activePrIds = new Set<string>(
+    ((state.prs && state.prs.pullRequests) || [])
+      .filter((pr) => String(pr && pr.prdId || '').trim() === activePrd.id)
+      .map((pr) => String(pr && pr.id || '').trim())
+      .filter(Boolean)
+  );
+  const activeLaneKeys = new Set<string>();
+  const queueFileUpdates: Array<Record<string, unknown>> = [];
+  const nextQueues = new Map<string, unknown[]>();
+
+  (state.config.agents || [])
+    .filter((agent) => usesTrackedQueueForRole(agent.role) && isImplementationRole(agent.role))
+    .forEach((agent) => {
+      const queue = state.taskQueues[agent.id];
+      const originalTasks = queue && Array.isArray(queue.tasks) ? queue.tasks : [];
+      const filteredTasks = originalTasks.filter((task) => {
+        const prdId = String(task && task.prdId || '').trim();
+        const laneKey = String(task && task.laneKey || '').trim();
+        const shouldRemove = prdId === activePrd.id;
+        if (shouldRemove) {
+          if (laneKey) {
+            activeLaneKeys.add(laneKey);
+          }
+          if (task && task.id) {
+            removedTaskIds.add(String(task.id));
+          }
+        }
+        return !shouldRemove;
+      });
+      if (filteredTasks.length !== originalTasks.length) {
+        nextQueues.set(agent.id, filteredTasks);
+      }
+    });
+
+  (state.config.agents || [])
+    .filter((agent) => usesTrackedQueueForRole(agent.role) && !isImplementationRole(agent.role))
+    .forEach((agent) => {
+      const queue = state.taskQueues[agent.id];
+      const originalTasks = queue && Array.isArray(queue.tasks) ? queue.tasks : [];
+      const filteredTasks = originalTasks.filter((task) => {
+        const prdId = String(task && task.prdId || '').trim();
+        const laneKey = String(task && task.laneKey || '').trim();
+        const sourceTaskId = String(task && task.sourceTaskId || '').trim();
+        const prId = String(task && task.prId || '').trim();
+        const shouldRemove = prdId === activePrd.id
+          || (sourceTaskId && removedTaskIds.has(sourceTaskId))
+          || (prId && activePrIds.has(prId));
+        if (shouldRemove) {
+          if (laneKey) {
+            activeLaneKeys.add(laneKey);
+          }
+          if (task && task.id) {
+            removedReviewTaskIds.add(String(task.id));
+          }
+        }
+        return !shouldRemove;
+      });
+      if (filteredTasks.length !== originalTasks.length) {
+        nextQueues.set(agent.id, filteredTasks);
+      }
+    });
+
+  (state.config.agents || []).forEach((agent) => {
+    if (!nextQueues.has(agent.id)) {
+      return;
+    }
+    queueFileUpdates.push({
+      relativePath: agent.taskQueue,
+      content: {
+        ...(isImplementationRole(agent.role) ? { schemaVersion: 1 } : {}),
+        agentId: agent.id,
+        role: agent.role,
+        tasks: nextQueues.get(agent.id),
+      },
+    });
+  });
+
+  const archivedSpecPath = path.posix.join(
+    path.posix.dirname(buildPrdSpecRelativePath(activePrd.id)),
+    'archived',
+    path.posix.basename(activeSpecEntry.relativePath)
+  );
+  const trackedUpdates = [
+    {
+      relativePath: archivedSpecPath,
+      content: buildPrdSpecPayload({
+        ...activeSpecEntry.spec,
+        archive: {
+          kind: 'reset',
+          status: 'abandoned',
+          archivedAt: now,
+          reason: reason || undefined,
+          fromStatus: String(activePrd.status || '').trim() || undefined,
+          actor: 'manager',
+        },
+      }),
+    },
+    {
+      relativePath: activeSpecEntry.relativePath,
+      delete: true,
+    },
+    {
+      relativePath: buildPrdStateRelativePath(activePrd.id),
+      delete: true,
+    },
+    ...specEntries
+      .filter((entry) => entry.spec && entry.spec.id === activePrd.id && entry.isQueued === true)
+      .map((entry) => ({
+        relativePath: entry.relativePath,
+        delete: true,
+      })),
+    ...queueFileUpdates,
+  ];
+
+  const pmAgent = getAgent(config, `${AGENT_ROLES.PM}-agent`);
+  const commitResult = commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, trackedUpdates, {
+    commitMessage: `autonomy(prd): reset ${activePrd.id}`,
+    gitIdentity: pmAgent.gitIdentity,
+  });
+  applyLocalQueueUpdates(rootDir, queueFileUpdates);
+  fs.rmSync(path.join(rootDir, buildPrdStateRelativePath(activePrd.id)), { force: true });
+
+  const remainingPullRequests = ((state.prs && state.prs.pullRequests) || []).filter(
+    (pr) => String(pr && pr.prdId || '').trim() !== activePrd.id
+  );
+  if (remainingPullRequests.length !== ((state.prs && state.prs.pullRequests) || []).length) {
+    writeJson(paths.prsState, {
+      ...(state.prs || {}),
+      pullRequests: remainingPullRequests,
+    });
+  }
+
+  const nextBranchLocks = {
+    ...(state.branchLocks || { locks: [] }),
+    locks: ((state.branchLocks && state.branchLocks.locks) || []).filter((lock) => {
+      const prdId = String(lock && lock.prdId || '').trim();
+      const laneKey = String(lock && lock.laneKey || '').trim();
+      const taskId = String(lock && lock.taskId || '').trim();
+      return prdId !== activePrd.id
+        && (!laneKey || !activeLaneKeys.has(laneKey))
+        && (!taskId || !removedTaskIds.has(taskId));
+    }),
+  };
+  writeJson(paths.branchLocksState, nextBranchLocks);
+
+  const runtimeState = fs.existsSync(paths.runtimeState)
+    ? readJson(paths.runtimeState)
+    : { workers: {} };
+  const affectedAgentIds = new Set<string>([
+    ...Array.from(removedTaskIds).map((taskId) => {
+      const task = findTaskById(state.taskQueues, taskId);
+      return String(task && task.agentId || '').trim();
+    }),
+    ...Array.from(removedReviewTaskIds).map((taskId) => {
+      const task = findTaskById(state.taskQueues, taskId);
+      return String(task && task.agentId || '').trim();
+    }),
+    ...Array.from(((state.branchLocks && state.branchLocks.locks) || [])
+      .filter((lock) => String(lock && lock.prdId || '').trim() === activePrd.id)
+      .map((lock) => String(lock && lock.agentId || '').trim())),
+  ].filter(Boolean));
+  const detachedWorkers = [];
+  const workers = { ...((runtimeState && runtimeState.workers) || {}) };
+  affectedAgentIds.forEach((agentId) => {
+    const currentWorker = workers[agentId];
+    const pid = Number(currentWorker && currentWorker.pid);
+    const terminated = Number.isInteger(pid) && pid > 0 ? terminateWorker(pid) : false;
+    detachedWorkers.push({
+      agentId,
+      pid: Number.isInteger(pid) && pid > 0 ? pid : null,
+      terminated,
+    });
+    workers[agentId] = {
+      agentId,
+      status: 'idle',
+      pid: null,
+      finishedAt: now,
+      reason: 'prd-reset',
+      lastResult: null,
+      lastError: null,
+    };
+  });
+  writeJson(paths.runtimeState, {
+    ...(runtimeState || {}),
+    workers,
+    ...(runtimeState && runtimeState.lastPrdPromotion && String(runtimeState.lastPrdPromotion.id || '').trim() === activePrd.id
+      ? { lastPrdPromotion: null }
+      : {}),
+  });
+
+  appendAgentLog(rootDir, config, pmAgent.id, 'prd:reset', {
+    input: {
+      prdId: activePrd.id,
+      reason: reason || null,
+      integrationBranch: config.integrationBranch,
+    },
+    output: {
+      commitSha: commitResult.commitSha,
+      archivedSpecPath,
+      removedTaskIds: Array.from(removedTaskIds),
+      removedReviewTaskIds: Array.from(removedReviewTaskIds),
+      removedPullRequestIds: Array.from(activePrIds),
+      detachedWorkers,
+    },
+  });
+
+  return {
+    noop: false,
+    prdId: activePrd.id,
+    title: activePrd.title,
+    reason: reason || null,
+    resetAt: now,
+    archivedPath: archivedSpecPath,
+    commitSha: commitResult.commitSha || null,
+    pushMessage: commitResult.pushMessage || null,
+    clearedTaskCount: removedTaskIds.size + removedReviewTaskIds.size,
+    clearedPullRequestCount: activePrIds.size,
+    detachedWorkers,
+  };
+}
+
+function selectResettablePrd(prds = []) {
+  return (prds || [])
+    .filter((prd) => prd && prd.isQueued !== true)
+    .filter((prd) => String(prd.status || '').trim() !== 'completed')
+    .sort((left, right) => {
+      return (Date.parse(String(right.updatedAt || right.createdAt || '')) || 0)
+        - (Date.parse(String(left.updatedAt || left.createdAt || '')) || 0);
+    })[0] || null;
+}
+
+function applyLocalQueueUpdates(rootDir, queueFileUpdates) {
+  (queueFileUpdates || []).forEach((entry) => {
+    const relativePath = String(entry && entry.relativePath || '').trim();
+    if (!relativePath || !Object.prototype.hasOwnProperty.call(entry || {}, 'content')) {
+      return;
+    }
+    writeJson(path.join(rootDir, relativePath), entry.content);
+  });
+}
+
+function findTaskById(taskQueues, taskId) {
+  for (const queue of Object.values(taskQueues || {}) as any[]) {
+    const task = (queue && Array.isArray(queue.tasks) ? queue.tasks : []).find((candidate: any) => String(candidate && candidate.id || '') === taskId);
+    if (task) {
+      return task;
+    }
+  }
+  return null;
+}
+
+function terminateWorker(pid) {
+  try {
+    process.kill(pid, 'SIGTERM');
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function loadValidatedAutonomyConfig(rootDir) {
   const paths = getAutonomyPaths(rootDir);
   return validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
@@ -156,5 +457,6 @@ function loadValidatedAutonomyConfig(rootDir) {
 export {
   buildPrdAddCliOptions,
   executePrdAdd,
+  executePrdReset,
   loadValidatedAutonomyConfig,
 };

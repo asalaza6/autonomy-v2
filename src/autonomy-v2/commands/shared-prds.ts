@@ -196,8 +196,10 @@ function loadTrackedPrdHistory(rootDir: string, config: AutonomyConfig, options:
   const archivedPrds = listArchivedPrdSpecs(rootDir, config.integrationBranch).map((entry) => ({
     ...entry.spec,
     isQueued: false,
-    status: 'completed',
-    updatedAt: entry.spec.createdAt,
+    status: String(entry.spec && entry.spec.archive && entry.spec.archive.kind || '').trim() === 'reset'
+      ? 'reset'
+      : 'completed',
+    updatedAt: String(entry.spec && entry.spec.archive && entry.spec.archive.archivedAt || entry.spec.createdAt),
     archived: true,
     archivePath: entry.relativePath,
   }));

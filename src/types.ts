@@ -128,6 +128,16 @@ export interface PrdSpecPayload extends AnyRecord {
   createdAt: string;
   specification?: string;
   requirements?: string[];
+  archive?: PrdArchiveMetadata;
+}
+
+export interface PrdArchiveMetadata extends AnyRecord {
+  kind?: 'completed' | 'reset' | string;
+  status?: string;
+  archivedAt?: string;
+  reason?: string;
+  fromStatus?: string;
+  actor?: string;
 }
 
 export interface ControlPlaneRepoRecord extends AnyRecord {
@@ -159,6 +169,12 @@ export interface ControlPlanePrdAddPayload extends AnyRecord {
 
 export interface ControlPlaneDeployPayload extends AnyRecord {
   repoId: string;
+}
+
+export interface ControlPlanePrdResetPayload extends AnyRecord {
+  repoId: string;
+  confirmPrdId: string;
+  reason?: string;
 }
 
 export interface ControlPlanePackageUpdatePayload extends AnyRecord {
@@ -230,9 +246,9 @@ export interface ControlPlaneConversationRecord extends AnyRecord {
 
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add' | 'deploy' | 'agent:chat' | 'package:update' | 'restart';
+  type: 'prd:add' | 'prd:reset' | 'deploy' | 'agent:chat' | 'package:update' | 'restart';
   repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload;
+  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
