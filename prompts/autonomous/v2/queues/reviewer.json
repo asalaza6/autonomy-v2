@@ -672,10 +672,10 @@
         "Repeated refreshes or polling over unchanged state are idempotent: once a queued PRD has been promoted, subsequent evaluations do not duplicate the promotion or add a second active PRD.",
         "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-26T08:20:30.500Z",
-      "updatedAt": "2026-04-26T08:23:40.679Z",
+      "updatedAt": "2026-04-26T08:23:52.684Z",
       "reviewedAt": "2026-04-26T08:23:40.679Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
