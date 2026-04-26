@@ -8,6 +8,7 @@ import path from 'path';
 import { runControlPlaneBridgeOnce } from '../../src/server/control-plane/control-plane-bridge.js';
 import {
   createFixtureRepo,
+  git,
   initAutonomyRepo,
 } from '../smoke/package-smoke.helpers.js';
 
@@ -394,6 +395,115 @@ test('bridge streams custom package update child logs when DEBUG=true', async (t
   });
   assert.match(completedJob.result.updateCommand.output, /debug child stdout/);
   assert.match(completedJob.result.updateCommand.output, /debug child stderr/);
+});
+
+test('bridge commits and pushes package update changes to the integration branch when repo is clean', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-package-commit-update-');
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize autonomy']);
+  fs.writeFileSync(path.join(repoDir, 'package.json'), `${JSON.stringify({
+    name: 'package-update-commit-fixture',
+    private: true,
+    version: '1.0.0',
+  }, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', 'package.json']);
+  git(repoDir, ['commit', '-m', 'add package manifest']);
+  git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
+  const remoteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-package-remote-'));
+  git(remoteDir, ['init', '--bare']);
+  git(repoDir, ['remote', 'add', 'origin', remoteDir]);
+  git(repoDir, ['push', '-u', 'origin', 'main']);
+  git(repoDir, ['push', '-u', 'origin', 'dev']);
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.packageUpdateCommand = {
+    command: process.execPath,
+    args: ['-e', [
+      'const fs = require("fs");',
+      'const path = require("path");',
+      'const manifestPath = path.join(process.cwd(), "package.json");',
+      'const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));',
+      'manifest.version = "2.0.0";',
+      'fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\\n", "utf8");',
+      'console.log("package update committed");',
+    ].join('\n')],
+  };
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', path.relative(repoDir, controlPlaneConfigPath)]);
+  git(repoDir, ['commit', '-m', 'configure custom package update']);
+  git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
+  git(repoDir, ['push', '--force', 'origin', 'dev']);
+  let completedJob: any = null;
+  let jobClaimed = false;
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
+      res.end(JSON.stringify({
+        job: {
+          id: 'job-package-update-commit-1',
+          type: 'package:update',
+          repoId: 'default',
+          payload: {
+            repoId: 'default',
+          },
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      return;
+    }
+
+    if (req.url === '/api/jobs/job-package-update-commit-1/complete' && req.method === 'POST') {
+      completedJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-package-update-commit-1', status: 'completed' }));
+      return;
+    }
+
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      await readRequestText(req);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+  });
+
+  await runControlPlaneBridgeOnce(repoDir, {
+    serverUrl,
+    repoRoots: {
+      default: repoDir,
+    },
+  });
+
+  assert.equal(completedJob.status, 'completed');
+  assert.equal(completedJob.result.commit.committed, true);
+  assert.equal(completedJob.result.commit.pushed, true);
+  assert.match(completedJob.result.pushMessage, /pushed to origin\/dev/);
+  assert.ok(completedJob.result.commitSha);
+  const remoteManifest = JSON.parse(git(repoDir, ['--git-dir', remoteDir, 'show', 'refs/heads/dev:package.json']));
+  assert.equal(remoteManifest.version, '2.0.0');
 });
 
 test('bridge executes restart jobs independently after completion', async (t) => {

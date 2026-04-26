@@ -324,6 +324,12 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     const updateCommand = job.result.updateCommand || {};
     const updateMode = updateCommand.mode === 'custom' ? 'custom command' : 'default install';
     details.push(`${updateMode}: ${job.result.installedVersion || job.result.newDeclaredVersion || 'latest'}`);
+    if (job.result.commitSha) {
+      details.push(`committed ${String(job.result.commitSha).slice(0, 12)}`);
+    }
+    if (job.result.pushMessage) {
+      details.push(String(job.result.pushMessage));
+    }
   } else if (status === 'completed' && jobType === 'restart' && job && job.result) {
     const restartStatus = job.result.restartStatus && job.result.restartStatus.status
       ? job.result.restartStatus.status

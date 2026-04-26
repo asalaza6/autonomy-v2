@@ -158,6 +158,8 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           packageManager: execution.packageManager,
           installedVersion: execution.installedVersion || '-',
+          commitSha: execution.result && execution.result.commitSha || '',
+          pushMessage: execution.result && execution.result.pushMessage || '',
         });
         result = execution.result;
       } else if (job.type === 'restart') {

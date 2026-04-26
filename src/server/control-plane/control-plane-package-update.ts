@@ -1,8 +1,14 @@
+import fs from 'fs';
 import path from 'path';
-import { spawn, spawnSync } from 'child_process';
+import { execFileSync, spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { AGENT_ROLES } from '../../agents/role-catalog.js';
+import { validateAutonomyConfig } from '../../config/config-main.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { readAutonomyPackageStatus, runPackageUpdate } from '../../autonomy-v2/commands/update.js';
+import { getAgent, getAutonomyPaths, readJson } from '../../autonomy-v2/commands/shared-core.js';
+import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
+import { extractExecError, gitWorkingTreeClean } from '../../sync/git-shared.js';
 import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../types.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import type { ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
@@ -14,6 +20,7 @@ type DeferredRestartTarget = RestartTarget | 'default';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_COMMAND_OUTPUT_LENGTH = 4000;
+const PACKAGE_UPDATE_COMMIT_MESSAGE = 'autonomy(update): refresh autonomy-v2 package';
 
 interface NormalizedControlPlaneCommandConfig {
   command: string;
@@ -51,14 +58,16 @@ interface DeferredRestartLaunchResult {
 }
 
 async function executeControlPlanePackageUpdate(rootDir: string) {
+  const commitContext = capturePackageUpdateCommitContext(rootDir);
   const config = loadControlPlaneConfig(rootDir);
   const packageUpdateCommand = normalizePackageUpdateCommandConfig(config.packageUpdateCommand, rootDir);
   if (packageUpdateCommand) {
-    return executeCustomControlPlanePackageUpdate(rootDir, packageUpdateCommand);
+    return executeCustomControlPlanePackageUpdate(rootDir, packageUpdateCommand, commitContext);
   }
 
   const update = runPackageUpdate(rootDir, {});
   const snapshot = buildStatusSnapshot(rootDir);
+  const commitResult = commitPackageUpdateChanges(rootDir, commitContext);
   const updateCommand = {
     status: 'defaulted' as const,
     reason: 'packageUpdateCommand-not-configured',
@@ -83,6 +92,9 @@ async function executeControlPlanePackageUpdate(rootDir: string) {
       refreshed: update.refreshed,
       refreshStatus: update.refreshStatus,
       refresh: update.refresh,
+      commit: commitResult,
+      commitSha: commitResult.commitSha || null,
+      pushMessage: commitResult.pushMessage || null,
       updateCommand,
       errors,
     },
@@ -91,7 +103,8 @@ async function executeControlPlanePackageUpdate(rootDir: string) {
 
 async function executeCustomControlPlanePackageUpdate(
   rootDir: string,
-  packageUpdateCommand: NormalizedControlPlaneCommandConfig
+  packageUpdateCommand: NormalizedControlPlaneCommandConfig,
+  commitContext: PackageUpdateCommitContext
 ) {
   const before = readAutonomyPackageStatus(rootDir);
   const commandResult = await runConfiguredControlPlaneCommand(packageUpdateCommand, rootDir, {
@@ -102,6 +115,7 @@ async function executeCustomControlPlanePackageUpdate(
   });
   const snapshot = buildStatusSnapshot(rootDir);
   const after = snapshot.autonomyPackage || readAutonomyPackageStatus(rootDir);
+  const commitResult = commitPackageUpdateChanges(rootDir, commitContext);
   const refresh = {
     skipped: true as const,
     reason: 'custom-update-command',
@@ -123,6 +137,9 @@ async function executeCustomControlPlanePackageUpdate(
       refreshed: false,
       refreshStatus: 'skipped',
       refresh,
+      commit: commitResult,
+      commitSha: commitResult.commitSha || null,
+      pushMessage: commitResult.pushMessage || null,
       updateCommand: {
         status: 'completed' as const,
         mode: 'custom' as const,
@@ -131,6 +148,159 @@ async function executeCustomControlPlanePackageUpdate(
       errors: [] as string[],
     },
   };
+}
+
+interface PackageUpdateCommitContext {
+  enabled: boolean;
+  integrationBranch: string;
+  beforePaths: Set<string>;
+  gitIdentity?: AnyRecord;
+  skipReason?: string;
+}
+
+function capturePackageUpdateCommitContext(rootDir: string): PackageUpdateCommitContext {
+  if (!isGitRepository(rootDir)) {
+    return {
+      enabled: false,
+      integrationBranch: 'dev',
+      beforePaths: new Set<string>(),
+      skipReason: 'not-a-git-repo',
+    };
+  }
+  if (!gitWorkingTreeClean(rootDir)) {
+    return {
+      enabled: false,
+      integrationBranch: resolveIntegrationBranch(rootDir),
+      beforePaths: new Set<string>(),
+      skipReason: 'working-tree-not-clean',
+    };
+  }
+  return {
+    enabled: true,
+    integrationBranch: resolveIntegrationBranch(rootDir),
+    beforePaths: listWorkingTreePaths(rootDir),
+    gitIdentity: resolvePackageUpdateGitIdentity(rootDir),
+  };
+}
+
+function commitPackageUpdateChanges(rootDir: string, context: PackageUpdateCommitContext) {
+  if (!context.enabled) {
+    return {
+      committed: false,
+      pushed: false,
+      commitSha: null,
+      pushMessage: null,
+      paths: [],
+      skipped: true as const,
+      reason: context.skipReason || 'disabled',
+    };
+  }
+  const afterPaths = listWorkingTreePaths(rootDir);
+  const changedPaths = Array.from(afterPaths)
+    .filter((relativePath) => !context.beforePaths.has(relativePath))
+    .sort();
+  if (changedPaths.length === 0) {
+    return {
+      committed: false,
+      pushed: false,
+      commitSha: null,
+      pushMessage: null,
+      paths: [],
+      skipped: true as const,
+      reason: 'no-package-update-changes',
+    };
+  }
+  const updates = changedPaths.map((relativePath) => {
+    const absolutePath = path.join(rootDir, relativePath);
+    if (!fs.existsSync(absolutePath)) {
+      return {
+        relativePath,
+        delete: true,
+      };
+    }
+    return {
+      relativePath,
+      content: fs.readFileSync(absolutePath, 'utf8'),
+    };
+  });
+  const commitResult = commitTrackedFilesToIntegrationBranch(rootDir, context.integrationBranch, updates, {
+    commitMessage: PACKAGE_UPDATE_COMMIT_MESSAGE,
+    gitIdentity: context.gitIdentity,
+  });
+  return {
+    committed: commitResult.committed,
+    pushed: commitResult.pushed,
+    commitSha: commitResult.commitSha || null,
+    pushMessage: commitResult.pushMessage || null,
+    paths: commitResult.paths || changedPaths,
+    skipped: commitResult.committed !== true,
+    reason: commitResult.committed === true ? null : 'no-staged-package-update-changes',
+  };
+}
+
+function resolveIntegrationBranch(rootDir: string) {
+  const paths = getAutonomyPaths(rootDir);
+  if (!fs.existsSync(paths.agentsConfig)) {
+    return 'dev';
+  }
+  const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
+  return String(config.integrationBranch || 'dev').trim() || 'dev';
+}
+
+function resolvePackageUpdateGitIdentity(rootDir: string) {
+  const paths = getAutonomyPaths(rootDir);
+  if (!fs.existsSync(paths.agentsConfig)) {
+    return undefined;
+  }
+  try {
+    const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
+    return getAgent(config, `${AGENT_ROLES.PM}-agent`).gitIdentity;
+  } catch {
+    return undefined;
+  }
+}
+
+function isGitRepository(rootDir: string) {
+  try {
+    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: rootDir,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function listWorkingTreePaths(rootDir: string) {
+  try {
+    const output = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
+      cwd: rootDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return new Set(
+      output
+        .split('\n')
+        .map((line) => String(line || '').trimEnd())
+        .filter(Boolean)
+        .map((line) => normalizePorcelainPath(line))
+        .filter(Boolean)
+    );
+  } catch (error) {
+    throw new Error(`Failed to inspect package update git changes: ${extractExecError(error)}`);
+  }
+}
+
+function normalizePorcelainPath(line: string) {
+  const payload = String(line || '').slice(3).trim();
+  if (!payload) {
+    return '';
+  }
+  if (payload.includes(' -> ')) {
+    return payload.split(' -> ').pop() || '';
+  }
+  return payload;
 }
 
 function executeControlPlaneRestart(rootDir: string, context: {
