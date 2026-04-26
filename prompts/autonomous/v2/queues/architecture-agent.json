@@ -4136,11 +4136,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-26T21:36:07.116Z",
-      "updatedAt": "2026-04-26T21:40:36.751Z",
+      "updatedAt": "2026-04-26T21:40:36.822Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
       "startedAt": "2026-04-26T21:36:11.093Z",
       "completedAt": "2026-04-26T21:40:36.751Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "895606848641832f219f79d85c16a9a821f5662a"
     }
   ]
 }
