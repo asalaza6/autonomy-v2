@@ -932,11 +932,13 @@
         "Automated coverage includes unit tests for open remote PR plus terminal local tasks, closed remote PR, merged remote PR, and missing-auth fallback; snapshot or status-service tests proving implementation/review PRDs remain active and open PRs remain listed; and an integration-style fixture covering the synthetic open-PR scenario described in the PRD. Run `npm run typecheck` and the relevant focused control-plane/sync test targets updated by the change."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-04-26T22:46:25.731Z",
-      "updatedAt": "2026-04-26T22:46:41.762Z",
+      "updatedAt": "2026-04-26T22:47:43.126Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T22:46:29.257Z"
+      "dispatchedAt": "2026-04-26T22:46:29.257Z",
+      "reviewedAt": "2026-04-26T22:47:43.126Z",
+      "lastDecision": "changes_requested"
     }
   ]
 }
