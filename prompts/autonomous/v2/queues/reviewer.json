@@ -778,7 +778,7 @@
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
-      "sourceTaskId": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-32",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-33",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "baseBranch": "dev",
@@ -790,20 +790,20 @@
         "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
       ],
       "reviewRound": 35,
-      "status": "failed",
+      "status": "queued",
       "createdAt": "2026-04-26T10:34:19.626Z",
-      "updatedAt": "2026-04-26T10:55:44.508Z",
+      "updatedAt": "2026-04-26T10:55:57.724Z",
       "reviewedAt": "2026-04-26T10:55:11.167Z",
       "lastDecision": "changes_requested",
+      "lastError": "Command failed: /Users/macmini/.local/node-v20.20.2-darwin-arm64/bin/node /Users/macmini/Documents/GitHub/autonomy-v2/dist/src/autonomy-v2/runner/default-runner.js",
       "conversationReferences": {
         "agent:reviewer": {
           "conversationId": "019dc95d-402a-7ca1-ae90-f56d444c6b3c",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-26T10:55:27.104Z"
+          "updatedAt": "2026-04-26T10:55:57.724Z"
         }
-      },
-      "lastError": "Command failed: /Users/macmini/.local/node-v20.20.2-darwin-arm64/bin/node /Users/macmini/Documents/GitHub/autonomy-v2/dist/src/autonomy-v2/runner/default-runner.js"
+      }
     }
   ]
 }
