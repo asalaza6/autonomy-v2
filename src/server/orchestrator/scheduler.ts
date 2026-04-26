@@ -52,6 +52,7 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   let dueAgents = [];
   let runtime = null;
   const started = [];
+  const pendingSpawnStarts = [];
 
   try {
     emitSchedulerProgress(options, 'state-lock:acquired', { lock: 'state-lock' });
@@ -119,33 +120,15 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
         continue;
       }
 
-      const child = spawnWorkerProcess(rootDir, due.agentId, {
-        streamOutput: options.streamWorkerOutput === true,
-      });
-      const pid = child.pid;
       setWorkerState(runtime, due.agentId, {
         status: 'running',
         mode: 'spawn',
         startedAt: now,
-        pid,
+        pid: null,
         reason: due.reason,
       });
-      started.push({ agentId: due.agentId, mode: 'spawn', reason: due.reason, pid });
-      emitSchedulerProgress(options, 'worker:dispatch:done', {
-        agentId: due.agentId,
-        mode: 'spawn',
-        reason: due.reason,
-        pid,
-      });
-      if (typeof options.onWorkerSpawn === 'function') {
-        options.onWorkerSpawn({
-          agentId: due.agentId,
-          mode: 'spawn',
-          reason: due.reason,
-          pid,
-          child,
-        });
-      }
+      started.push({ agentId: due.agentId, mode: 'spawn', reason: due.reason, pid: null, startedAt: now });
+      pendingSpawnStarts.push({ agentId: due.agentId, reason: due.reason, startedAt: now });
     }
 
     emitSchedulerProgress(options, 'runtime:write:start', {
@@ -160,6 +143,44 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   } finally {
     emitSchedulerProgress(options, 'state-lock:release', { lock: 'state-lock' });
     release();
+  }
+
+  if (options.inline !== true) {
+    for (let index = 0; index < pendingSpawnStarts.length; index += 1) {
+      const entry = pendingSpawnStarts[index];
+      try {
+        const child = spawnWorkerProcess(rootDir, entry.agentId, {
+          streamOutput: options.streamWorkerOutput === true,
+        });
+        const pid = child.pid;
+        const startedEntry = started.find((candidate) => candidate.agentId === entry.agentId && candidate.mode === 'spawn');
+        if (startedEntry) {
+          startedEntry.pid = pid;
+        }
+        updateSpawnedWorkerPid(rootDir, entry.agentId, entry.startedAt, pid);
+        emitSchedulerProgress(options, 'worker:dispatch:done', {
+          agentId: entry.agentId,
+          mode: 'spawn',
+          reason: entry.reason,
+          pid,
+        });
+        if (typeof options.onWorkerSpawn === 'function') {
+          options.onWorkerSpawn({
+            agentId: entry.agentId,
+            mode: 'spawn',
+            reason: entry.reason,
+            pid,
+            child,
+          });
+        }
+      } catch (error) {
+        markSpawnDispatchFailed(rootDir, entry.agentId, entry.startedAt, error);
+        pendingSpawnStarts.slice(index + 1).forEach((pending) => {
+          markSpawnDispatchSkipped(rootDir, pending.agentId, pending.startedAt, 'worker dispatch aborted before spawn');
+        });
+        throw error;
+      }
+    }
   }
 
   if (options.inline === true) {
@@ -200,6 +221,61 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     started,
     runtime,
   };
+}
+
+function updateSpawnedWorkerPid(rootDir: string, agentId: string, startedAt: string, pid: number | null | undefined) {
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    const worker = runtime.workers[agentId];
+    if (!worker || worker.status !== 'running' || worker.mode !== 'spawn' || worker.startedAt !== startedAt) {
+      return;
+    }
+    worker.pid = pid ?? null;
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
+}
+
+function markSpawnDispatchFailed(rootDir: string, agentId: string, startedAt: string, error: unknown) {
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    const worker = runtime.workers[agentId];
+    if (!worker || worker.mode !== 'spawn' || worker.startedAt !== startedAt) {
+      return;
+    }
+    setWorkerState(runtime, agentId, {
+      status: 'idle',
+      pid: null,
+      finishedAt: new Date().toISOString(),
+      lastError: error instanceof Error ? error.message : String(error || 'worker spawn failed'),
+    });
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
+}
+
+function markSpawnDispatchSkipped(rootDir: string, agentId: string, startedAt: string, message: string) {
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    const worker = runtime.workers[agentId];
+    if (!worker || worker.mode !== 'spawn' || worker.startedAt !== startedAt) {
+      return;
+    }
+    setWorkerState(runtime, agentId, {
+      status: 'idle',
+      pid: null,
+      finishedAt: new Date().toISOString(),
+      lastError: message,
+    });
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
 }
 
 export { runSchedulerTick };
