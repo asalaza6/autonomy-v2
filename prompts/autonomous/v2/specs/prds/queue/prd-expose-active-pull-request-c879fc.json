@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-expose-active-pull-request-c879fc",
+  "title": "Expose active pull request link in main progress UI during implementation",
+  "createdAt": "2026-04-26T06:56:44.403Z",
+  "specification": "# PRD: Expose active pull request link in main progress UI during implementation\n\nPriority: medium\n\n## Problem\nWhen a PRD is in implementation or review, the main progress section shows status and task progress but does not give a direct pull request link. Managers have to find the separate pull request list instead of using the progress area they are already looking at.\n\n## Goal\nMake the main progress area show a clear clickable pull request action/link whenever the active PRD has an associated implementation or review pull request.\n\n## Requirements\n- Use existing `pullRequestStatuses` data for the active PRD and prefer the current active/review PR when multiple PRs exist.\n- Show the link only when the active PRD is in implementation or review-related states and a valid PR URL exists.\n- Place the link in the main progress area near the progress detail/button area so it is visible without scrolling to the PR section.\n- Use clear button/link copy that includes PR context, such as the PR number or 'Open pull request'.\n- Do not show the control if there is no matching PR URL for the active PRD.\n- Keep existing progress stats and step rendering intact.\n\n## Acceptance Criteria\n- With an active PRD and matching `pullRequestStatuses[].url`, the progress section renders a visible clickable PR link/button.\n- Clicking the control opens the correct GitHub pull request URL.\n- When no active PR exists for the active PRD, the progress section renders no PR link/button.\n- If multiple PR statuses exist for the active PRD, the UI consistently selects the most relevant active implementation/review PR.\n- Existing PR list rendering and progress calculations continue to work unchanged.\n\n## Verification\n- Add or update unit coverage for active-PR selection logic for the progress section.\n- Add UI rendering coverage for showing and hiding the link based on PRD state and PR URL presence.\n- Manually verify in the control plane that an active implementation/review PR shows a link in the main progress area and opens the expected GitHub PR.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777184531911_68121464d66b48\nManager message: msg_1777186027298_4bcc7f4b49b4d\nAgent message: msg_1777186027298_129627f5e528b8\nCreated: 2026-04-26T06:47:55.308Z",
+  "requirements": [
+    "Use existing `pullRequestStatuses` data for the active PRD and prefer the current active/review PR when multiple PRs exist.",
+    "Show the link only when the active PRD is in implementation or review-related states and a valid PR URL exists.",
+    "Place the link in the main progress area near the progress detail/button area so it is visible without scrolling to the PR section.",
+    "Use clear button/link copy that includes PR context",
+    "such as the PR number or 'Open pull request'.",
+    "Do not show the control if there is no matching PR URL for the active PRD.",
+    "Keep existing progress stats and step rendering intact."
+  ]
+}

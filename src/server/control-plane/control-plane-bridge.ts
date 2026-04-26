@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord } from '../../types.js';
 import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
@@ -6,6 +7,7 @@ import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
+import { completeJob, enqueueJob, getControlPlanePaths, loadControlPlaneState } from './control-plane-store.js';
 import {
   executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
@@ -13,6 +15,8 @@ import {
 } from './control-plane-package-update.js';
 
 const CONTROL_BRIDGE_START_DELAY_ENV = 'AUTONOMY_CONTROL_PLANE_BRIDGE_START_DELAY_MS';
+const DEFERRED_RESTART_RESULT_POLL_MS = 100;
+const DEFAULT_DEFERRED_RESTART_RESULT_TIMEOUT_MS = 12_000;
 
 function parseRepoMap(value: string | undefined) {
   const repoMap: Record<string, string> = {};
@@ -35,6 +39,164 @@ function parseRepoMap(value: string | undefined) {
   return repoMap;
 }
 
+function mergeDeferredRestartLaunchResults(
+  result: Record<string, unknown>,
+  launchResults: Array<DeferredLaunchResult>,
+  options: {
+    persistedResult?: Record<string, unknown> | null;
+    unresolvedDefaultTargets?: Array<'server' | 'controlBridge'>;
+  } = {}
+) {
+  const persistedResult = options.persistedResult && typeof options.persistedResult === 'object'
+    ? options.persistedResult
+    : null;
+  const nextResult = {
+    ...result,
+    ...(persistedResult || {}),
+  };
+  const persistedRestartStatus = persistedResult && persistedResult.restartStatus && typeof persistedResult.restartStatus === 'object'
+    ? persistedResult.restartStatus as Record<string, unknown>
+    : null;
+  const restartStatus = {
+    ...(nextResult.restartStatus && typeof nextResult.restartStatus === 'object'
+      ? nextResult.restartStatus as Record<string, unknown>
+      : {}),
+  };
+
+  if (persistedRestartStatus) {
+    ['server', 'controlBridge'].forEach((target) => {
+      const persistedTarget = persistedRestartStatus[target];
+      if (!persistedTarget || typeof persistedTarget !== 'object') {
+        return;
+      }
+      const previousTarget = restartStatus[target] && typeof restartStatus[target] === 'object'
+        ? restartStatus[target] as Record<string, unknown>
+        : {};
+      restartStatus[target] = {
+        ...previousTarget,
+        ...(persistedTarget as Record<string, unknown>),
+      };
+    });
+    Object.entries(persistedRestartStatus).forEach(([key, value]) => {
+      if (key === 'server' || key === 'controlBridge') {
+        return;
+      }
+      restartStatus[key] = value;
+    });
+  }
+
+  let latestCompletedAt = String(restartStatus.completedAt || '').trim() || null;
+
+  launchResults.forEach((launchResult) => {
+    if (launchResult.mode === 'default') {
+      if (launchResult.status === 'failed') {
+        const completedAt = launchResult.completedAt;
+        (launchResult.targets || []).forEach((target) => {
+          const previousTarget = restartStatus[target] && typeof restartStatus[target] === 'object'
+            ? restartStatus[target] as Record<string, unknown>
+            : {};
+          restartStatus[target] = {
+            ...previousTarget,
+            status: 'failed',
+            postRestartPid: null,
+            completedAt,
+            reason: 'restart-helper-launch-failed',
+            error: launchResult.error || 'Default restart helper failed to launch.',
+          };
+        });
+        if (!latestCompletedAt || Date.parse(completedAt) >= Date.parse(latestCompletedAt)) {
+          latestCompletedAt = completedAt;
+        }
+      }
+      return;
+    }
+    if (launchResult.target !== 'server' && launchResult.target !== 'controlBridge') {
+      return;
+    }
+    const previousTarget = restartStatus[launchResult.target] && typeof restartStatus[launchResult.target] === 'object'
+      ? restartStatus[launchResult.target] as Record<string, unknown>
+      : {};
+    const postRestartPid = launchResult.postRestartPid ?? null;
+    const nextTarget: Record<string, unknown> = {
+      ...previousTarget,
+      status: launchResult.status === 'launched' ? 'restarted' : 'failed',
+      postRestartPid,
+      completedAt: launchResult.completedAt,
+    };
+    if (launchResult.error) {
+      nextTarget.error = launchResult.error;
+    } else {
+      delete nextTarget.error;
+    }
+    if (launchResult.status === 'launched' && postRestartPid === null) {
+      nextTarget.reason = 'post-restart-pid-unavailable';
+    } else {
+      delete nextTarget.reason;
+    }
+    restartStatus[launchResult.target] = nextTarget;
+    if (!latestCompletedAt || Date.parse(launchResult.completedAt) >= Date.parse(latestCompletedAt)) {
+      latestCompletedAt = launchResult.completedAt;
+    }
+  });
+
+  if (Array.isArray(options.unresolvedDefaultTargets) && options.unresolvedDefaultTargets.length > 0) {
+    const completedAt = new Date().toISOString();
+    options.unresolvedDefaultTargets.forEach((target) => {
+      const previousTarget = restartStatus[target] && typeof restartStatus[target] === 'object'
+        ? restartStatus[target] as Record<string, unknown>
+        : {};
+      restartStatus[target] = {
+        ...previousTarget,
+        status: 'failed',
+        postRestartPid: null,
+        completedAt,
+        reason: 'restart-evidence-unavailable',
+        error: 'Default restart completed without persisted restart evidence.',
+      };
+    });
+    latestCompletedAt = completedAt;
+  }
+
+  const targetStatuses = [restartStatus.controlBridge, restartStatus.server]
+    .map((entry) => entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).status || '').trim() : '')
+    .filter(Boolean);
+  restartStatus.status = summarizeRestartStatus(targetStatuses);
+  if (latestCompletedAt && restartStatus.status !== 'deferred') {
+    restartStatus.completedAt = latestCompletedAt;
+  }
+  nextResult.restartStatus = restartStatus;
+  nextResult.errors = [restartStatus.controlBridge, restartStatus.server]
+    .map((entry) => entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).error || '').trim() : '')
+    .filter(Boolean);
+  return nextResult;
+}
+
+type DeferredLaunchResult = {
+    target: 'server' | 'controlBridge' | 'default';
+    mode: 'configured' | 'default';
+    status: 'launched' | 'failed';
+    completedAt: string;
+    postRestartPid?: number | null;
+    targets?: Array<'server' | 'controlBridge'>;
+    error?: string;
+};
+
+function summarizeRestartStatus(targetStatuses: string[]) {
+  if (targetStatuses.includes('failed') || targetStatuses.includes('relaunch-failed') || targetStatuses.includes('stale-pid')) {
+    return 'failed';
+  }
+  if (targetStatuses.includes('deferred')) {
+    return 'deferred';
+  }
+  if (targetStatuses.includes('restarted')) {
+    return 'restarted';
+  }
+  if (targetStatuses.length > 0 && targetStatuses.every((status) => status === 'skipped')) {
+    return 'skipped';
+  }
+  return targetStatuses[0] || 'skipped';
+}
+
 async function runControlPlaneBridgeOnce(rootDir: string, options: {
   serverUrl: string;
   repoRoots: Record<string, string>;
@@ -46,7 +208,9 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
   const deferredControlPlaneRestarts: Array<{
     jobId: string;
     repoId: string;
+    repoRoot: string;
     commands: Parameters<typeof runDeferredControlPlaneRestartCommands>[0];
+    result: Record<string, unknown>;
   }> = [];
   while (registeredRepoIds.length > 0) {
     const claimed = await requestJson(`${options.serverUrl}/api/jobs/claim-next`, {
@@ -229,10 +393,15 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         status: completedStatus || 'unacknowledged',
       });
       if (isCompletedJobResponse(completed, job.id) && deferredRestartCommandsForJob.length > 0) {
+        if (deferredRestartCommandsForJob.some((command) => command.mode === 'default')) {
+          mirrorRestartJobLocally(repoRoot, job, result);
+        }
         deferredControlPlaneRestarts.push({
           jobId: job.id,
           repoId: job.repoId,
+          repoRoot,
           commands: deferredRestartCommandsForJob,
+          result,
         });
       } else if (deferredRestartCommandsForJob.length > 0) {
         logBridgeEvent('bridge:restart:deferred-skipped', {
@@ -301,11 +470,123 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         error: result.error || '',
       });
     });
+    const defaultTargets = collectDefaultRestartTargets(restart.commands);
+    const persistedResult = await waitForPersistedDefaultRestartResult(restart.repoRoot, restart.jobId, defaultTargets, results);
+    const updated = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(restart.jobId)}/complete`, {
+      method: 'POST',
+      body: {
+        status: 'completed',
+        result: mergeDeferredRestartLaunchResults(restart.result, results, {
+          persistedResult,
+          unresolvedDefaultTargets: defaultTargets.filter((target) => {
+            if (!persistedResult || !persistedResult.restartStatus || typeof persistedResult.restartStatus !== 'object') {
+              return true;
+            }
+            const targetResult = persistedResult.restartStatus[target];
+            return !targetResult
+              || typeof targetResult !== 'object'
+              || String((targetResult as Record<string, unknown>).status || '').trim() === 'deferred';
+          }),
+        }),
+      },
+    }).catch(() => null);
+    logBridgeEvent('bridge:restart:deferred-complete', {
+      jobId: restart.jobId,
+      repoId: restart.repoId,
+      status: getResponseStatus(updated) || 'unacknowledged',
+    });
   }
 
   return {
     processed,
   };
+}
+
+function mirrorRestartJobLocally(repoRoot: string, job: ControlPlaneJobRecord, result: Record<string, unknown>) {
+  const existing = loadControlPlaneState(repoRoot).jobs.find((entry) => entry.id === job.id);
+  if (!existing) {
+    enqueueJob(repoRoot, {
+      ...job,
+      status: 'claimed',
+    });
+  }
+  completeJob(repoRoot, job.id, {
+    status: 'completed',
+    result,
+  });
+}
+
+function collectDefaultRestartTargets(
+  commands: Parameters<typeof runDeferredControlPlaneRestartCommands>[0]
+): Array<'server' | 'controlBridge'> {
+  const targets = new Set<'server' | 'controlBridge'>();
+  commands.forEach((command) => {
+    if (command.mode !== 'default') {
+      return;
+    }
+    command.helperPlan.targets.forEach((target) => {
+      targets.add(target.target);
+    });
+  });
+  return Array.from(targets);
+}
+
+async function waitForPersistedDefaultRestartResult(
+  repoRoot: string,
+  jobId: string,
+  defaultTargets: Array<'server' | 'controlBridge'>,
+  launchResults: DeferredLaunchResult[]
+) {
+  if (defaultTargets.length === 0) {
+    return null;
+  }
+  const defaultLaunchFailed = launchResults.some((result) => result.mode === 'default' && result.status === 'failed');
+  if (defaultLaunchFailed) {
+    return null;
+  }
+  const deadline = Date.now() + DEFAULT_DEFERRED_RESTART_RESULT_TIMEOUT_MS;
+  while (Date.now() <= deadline) {
+    const persistedResult = readPersistedJobResult(repoRoot, jobId);
+    if (hasPersistedDefaultRestartEvidence(persistedResult, defaultTargets)) {
+      return persistedResult;
+    }
+    await delay(DEFERRED_RESTART_RESULT_POLL_MS);
+  }
+  return readPersistedJobResult(repoRoot, jobId);
+}
+
+function readPersistedJobResult(repoRoot: string, jobId: string) {
+  try {
+    const { statePath } = getControlPlanePaths(repoRoot);
+    if (!fs.existsSync(statePath)) {
+      return null;
+    }
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const jobs = Array.isArray(state?.jobs) ? state.jobs : [];
+    const job = jobs.find((entry) => entry && typeof entry === 'object' && entry.id === jobId);
+    return job && job.result && typeof job.result === 'object' ? job.result as Record<string, unknown> : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function hasPersistedDefaultRestartEvidence(
+  result: Record<string, unknown> | null,
+  defaultTargets: Array<'server' | 'controlBridge'>
+) {
+  if (!result || !result.restartStatus || typeof result.restartStatus !== 'object') {
+    return false;
+  }
+  const restartStatus = result.restartStatus as Record<string, unknown>;
+  return defaultTargets.every((target) => {
+    const targetResult = restartStatus[target];
+    return Boolean(
+      targetResult
+      && typeof targetResult === 'object'
+      && String((targetResult as Record<string, unknown>).status || '').trim()
+      && String((targetResult as Record<string, unknown>).status || '').trim() !== 'deferred'
+    );
+  });
 }
 
 async function runControlPlaneBridgeLoop(rootDir: string, options: {

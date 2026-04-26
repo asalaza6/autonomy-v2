@@ -389,6 +389,12 @@ test('default restart helper records bridge results before a relaunched bridge c
   assert.equal(storedJob?.result?.restartStatus.helperStatus, 'restarted');
   assert.equal(storedJob?.result?.restartStatus.server.status, 'restarted');
   assert.equal(storedJob?.result?.restartStatus.controlBridge.status, 'restarted');
+  assert.equal(storedJob?.result?.restartStatus.server.preRestartPid, originalServerPid);
+  assert.equal(storedJob?.result?.restartStatus.controlBridge.preRestartPid, originalBridgePid);
+  assert.notEqual(storedJob?.result?.restartStatus.server.postRestartPid, originalServerPid);
+  assert.notEqual(storedJob?.result?.restartStatus.controlBridge.postRestartPid, originalBridgePid);
+  assert.equal(typeof storedJob?.result?.restartStatus.server.completedAt, 'string');
+  assert.equal(typeof storedJob?.result?.restartStatus.controlBridge.completedAt, 'string');
   assert.equal(storedJob?.result?.restartStatus.helperResults.length, 2);
 });
 

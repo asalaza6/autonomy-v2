@@ -109,6 +109,40 @@ type JobSummary = {
   createdAt?: string | null;
   action?: string;
   branch?: string;
+  restartEvidence?: RestartEvidenceSummary | null;
+};
+
+type RestartEvidenceTargetSummary = {
+  target?: string;
+  label?: string;
+  status?: string;
+  statusLabel?: string;
+  reason?: string | null;
+  reasonLabel?: string | null;
+  mode?: string | null;
+  modeLabel?: string | null;
+  command?: string | null;
+  cwd?: string | null;
+  preRestartPid?: number | null;
+  postRestartPid?: number | null;
+  recordedAt?: string | null;
+  completedAt?: string | null;
+  error?: string | null;
+  pidChanged?: boolean | null;
+  compactLabel?: string;
+};
+
+type RestartEvidenceSummary = {
+  status?: string;
+  statusLabel?: string;
+  completedAt?: string | null;
+  helperStatus?: string | null;
+  compactSummary?: string;
+  allTargetsRelaunched?: boolean;
+  allTargetsChangedPid?: boolean;
+  relaunchedTargetCount?: number;
+  pidChangedTargetCount?: number;
+  targets?: RestartEvidenceTargetSummary[];
 };
 
 type ChatMessageSummary = {
@@ -1934,6 +1968,7 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
   const freshnessLabel = repo.freshnessStatusLabel || 'Offline';
   const deployment = repo.deployment || null;
   const projectUrl = repo.repoId ? `/project/${encodeURIComponent(repo.repoId)}` : '';
+  const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
 
   return (
     <article className="repo">
@@ -1967,6 +2002,9 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
           <PackageStatus packageStatus={repo.packageStatus || null} />
           <PackageUpdateButton repo={repo} />
         </RepoSection>
+        <RepoSection title="Restart">
+          <ManagerRestartSummary repo={repo} restartEvidence={restartEvidence} />
+        </RepoSection>
         <RepoSection title="Deployment">
           <div className={`status-chip ${statusClass(deployment && deployment.status)}`}>
             <span className="status-dot" />
@@ -1997,6 +2035,7 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
   const deployButtonState = buildDeployButtonState(repo);
   const showDeployButton = Boolean(repo.repoId && (deployButtonState.active || deployment && deployment.hasChanges));
   const deploymentStatus = deployment ? deployment.status : null;
+  const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
 
   return (
     <article className="repo">
@@ -2033,6 +2072,9 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
         <RepoSection title="Autonomy v2">
           <PackageStatus packageStatus={repo.packageStatus || null} />
           <PackageUpdateButton repo={repo} />
+        </RepoSection>
+        <RepoSection title="Restart Evidence">
+          <ProjectRestartPanel repo={repo} restartEvidence={restartEvidence} />
         </RepoSection>
         <RepoSection title="Deployment">
           <div className="queued-prd">
@@ -2095,6 +2137,115 @@ function RepoSection({ title, children }: { title: string; children: JSX.Element
     <div className="repo-section">
       <h4>{title}</h4>
       {children}
+    </div>
+  );
+}
+
+function ManagerRestartSummary({
+  repo,
+  restartEvidence,
+}: {
+  repo: RepoSummary;
+  restartEvidence: RestartEvidenceSummary | null;
+}) {
+  if (!repo.restartJob) {
+    return <div className="list-note">No restart job recorded yet.</div>;
+  }
+  if (!restartEvidence) {
+    return <div className="list-note">{repo.restartJob.detail || 'Restart state unavailable.'}</div>;
+  }
+  const summary = buildManagerRestartSummary(restartEvidence);
+  return (
+    <div className="queued-prd">
+      <div className="item-head">
+        <div>
+          <div className={`status-chip ${statusClass(restartEvidence.status)}`}>
+            <span className="status-dot" />
+            <span>{restartEvidence.statusLabel || 'Restart status unavailable'}</span>
+          </div>
+          <div className="queue-title">{summary.headline}</div>
+        </div>
+        {restartEvidence.completedAt ? <span className="pill">{formatTimestamp(restartEvidence.completedAt)}</span> : null}
+      </div>
+      <div className="queue-detail">{summary.detail}</div>
+      {restartEvidence.compactSummary ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>{restartEvidence.compactSummary}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function ProjectRestartPanel({
+  repo,
+  restartEvidence,
+}: {
+  repo: RepoSummary;
+  restartEvidence: RestartEvidenceSummary | null;
+}) {
+  if (!repo.restartJob) {
+    return <div className="list-note">No restart job recorded yet.</div>;
+  }
+  if (!restartEvidence) {
+    return <div className="list-note">{repo.restartJob.detail || 'Restart state unavailable.'}</div>;
+  }
+  const targets = Array.isArray(restartEvidence.targets) ? restartEvidence.targets : [];
+  return (
+    <div className="queued-prd">
+      <div className="item-head">
+        <div>
+          <div className={`status-chip ${statusClass(restartEvidence.status)}`}>
+            <span className="status-dot" />
+            <span>{restartEvidence.statusLabel || 'Restart status unavailable'}</span>
+          </div>
+          <div className="queue-title">Latest restart</div>
+        </div>
+        {restartEvidence.completedAt ? <span className="pill">{formatTimestamp(restartEvidence.completedAt)}</span> : null}
+      </div>
+      <div className="queue-detail">
+        {repo.restartJob.statusLabel || repo.restartJob.status || 'Restart recorded'}
+        {repo.restartJob.detail ? ` | ${repo.restartJob.detail}` : ''}
+      </div>
+      {targets.length > 0 ? (
+        targets.map((target) => <RestartTargetRow target={target} />)
+      ) : (
+        <div className="list-note" style={{ marginTop: '8px' }}>No per-target restart evidence recorded.</div>
+      )}
+    </div>
+  );
+}
+
+function RestartTargetRow({ target }: { target: RestartEvidenceTargetSummary }) {
+  const heartbeat = resolveTargetHeartbeat(target.target);
+  const detailParts = [
+    target.modeLabel ? `mode ${target.modeLabel.toLowerCase()}` : '',
+    target.recordedAt ? `recorded ${formatTimestamp(target.recordedAt)}` : 'recorded time missing',
+    target.completedAt ? `completed ${formatTimestamp(target.completedAt)}` : 'completion time missing',
+    heartbeat ? `${heartbeat.label || 'Heartbeat'} ${heartbeat.statusLabel || 'Offline'}` : '',
+  ].filter(Boolean);
+  const secondaryParts = [
+    buildTargetLifecycleLabel(target),
+    target.reasonLabel ? `reason ${target.reasonLabel}` : '',
+    target.pidChanged === true ? 'pid changed' : target.pidChanged === false ? 'pid unchanged' : 'pid change unknown',
+    target.error || '',
+  ].filter(Boolean);
+
+  return (
+    <div className="agent" style={{ marginTop: '12px' }}>
+      <div className="agent-head">
+        <div>
+          <div className={`status-chip ${statusClass(target.status)}`}>
+            <span className="status-dot" />
+            <span>{target.statusLabel || target.status || 'Unknown'}</span>
+          </div>
+          <div className="agent-title">{target.compactLabel || buildTargetLifecycleLabel(target)}</div>
+        </div>
+        <div className={`status-chip ${statusClass(heartbeat && heartbeat.status)}`}>
+          <span className="status-dot" />
+          <span>{heartbeat ? `${heartbeat.label || 'Heartbeat'} ${heartbeat.statusLabel || 'Offline'}` : 'Heartbeat unavailable'}</span>
+        </div>
+      </div>
+      <div className="agent-detail">{detailParts.join(' | ')}</div>
+      {secondaryParts.length > 0 ? <div className="agent-detail" style={{ marginTop: '6px' }}>{secondaryParts.join(' | ')}</div> : null}
     </div>
   );
 }
@@ -2365,6 +2516,38 @@ function buildRestartButtonState(repo: RepoSummary | null) {
   };
 }
 
+function buildManagerRestartSummary(restartEvidence: RestartEvidenceSummary) {
+  const targets = Array.isArray(restartEvidence.targets) ? restartEvidence.targets : [];
+  const relaunched = targets.filter((target) => target.status === 'restarted').length;
+  const changed = targets.filter((target) => target.pidChanged === true).length;
+  const headline = restartEvidence.allTargetsChangedPid
+    ? 'Both targets relaunched with new PIDs'
+    : restartEvidence.allTargetsRelaunched
+      ? 'Both targets relaunched'
+      : `${relaunched}/${targets.length || 0} targets relaunched`;
+  const detail = targets.length > 0
+    ? `${changed}/${targets.length} targets changed PID`
+    : 'No target evidence recorded';
+  return { headline, detail };
+}
+
+function buildTargetLifecycleLabel(target: RestartEvidenceTargetSummary) {
+  const pre = target.preRestartPid == null ? 'missing' : String(target.preRestartPid);
+  const post = target.postRestartPid == null ? 'missing' : String(target.postRestartPid);
+  return `${target.label || target.target || 'target'} pid ${pre} -> ${post}`;
+}
+
+function resolveTargetHeartbeat(target?: string) {
+  const dashboard = latestDashboard || {};
+  if (target === 'server') {
+    return dashboard.serverHeartbeat || null;
+  }
+  if (target === 'controlBridge') {
+    return dashboard.bridgeHeartbeat || null;
+  }
+  return null;
+}
+
 function formatTimestamp(value: string | null | undefined) {
   const date = new Date(value || '');
   if (Number.isNaN(date.getTime())) {
@@ -2401,9 +2584,11 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 
 export {
   ChatMessage,
+  ManagerRepoCard,
   ChatPrdProposalCard,
   PackageUpdateButton,
   PrdHistoryDetail,
+  ProjectRepoCard,
   buildChatPrdDraftFormState,
   captureChatScrollSnapshot,
   continueSourceChatFromPrd,
