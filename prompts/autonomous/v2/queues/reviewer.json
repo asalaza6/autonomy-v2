@@ -882,32 +882,26 @@
     {
       "id": "review-pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "title": "Review [architecture-agent] Enable authenticated GitHub PR reads for repo-assistant sessions using whitelisted runtime secrets",
-      "description": "Review pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent for Enable authenticated GitHub PR reads for repo-assistant sessions using whitelisted runtime secrets",
+      "description": "Review pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent for Address review for [architecture-agent] Enable authenticated GitHub PR reads for repo-assistant sessions using whitelisted runtime secrets",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
-      "sourceTaskId": "prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "A freshly started repo-assistant session for `asalaza6/autonomy-v2` automatically receives only whitelisted GitHub auth variables such as `GITHUB_TOKEN` or `GH_TOKEN` from the approved runtime secret source, without requiring any manual token entry inside the session.",
-        "The assistant session does not read arbitrary env files directly for this feature; credential delivery is performed by runtime injection or equivalent pre-session secret shaping controlled by the host process.",
-        "When a valid repo-scoped credential is present, the session can use the GitHub tool/plugin to read live PR data for `asalaza6/autonomy-v2#27`, including PR metadata, diff, top-level comments, reviews, and unresolved review threads.",
-        "Before GitHub-backed PR inspection is marked available, startup performs a read-access validation against the target repository and PR resources; if validation fails, GitHub inspection remains disabled rather than silently falling back.",
-        "Repo-assistant sessions receive outbound network permission only for the GitHub endpoints required to perform the supported PR read operations, and the implementation documents or enforces that narrower allowlist in the relevant runtime configuration.",
-        "The control panel or equivalent runtime status surface shows a clear, user-visible state for GitHub access success and for each failure mode tested here: missing token, invalid token, and token lacking repository access.",
-        "Raw secret values are never emitted into assistant transcript content, structured status payloads, logs, or UI output; any error or debug reporting uses redacted or non-secret-safe messaging only.",
-        "Focused automated coverage exercises successful GitHub capability enablement plus the missing-token, invalid-token, and unauthorized-token failure paths, and the implementation runs `npm run typecheck` along with the relevant control-plane, runner, or smoke tests covering session startup and status reporting."
+        "Blocking issues remain in the repo-assistant GitHub auth/session wiring. `npm run typecheck` and `npm run lint` were reported passed by the wrapper, but I found two merge blockers in the current diff. I also could not run the added unit tests in this read-only review environment because `npm test` needs to write `dist/` artifacts.\n`src/codex/cli.ts:261-303` still spawns Codex with `env: { ...process.env, ...(env || {}) }`. That means a repo-assistant session inherits the full host environment, not just the whitelisted GitHub auth vars prepared in `answerControlPlaneAgentChat`. This violates the acceptance requirement that the session receive only approved GitHub auth variables and risks leaking unrelated runtime secrets into the assistant process. The fix needs to launch the repo-assistant with a shaped env that explicitly limits forwarded secrets, and add focused coverage for the spawned env contract.\n`src/server/control-plane/control-plane-github.ts:7-8,125-165,243-250` defines `REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS`, but that allowlist is only reported in status/prompt context. `src/server/control-plane/control-plane-chat.ts:84-91` and `src/codex/cli.ts:187-223` do not enforce any GitHub-only network permission when starting the repo-assistant session. As written, the feature documents `api.github.com` but does not actually grant or restrict outbound access accordingly, so the acceptance criterion about narrow GitHub endpoint permission is unmet. The fix needs real runtime enforcement/configuration for the assistant session network policy, plus verification that the enabled path can read PR data while non-allowlisted network access remains unavailable."
       ],
       "reviewRound": 2,
       "status": "queued",
       "createdAt": "2026-04-26T22:06:56.730Z",
-      "updatedAt": "2026-04-26T22:09:01.757Z",
+      "updatedAt": "2026-04-26T22:15:07.048Z",
       "reviewedAt": "2026-04-26T22:08:49.333Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T22:07:03.119Z"
+      "dispatchedAt": "2026-04-26T22:07:03.119Z",
+      "scopeViolations": []
     }
   ]
 }
