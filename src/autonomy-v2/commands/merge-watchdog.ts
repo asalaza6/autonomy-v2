@@ -39,7 +39,7 @@ function runApprovedPrMergeWatchdog(rootDir: string, options: AnyRecord = {}) {
   const attemptMergeFn = typeof options.attemptMerge === 'function'
     ? options.attemptMerge
     : attemptMerge;
-  const mergeResult = attemptMergeFn(rootDir, prepared.prId, prepared.reviewerId);
+  const mergeResult = attemptMergeFn(rootDir, prepared.prId, prepared.reviewerId, options);
   if (mergeResult.merged) {
     return {
       checked: 1,
@@ -269,8 +269,14 @@ function compareApprovedMergeCandidates(left: PullRequestRecord, right: PullRequ
   return String(left.id || '').localeCompare(String(right.id || ''));
 }
 
-function attemptMerge(rootDir: string, prId: string, reviewerId: string) {
+function attemptMerge(rootDir: string, prId: string, reviewerId: string, options: AnyRecord = {}) {
   try {
+    const env = options.stateLockHeld === true
+      ? {
+          ...process.env,
+          AUTONOMY_SKIP_STATE_LOCK: '1',
+        }
+      : process.env;
     execFileSync(process.execPath, [
       CLI_PATH,
       'merge',
@@ -283,6 +289,7 @@ function attemptMerge(rootDir: string, prId: string, reviewerId: string) {
       '--execute',
     ], {
       cwd: rootDir,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     return { merged: true, message: 'merged', code: null };
