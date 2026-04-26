@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4342,6 +4341,30 @@
       "completedAt": "2026-04-26T22:15:05.951Z",
       "completionMode": "code",
       "commitSha": "68ef484298cbbb6a7f62b950bb14b44cb9ca6ee0"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Enable authenticated GitHub PR reads for repo-assistant sessions using whitelisted runtime secrets",
+      "description": "`npm run typecheck` and `npm run lint` are reported passing, but the PR still does not satisfy the repo-assistant secret-isolation requirement. The GitHub-enabled path is now restricted, yet the failure paths still launch the repo assistant with the full host environment, so this is not safe to merge into `dev`.\n`src/server/control-plane/control-plane-chat.ts:84-96` only sets `inheritHostEnv: false` and the GitHub-only config overrides when `githubCapability.available === true`. On the missing-token / invalid-token / unauthorized-token paths, `runCodexStructured` is called with `env: undefined` and `inheritHostEnv: true`, which flows into `buildCodexProcessEnv` in `src/codex/cli.ts:482-502` and forwards the entire host `process.env` to the repo-assistant child. That means a session that is supposed to have GitHub inspection disabled can still inherit unrelated runtime secrets, and it can also inherit a host `GITHUB_TOKEN`/`GH_TOKEN` that did not come from the approved secret source, bypassing the acceptance contract. The added coverage in `tests/unit/codex-cli.test.ts:9-81` only proves the explicitly restricted success path; it does not cover the unavailable/unauthorized launch path where the leak remains. The fix should shape the repo-assistant env for all launches, not only the enabled case, and add a focused test that proves the disabled/error paths do not inherit arbitrary host env or non-approved GitHub credentials.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-enable-repo-assistant-sessions-to-67a11c",
+      "laneKey": "prd-enable-repo-assistant-sessions-to-67a11c:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` and `npm run lint` are reported passing, but the PR still does not satisfy the repo-assistant secret-isolation requirement. The GitHub-enabled path is now restricted, yet the failure paths still launch the repo assistant with the full host environment, so this is not safe to merge into `dev`.\n`src/server/control-plane/control-plane-chat.ts:84-96` only sets `inheritHostEnv: false` and the GitHub-only config overrides when `githubCapability.available === true`. On the missing-token / invalid-token / unauthorized-token paths, `runCodexStructured` is called with `env: undefined` and `inheritHostEnv: true`, which flows into `buildCodexProcessEnv` in `src/codex/cli.ts:482-502` and forwards the entire host `process.env` to the repo-assistant child. That means a session that is supposed to have GitHub inspection disabled can still inherit unrelated runtime secrets, and it can also inherit a host `GITHUB_TOKEN`/`GH_TOKEN` that did not come from the approved secret source, bypassing the acceptance contract. The added coverage in `tests/unit/codex-cli.test.ts:9-81` only proves the explicitly restricted success path; it does not cover the unavailable/unauthorized launch path where the leak remains. The fix should shape the repo-assistant env for all launches, not only the enabled case, and add a focused test that proves the disabled/error paths do not inherit arbitrary host env or non-approved GitHub credentials."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
+      "createdAt": "2026-04-26T22:16:45.706Z",
+      "updatedAt": "2026-04-26T22:16:45.706Z",
+      "startedAt": "2026-04-26T22:16:45.706Z",
+      "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
