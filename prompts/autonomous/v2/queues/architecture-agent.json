@@ -4362,11 +4362,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "createdAt": "2026-04-26T22:16:45.706Z",
-      "updatedAt": "2026-04-26T22:19:47.809Z",
+      "updatedAt": "2026-04-26T22:19:47.876Z",
       "startedAt": "2026-04-26T22:16:45.706Z",
       "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "completedAt": "2026-04-26T22:19:47.809Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "e403454327ecbcdd2ba4678ac9d533c8adb89e72"
     }
   ]
 }
