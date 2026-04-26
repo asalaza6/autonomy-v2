@@ -685,7 +685,7 @@
     {
       "id": "review-pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent",
       "title": "Review [architecture-agent] architecture lane work for prd-add-manager-side-reset-prds-4fb271",
-      "description": "Review pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent for Add manager control-plane Reset PRDs UI and history/status refresh behavior",
+      "description": "Review pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent for Address review for [architecture-agent] architecture lane work for prd-add-manager-side-reset-prds-4fb271",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent",
@@ -695,17 +695,18 @@
       "baseBranch": "dev",
       "acceptance": [
         "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-1` is complete within the assigned agent scope.",
-        "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-2` is complete within the assigned agent scope."
+        "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-2` is complete within the assigned agent scope.",
+        "`npm run typecheck` and `npm run lint` passed, but the PRD reset flow is not merge-safe yet because the backend can target a different PRD than the one the manager UI shows as active.\nBlocking: the UI and backend use different active-PRD selection rules. The manager dashboard only exposes reset for `planning`/`planned` PRDs via `selectActivePrd` in `src/autonomy-v2/control-plane/status-view.ts:11`, but `executePrdReset` calls `selectResettablePrd` in `src/autonomy-v2/control-plane/prd-service.ts:169` / `:413`, which will pick any non-queued, non-completed PRD, including `failed` ones. If a newer failed PRD coexists with an older planned PRD, the UI will send the planned PRD id while the backend rejects it with `Confirmation must match the active PRD id ...`, so the manager's reset control breaks for a valid visible state. Align the backend selection with the same active-PRD predicate the dashboard uses, and add a focused test covering `failed` + `planned` PRDs existing together.",
+        "`npm run typecheck` and `npm run lint` passed, and the reset handler now aligns its active-PRD selection with the dashboard by calling `selectActivePrd` from `src/autonomy-v2/control-plane/prd-service.ts:170` / `src/autonomy-v2/control-plane/status-view.ts:11-26`. I’m still blocking this round because the regression that previously broke the manager reset flow is not covered by a focused test, so merge safety is still weak in this high-risk control-plane path.\nAdd a focused regression test for the case where a newer `failed` PRD coexists with an older `planned` PRD. The fix now depends on sharing `selectActivePrd` between the UI and backend (`src/autonomy-v2/control-plane/prd-service.ts:170`, `src/autonomy-v2/control-plane/status-view.ts:11-26`), but `tests/unit/control-plane-prd-reset.test.ts:17-152` only covers the happy-path reset and the no-active-PRD noop. Without an assertion for the `failed` + `planned` combination, the exact mismatch that blocked the previous review can regress without detection."
       ],
       "reviewRound": 3,
       "status": "merged",
       "createdAt": "2026-04-26T09:50:05.449Z",
-      "updatedAt": "2026-04-26T09:57:01.320Z",
+      "updatedAt": "2026-04-26T09:57:04.864Z",
       "reviewedAt": "2026-04-26T09:56:56.871Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T09:55:05.637Z",
-      "mergedAt": "2026-04-26T09:57:01.320Z"
+      "dispatchedAt": "2026-04-26T09:55:05.637Z"
     }
   ]
 }
