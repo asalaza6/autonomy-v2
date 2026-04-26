@@ -1409,11 +1409,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-26T07:47:39.281Z",
-      "updatedAt": "2026-04-26T07:54:04.791Z",
+      "updatedAt": "2026-04-26T07:54:04.856Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
       "startedAt": "2026-04-26T07:47:42.457Z",
       "completedAt": "2026-04-26T07:54:04.791Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "fd408bd57307f1e0822218c585a5552672c8e728"
     }
   ]
 }
