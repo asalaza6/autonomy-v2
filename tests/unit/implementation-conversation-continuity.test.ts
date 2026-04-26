@@ -478,6 +478,39 @@ test('implementation runner does not resume from generic reviewer conversation f
   assert.equal(completedTasks[0].implementationConversationId, 'session-new-implementation');
 });
 
+test('reviewer auto-approves after four prior review rounds when checks and scope are clean', async () => {
+  const { context, recordedReviews } = buildReviewRunnerContext(async () => ({
+    decision: 'changes_requested',
+    summary: 'Still asking for another review round.',
+    concerns: ['Please revisit this once more.'],
+  }), {
+    prOverrides: {
+      reviews: [
+        { reviewerId: 'reviewer', decision: 'changes_requested', summary: 'Round 1' },
+        { reviewerId: 'reviewer', decision: 'changes_requested', summary: 'Round 2' },
+        { reviewerId: 'reviewer', decision: 'changes_requested', summary: 'Round 3' },
+        { reviewerId: 'reviewer', decision: 'changes_requested', summary: 'Round 4' },
+      ],
+      status: 'changes_requested',
+    },
+  });
+
+  const result = await getAgentDefinition(AGENT_ROLES.REVIEW).execute(context, {
+    kind: AGENT_ROLES.REVIEW,
+    agentId: 'reviewer',
+    reason: 'runner',
+    reviewTaskId: 'review-pr-prd-conversation-architecture-agent',
+    prId: 'pr-prd-conversation-architecture-agent',
+    sourceAgentId: 'architecture-agent',
+  });
+
+  assert.equal(result.status, 'approved');
+  assert.equal(result.decision, 'approve');
+  assert.equal(recordedReviews.length, 1);
+  assert.equal(recordedReviews[0].decision, 'approve');
+  assert.match(recordedReviews[0].summary, /Auto-approval threshold reached: 4\+ reviewer rounds with passing checks\/scope\./);
+});
+
 function buildReviewTask(overrides: Record<string, unknown> = {}): any {
   return {
     id: 'review-pr-prd-conversation-architecture-agent',

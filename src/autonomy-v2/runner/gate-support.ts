@@ -6,6 +6,7 @@ import {
   getRoleAgentLabel,
   getRoleLabel,
 } from '../../agents/role-catalog.js';
+import { REVIEW_AUTO_APPROVAL_THRESHOLD } from './runner-constants.js';
 import { hasGithubAuth, resolveGithubAuthToken } from '../../github/github-main.js';
 import { resolveGithubRepo, postIssueComment } from './net.js';
 import { normalizeNonEmptyString, uniqueStrings } from './runner-shared.js';
@@ -141,6 +142,11 @@ function getPrCommitCount(pr) {
   return Number.isFinite(count) ? count : 0;
 }
 
+function shouldForceApproveAfterRepeatedReviews(pr) {
+  const reviewCount = Array.isArray(pr && pr.reviews) ? pr.reviews.length : 0;
+  return reviewCount >= REVIEW_AUTO_APPROVAL_THRESHOLD;
+}
+
 function publishMergeFollowupCommentIfNeeded(rootDir, pr, reviewerTask, mergeMessage) {
   const normalizedMessage = normalizeNonEmptyString(mergeMessage) || 'Automatic merge did not complete.';
   if (normalizedMessage === reviewerTask.lastMergeFailureMessage) {
@@ -178,4 +184,5 @@ export {
   resolveReviewCheckCommands,
   runCheckCommands,
   getPrCommitCount,
+  shouldForceApproveAfterRepeatedReviews,
 };

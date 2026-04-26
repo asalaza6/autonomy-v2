@@ -15,6 +15,7 @@ import {
   buildScopeSafeApprovalSummary,
   isScopeOnlyReviewFeedback,
   resolveReviewCheckCommands,
+  shouldForceApproveAfterRepeatedReviews as shouldAutoApproveAfterRepeatedReviews,
 } from '../autonomy-v2/runner/gate-support.js';
 import type { AgentConfig, AutonomyConfig, PullRequestRecord, TaskRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedReviewWork, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
@@ -340,6 +341,9 @@ class ReviewAgentDefinition extends AgentDefinition {
     const scopeConcernOnly = scopeResult.ok && isScopeOnlyReviewFeedback(codexReview);
     const checkExpectationOnly = failedChecks.length === 0
       && this.isCheckExpectationOnlyReviewFeedback(codexReview, checkResults, reviewCheckCommands);
+    const repeatedReviewAutoApprove = failedChecks.length === 0
+      && scopeResult.ok
+      && shouldAutoApproveAfterRepeatedReviews(pr);
     const decision = failedChecks.length > 0
       ? 'changes-requested'
       : !scopeResult.ok
@@ -348,6 +352,8 @@ class ReviewAgentDefinition extends AgentDefinition {
           ? 'approve'
           : checkExpectationOnly
             ? 'approve'
+          : repeatedReviewAutoApprove
+            ? 'approve'
           : codexReview.decision === 'approved'
             ? 'approve'
             : 'changes-requested';
@@ -355,6 +361,11 @@ class ReviewAgentDefinition extends AgentDefinition {
       ? [buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
       : checkExpectationOnly
         ? [buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults)]
+        : repeatedReviewAutoApprove
+          ? [
+            buildScopeSafeApprovalSummary(pr, reviewDiffFiles, checkResults),
+            'Auto-approval threshold reached: 4+ reviewer rounds with passing checks/scope.',
+          ]
         : [codexReview.summary].concat(codexReview.concerns || []);
     if (failedChecks.length > 0) {
       summaryParts.push(`Blocking checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
@@ -421,6 +432,7 @@ class ReviewAgentDefinition extends AgentDefinition {
         decision,
         scopeConcernOnly,
         checkExpectationOnly,
+        repeatedReviewAutoApprove,
         summary,
         merged,
         mergeMessage,
