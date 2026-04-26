@@ -778,7 +778,7 @@
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-fix-chat-prd-review-9f095c-architecture-agent",
-      "sourceTaskId": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-31",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-fix-chat-prd-review-9f095c-architecture-agent-32",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "baseBranch": "dev",
@@ -789,10 +789,10 @@
         "Opening the PRD review popup, closing it, backing out to chat, and submitting through the existing PRD flow continue to behave as before after the responsive layout changes.",
         "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
       ],
-      "reviewRound": 32,
-      "status": "changes_requested",
+      "reviewRound": 33,
+      "status": "queued",
       "createdAt": "2026-04-26T10:34:19.626Z",
-      "updatedAt": "2026-04-26T10:53:59.978Z",
+      "updatedAt": "2026-04-26T10:54:25.973Z",
       "reviewedAt": "2026-04-26T10:53:59.978Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
@@ -802,7 +802,7 @@
           "conversationId": "019dc95d-402a-7ca1-ae90-f56d444c6b3c",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-26T10:53:59.978Z"
+          "updatedAt": "2026-04-26T10:54:25.973Z"
         }
       }
     }
