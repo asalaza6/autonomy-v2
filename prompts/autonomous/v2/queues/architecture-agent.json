@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1760,6 +1759,30 @@
       "completedAt": "2026-04-26T10:04:28.552Z",
       "completionMode": "code",
       "commitSha": "0fb8efdcdc7fd94f8c0447284802ed051b2ee2c8"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-expose-active-pull-request-c879fc-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Show the active pull request link in the main progress area",
+      "description": "Blocking on missing focused verification. The diff appears scoped to the active-PR link feature and `npm run typecheck` / `npm run lint` passed, but this changes high-risk control-plane UI and PR-selection behavior without a recorded passing run of the relevant tests.\nFocused test execution is missing for the new control-plane progress and PR-selection coverage in `tests/unit/control-plane-progress-ui.test.ts` and `tests/unit/control-plane-status.test.ts`. Per the project context, control-plane UI/status changes require focused tests, and the wrapper only reported `npm run typecheck` and `npm run lint`. Please run and pass the relevant unit coverage for these new paths, then resubmit.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-expose-active-pull-request-c879fc",
+      "laneKey": "prd-expose-active-pull-request-c879fc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on missing focused verification. The diff appears scoped to the active-PR link feature and `npm run typecheck` / `npm run lint` passed, but this changes high-risk control-plane UI and PR-selection behavior without a recorded passing run of the relevant tests.\nFocused test execution is missing for the new control-plane progress and PR-selection coverage in `tests/unit/control-plane-progress-ui.test.ts` and `tests/unit/control-plane-status.test.ts`. Per the project context, control-plane UI/status changes require focused tests, and the wrapper only reported `npm run typecheck` and `npm run lint`. Please run and pass the relevant unit coverage for these new paths, then resubmit."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-active-pull-request-c879fc-architecture-agent",
+      "createdAt": "2026-04-26T10:06:35.188Z",
+      "updatedAt": "2026-04-26T10:06:35.188Z",
+      "startedAt": "2026-04-26T10:06:35.188Z",
+      "prId": "pr-prd-expose-active-pull-request-c879fc-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
