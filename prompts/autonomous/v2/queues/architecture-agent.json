@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1560,6 +1559,30 @@
       "completedAt": "2026-04-26T08:20:29.398Z",
       "completionMode": "code",
       "commitSha": "3fcc428eef3827bd5928a9855327d00155bd3c0c"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement automatic promotion of the next queued PRD when no active PRD exists",
+      "description": "`npm run typecheck` passed, but the auto-promotion logic is not preserving the existing queued PRD order, so this branch is not safe to merge yet.\nBlocking: `src/sync/syncer.ts:243-246` promotes the first queued spec returned by `remoteSpecs.find(...)`, which follows `git ls-tree` path order, not the repository’s existing queue order. The current queue/status logic orders queued PRDs by timestamp (`src/autonomy-v2/control-plane/status-view.ts:29-33`), so if two queued PRDs were created out of lexical ID order this code can promote the wrong one and violate the acceptance criterion that the first queued PRD is promoted. Sort queued candidates by the established queue ordering before selecting one, and add focused coverage for multiple queued PRDs with IDs that do not match creation order.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-auto-promote-next-queued-prd-abaf6c",
+      "laneKey": "prd-auto-promote-next-queued-prd-abaf6c:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` passed, but the auto-promotion logic is not preserving the existing queued PRD order, so this branch is not safe to merge yet.\nBlocking: `src/sync/syncer.ts:243-246` promotes the first queued spec returned by `remoteSpecs.find(...)`, which follows `git ls-tree` path order, not the repository’s existing queue order. The current queue/status logic orders queued PRDs by timestamp (`src/autonomy-v2/control-plane/status-view.ts:29-33`), so if two queued PRDs were created out of lexical ID order this code can promote the wrong one and violate the acceptance criterion that the first queued PRD is promoted. Sort queued candidates by the established queue ordering before selecting one, and add focused coverage for multiple queued PRDs with IDs that do not match creation order."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-auto-promote-next-queued-prd-abaf6c-architecture-agent",
+      "createdAt": "2026-04-26T08:22:11.757Z",
+      "updatedAt": "2026-04-26T08:22:11.757Z",
+      "startedAt": "2026-04-26T08:22:11.757Z",
+      "prId": "pr-prd-auto-promote-next-queued-prd-abaf6c-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
