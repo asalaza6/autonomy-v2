@@ -747,10 +747,6 @@
       "prId": "pr-prd-add-selectable-queued-prd-a6fbed-architecture-agent",
       "sourceTaskId": "prd-add-selectable-queued-prd-a6fbed-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-26T10:23:23.773Z",
-      "updatedAt": "2026-04-26T10:23:23.773Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-add-selectable-queued-prd-a6fbed-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -765,9 +761,12 @@
         "Add or update dashboard or control-plane tests proving the queued PRD fields required by the Main detail view are present in the status/dashboard contract.",
         "Verification includes `npm run typecheck` and the focused unit tests for control-plane client and dashboard behavior affected by this change."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-26T10:23:27.375Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-26T10:23:23.773Z",
+      "updatedAt": "2026-04-26T10:23:45.892Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-26T10:23:27.375Z"
     }
   ]
 }
