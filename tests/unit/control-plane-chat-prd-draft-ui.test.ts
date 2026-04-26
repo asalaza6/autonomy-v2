@@ -20,6 +20,12 @@ test('project UI renders dedicated chat PRD review popup controls', () => {
   assert.match(html, /id="chat-prd-draft-panel"/);
   assert.match(html, /id="open-chat-prd-review"/);
   assert.match(html, /id="chat-prd-review-modal"/);
+  assert.match(html, /class="modal-shell chat-prd-review-modal-shell"/);
+  assert.match(html, /class="modal-card chat-prd-review-modal-card"/);
+  assert.match(html, /\.chat-prd-review-modal-card \{/);
+  assert.match(html, /\.chat-prd-review-modal-content \{/);
+  assert.match(html, /\.chat-prd-review-modal-actions \{/);
+  assert.match(html, /@media \(max-width: 640px\) \{/);
   assert.match(html, /id="close-chat-prd-review"/);
   assert.match(html, /id="back-chat-prd-review"/);
   assert.match(html, /id="submit-chat-prd-review"/);
@@ -64,6 +70,11 @@ test('chat PRD review popup preserves draft on back and close, and submits throu
   assert.match(interactive.elements.chatPrdReviewContent.innerHTML, /Acceptance Criteria/);
   assert.match(interactive.elements.chatPrdReviewContent.innerHTML, /Verification/);
 
+  interactive.elements.backChatPrdReview.dispatch('click');
+  assert.equal(interactive.elements.chatPrdReviewModal.hidden, true);
+  assert.equal(interactive.storage.get(interactive.activeStorageKey)?.includes('proposal-key'), true);
+
+  openChatPrdReviewModal();
   closeChatPrdReviewModal();
   assert.equal(interactive.elements.chatPrdReviewModal.hidden, true);
   assert.equal(interactive.storage.get(interactive.activeStorageKey)?.includes('proposal-key'), true);
