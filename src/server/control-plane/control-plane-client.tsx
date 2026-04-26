@@ -854,7 +854,7 @@ function renderChatPrdReviewModal() {
   if (!chatPrdReviewModalEl) {
     return;
   }
-  const draft = activeChatPrdDraft;
+  const draft = buildCurrentChatPrdDraftState(activeChatPrdDraft);
   const visible = Boolean(draft && chatPrdReviewModalOpen);
   chatPrdReviewModalEl.hidden = !visible;
   if (!draft || !visible) {
@@ -870,6 +870,23 @@ function renderChatPrdReviewModal() {
   if (chatPrdReviewContentEl) {
     chatPrdReviewContentEl.innerHTML = renderToHtml(<ChatPrdReviewSummary draft={draft} />);
   }
+}
+
+function buildCurrentChatPrdDraftState(draft: ChatPrdDraftState | null) {
+  if (!draft) {
+    return null;
+  }
+  return {
+    ...draft,
+    title: prdTitleEl ? prdTitleEl.value.trim() : draft.title,
+    specification: prdSpecEl?.value.trim() || '',
+    requirements: (prdReqEl?.value || '')
+      .split('\n')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+    sprintId: prdSprintEl?.value.trim() || '',
+    taskSpecsRaw: prdTaskSpecsEl?.value.trim() || '',
+  };
 }
 
 async function submitActiveChatPrdDraftReview() {
@@ -1861,58 +1878,151 @@ function ChatThread({ conversation }: { conversation: ChatConversationSummary | 
 }
 
 function ChatPrdReviewSummary({ draft }: { draft: ChatPrdDraftState }) {
-  const proposal = draft.proposal;
+  const summary = buildChatPrdReviewSummaryState(draft);
   const meta = [
-    proposal.priority ? `Priority ${proposal.priority}` : '',
-    proposal.source?.repoId ? `Repo ${proposal.source.repoId}` : '',
+    summary.priority ? `Priority ${summary.priority}` : '',
+    draft.proposal.source?.repoId ? `Repo ${draft.proposal.source.repoId}` : '',
   ].filter(Boolean).join(' | ');
   return (
     <div className="chat-prd-review-summary">
       <div className="chat-prd-review-hero">
         <div className="pill">PRD proposal</div>
-        <div className="chat-prd-review-title">{proposal.title || draft.title || 'Untitled PRD proposal'}</div>
+        <div className="chat-prd-review-title">{summary.title || 'Untitled PRD proposal'}</div>
         {meta ? <div className="chat-prd-proposal-detail">{meta}</div> : null}
       </div>
       <div className="chat-prd-review-grid">
-        {proposal.problem ? (
+        {summary.problem ? (
           <section className="chat-prd-review-card">
             <h3>Problem</h3>
-            <p>{proposal.problem}</p>
+            <p>{summary.problem}</p>
           </section>
         ) : null}
-        {proposal.goal ? (
+        {summary.goal ? (
           <section className="chat-prd-review-card">
             <h3>Goal</h3>
-            <p>{proposal.goal}</p>
+            <p>{summary.goal}</p>
           </section>
         ) : null}
-        {proposal.requirements.length > 0 ? (
+        {summary.requirements.length > 0 ? (
           <section className="chat-prd-review-card wide">
             <h3>Requirements</h3>
             <ul className="chat-prd-review-list">
-              {proposal.requirements.map((requirement) => <li>{requirement}</li>)}
+              {summary.requirements.map((requirement) => <li>{requirement}</li>)}
             </ul>
           </section>
         ) : null}
-        {proposal.acceptanceCriteria.length > 0 ? (
+        {summary.acceptanceCriteria.length > 0 ? (
           <section className="chat-prd-review-card">
             <h3>Acceptance Criteria</h3>
             <ul className="chat-prd-review-list">
-              {proposal.acceptanceCriteria.map((item) => <li>{item}</li>)}
+              {summary.acceptanceCriteria.map((item) => <li>{item}</li>)}
             </ul>
           </section>
         ) : null}
-        {proposal.verification.length > 0 ? (
+        {summary.verification.length > 0 ? (
           <section className="chat-prd-review-card">
             <h3>Verification</h3>
             <ul className="chat-prd-review-list">
-              {proposal.verification.map((item) => <li>{item}</li>)}
+              {summary.verification.map((item) => <li>{item}</li>)}
             </ul>
           </section>
         ) : null}
       </div>
     </div>
   );
+}
+
+function buildChatPrdReviewSummaryState(draft: ChatPrdDraftState) {
+  const parsed = parsePrdSpecificationSummary(draft.specification);
+  return {
+    title: draft.title || parsed.title || draft.proposal.title || '',
+    priority: parsed.priority,
+    problem: parsed.problem,
+    goal: parsed.goal,
+    requirements: draft.requirements,
+    acceptanceCriteria: parsed.acceptanceCriteria,
+    verification: parsed.verification,
+  };
+}
+
+function parsePrdSpecificationSummary(specification: string) {
+  const lines = String(specification || '').split(/\r?\n/);
+  let title = '';
+  let priority = '';
+  let currentSection = '';
+  let currentBuffer: string[] = [];
+  const sections: Record<string, string[]> = {};
+
+  const commitSection = () => {
+    if (!currentSection) {
+      currentBuffer = [];
+      return;
+    }
+    const values = currentBuffer
+      .map((line) => line.trim())
+      .filter(Boolean);
+    sections[currentSection] = values;
+    currentBuffer = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      if (currentSection) {
+        currentBuffer.push('');
+      }
+      continue;
+    }
+    if (!title) {
+      const titleMatch = line.match(/^#\s*PRD:\s*(.+)$/i);
+      if (titleMatch) {
+        title = titleMatch[1].trim();
+        continue;
+      }
+    }
+    if (!priority) {
+      const priorityMatch = line.match(/^Priority:\s*(.+)$/i);
+      if (priorityMatch) {
+        priority = priorityMatch[1].trim();
+        continue;
+      }
+    }
+    const sectionMatch = line.match(/^##\s+(.+)$/);
+    if (sectionMatch) {
+      commitSection();
+      currentSection = normalizePrdSectionName(sectionMatch[1]);
+      continue;
+    }
+    if (currentSection) {
+      currentBuffer.push(line);
+    }
+  }
+  commitSection();
+
+  return {
+    title,
+    priority,
+    problem: sections.problem?.join(' ').trim() || '',
+    goal: sections.goal?.join(' ').trim() || '',
+    acceptanceCriteria: normalizePrdSectionList(sections.acceptanceCriteria),
+    verification: normalizePrdSectionList(sections.verification),
+  };
+}
+
+function normalizePrdSectionName(sectionHeading: string) {
+  const normalized = String(sectionHeading || '').trim().toLowerCase();
+  if (normalized === 'acceptance criteria') {
+    return 'acceptanceCriteria';
+  }
+  return normalized;
+}
+
+function normalizePrdSectionList(lines: string[] | undefined) {
+  return Array.isArray(lines)
+    ? lines
+      .map((line) => line.replace(/^[-*]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
+      .filter(Boolean)
+    : [];
 }
 
 function ChatMessage({ message }: { message: ChatMessageSummary }) {

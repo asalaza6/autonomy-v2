@@ -49,7 +49,7 @@ test('chat PRD review popup preserves draft on back and close, and submits throu
       key: 'proposal-key',
       proposal: proposal!,
       title: 'Draft from chat',
-      specification: 'Problem: The user has to copy text manually.\n\nGoal: Present a dedicated review popup before queueing.',
+      specification: buildPrdSubmissionFromProposal(proposal!, { repoId: 'alpha' }).specification!,
       requirements: ['Render a popup review step'],
       sprintId: '',
       taskSpecsRaw: '',
@@ -77,6 +77,10 @@ test('chat PRD review popup preserves draft on back and close, and submits throu
   interactive.elements.prdSpec.value = 'Edited PRD specification.';
   interactive.elements.prdReq.value = 'Edited requirement';
   openChatPrdReviewModal();
+  assert.match(interactive.elements.chatPrdReviewContent.innerHTML, /Edited chat PRD title/);
+  assert.match(interactive.elements.chatPrdReviewContent.innerHTML, /Edited requirement/);
+  assert.doesNotMatch(interactive.elements.chatPrdReviewContent.innerHTML, /Draft from chat/);
+  assert.doesNotMatch(interactive.elements.chatPrdReviewContent.innerHTML, /Render a popup review step/);
   await submitActiveChatPrdDraftReview();
 
   const jobRequest = interactive.fetchCalls.find((call) => call.url === '/api/jobs' && call.method === 'POST');
@@ -113,7 +117,7 @@ test('chat PRD review resume keeps edited draft changes after closing the popup'
       key: 'proposal-key',
       proposal: proposal!,
       title: 'Draft from chat',
-      specification: 'Problem: The user has to copy text manually.\n\nGoal: Present a dedicated review popup before queueing.',
+      specification: buildPrdSubmissionFromProposal(proposal!, { repoId: 'alpha' }).specification!,
       requirements: ['Render a popup review step'],
       sprintId: '',
       taskSpecsRaw: '',
@@ -207,6 +211,58 @@ test('chat PRD review popup summary renders proposal sections', async () => {
   assert.match(html, /Acceptance Criteria/);
   assert.match(html, /Verification/);
   assert.match(html, /Priority high/);
+});
+
+test('chat PRD review popup summary renders current draft values instead of stale proposal fields', async () => {
+  installBrowserStubs();
+  const { ChatPrdReviewSummary, buildChatPrdDraftFormState } = await import('../../src/server/control-plane/control-plane-client.js');
+  const proposal = normalizePrdProposal({
+    title: 'Original proposal title',
+    problem: 'Original problem.',
+    goal: 'Original goal.',
+    requirements: ['Original requirement'],
+    acceptanceCriteria: ['Original acceptance'],
+    verification: ['Original verification'],
+    priority: 'medium',
+  });
+  const draft = buildChatPrdDraftFormState('proposal-key', proposal!, 'alpha');
+  draft.title = 'Edited chat PRD title';
+  draft.specification = [
+    '# PRD: Edited chat PRD title',
+    '',
+    'Priority: high',
+    '',
+    '## Problem',
+    '',
+    'Edited problem.',
+    '',
+    '## Goal',
+    '',
+    'Edited goal.',
+    '',
+    '## Acceptance Criteria',
+    '',
+    '- Edited acceptance',
+    '',
+    '## Verification',
+    '',
+    '- Edited verification',
+  ].join('\n');
+  draft.requirements = ['Edited requirement'];
+
+  const html = renderToHtml(h(ChatPrdReviewSummary as any, { draft }));
+
+  assert.match(html, /Edited chat PRD title/);
+  assert.match(html, /Edited problem\./);
+  assert.match(html, /Edited goal\./);
+  assert.match(html, /Edited requirement/);
+  assert.match(html, /Edited acceptance/);
+  assert.match(html, /Edited verification/);
+  assert.match(html, /Priority high/);
+  assert.doesNotMatch(html, /Original proposal title/);
+  assert.doesNotMatch(html, /Original requirement/);
+  assert.doesNotMatch(html, /Original acceptance/);
+  assert.doesNotMatch(html, /Original verification/);
 });
 
 test('history detail renders continue source chat action for source chat metadata', async () => {

@@ -1518,13 +1518,15 @@
       "acceptance": [
         "Found a blocking correctness issue in the new chat PRD review flow. The required check `npm run typecheck` passed, but the branch is not safe to merge into `dev` yet.\n`src/server/control-plane/control-plane-client.tsx:866-889` renders the popup from `ChatPrdReviewSummary(draft)`, but `ChatPrdReviewSummary` at `src/server/control-plane/control-plane-client.tsx:1842-1893` still reads the displayed title, requirements, acceptance criteria, and verification from `draft.proposal` rather than the editable draft/form state. The submit path at `src/server/control-plane/control-plane-client.tsx:876-885` queues the current form values instead. That means a manager can edit the preserved draft, reopen the popup, see the original proposal summary, and submit different content than the popup shows. This undermines the explicit review-before-submit requirement. Update the popup to reflect the current draft values that will actually be queued, or otherwise prevent editable divergence, and add a focused test covering edit -> reopen popup -> summary matches submitted payload."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
       "createdAt": "2026-04-26T08:00:15.723Z",
-      "updatedAt": "2026-04-26T08:02:33.334Z",
+      "updatedAt": "2026-04-26T08:06:04.375Z",
       "startedAt": "2026-04-26T08:02:33.334Z",
-      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent"
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "completedAt": "2026-04-26T08:06:04.375Z",
+      "completionMode": "code"
     }
   ]
 }
