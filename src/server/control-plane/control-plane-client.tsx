@@ -208,6 +208,25 @@ type RepoSummary = {
   prdHistory?: PrdSummary[];
   agentStatuses?: AgentSummary[];
   pullRequestStatuses?: PullRequestSummary[];
+  repoAssistant?: {
+    github?: {
+      available?: boolean;
+      status?: string;
+      statusLabel?: string;
+      detail?: string;
+      allowedHosts?: string[];
+      authEnvKeys?: string[];
+      authFiles?: string[];
+      repository?: {
+        owner?: string;
+        repo?: string;
+      } | null;
+      validation?: {
+        pullRequestNumber?: number | null;
+        validatedAt?: string | null;
+      } | null;
+    } | null;
+  } | null;
   deployment?: {
     sourceBranch?: string;
     targetBranch?: string;
@@ -2802,6 +2821,9 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
           <PackageStatus packageStatus={repo.packageStatus || null} />
           <PackageUpdateButton repo={repo} />
         </RepoSection>
+        <RepoSection title="GitHub Access">
+          <RepoGithubAccess repo={repo} />
+        </RepoSection>
         <RepoSection title="PRD">
           {repo.activePrd ? (
             <div className="queued-prd">
@@ -2911,6 +2933,9 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
             ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
             : <div className="list-note">No pull requests awaiting action.</div>}
         </RepoSection>
+        <RepoSection title="GitHub Access">
+          <RepoGithubAccess repo={repo} />
+        </RepoSection>
         <RepoSection title="Autonomy v2">
           <PackageStatus packageStatus={repo.packageStatus || null} />
           <PackageUpdateButton repo={repo} />
@@ -2979,6 +3004,57 @@ function RepoSection({ title, children }: { title: string; children: JSX.Element
     <div className="repo-section">
       <h4>{title}</h4>
       {children}
+    </div>
+  );
+}
+
+function RepoGithubAccess({ repo }: { repo: RepoSummary }) {
+  const github = repo.repoAssistant && repo.repoAssistant.github ? repo.repoAssistant.github : null;
+  if (!github) {
+    return <div className="list-note">GitHub repo assistant status unavailable.</div>;
+  }
+  const repository = github.repository || null;
+  const validation = github.validation || null;
+  const allowlist = Array.isArray(github.allowedHosts) ? github.allowedHosts.filter(Boolean) : [];
+  const authEnvKeys = Array.isArray(github.authEnvKeys) ? github.authEnvKeys.filter(Boolean) : [];
+  const authFiles = Array.isArray(github.authFiles) ? github.authFiles.filter(Boolean) : [];
+  return (
+    <div className="queued-prd">
+      <div className="item-head">
+        <div>
+          <div className={`status-chip ${statusClass(github.available === true ? 'online' : github.status || 'offline')}`}>
+            <span className="status-dot" />
+            <span>{github.statusLabel || 'GitHub access unavailable'}</span>
+          </div>
+          <div className="queue-title">
+            {repository && repository.owner && repository.repo
+              ? `${repository.owner}/${repository.repo}`
+              : 'Repo assistant GitHub access'}
+          </div>
+        </div>
+        {validation && validation.validatedAt ? <span className="pill">{formatTimestamp(validation.validatedAt)}</span> : null}
+      </div>
+      <div className="queue-detail">{github.detail || 'GitHub repo assistant status unavailable.'}</div>
+      {validation && validation.pullRequestNumber ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          Validation PR: #{validation.pullRequestNumber}
+        </div>
+      ) : null}
+      {allowlist.length > 0 ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          Allowed GitHub hosts: {allowlist.join(', ')}
+        </div>
+      ) : null}
+      {authEnvKeys.length > 0 ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          Injected auth vars: {authEnvKeys.join(', ')}
+        </div>
+      ) : null}
+      {authFiles.length > 0 ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          Approved secret source: {authFiles.join(', ')}
+        </div>
+      ) : null}
     </div>
   );
 }

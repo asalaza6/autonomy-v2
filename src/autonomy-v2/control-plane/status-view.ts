@@ -825,6 +825,8 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const runningAgents = agentStatuses.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
   const freshness = buildHeartbeatSummary(repoStatus && repoStatus.updatedAt, repoLabel || 'Repository');
   const deployment = snapshot.deployment || null;
+  const repoAssistant = snapshot.repoAssistant || null;
+  const githubAccess = repoAssistant && typeof repoAssistant === 'object' ? repoAssistant.github || null : null;
 
   const overviewParts = [];
   overviewParts.push(activePrd ? `Active PRD: ${activePrd.title}` : 'No active PRD yet');
@@ -854,6 +856,9 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   if (deployment && deployment.statusLabel) {
     overviewParts.push(`Deploy: ${deployment.statusLabel}`);
   }
+  if (githubAccess && githubAccess.statusLabel) {
+    overviewParts.push(`GitHub: ${githubAccess.statusLabel}`);
+  }
 
   return {
     repoId: String(repoStatus && repoStatus.repoId || ''),
@@ -869,6 +874,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     agentStatuses,
     pullRequestStatuses,
     deployment,
+    repoAssistant,
     branchLockCount: Number(snapshot.branchLockCount || 0),
     freshnessStatus: freshness.status,
     freshnessStatusLabel: freshness.statusLabel,

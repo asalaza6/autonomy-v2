@@ -13,7 +13,23 @@ import {
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
 const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 10 * 60 * 1000;
 
-async function runCodexStructured({ cwd, prompt, schema, readOnly, resumeSessionId = '', captureConversationId = false }) {
+async function runCodexStructured({
+  cwd,
+  prompt,
+  schema,
+  readOnly,
+  resumeSessionId = '',
+  captureConversationId = false,
+  env,
+}: {
+  cwd: string;
+  prompt: string;
+  schema: unknown;
+  readOnly: boolean;
+  resumeSessionId?: string;
+  captureConversationId?: boolean;
+  env?: NodeJS.ProcessEnv;
+}) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
   const schemaPath = path.join(tempDir, 'schema.json');
@@ -30,6 +46,7 @@ async function runCodexStructured({ cwd, prompt, schema, readOnly, resumeSession
       cwd,
       input: prompt,
       streamOutput,
+      env,
     });
     const output = readCodexOutput(outputPath, streamOutput);
     const conversationId = extractCodexConversationId(result.stdout);
@@ -44,7 +61,21 @@ async function runCodexStructured({ cwd, prompt, schema, readOnly, resumeSession
   }
 }
 
-async function runCodexExec({ cwd, prompt, readOnly, resumeSessionId = '', captureConversationId = false }) {
+async function runCodexExec({
+  cwd,
+  prompt,
+  readOnly,
+  resumeSessionId = '',
+  captureConversationId = false,
+  env,
+}: {
+  cwd: string;
+  prompt: string;
+  readOnly: boolean;
+  resumeSessionId?: string;
+  captureConversationId?: boolean;
+  env?: NodeJS.ProcessEnv;
+}) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const streamOutput = shouldStreamCodexOutput();
   try {
@@ -57,6 +88,7 @@ async function runCodexExec({ cwd, prompt, readOnly, resumeSessionId = '', captu
       input: prompt,
       streamOutput,
       timeoutMs: resolveCodexExecTimeoutMs(),
+      env,
     });
     return {
       conversationId: extractCodexConversationId(result.stdout),
@@ -67,7 +99,21 @@ async function runCodexExec({ cwd, prompt, readOnly, resumeSessionId = '', captu
   }
 }
 
-function runCodexExecSync({ cwd, prompt, readOnly, resumeSessionId = '', captureConversationId = false }) {
+function runCodexExecSync({
+  cwd,
+  prompt,
+  readOnly,
+  resumeSessionId = '',
+  captureConversationId = false,
+  env,
+}: {
+  cwd: string;
+  prompt: string;
+  readOnly: boolean;
+  resumeSessionId?: string;
+  captureConversationId?: boolean;
+  env?: NodeJS.ProcessEnv;
+}) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const streamOutput = shouldStreamCodexOutput();
   try {
@@ -79,6 +125,7 @@ function runCodexExecSync({ cwd, prompt, readOnly, resumeSessionId = '', capture
       cwd,
       input: prompt,
       streamOutput,
+      env,
     });
     return {
       conversationId: extractCodexConversationId(result.stdout),
@@ -89,7 +136,23 @@ function runCodexExecSync({ cwd, prompt, readOnly, resumeSessionId = '', capture
   }
 }
 
-function runCodexStructuredSync({ cwd, prompt, schema, readOnly, resumeSessionId = '', captureConversationId = false }) {
+function runCodexStructuredSync({
+  cwd,
+  prompt,
+  schema,
+  readOnly,
+  resumeSessionId = '',
+  captureConversationId = false,
+  env,
+}: {
+  cwd: string;
+  prompt: string;
+  schema: unknown;
+  readOnly: boolean;
+  resumeSessionId?: string;
+  captureConversationId?: boolean;
+  env?: NodeJS.ProcessEnv;
+}) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
   const schemaPath = path.join(tempDir, 'schema.json');
@@ -106,6 +169,7 @@ function runCodexStructuredSync({ cwd, prompt, schema, readOnly, resumeSessionId
       cwd,
       input: prompt,
       streamOutput,
+      env,
     });
     const output = readCodexOutput(outputPath, streamOutput);
     const conversationId = extractCodexConversationId(result.stdout);
@@ -194,7 +258,7 @@ function buildCodexExecArgs({ cwd, readOnly, resumeSessionId = '', captureConver
   return args;
 }
 
-function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
+function runCodexCommandSync({ binary, args, cwd, input, streamOutput, env }) {
   const result = spawnSync(binary, args, {
     cwd,
     input,
@@ -202,6 +266,10 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
     stdio: ['pipe', 'pipe', 'pipe'],
     maxBuffer: DEFAULT_CAPTURE_LIMIT,
     killSignal: 'SIGKILL',
+    env: {
+      ...process.env,
+      ...(env || {}),
+    },
   });
   if (result.error) {
     throw new Error(result.error.message);
@@ -223,11 +291,15 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput }) {
   };
 }
 
-function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0 }) {
+function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0, env }) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn(binary, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        ...(env || {}),
+      },
     });
     let settled = false;
     let stdoutCapture = '';

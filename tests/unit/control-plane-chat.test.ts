@@ -10,6 +10,7 @@ import {
   normalizeChatPrdProposal,
   readProjectContextForChatPrompt,
 } from '../../src/server/control-plane/control-plane-chat.js';
+import { buildRepoAssistantGithubPromptContext } from '../../src/server/control-plane/control-plane-github.js';
 import {
   buildPrdSubmissionFromProposal,
   extractPrdProposalFromText,
@@ -52,12 +53,31 @@ test('control plane chat prompt includes project context for a first-turn conver
     responseMessageId: 'message-002',
     prompt: 'Summarize the repo.',
     history: [],
-  }, {}, '# Project Context\n\nRepo default: dev');
+  }, {}, '# Project Context\n\nRepo default: dev', {
+    available: true,
+    status: 'enabled',
+    statusLabel: 'GitHub access ready',
+    detail: 'Validated GitHub read access for asalaza6/autonomy-v2#27.',
+    authEnvKeys: ['GITHUB_TOKEN', 'GH_TOKEN'],
+    authFiles: ['.env.autonomy'],
+    allowedHosts: ['api.github.com'],
+    repository: {
+      owner: 'asalaza6',
+      repo: 'autonomy-v2',
+    },
+    validation: {
+      pullRequestNumber: 27,
+    },
+  });
 
   assert.match(prompt, /Project context:/);
   assert.match(prompt, /Repo default: dev/);
   assert.match(prompt, /Conversation history:\n\[\]/);
   assert.match(prompt, /Current manager message:\nSummarize the repo\./);
+  assert.match(prompt, /GitHub PR inspection capability:/);
+  assert.match(prompt, /api\.github\.com/);
+  assert.match(prompt, /GH_TOKEN\/GITHUB_TOKEN/);
+  assert.match(prompt, /\.env\.autonomy/);
 });
 
 test('control plane chat project context loader degrades cleanly when the file is missing', async () => {
@@ -75,6 +95,30 @@ test('control plane chat project context loader degrades cleanly when the file i
   }, {}, null);
 
   assert.match(degradedPrompt, /project-context\.md was unavailable/i);
+});
+
+test('repo assistant GitHub prompt context stays secret-safe', () => {
+  const context = buildRepoAssistantGithubPromptContext({
+    available: false,
+    status: 'invalid-token',
+    statusLabel: 'GitHub token invalid',
+    detail: 'The runtime GitHub token was rejected during repo assistant validation.',
+    authEnvKeys: ['GITHUB_TOKEN', 'GH_TOKEN'],
+    authFiles: ['.env.autonomy'],
+    allowedHosts: ['api.github.com'],
+    repository: {
+      owner: 'asalaza6',
+      repo: 'autonomy-v2',
+    },
+    validation: {
+      pullRequestNumber: 27,
+    },
+  });
+
+  assert.equal(context.status, 'invalid-token');
+  assert.equal(context.authEnvKeys.includes('GITHUB_TOKEN'), true);
+  assert.deepEqual(context.authFiles, ['.env.autonomy']);
+  assert.doesNotMatch(JSON.stringify(context), /ghp_|github_pat_/);
 });
 
 function assertStructuredOutputObjectRequirements(schema: any, path = 'schema') {

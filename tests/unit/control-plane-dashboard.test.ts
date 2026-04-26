@@ -165,6 +165,25 @@ Created: 2026-04-01T11:59:00.000Z`,
             declaredVersion: '^1.4.45',
             installedVersion: '1.4.45',
           },
+          repoAssistant: {
+            github: {
+              available: false,
+              status: 'unauthorized-token',
+              statusLabel: 'GitHub repo access denied',
+              detail: 'The runtime GitHub token does not have read access to asalaza6/autonomy-v2#27.',
+              authEnvKeys: ['GITHUB_TOKEN', 'GH_TOKEN'],
+              authFiles: ['.env.autonomy'],
+              allowedHosts: ['api.github.com'],
+              repository: {
+                owner: 'asalaza6',
+                repo: 'autonomy-v2',
+              },
+              validation: {
+                pullRequestNumber: 27,
+                validatedAt: '2026-04-01T12:11:00.000Z',
+              },
+            },
+          },
           runtime: {
             workers: {},
             lastPrdPromotion: {
@@ -193,6 +212,7 @@ Created: 2026-04-01T11:59:00.000Z`,
   assert.match(dashboard.repos[0].overview, /Active PRD/);
   assert.match(dashboard.repos[0].overview, /queued PRD/i);
   assert.match(dashboard.repos[0].overview, /Auto-promoted Active PRD/);
+  assert.match(dashboard.repos[0].overview, /GitHub: GitHub repo access denied/);
   assert.equal(dashboard.repos[0].activePrd.title, 'Active PRD');
   assert.equal(dashboard.repos[0].lastPrdPromotion.id, 'prd-active-001');
   assert.equal(dashboard.repos[0].lastPrdPromotion.title, 'Active PRD');
@@ -245,6 +265,7 @@ Created: 2026-04-01T11:59:00.000Z`,
   assert.equal(dashboard.repos[0].packageStatus.installedVersion, '1.4.45');
   assert.equal(dashboard.repos[0].packageStatus.declaredVersion, '^1.4.45');
   assert.equal(dashboard.repos[0].packageStatus.packageManager, 'npm');
+  assert.equal(dashboard.repos[0].repoAssistant.github.status, 'unauthorized-token');
   assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
