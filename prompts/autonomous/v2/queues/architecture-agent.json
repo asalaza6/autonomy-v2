@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4142,6 +4141,30 @@
       "completedAt": "2026-04-26T21:40:36.751Z",
       "completionMode": "code",
       "commitSha": "895606848641832f219f79d85c16a9a821f5662a"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-show-associated-pull-request-5ed56d-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Add linked pull request metadata and conditional History action for completed PRDs",
+      "description": "Blocking on verification. The diff is scoped correctly and the required `npm run typecheck`/`npm run lint` checks passed, but this change modifies high-risk control-plane status/history shaping and History detail UI without evidence that the focused control-plane tests were actually run.\nMissing merge-blocking verification for the changed control-plane paths. This PR updates history snapshot shaping in `src/autonomy-v2/commands/shared-prds.ts` and History detail rendering in `src/server/control-plane/control-plane-client.tsx`, and the acceptance criteria explicitly require relevant focused tests in addition to `npm run typecheck`. The wrapper results only show `npm run typecheck` and `npm run lint`, so please run and report the focused tests that cover this behavior, at minimum the updated suites in `tests/unit/control-plane-status.test.ts`, `tests/unit/control-plane-dashboard.test.ts`, and `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent narrower command that executes those cases).",
+      "agentId": "architecture-agent",
+      "prdId": "prd-show-associated-pull-request-5ed56d",
+      "laneKey": "prd-show-associated-pull-request-5ed56d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking on verification. The diff is scoped correctly and the required `npm run typecheck`/`npm run lint` checks passed, but this change modifies high-risk control-plane status/history shaping and History detail UI without evidence that the focused control-plane tests were actually run.\nMissing merge-blocking verification for the changed control-plane paths. This PR updates history snapshot shaping in `src/autonomy-v2/commands/shared-prds.ts` and History detail rendering in `src/server/control-plane/control-plane-client.tsx`, and the acceptance criteria explicitly require relevant focused tests in addition to `npm run typecheck`. The wrapper results only show `npm run typecheck` and `npm run lint`, so please run and report the focused tests that cover this behavior, at minimum the updated suites in `tests/unit/control-plane-status.test.ts`, `tests/unit/control-plane-dashboard.test.ts`, and `tests/unit/control-plane-chat-prd-draft-ui.test.ts` (or an equivalent narrower command that executes those cases)."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
+      "createdAt": "2026-04-26T21:42:18.923Z",
+      "updatedAt": "2026-04-26T21:42:18.923Z",
+      "startedAt": "2026-04-26T21:42:18.923Z",
+      "prId": "pr-prd-show-associated-pull-request-5ed56d-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
