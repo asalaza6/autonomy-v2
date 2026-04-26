@@ -15,6 +15,7 @@ import { loadControlPlaneConfig } from './control-plane-config.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import {
   claimJob,
+  claimNextJob,
   completeJob,
   createControlPlaneDeployJob,
   createControlPlanePackageUpdateJob,
@@ -252,6 +253,22 @@ async function handleRequest(
     } catch (error) {
       sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
     }
+    return;
+  }
+
+  if (url.pathname === '/api/jobs/claim-next' && req.method === 'POST') {
+    const body = await readJsonBody(req);
+    const job = claimNextJob(rootDir, {
+      repoIds: parseBodyRepoIds(body),
+    });
+    if (job) {
+      logControlPlaneEvent('control-plane:job:claimed', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type,
+      });
+    }
+    sendJson(res, 200, { job });
     return;
   }
 

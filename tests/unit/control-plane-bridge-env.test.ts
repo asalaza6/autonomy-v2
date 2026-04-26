@@ -23,9 +23,9 @@ test('bridge loads repo env during its startup cycle', async (t) => {
   delete process.env.GH_TOKEN;
 
   const server = http.createServer((req, res) => {
-    if (req.url === '/api/jobs?status=queued') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ jobs: [] }));
+      res.end(JSON.stringify({ job: null }));
       return;
     }
     if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
@@ -79,31 +79,29 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   const mainBefore = git(repoDir, ['rev-parse', 'main']);
   let heartbeatCount = 0;
   let completedJob: any = null;
+  let jobClaimed = false;
 
   const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
       res.end(JSON.stringify({
-        jobs: [
-          {
-            id: 'job-deploy-1',
-            type: 'deploy',
+        job: {
+          id: 'job-deploy-1',
+          type: 'deploy',
+          repoId: 'default',
+          payload: {
             repoId: 'default',
-            payload: {
-              repoId: 'default',
-            },
-            status: 'queued',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
           },
-        ],
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      return;
-    }
-
-    if (req.url === '/api/jobs/job-deploy-1/claim' && req.method === 'POST') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-deploy-1', status: 'claimed' }));
       return;
     }
 
@@ -165,39 +163,37 @@ test('bridge executes agent chat jobs for mapped repos', async (t) => {
   initAutonomyRepo(repoDir);
   let heartbeatCount = 0;
   let completedJob: any = null;
+  let jobClaimed = false;
 
   const originalChatStub = process.env.AUTONOMY_CONTROL_PLANE_CHAT_STUB;
   process.env.AUTONOMY_CONTROL_PLANE_CHAT_STUB = '1';
 
   const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
       res.end(JSON.stringify({
-        jobs: [
-          {
-            id: 'job-chat-1',
-            type: 'agent:chat',
+        job: {
+          id: 'job-chat-1',
+          type: 'agent:chat',
+          repoId: 'default',
+          payload: {
             repoId: 'default',
-            payload: {
-              repoId: 'default',
-              conversationId: 'chat-1',
-              messageId: 'msg-manager-1',
-              responseMessageId: 'msg-agent-1',
-              prompt: 'Summarize the repo.',
-              history: [],
-            },
-            status: 'queued',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
+            conversationId: 'chat-1',
+            messageId: 'msg-manager-1',
+            responseMessageId: 'msg-agent-1',
+            prompt: 'Summarize the repo.',
+            history: [],
           },
-        ],
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      return;
-    }
-
-    if (req.url === '/api/jobs/job-chat-1/claim' && req.method === 'POST') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-chat-1', status: 'claimed' }));
       return;
     }
 

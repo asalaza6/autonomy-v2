@@ -439,12 +439,47 @@ function claimJob(rootDir: string, jobId: string, options: { repoIds?: string[] 
   if (!job || job.status !== 'queued') {
     return null;
   }
+  if (!isJobEligibleForClaim(job, options)) {
+    return null;
+  }
+  markJobClaimed(state, job);
+  saveControlPlaneState(rootDir, state);
+  return job;
+}
+
+function claimNextJob(rootDir: string, options: { repoIds?: string[]; types?: ControlPlaneJobRecord['type'][] } = {}) {
+  const state = loadControlPlaneState(rootDir);
+  const nextJob = state.jobs
+    .filter((job) => job.status === 'queued' && isJobEligibleForClaim(job, options))
+    .sort(compareJobsForClaim)[0];
+  if (!nextJob) {
+    return null;
+  }
+  markJobClaimed(state, nextJob);
+  saveControlPlaneState(rootDir, state);
+  return nextJob;
+}
+
+function isJobEligibleForClaim(
+  job: ControlPlaneJobRecord,
+  options: { repoIds?: string[]; types?: ControlPlaneJobRecord['type'][] } = {}
+) {
   const eligibleRepoIds = Array.isArray(options.repoIds)
     ? options.repoIds.map((entry) => String(entry || '').trim()).filter(Boolean)
     : [];
   if (eligibleRepoIds.length > 0 && !eligibleRepoIds.includes(String(job.repoId || '').trim())) {
-    return null;
+    return false;
   }
+  const eligibleTypes = Array.isArray(options.types)
+    ? options.types.map((entry) => normalizeJobType(entry)).filter(Boolean)
+    : [];
+  if (eligibleTypes.length > 0 && !eligibleTypes.includes(job.type)) {
+    return false;
+  }
+  return true;
+}
+
+function markJobClaimed(state: ControlPlaneState, job: ControlPlaneJobRecord) {
   job.status = 'claimed';
   job.claimedAt = new Date().toISOString();
   job.updatedAt = job.claimedAt;
@@ -455,8 +490,24 @@ function claimJob(rootDir: string, jobId: string, options: { repoIds?: string[] 
       updatedAt: job.updatedAt,
     });
   }
-  saveControlPlaneState(rootDir, state);
-  return job;
+}
+
+function compareJobsForClaim(left: ControlPlaneJobRecord, right: ControlPlaneJobRecord) {
+  const createdDelta = compareIsoTimes(left.createdAt, right.createdAt);
+  if (createdDelta !== 0) {
+    return createdDelta;
+  }
+  const updatedDelta = compareIsoTimes(left.updatedAt, right.updatedAt);
+  if (updatedDelta !== 0) {
+    return updatedDelta;
+  }
+  return String(left.id || '').localeCompare(String(right.id || ''));
+}
+
+function compareIsoTimes(left: string | undefined, right: string | undefined) {
+  const leftTime = Date.parse(String(left || '')) || 0;
+  const rightTime = Date.parse(String(right || '')) || 0;
+  return leftTime - rightTime;
 }
 
 function completeJob(rootDir: string, jobId: string, patch: Partial<ControlPlaneJobRecord> = {}) {
@@ -763,6 +814,7 @@ function shouldPersistControlPlaneState(rootDir: string) {
 
 export {
   claimJob,
+  claimNextJob,
   completeJob,
   createControlPlaneAgentChatJob,
   createControlPlaneJob,

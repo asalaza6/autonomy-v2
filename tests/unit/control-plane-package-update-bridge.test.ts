@@ -34,34 +34,32 @@ test('bridge executes default package update jobs without restarting services', 
   let heartbeatCount = 0;
   let completedJob: any = null;
   const statusSnapshots: any[] = [];
+  let jobClaimed = false;
 
   const originalPath = process.env.PATH;
   process.env.PATH = `${fakeBinDir}:${process.env.PATH || ''}`;
 
   const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
       res.end(JSON.stringify({
-        jobs: [
-          {
-            id: 'job-package-update-1',
-            type: 'package:update',
+        job: {
+          id: 'job-package-update-1',
+          type: 'package:update',
+          repoId: 'default',
+          payload: {
             repoId: 'default',
-            payload: {
-              repoId: 'default',
-            },
-            status: 'queued',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
           },
-        ],
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      return;
-    }
-
-    if (req.url === '/api/jobs/job-package-update-1/claim' && req.method === 'POST') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-package-update-1', status: 'claimed' }));
       return;
     }
 
@@ -122,6 +120,7 @@ test('bridge executes default package update jobs without restarting services', 
   await assertFileMissingAfter(serverMarkerPath);
   assert.match(logs.join('\n'), /bridge:package:update:start/);
   assert.match(logs.join('\n'), /bridge:package:update:done/);
+  assert.doesNotMatch(logs.join('\n'), /bridge:job:claim-skipped/);
   assert.doesNotMatch(logs.join('\n'), /bridge:restart:deferred-launch/);
 });
 
@@ -147,34 +146,32 @@ test('bridge executes custom package update command instead of default install',
   fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
   const fakeBinDir = createFailingNpmBin();
   let completedJob: any = null;
+  let jobClaimed = false;
 
   const originalPath = process.env.PATH;
   process.env.PATH = `${fakeBinDir}:${process.env.PATH || ''}`;
 
   const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
       res.end(JSON.stringify({
-        jobs: [
-          {
-            id: 'job-package-update-custom-1',
-            type: 'package:update',
+        job: {
+          id: 'job-package-update-custom-1',
+          type: 'package:update',
+          repoId: 'default',
+          payload: {
             repoId: 'default',
-            payload: {
-              repoId: 'default',
-            },
-            status: 'queued',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
           },
-        ],
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      return;
-    }
-
-    if (req.url === '/api/jobs/job-package-update-custom-1/claim' && req.method === 'POST') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-package-update-custom-1', status: 'claimed' }));
       return;
     }
 
@@ -240,34 +237,32 @@ test('bridge runs autonomy-v2 package update config as npm run release:patch', a
   fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
   const fakeBinDir = createFakeNpmRunBin(npmRecordPath);
   let completedJob: any = null;
+  let jobClaimed = false;
 
   const originalPath = process.env.PATH;
   process.env.PATH = `${fakeBinDir}:${process.env.PATH || ''}`;
 
   const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
       res.end(JSON.stringify({
-        jobs: [
-          {
-            id: 'job-package-update-release-1',
-            type: 'package:update',
+        job: {
+          id: 'job-package-update-release-1',
+          type: 'package:update',
+          repoId: 'default',
+          payload: {
             repoId: 'default',
-            payload: {
-              repoId: 'default',
-            },
-            status: 'queued',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
           },
-        ],
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      return;
-    }
-
-    if (req.url === '/api/jobs/job-package-update-release-1/claim' && req.method === 'POST') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-package-update-release-1', status: 'claimed' }));
       return;
     }
 
@@ -353,31 +348,29 @@ test('bridge executes restart jobs independently after completion', async (t) =>
   let markerExistedAtComplete = false;
   let markerExistedAtHeartbeat = false;
   const requestEvents: string[] = [];
+  let jobClaimed = false;
 
   const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
       res.end(JSON.stringify({
-        jobs: [
-          {
-            id: 'job-restart-1',
-            type: 'restart',
+        job: {
+          id: 'job-restart-1',
+          type: 'restart',
+          repoId: 'default',
+          payload: {
             repoId: 'default',
-            payload: {
-              repoId: 'default',
-            },
-            status: 'queued',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
           },
-        ],
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      return;
-    }
-
-    if (req.url === '/api/jobs/job-restart-1/claim' && req.method === 'POST') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-restart-1', status: 'claimed' }));
       return;
     }
 
@@ -447,31 +440,29 @@ test('bridge reports skipped restart when restart commands and lifecycle metadat
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-restart-missing-');
   initAutonomyRepo(repoDir);
   let completedJob: any = null;
+  let jobClaimed = false;
 
   const server = http.createServer(async (req, res) => {
-    if (req.url === '/api/jobs?status=queued&repoIds=default') {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
       res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
       res.end(JSON.stringify({
-        jobs: [
-          {
-            id: 'job-restart-missing-1',
-            type: 'restart',
+        job: {
+          id: 'job-restart-missing-1',
+          type: 'restart',
+          repoId: 'default',
+          payload: {
             repoId: 'default',
-            payload: {
-              repoId: 'default',
-            },
-            status: 'queued',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
           },
-        ],
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
       }));
-      return;
-    }
-
-    if (req.url === '/api/jobs/job-restart-missing-1/claim' && req.method === 'POST') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'job-restart-missing-1', status: 'claimed' }));
       return;
     }
 

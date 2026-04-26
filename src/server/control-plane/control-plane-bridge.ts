@@ -1,4 +1,5 @@
 import { loadAutonomyEnv } from '../../env/env-main.js';
+import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord } from '../../types.js';
 import { executePrdAdd, buildPrdAddCliOptions } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
@@ -41,39 +42,22 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
   loadAutonomyEnv(rootDir);
   const registeredRepoRoots = resolveRegisteredRepoRoots(options.repoRoots);
   const registeredRepoIds = Object.keys(registeredRepoRoots);
-  const queuedJobs = registeredRepoIds.length > 0
-    ? await requestJson(
-      `${options.serverUrl}/api/jobs?status=queued&repoIds=${encodeURIComponent(registeredRepoIds.join(','))}`
-    )
-    : { jobs: [] };
-  const jobs = Array.isArray(queuedJobs.jobs) ? queuedJobs.jobs : [];
   const processed = [];
   const deferredControlPlaneRestarts: Array<{
     jobId: string;
     repoId: string;
     commands: Parameters<typeof runDeferredControlPlaneRestartCommands>[0];
   }> = [];
-  if (jobs.length > 0) {
-    logBridgeEvent('bridge:jobs:found', {
-      count: jobs.length,
-      repoIds: registeredRepoIds.join(','),
-    });
-  }
-
-  for (const job of jobs) {
-    const claimed = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(job.id)}/claim`, {
+  while (registeredRepoIds.length > 0) {
+    const claimed = await requestJson(`${options.serverUrl}/api/jobs/claim-next`, {
       method: 'POST',
       body: {
         repoIds: registeredRepoIds,
       },
-    }).catch(() => null);
-    if (!claimed) {
-      logBridgeEvent('bridge:job:claim-skipped', {
-        jobId: job.id,
-        repoId: job.repoId,
-        type: job.type || 'prd:add',
-      });
-      continue;
+    });
+    const job = extractClaimedJob(claimed);
+    if (!job) {
+      break;
     }
     logBridgeEvent('bridge:job:claimed', {
       jobId: job.id,
@@ -113,21 +97,22 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       let result: Record<string, unknown>;
       let deferredRestartCommandsForJob: Parameters<typeof runDeferredControlPlaneRestartCommands>[0] = [];
       if (job.type === 'agent:chat') {
+        const chatPayload = job.payload as ControlPlaneAgentChatMessagePayload;
         logBridgeEvent('bridge:agent:chat:start', {
           jobId: job.id,
           repoId: job.repoId,
-          conversationId: job.payload && job.payload.conversationId || '',
+          conversationId: chatPayload && chatPayload.conversationId || '',
         });
         result = await answerControlPlaneAgentChat({
           repoRoot,
           repoId: job.repoId,
-          payload: job.payload,
+          payload: chatPayload,
           snapshot,
         });
         logBridgeEvent('bridge:agent:chat:done', {
           jobId: job.id,
           repoId: job.repoId,
-          conversationId: job.payload && job.payload.conversationId || '',
+          conversationId: chatPayload && chatPayload.conversationId || '',
         });
       } else if (job.type === 'deploy') {
         logBridgeEvent('bridge:deploy:start', {
@@ -418,6 +403,17 @@ function getResponseId(value: unknown) {
   return value && typeof value === 'object' && 'id' in value
     ? String((value as { id?: unknown }).id || '')
     : '';
+}
+
+function extractClaimedJob(value: unknown) {
+  if (!value || typeof value !== 'object' || !('job' in value)) {
+    return null;
+  }
+  const job = (value as { job?: ControlPlaneJobRecord | null }).job;
+  if (!job || typeof job !== 'object') {
+    return null;
+  }
+  return job;
 }
 
 function isCompletedJobResponse(value: unknown, jobId: string) {

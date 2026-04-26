@@ -17,6 +17,7 @@ import {
 import { parseRepoRoots } from '../../src/server/control-plane/control-plane-main.js';
 import {
   claimJob,
+  claimNextJob,
   completeJob,
   createControlPlanePackageUpdateJob,
   createControlPlaneRestartJob,
@@ -155,6 +156,7 @@ test('package update jobs validate, queue, claim, and complete for one repo', ()
   assert.equal(job.repoId, 'alpha');
   assert.equal(listJobs(rootDir, { type: 'package:update' as any }).length, 1);
   assert.equal(claimJob(rootDir, job.id, { repoIds: ['beta'] }), null);
+  assert.equal(claimNextJob(rootDir, { repoIds: ['beta'] }), null);
 
   const claimed = claimJob(rootDir, job.id, { repoIds: ['alpha'] });
   assert.equal(claimed?.status, 'claimed');
@@ -170,6 +172,47 @@ test('package update jobs validate, queue, claim, and complete for one repo', ()
 
   assert.equal(completed?.status, 'completed');
   assert.equal(completed?.result?.installedVersion, '1.4.45');
+});
+
+test('claim next job picks the oldest eligible queued job deterministically', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-claim-next-'));
+  const olderJob = enqueueJob(rootDir, {
+    id: 'job-older',
+    type: 'package:update',
+    repoId: 'alpha',
+    payload: { repoId: 'alpha' },
+    status: 'queued',
+    createdAt: '2026-04-21T00:00:00.000Z',
+    updatedAt: '2026-04-21T00:00:00.000Z',
+  } as any);
+  const newerJob = enqueueJob(rootDir, {
+    id: 'job-newer',
+    type: 'package:update',
+    repoId: 'alpha',
+    payload: { repoId: 'alpha' },
+    status: 'queued',
+    createdAt: '2026-04-21T00:00:01.000Z',
+    updatedAt: '2026-04-21T00:00:01.000Z',
+  } as any);
+  const otherRepoJob = enqueueJob(rootDir, {
+    id: 'job-beta',
+    type: 'package:update',
+    repoId: 'beta',
+    payload: { repoId: 'beta' },
+    status: 'queued',
+    createdAt: '2026-04-21T00:00:02.000Z',
+    updatedAt: '2026-04-21T00:00:02.000Z',
+  } as any);
+
+  const firstClaim = claimNextJob(rootDir, { repoIds: ['alpha'] });
+  const secondClaim = claimNextJob(rootDir, { repoIds: ['alpha'] });
+  const thirdClaim = claimNextJob(rootDir, { repoIds: ['alpha'] });
+  const betaClaim = claimNextJob(rootDir, { repoIds: ['beta'] });
+
+  assert.equal(firstClaim?.id, olderJob.id);
+  assert.equal(secondClaim?.id, newerJob.id);
+  assert.equal(thirdClaim, null);
+  assert.equal(betaClaim?.id, otherRepoJob.id);
 });
 
 test('restart jobs validate, queue, claim, and complete for one repo', () => {
