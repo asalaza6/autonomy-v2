@@ -11,5 +11,23 @@
     "Update the History detail pane to render an `Open pull request` button or link when the selected PRD has associated PR metadata.",
     "Hide the pull request action entirely when no PR is associated with the PRD.",
     "Keep existing History selection and source-chat actions unchanged."
+  ],
+  "tasks": [
+    {
+      "id": "prd-show-associated-pull-request-5ed56d-architecture-agent-1",
+      "title": "Add linked pull request metadata and conditional History action for completed PRDs",
+      "agentId": "architecture-agent",
+      "description": "Update the completed-PRD history contract and History detail UI so historical PRDs can expose an associated GitHub pull request when one exists. Scope includes shaping the PRD history data model and repo status/history snapshot builders in the control-plane or sync layers that assemble completed or reviewed PRD records, threading linked pull request metadata through the existing status payload, and updating the History detail pane in `src/server/control-plane/` to render an `Open pull request` action only when the selected PRD includes linked PR metadata. Preserve existing History selection behavior and source-chat continuation actions, and keep the change targeted to the `dev` integration flow only.",
+      "acceptance": [
+        "The PRD history data model used by the control-plane status or dashboard payload supports associated pull request metadata for historical PRDs, including at minimum a pull request number and URL when a linked PR exists.",
+        "The History detail rendering path in `src/server/control-plane/` shows an `Open pull request` action for the selected historical PRD only when associated pull request metadata is present.",
+        "Activating the History detail pull request action opens or targets the exact associated GitHub pull request URL carried in the selected PRD's metadata.",
+        "Selecting a historical PRD with no associated pull request metadata renders no empty placeholder, disabled control, or broken pull-request action in the History detail pane.",
+        "Existing History detail content, selection behavior, and source-chat continuation actions remain unchanged for PRDs regardless of whether pull request metadata exists.",
+        "Add or update focused tests covering history snapshot shaping with and without associated pull request metadata and the conditional History detail rendering of the pull-request action.",
+        "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
