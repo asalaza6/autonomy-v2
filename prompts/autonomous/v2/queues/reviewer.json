@@ -717,10 +717,6 @@
       "prId": "pr-prd-expose-active-pull-request-c879fc-architecture-agent",
       "sourceTaskId": "prd-expose-active-pull-request-c879fc-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "queued",
-      "createdAt": "2026-04-26T10:04:29.733Z",
-      "updatedAt": "2026-04-26T10:04:29.733Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-expose-active-pull-request-c879fc-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -732,7 +728,10 @@
         "Automated coverage is added or updated for active pull request selection logic and for progress-section rendering that shows and hides the link based on PRD state and URL presence.",
         "Verification includes `npm run typecheck` and the relevant unit coverage for the control-plane progress UI or status-selection logic."
       ],
-      "scopeViolations": []
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-26T10:04:29.733Z",
+      "updatedAt": "2026-04-26T10:04:33.083Z"
     }
   ]
 }
