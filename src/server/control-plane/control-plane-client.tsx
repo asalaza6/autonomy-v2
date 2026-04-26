@@ -36,8 +36,11 @@ type PrdSummary = {
   status?: string;
   stateLabel?: string;
   detail?: string;
+  problem?: string;
   specification?: string;
   requirements?: string[];
+  acceptanceCriteria?: string[];
+  verification?: string[];
   tasks?: PrdTaskSummary[];
   plannedTaskCount?: number;
   completedTaskCount?: number;
@@ -305,6 +308,9 @@ const mainProgressFillEl = document.getElementById('main-progress-fill');
 const mainProgressStepsEl = document.getElementById('main-progress-steps');
 const mainProgressActionsEl = document.getElementById('main-progress-actions');
 const mainDeployActionsEl = document.getElementById('main-deploy-actions');
+const mainQueuedPrdSummaryEl = document.getElementById('main-queued-prd-summary');
+const mainQueuedPrdListEl = document.getElementById('main-queued-prd-list');
+const mainQueuedPrdDetailEl = document.getElementById('main-queued-prd-detail');
 const prdHistorySummaryEl = document.getElementById('prd-history-summary');
 const prdHistoryListEl = document.getElementById('prd-history-list');
 const prdHistoryDetailEl = document.getElementById('prd-history-detail');
@@ -345,6 +351,7 @@ let resettingPrdRepoIds = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
 let restartingRepoIds = new Set<string>();
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
+let selectedQueuedPrdId = '';
 let selectedHistoryPrdId = '';
 let preferredHistoryPrdId = '';
 let prdHistoryContinueMessagePrdId = '';
@@ -505,6 +512,13 @@ function mountControlPlane() {
       prdHistoryContinueMessagePrdId = '';
       prdHistoryContinueMessage = '';
       renderPrdHistory(latestDashboard);
+      return;
+    }
+
+    const queuedPrdButton = target ? target.closest<HTMLButtonElement>('[data-action="select-queued-prd"]') : null;
+    if (queuedPrdButton) {
+      selectedQueuedPrdId = String(queuedPrdButton.dataset.prdId || '').trim();
+      renderProjectMain(latestDashboard);
       return;
     }
 
@@ -1353,6 +1367,22 @@ function renderProjectMain(dashboard: DashboardSummary) {
   if (mainDeployActionsEl) {
     mainDeployActionsEl.innerHTML = renderToHtml(<ProjectMainDeployActions repo={repo} />);
   }
+  if (mainQueuedPrdSummaryEl && mainQueuedPrdListEl && mainQueuedPrdDetailEl) {
+    const queuedPrds = repo && Array.isArray(repo.queuedPrds) ? repo.queuedPrds : [];
+    const queuedSelection = resolveSelectedQueuedPrdState(queuedPrds, selectedQueuedPrdId);
+    selectedQueuedPrdId = queuedSelection.selectedPrdId;
+    const selectedPrd = queuedPrds.find((prd) => String(prd.id || '') === selectedQueuedPrdId) || null;
+
+    mainQueuedPrdSummaryEl.textContent = queuedPrds.length > 0
+      ? `${queuedPrds.length} queued PRD${queuedPrds.length === 1 ? '' : 's'} ready to inspect`
+      : 'No queued PRDs.';
+    mainQueuedPrdListEl.innerHTML = renderToHtml(
+      <QueuedPrdList queuedPrds={queuedPrds} selectedPrdId={selectedQueuedPrdId} />
+    );
+    mainQueuedPrdDetailEl.innerHTML = renderToHtml(
+      <QueuedPrdDetail prd={selectedPrd} />
+    );
+  }
 }
 
 function renderPrdHistory(dashboard: DashboardSummary) {
@@ -1418,6 +1448,20 @@ function resolveSelectedHistoryState(history: PrdSummary[], selectedPrdId: strin
   return {
     selectedPrdId: history.length > 0 ? String(history[0].id || '') : '',
     preferredPrdId: preferred,
+  };
+}
+
+function resolveSelectedQueuedPrdState(queuedPrds: PrdSummary[], selectedPrdId: string) {
+  const selected = String(selectedPrdId || '').trim();
+  const queuedIds = new Set(queuedPrds.map((prd) => String(prd.id || '').trim()).filter(Boolean));
+  if (selected && queuedIds.has(selected)) {
+    return {
+      selectedPrdId: selected,
+    };
+  }
+
+  return {
+    selectedPrdId: queuedPrds.length > 0 ? String(queuedPrds[0].id || '') : '',
   };
 }
 
@@ -1883,6 +1927,36 @@ function PrdHistoryList({ history, selectedPrdId }: { history: PrdSummary[]; sel
   );
 }
 
+function QueuedPrdList({ queuedPrds, selectedPrdId }: { queuedPrds: PrdSummary[]; selectedPrdId: string }) {
+  if (!queuedPrds.length) {
+    return <div className="muted">No queued PRDs. New PRDs will appear here once they are waiting to start.</div>;
+  }
+
+  return (
+    <>
+      {queuedPrds.map((prd) => {
+        const prdId = String(prd.id || '');
+        const selected = prdId === selectedPrdId;
+        return (
+          <button
+            type="button"
+            className={`history-item${selected ? ' selected' : ''}`}
+            data-action="select-queued-prd"
+            data-prd-id={prdId}
+            aria-pressed={selected ? 'true' : 'false'}
+          >
+            <span className="history-item-title">{prd.title || prd.id || 'Untitled PRD'}</span>
+            <span className="history-item-meta">
+              {prd.stateLabel || prd.status || 'Queued PRD'}
+              {prd.updatedAt || prd.createdAt ? ` · ${formatTimestamp(prd.updatedAt || prd.createdAt)}` : ''}
+            </span>
+          </button>
+        );
+      })}
+    </>
+  );
+}
+
 function PrdHistoryDetail({
   prd,
   continueChatMessage = '',
@@ -1960,6 +2034,87 @@ function PrdHistoryDetail({
             {tasks.map((task) => <PrdHistoryTask task={task} />)}
           </div>
         ) : <div className="list-note">No task specs recorded.</div>}
+      </div>
+      <div className="history-block">
+        <h4>Raw PRD Info</h4>
+        <pre>{JSON.stringify(prd, null, 2)}</pre>
+      </div>
+    </div>
+  );
+}
+
+function QueuedPrdDetail({ prd }: { prd: PrdSummary | null }) {
+  if (!prd) {
+    return <div className="muted">No queued PRDs right now. Queue a PRD to inspect it here.</div>;
+  }
+
+  const requirements = Array.isArray(prd.requirements) ? prd.requirements.filter(Boolean) : [];
+  const acceptanceCriteria = Array.isArray(prd.acceptanceCriteria) ? prd.acceptanceCriteria.filter(Boolean) : [];
+  const verification = Array.isArray(prd.verification) ? prd.verification.filter(Boolean) : [];
+  const sourceChat = normalizePrdSourceChatSummary(prd.sourceChat);
+  const sourceChatDetail = sourceChat ? [
+    sourceChat.repoId ? `Repo ${sourceChat.repoId}` : '',
+    sourceChat.conversationId ? `Conversation ${sourceChat.conversationId}` : '',
+    sourceChat.managerMessageId ? `Manager message ${sourceChat.managerMessageId}` : '',
+    sourceChat.agentMessageId ? `Agent message ${sourceChat.agentMessageId}` : '',
+    sourceChat.createdAt ? `Created ${formatTimestamp(sourceChat.createdAt)}` : '',
+  ].filter(Boolean).join(' | ') : '';
+  const timestamps = [
+    prd.createdAt ? `Created ${formatTimestamp(prd.createdAt)}` : '',
+    prd.updatedAt ? `Updated ${formatTimestamp(prd.updatedAt)}` : '',
+  ].filter(Boolean).join(' | ');
+
+  return (
+    <div className="history-detail-card">
+      <div className="item-head">
+        <div>
+          <div className="pill">{prd.stateLabel || prd.status || 'Queued PRD'}</div>
+          <h3 className="history-detail-title">{prd.title || prd.id || 'Untitled PRD'}</h3>
+        </div>
+        {prd.updatedAt ? <span className="pill">{formatTimestamp(prd.updatedAt)}</span> : null}
+      </div>
+      <div className="queue-detail">{prd.id || 'unknown PRD'}{timestamps ? ` | ${timestamps}` : ''}</div>
+      {sourceChat ? (
+        <div className="history-block source-chat-block">
+          <h4>Source Chat</h4>
+          {sourceChatDetail ? <div className="queue-detail">{sourceChatDetail}</div> : null}
+        </div>
+      ) : null}
+      {prd.problem ? (
+        <div className="history-block">
+          <h4>Problem</h4>
+          <p>{prd.problem}</p>
+        </div>
+      ) : null}
+      {prd.specification ? (
+        <div className="history-block">
+          <h4>Specification</h4>
+          <p>{prd.specification}</p>
+        </div>
+      ) : null}
+      <div className="history-block">
+        <h4>Requirements</h4>
+        {requirements.length > 0 ? (
+          <ul className="history-list">
+            {requirements.map((requirement) => <li>{requirement}</li>)}
+          </ul>
+        ) : <div className="list-note">No requirements recorded.</div>}
+      </div>
+      <div className="history-block">
+        <h4>Acceptance Criteria</h4>
+        {acceptanceCriteria.length > 0 ? (
+          <ul className="history-list">
+            {acceptanceCriteria.map((item) => <li>{item}</li>)}
+          </ul>
+        ) : <div className="list-note">No acceptance criteria recorded.</div>}
+      </div>
+      <div className="history-block">
+        <h4>Verification</h4>
+        {verification.length > 0 ? (
+          <ul className="history-list">
+            {verification.map((item) => <li>{item}</li>)}
+          </ul>
+        ) : <div className="list-note">No verification steps recorded.</div>}
       </div>
       <div className="history-block">
         <h4>Raw PRD Info</h4>
@@ -3141,6 +3296,8 @@ export {
   PackageUpdateButton,
   ProjectMainProgressActions,
   PrdHistoryDetail,
+  QueuedPrdDetail,
+  QueuedPrdList,
   ProjectRepoCard,
   buildChatPrdDraftFormState,
   captureChatScrollSnapshot,
@@ -3150,6 +3307,7 @@ export {
   mountControlPlane,
   openChatPrdReviewModal,
   resolveProjectProgress,
+  resolveSelectedQueuedPrdState,
   resolveSelectedHistoryState,
   resolveChatScrollDecision,
   resolvePrdHistoryContinueChat,

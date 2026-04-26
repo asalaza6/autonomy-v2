@@ -530,6 +530,29 @@ const styles = `
     gap: 12px;
   }
 
+  .main-queue-shell {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 22px;
+    background: rgba(255, 253, 248, 0.92);
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    box-shadow: var(--shadow);
+  }
+
+  .main-queue-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 0.36fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .main-queue-list,
+  .main-queue-detail {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+
   .progress-head {
     display: flex;
     justify-content: space-between;
@@ -988,7 +1011,7 @@ const styles = `
   }
 
   @media (max-width: 980px) {
-    .metric-grid, .raw-grid, .grid, .history-layout, .progress-steps, .chat-prd-review-grid { grid-template-columns: 1fr; }
+    .metric-grid, .raw-grid, .grid, .history-layout, .progress-steps, .chat-prd-review-grid, .main-queue-layout { grid-template-columns: 1fr; }
     .main-stage-actions, .progress-head, .progress-foot { align-items: start; }
   }
 `;
@@ -1091,6 +1114,20 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                         <span>Progress moves as planned tasks complete.</span>
                         <span>Finished PRDs move into History.</span>
                       </div>
+                    </div>
+                  </article>
+
+                  <article className="main-queue-shell">
+                    <div className="surface-head">
+                      <div>
+                        <h2>Queued PRDs</h2>
+                        <p className="muted">Inspect waiting PRDs in place without leaving Main.</p>
+                      </div>
+                      <div className="muted" id="main-queued-prd-summary">No queued PRDs.</div>
+                    </div>
+                    <div className="main-queue-layout">
+                      <div id="main-queued-prd-list" className="main-queue-list" />
+                      <div id="main-queued-prd-detail" className="main-queue-detail" />
                     </div>
                   </article>
                 </div>
