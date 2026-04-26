@@ -691,18 +691,18 @@
       "prId": "pr-prd-add-manager-side-reset-prds-4fb271-architecture-agent",
       "sourceTaskId": "prd-add-manager-side-reset-prds-4fb271-architecture-agent-2",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-26T09:50:05.449Z",
-      "updatedAt": "2026-04-26T09:50:05.449Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-add-manager-side-reset-prds-4fb271-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
+        "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-1` is complete within the assigned agent scope.",
         "Task `prd-add-manager-side-reset-prds-4fb271-architecture-agent-2` is complete within the assigned agent scope."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-26T09:50:09.177Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-26T09:50:05.449Z",
+      "updatedAt": "2026-04-26T09:50:28.016Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-26T09:50:09.177Z"
     }
   ]
 }
