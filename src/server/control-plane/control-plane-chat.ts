@@ -7,6 +7,13 @@ import {
   extractPrdProposalFromText,
   normalizePrdProposal,
 } from './control-plane-prd-proposal.js';
+import {
+  buildRepoAssistantGithubCodexConfigOverrides,
+  buildRepoAssistantGithubEnv,
+  buildRepoAssistantGithubPromptContext,
+  resolveRepoAssistantGithubEnv,
+  resolveRepoAssistantGithubCapability,
+} from './control-plane-github.js';
 
 const CHAT_RESPONSE_SCHEMA = {
   type: 'object',
@@ -71,11 +78,23 @@ async function answerControlPlaneAgentChat({
   }
 
   const projectContext = await readProjectContextForChatPrompt(repoRoot);
+  const githubCapability = resolveRepoAssistantGithubCapability(repoRoot, {
+    includePullRequestData: true,
+  });
+  const runtimeGithubEnv = resolveRepoAssistantGithubEnv(repoRoot).env;
+  const repoAssistantEnv = githubCapability.available === true
+    ? buildRepoAssistantGithubEnv(runtimeGithubEnv)
+    : {};
   const output = await runCodexStructured({
     cwd: repoRoot,
     readOnly: true,
     schema: CHAT_RESPONSE_SCHEMA,
-    prompt: buildAgentChatPrompt(repoId, payload, snapshot, projectContext),
+    prompt: buildAgentChatPrompt(repoId, payload, snapshot, projectContext, githubCapability),
+    env: repoAssistantEnv,
+    inheritHostEnv: false,
+    configOverrides: githubCapability.available === true
+      ? buildRepoAssistantGithubCodexConfigOverrides()
+      : [],
   });
 
   const answer = String(output && output.answer || '').trim();
@@ -90,7 +109,8 @@ function buildAgentChatPrompt(
   repoId: string,
   payload: ControlPlaneAgentChatMessagePayload,
   snapshot: AnyRecord,
-  projectContext?: string | null
+  projectContext?: string | null,
+  githubCapability?: AnyRecord | null,
 ) {
   return [
     'You are the read-only repo assistant inside the Autonomy v2 control panel.',
@@ -103,6 +123,8 @@ function buildAgentChatPrompt(
     '- When you recommend queueing a repo change or PRD, include a prdProposal object with title, problem, goal, requirements, acceptanceCriteria, verification, and priority when known.',
     '- Do not include prdProposal for normal status answers, explanations, or answers that do not recommend a new PRD.',
     '- Be concise and specific. Mention uncertainty when repo context is insufficient.',
+    '- Never print raw secret values or ask the manager to paste GitHub tokens into the chat.',
+    '- Do not inspect local env files for credentials. Use the injected GitHub runtime auth only when the GitHub capability below is enabled.',
     '',
     `Repo id: ${repoId}`,
     '',
@@ -119,6 +141,14 @@ function buildAgentChatPrompt(
     '',
     'Current repo status summary:',
     JSON.stringify(buildRepoChatContext(snapshot), null, 2),
+    '',
+    'GitHub PR inspection capability:',
+    JSON.stringify(buildRepoAssistantGithubPromptContext(githubCapability), null, 2),
+    '',
+    'When GitHub PR inspection is enabled:',
+    '- You may use the injected GH_TOKEN/GITHUB_TOKEN with `gh api` for live GitHub reads.',
+    '- Limit GitHub network reads to api.github.com endpoints needed for pull request metadata, changed files, issue comments, reviews, and review threads.',
+    '- If GitHub access is not enabled, do not pretend live PR inspection succeeded; explain the reported status instead.',
     '',
     'Return JSON only with answer and prdProposal fields. Set prdProposal to null unless you are recommending a new PRD.',
   ].join('\n');

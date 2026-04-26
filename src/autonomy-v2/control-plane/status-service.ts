@@ -9,6 +9,7 @@ import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
 import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapshot } from '../commands/deploy-version.js';
 import { readAutonomyPackageStatus } from '../commands/update.js';
 import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../sync/review-reconciliation.js';
+import { resolveRepoAssistantGithubCapabilityStatus } from '../../server/control-plane/control-plane-github.js';
 
 function buildStatusSnapshot(rootDir) {
   ensureInitialized(rootDir);
@@ -53,6 +54,9 @@ function buildStatusSnapshot(rootDir) {
     runtime,
     branchLocks,
   });
+  const repoAssistant = {
+    github: resolveRepoAssistantGithubCapabilityStatus(rootDir),
+  };
 
   return {
     configPath: pathRelative(rootDir, paths.agentsConfig),
@@ -71,6 +75,7 @@ function buildStatusSnapshot(rootDir) {
     branchLockCount: branchLocks.locks.length,
     deployment: buildDeploymentSnapshot(rootDir, config),
     autonomyPackage: readAutonomyPackageStatus(rootDir),
+    repoAssistant,
     runtime,
     prds,
     prdHistory,
