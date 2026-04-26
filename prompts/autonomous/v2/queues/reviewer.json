@@ -729,13 +729,13 @@
         "Verification includes `npm run typecheck` and the relevant unit coverage for the control-plane progress UI or status-selection logic."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T10:04:29.733Z",
       "updatedAt": "2026-04-26T10:07:03.713Z",
       "reviewedAt": "2026-04-26T10:06:35.188Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T10:04:35.090Z"
+      "dispatchedAt": "2026-04-26T10:07:05.558Z"
     }
   ]
 }
