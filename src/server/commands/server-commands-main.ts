@@ -147,6 +147,8 @@ async function main(argv: string[] = process.argv.slice(2)) {
   process.on('exit', cleanup);
 
   let lastSyncAt = 0;
+  let tickRunning = false;
+  let rerunRequested = false;
   console.log(formatServerEventLine('server:start', {
     root: rootDir,
     pollMs,
@@ -156,6 +158,14 @@ async function main(argv: string[] = process.argv.slice(2)) {
   void reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler started');
 
   const runTick = () => {
+    if (tickRunning) {
+      rerunRequested = true;
+      console.log(formatServerEventLine('tick:skip-overlap', {
+        nextId: tickCount + 1,
+      }));
+      return;
+    }
+    tickRunning = true;
     const tickId = tickCount + 1;
     try {
       const now = Date.now();
@@ -191,6 +201,11 @@ async function main(argv: string[] = process.argv.slice(2)) {
       }
     }
     void reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler tick complete');
+    tickRunning = false;
+    if (rerunRequested) {
+      rerunRequested = false;
+      queueMicrotask(runTick);
+    }
   };
 
   runTick();
