@@ -599,7 +599,7 @@
         "render that explicitly rather than implying success."
       ],
       "reviewRound": 6,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T06:40:50.509Z",
       "updatedAt": "2026-04-26T07:00:36.138Z",
       "reviewedAt": "2026-04-26T06:50:38.488Z",
@@ -607,7 +607,7 @@
       "lastMergeFailureCode": "merge_rejected",
       "lastMergeFailureMessage": "ERROR: Timed out acquiring autonomy state lock at /Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/state-lock",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T06:53:05.371Z"
+      "dispatchedAt": "2026-04-26T07:00:38.455Z"
     }
   ]
 }
