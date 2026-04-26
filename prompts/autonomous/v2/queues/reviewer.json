@@ -599,10 +599,10 @@
         "Preserve existing PRD queue semantics and payload validation.",
         "Keep non-PRD chat responses unchanged."
       ],
-      "reviewRound": 3,
-      "status": "changes_requested",
+      "reviewRound": 4,
+      "status": "queued",
       "createdAt": "2026-04-26T07:54:06.297Z",
-      "updatedAt": "2026-04-26T07:57:43.956Z",
+      "updatedAt": "2026-04-26T07:58:04.160Z",
       "reviewedAt": "2026-04-26T07:57:43.956Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
