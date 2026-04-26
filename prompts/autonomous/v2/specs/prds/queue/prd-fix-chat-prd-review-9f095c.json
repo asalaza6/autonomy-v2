@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-fix-chat-prd-review-9f095c",
+  "title": "Fix chat PRD review popup overflow and scrolling across device sizes",
+  "createdAt": "2026-04-26T09:43:07.605Z",
+  "specification": "# PRD: Fix chat PRD review popup overflow and scrolling across device sizes\n\nPriority: high\n\n## Problem\nThe chat PRD review popup can exceed the viewport on some devices, making the modal non-scrollable and hiding the submit button unless the user zooms out.\n\n## Goal\nMake the chat PRD review popup fully usable on mobile, tablet, and desktop without zooming, with accessible scrolling and a consistently reachable submit action.\n\n## Requirements\n- Update the control-plane chat PRD review modal layout to fit within the viewport on small and medium screens.\n- Ensure the modal has a bounded height with an internal scrollable content region when proposal content is long.\n- Keep the primary submit action visible and reachable on all supported device sizes.\n- Add responsive spacing and sizing rules for the modal shell, card, header, content, and footer controls.\n- Preserve existing chat PRD review functionality and submission flow.\n\n## Acceptance Criteria\n- On narrow mobile screens, the PRD review popup stays within the viewport and the user can scroll the review content without browser zoom.\n- The submit button is reachable and usable on iPhone-sized, Android-sized, tablet, and desktop viewports.\n- Long PRD proposals do not push modal controls off-screen.\n- Opening, closing, backing out, and submitting the chat PRD review still work as before.\n\n## Verification\n- Inspect and update the modal styles and markup in `src/server/control-plane/control-plane-page.tsx`.\n- Test the PRD review popup at representative viewport sizes such as 320x568, 390x844, 768x1024, and desktop widths.\n- Verify keyboard and pointer access to Close, Back to chat, and Submit actions after the responsive changes.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777195836717_b2dc5cc11f43e\nManager message: msg_1777196297173_8ff27a36717008\nAgent message: msg_1777196297173_d956a26c7d8f58\nCreated: 2026-04-26T09:39:00.584Z",
+  "requirements": [
+    "Update the control-plane chat PRD review modal layout to fit within the viewport on small and medium screens.",
+    "Ensure the modal has a bounded height with an internal scrollable content region when proposal content is long.",
+    "Keep the primary submit action visible and reachable on all supported device sizes.",
+    "Add responsive spacing and sizing rules for the modal shell",
+    "card",
+    "header",
+    "content",
+    "and footer controls.",
+    "Preserve existing chat PRD review functionality and submission flow."
+  ]
+}
