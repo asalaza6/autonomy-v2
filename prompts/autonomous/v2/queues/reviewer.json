@@ -602,11 +602,13 @@
       "reviewRound": 5,
       "status": "approved",
       "createdAt": "2026-04-26T07:54:06.297Z",
-      "updatedAt": "2026-04-26T08:01:57.063Z",
+      "updatedAt": "2026-04-26T08:02:00.611Z",
       "reviewedAt": "2026-04-26T08:01:57.063Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T08:00:39.770Z"
+      "dispatchedAt": "2026-04-26T08:00:39.770Z",
+      "lastMergeFailureCode": "pending_checks",
+      "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge"
     },
     {
       "id": "review-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
