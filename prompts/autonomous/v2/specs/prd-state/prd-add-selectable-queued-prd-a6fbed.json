@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-add-selectable-queued-prd-a6fbed",
+  "status": "planned",
+  "createdAt": "2026-04-26T10:18:31.986Z",
+  "updatedAt": "2026-04-26T10:18:31.986Z",
+  "plannedTaskIds": [
+    "prd-add-selectable-queued-prd-a6fbed-architecture-agent-1"
+  ]
+}
