@@ -53,6 +53,11 @@ function run(rootDir, options) {
     } else {
       console.log('Queued PRDs: none');
     }
+    if (payload.runtime && payload.runtime.lastPrdPromotion && payload.runtime.lastPrdPromotion.id) {
+      const lastPromotion = payload.runtime.lastPrdPromotion;
+      const promotedTitle = String(lastPromotion.title || lastPromotion.id || 'Queued PRD');
+      console.log(`Last auto-promotion: ${promotedTitle}`);
+    }
     console.log(`Branch locks: ${payload.branchLockCount}`);
   });
 }

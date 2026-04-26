@@ -266,19 +266,39 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
     '--root',
     repoDir,
     '--id',
-    'prd-queue-promo-002',
+    'prd-queue-promo-200',
     '--title',
-    'Queued PRD',
+    'First queued PRD',
     '--specification',
-    'Should wait in queue until promoted',
+    'Should be promoted before later queued specs',
+  ]);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-queue-promo-100',
+    '--title',
+    'Second queued PRD',
+    '--specification',
+    'Should stay queued after the earlier queued spec is promoted',
   ]);
 
   assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-002.json'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-200.json'),
     true
   );
   assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-002.json'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-100.json'),
+    true
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-200.json'),
+    false
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-100.json'),
     false
   );
 
@@ -289,11 +309,19 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
   }));
   assert.equal(blockedTick.started.some((entry) => entry.agentId === 'pm-agent'), false);
   assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-002.json'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-200.json'),
     true
   );
   assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-002.json'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-100.json'),
+    true
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-200.json'),
+    false
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-100.json'),
     false
   );
 
@@ -323,18 +351,39 @@ test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is 
       AUTONOMY_CODEX_STUB: '1',
     },
   }));
+  assert.equal(secondTick.sync.queuedPromotion.id, 'prd-queue-promo-200');
+  assert.equal(secondTick.sync.queuedPromotion.title, 'First queued PRD');
   assert.equal(secondTick.started.some((entry) => entry.agentId === 'pm-agent'), true);
   assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-002.json'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-200.json'),
     false
   );
   assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-002.json'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-200.json'),
     true
   );
   assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-queue-promo-002.json'),
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-100.json'),
     true
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-100.json'),
+    false
+  );
+  assert.equal(
+    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-queue-promo-200.json'),
+    true
+  );
+
+  const thirdTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+  assert.equal(thirdTick.sync.queuedPromotion, null);
+  assert.equal(
+    thirdTick.started.filter((entry) => entry.agentId === 'pm-agent').length,
+    0
   );
 });
 
