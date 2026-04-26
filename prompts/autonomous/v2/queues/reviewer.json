@@ -675,11 +675,13 @@
       "reviewRound": 3,
       "status": "approved",
       "createdAt": "2026-04-26T08:20:30.500Z",
-      "updatedAt": "2026-04-26T08:25:27.631Z",
+      "updatedAt": "2026-04-26T08:25:30.739Z",
       "reviewedAt": "2026-04-26T08:25:27.631Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T08:23:54.592Z"
+      "dispatchedAt": "2026-04-26T08:23:54.592Z",
+      "lastMergeFailureCode": "pending_checks",
+      "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge"
     }
   ]
 }
