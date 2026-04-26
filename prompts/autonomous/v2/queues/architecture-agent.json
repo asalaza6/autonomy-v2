@@ -2171,11 +2171,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-26T10:32:09.787Z",
-      "updatedAt": "2026-04-26T10:34:18.493Z",
+      "updatedAt": "2026-04-26T10:34:18.555Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-fix-chat-prd-review-9f095c-architecture-agent",
       "startedAt": "2026-04-26T10:32:12.940Z",
       "completedAt": "2026-04-26T10:34:18.493Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "6b5f005223bf7ea3a1d87457a79cf96224fcf317"
     }
   ]
 }
