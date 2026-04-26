@@ -329,6 +329,8 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     }
     if (job.result.pushMessage) {
       details.push(String(job.result.pushMessage));
+    } else if (job.result.commit && job.result.commit.reason) {
+      details.push(`commit ${String(job.result.commit.reason)}`);
     }
   } else if (status === 'completed' && jobType === 'restart' && job && job.result) {
     const restartStatus = job.result.restartStatus && job.result.restartStatus.status

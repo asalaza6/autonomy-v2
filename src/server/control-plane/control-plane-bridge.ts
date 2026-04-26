@@ -158,6 +158,8 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           packageManager: execution.packageManager,
           installedVersion: execution.installedVersion || '-',
+          commitStatus: execution.result && execution.result.commit && execution.result.commit.committed ? 'committed' : 'skipped',
+          commitReason: execution.result && execution.result.commit && execution.result.commit.reason || '',
           commitSha: execution.result && execution.result.commitSha || '',
           pushMessage: execution.result && execution.result.pushMessage || '',
         });

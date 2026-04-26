@@ -8,7 +8,7 @@ import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-serv
 import { readAutonomyPackageStatus, runPackageUpdate } from '../../autonomy-v2/commands/update.js';
 import { getAgent, getAutonomyPaths, readJson } from '../../autonomy-v2/commands/shared-core.js';
 import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
-import { extractExecError, gitWorkingTreeClean } from '../../sync/git-shared.js';
+import { extractExecError } from '../../sync/git-shared.js';
 import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../types.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import type { ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
@@ -154,6 +154,7 @@ interface PackageUpdateCommitContext {
   enabled: boolean;
   integrationBranch: string;
   beforePaths: Set<string>;
+  beforePathStates: Map<string, string>;
   gitIdentity?: AnyRecord;
   skipReason?: string;
 }
@@ -164,21 +165,16 @@ function capturePackageUpdateCommitContext(rootDir: string): PackageUpdateCommit
       enabled: false,
       integrationBranch: 'dev',
       beforePaths: new Set<string>(),
+      beforePathStates: new Map<string, string>(),
       skipReason: 'not-a-git-repo',
     };
   }
-  if (!gitWorkingTreeClean(rootDir)) {
-    return {
-      enabled: false,
-      integrationBranch: resolveIntegrationBranch(rootDir),
-      beforePaths: new Set<string>(),
-      skipReason: 'working-tree-not-clean',
-    };
-  }
+  const beforePaths = listWorkingTreePaths(rootDir);
   return {
     enabled: true,
     integrationBranch: resolveIntegrationBranch(rootDir),
-    beforePaths: listWorkingTreePaths(rootDir),
+    beforePaths,
+    beforePathStates: captureWorkingTreePathStates(rootDir, beforePaths),
     gitIdentity: resolvePackageUpdateGitIdentity(rootDir),
   };
 }
@@ -197,7 +193,12 @@ function commitPackageUpdateChanges(rootDir: string, context: PackageUpdateCommi
   }
   const afterPaths = listWorkingTreePaths(rootDir);
   const changedPaths = Array.from(afterPaths)
-    .filter((relativePath) => !context.beforePaths.has(relativePath))
+    .filter((relativePath) => {
+      if (!context.beforePaths.has(relativePath)) {
+        return true;
+      }
+      return readWorkingTreePathState(rootDir, relativePath) !== context.beforePathStates.get(relativePath);
+    })
     .sort();
   if (changedPaths.length === 0) {
     return {
@@ -290,6 +291,26 @@ function listWorkingTreePaths(rootDir: string) {
   } catch (error) {
     throw new Error(`Failed to inspect package update git changes: ${extractExecError(error)}`);
   }
+}
+
+function captureWorkingTreePathStates(rootDir: string, paths: Iterable<string>) {
+  const states = new Map<string, string>();
+  for (const relativePath of paths) {
+    states.set(relativePath, readWorkingTreePathState(rootDir, relativePath));
+  }
+  return states;
+}
+
+function readWorkingTreePathState(rootDir: string, relativePath: string) {
+  const absolutePath = path.join(rootDir, relativePath);
+  if (!fs.existsSync(absolutePath)) {
+    return 'missing';
+  }
+  const stat = fs.statSync(absolutePath);
+  if (!stat.isFile()) {
+    return `non-file:${stat.size}:${stat.mtimeMs}`;
+  }
+  return `file:${fs.readFileSync(absolutePath, 'utf8')}`;
 }
 
 function normalizePorcelainPath(line: string) {
