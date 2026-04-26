@@ -1332,11 +1332,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-expose-visual-restart-proof-1c94e7-architecture-agent",
       "createdAt": "2026-04-26T06:46:11.514Z",
-      "updatedAt": "2026-04-26T07:00:27.881Z",
+      "updatedAt": "2026-04-26T07:00:27.943Z",
       "startedAt": "2026-04-26T06:52:41.425Z",
       "prId": "pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent",
       "completedAt": "2026-04-26T07:00:27.881Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "036d3e3d7ef5b4e9729a5df3095fec96459db531"
     },
     {
       "id": "architecture-agent-followup-pr-prd-expose-visual-restart-proof-1c94e7-architecture-agent-4",
