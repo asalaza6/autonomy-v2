@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4089,11 +4090,11 @@
       "acceptance": [
         "Blocking on verification. The code changes look scoped and `npm run typecheck`/`npm run lint` passed, but this PR changes a high-risk control-plane chat path and the required chat-focused unit test pass is not provided.\nRequired focused verification is missing for the changed control-plane chat flow. Acceptance explicitly requires relevant control-plane chat tests to pass, but the deterministic results only include `npm run typecheck` and `npm run lint`. Please run and attach a passing result for the chat-focused unit suite covering this change, such as `dist/tests/unit/control-plane-chat.test.js` after build or the repo’s equivalent test command. I attempted the compiled unit test in this sandbox, but it was inconclusive because the sandbox blocks the test file’s temp-directory writes (`mkdtemp` EPERM), so the PR still lacks merge-grade evidence for this high-risk path."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-inject-project-context-into-control-plane-16b541-architecture-agent",
       "createdAt": "2026-04-26T11:23:10.880Z",
-      "updatedAt": "2026-04-26T11:23:10.880Z",
+      "updatedAt": "2026-04-26T11:23:48.319Z",
       "startedAt": "2026-04-26T11:23:10.880Z",
       "prId": "pr-prd-inject-project-context-into-control-plane-16b541-architecture-agent",
       "conversationReferences": {
@@ -4101,11 +4102,12 @@
           "conversationId": "019dc984-5e10-7fa0-8764-1205fa1012a9",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-26T11:23:10.880Z"
+          "updatedAt": "2026-04-26T11:23:48.319Z"
         }
       },
-      "implementationConversationId": "019dc984-5e10-7fa0-8764-1205fa1012a9"
+      "implementationConversationId": "019dc984-5e10-7fa0-8764-1205fa1012a9",
+      "completedAt": "2026-04-26T11:23:48.319Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
