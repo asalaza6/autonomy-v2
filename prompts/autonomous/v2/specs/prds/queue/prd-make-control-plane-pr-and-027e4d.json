@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-make-control-plane-pr-and-027e4d",
+  "title": "Make control-plane PR and PRD status authoritative and observable",
+  "createdAt": "2026-04-26T21:32:06.545Z",
+  "specification": "# PRD: Make control-plane PR and PRD status authoritative and observable\n\nPriority: high\n\n## Problem\nThe control panel can report no active PRDs or PRs while GitHub still has open pull requests because snapshot code mutates PR state from inferred task completion and active PRD selection ignores implementation/review phases. This creates persistent drift between GitHub reality and control-plane status.\n\n## Goal\nMake repo status trustworthy without manual debugging by using GitHub as the source of truth for PR open/closed/merged state, keeping status assembly read-only, and exposing active PRDs across the full lifecycle.\n\n## Requirements\n- Use live GitHub PR state when available to determine whether a pull request is open, closed, or merged.\n- Do not rewrite pull request status to `merged` during status snapshot generation based only on task completion inference.\n- Keep inferred local task state separate from canonical PR state so UI can show both without conflation.\n- Treat PRDs in implementation and review phases as active until all associated pull requests are actually merged or closed.\n- Add drift detection that flags when local inferred state disagrees with remote GitHub state.\n- Log or surface explicit reconciliation reasons so hidden transitions are explainable.\n- Preserve degraded behavior when GitHub auth is unavailable, but label the snapshot as inferred/stale instead of authoritative.\n\n## Acceptance Criteria\n- An open GitHub PR remains visible in `pullRequestStatuses` even if all linked tasks are terminal locally.\n- A PRD with work in implementation or review remains visible as active until its associated PRs are actually resolved upstream.\n- Status snapshot generation does not mutate PR records from `changes_requested` to `merged` unless remote GitHub state confirms merge.\n- When GitHub cannot be queried, the control panel marks PR state as inferred or stale rather than silently resolving it.\n- The control panel can explain why a PR or PRD is considered active, resolved, blocked, or stale.\n\n## Verification\n- Add unit tests for reconciliation covering open remote PR plus terminal local tasks, closed remote PR, merged remote PR, and missing-auth fallback.\n- Add snapshot/status-service tests proving active PRDs include implementation/review states and open PRs remain listed.\n- Run an end-to-end fixture or integration test with a synthetic open PR record matching PR #28 behavior and confirm the snapshot still shows it active.\n- Verify logs or UI metadata include a reconciliation/source label such as `remote`, `inferred`, or `stale`.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777238476176_048cba1a27cf08\nManager message: msg_1777239026534_725f86b165a368\nAgent message: msg_1777239026534_c4b482c6787d78\nCreated: 2026-04-26T21:31:05.555Z",
+  "requirements": [
+    "Use live GitHub PR state when available to determine whether a pull request is open",
+    "closed",
+    "or merged.",
+    "Do not rewrite pull request status to `merged` during status snapshot generation based only on task completion inference.",
+    "Keep inferred local task state separate from canonical PR state so UI can show both without conflation.",
+    "Treat PRDs in implementation and review phases as active until all associated pull requests are actually merged or closed.",
+    "Add drift detection that flags when local inferred state disagrees with remote GitHub state.",
+    "Log or surface explicit reconciliation reasons so hidden transitions are explainable.",
+    "Preserve degraded behavior when GitHub auth is unavailable",
+    "but label the snapshot as inferred/stale instead of authoritative."
+  ]
+}
