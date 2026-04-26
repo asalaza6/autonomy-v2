@@ -673,7 +673,7 @@
         "Control-plane status, dashboard activity, or equivalent surfaced runtime output clearly reports that an automatic queued-PRD promotion occurred and identifies the promoted PRD."
       ],
       "reviewRound": 4,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T08:20:30.500Z",
       "updatedAt": "2026-04-26T08:26:24.206Z",
       "reviewedAt": "2026-04-26T08:25:27.631Z",
@@ -681,7 +681,7 @@
       "lastMergeFailureCode": "pending_checks",
       "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T08:23:54.592Z"
+      "dispatchedAt": "2026-04-26T08:26:26.016Z"
     }
   ]
 }
