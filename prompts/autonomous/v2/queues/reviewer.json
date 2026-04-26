@@ -888,10 +888,6 @@
       "prId": "pr-prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "sourceTaskId": "prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "queued",
-      "createdAt": "2026-04-26T22:06:56.730Z",
-      "updatedAt": "2026-04-26T22:06:56.730Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-enable-repo-assistant-sessions-to-67a11c-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -904,7 +900,10 @@
         "Raw secret values are never emitted into assistant transcript content, structured status payloads, logs, or UI output; any error or debug reporting uses redacted or non-secret-safe messaging only.",
         "Focused automated coverage exercises successful GitHub capability enablement plus the missing-token, invalid-token, and unauthorized-token failure paths, and the implementation runs `npm run typecheck` along with the relevant control-plane, runner, or smoke tests covering session startup and status reporting."
       ],
-      "scopeViolations": []
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-26T22:06:56.730Z",
+      "updatedAt": "2026-04-26T22:07:01.240Z"
     }
   ]
 }
