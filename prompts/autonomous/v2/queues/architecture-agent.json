@@ -1461,11 +1461,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
       "createdAt": "2026-04-26T07:56:49.559Z",
-      "updatedAt": "2026-04-26T08:01:17.601Z",
+      "updatedAt": "2026-04-26T08:01:17.665Z",
       "startedAt": "2026-04-26T07:59:21.523Z",
       "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent",
       "completedAt": "2026-04-26T08:01:17.601Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "4e8e80e5cfb94c9a568fcec5616a0c98f886573a"
     },
     {
       "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-3",
