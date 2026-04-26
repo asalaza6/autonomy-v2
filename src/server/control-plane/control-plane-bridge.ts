@@ -145,7 +145,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           root: repoRoot,
         });
-        const execution = executeControlPlanePackageUpdate(repoRoot);
+        const execution = await executeControlPlanePackageUpdate(repoRoot);
         await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
           method: 'POST',
           body: {

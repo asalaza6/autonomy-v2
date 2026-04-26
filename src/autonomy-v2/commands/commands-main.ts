@@ -59,11 +59,20 @@ async function main(argv: string[] = process.argv.slice(2)) {
       await runCommand();
       return;
     }
+    if (shouldBypassStateLock()) {
+      await runCommand();
+      return;
+    }
     await withStateLock(rootDir, runCommand);
   } catch (error) {
     console.error(`ERROR: ${error.message}`);
     process.exitCode = 1;
   }
+}
+
+function shouldBypassStateLock() {
+  return String(process.env.AUTONOMY_SKIP_STATE_LOCK || '').trim().toLowerCase() === '1'
+    || String(process.env.AUTONOMY_SKIP_STATE_LOCK || '').trim().toLowerCase() === 'true';
 }
 
 

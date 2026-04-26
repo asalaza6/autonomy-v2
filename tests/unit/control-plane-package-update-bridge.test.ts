@@ -94,7 +94,7 @@ test('bridge executes default package update jobs without restarting services', 
     restoreEnv('PATH', originalPath);
   });
 
-  const logs = await captureConsoleLogs(async () => {
+  const logs = await captureProcessOutput(async () => {
     await runControlPlaneBridgeOnce(repoDir, {
       serverUrl,
       repoRoots: {
@@ -311,6 +311,89 @@ test('bridge runs autonomy-v2 package update config as npm run release:patch', a
   assert.equal(completedJob.result.updateCommand.mode, 'custom');
   assert.equal(completedJob.result.updateCommand.command, 'npm run release:patch');
   assert.match(completedJob.result.updateCommand.output, /release patch published/);
+});
+
+test('bridge streams custom package update child logs when DEBUG=true', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-package-debug-update-');
+  initAutonomyRepo(repoDir);
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.packageUpdateCommand = {
+    command: process.execPath,
+    args: ['-e', [
+      'console.log("debug child stdout");',
+      'console.error("debug child stderr");',
+    ].join('\n')],
+  };
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
+  let jobClaimed = false;
+  let completedJob: any = null;
+
+  const originalDebug = process.env.DEBUG;
+  process.env.DEBUG = 'true';
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
+      res.end(JSON.stringify({
+        job: {
+          id: 'job-package-update-debug-1',
+          type: 'package:update',
+          repoId: 'default',
+          payload: {
+            repoId: 'default',
+          },
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      return;
+    }
+
+    if (req.url === '/api/jobs/job-package-update-debug-1/complete' && req.method === 'POST') {
+      completedJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-package-update-debug-1', status: 'completed' }));
+      return;
+    }
+
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      await readRequestText(req);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+    restoreEnv('DEBUG', originalDebug);
+  });
+
+  await runControlPlaneBridgeOnce(repoDir, {
+    serverUrl,
+    repoRoots: {
+      default: repoDir,
+    },
+  });
+  assert.match(completedJob.result.updateCommand.output, /debug child stdout/);
+  assert.match(completedJob.result.updateCommand.output, /debug child stderr/);
 });
 
 test('bridge executes restart jobs independently after completion', async (t) => {
@@ -663,6 +746,27 @@ async function captureConsoleLogs(callback: () => Promise<void>) {
     await callback();
   } finally {
     console.log = originalLog;
+  }
+  return lines;
+}
+
+async function captureProcessOutput(callback: () => Promise<void>) {
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+  const lines: string[] = [];
+  process.stdout.write = ((chunk: any, ...args: any[]) => {
+    lines.push(String(chunk || ''));
+    return originalStdoutWrite(chunk, ...args);
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: any, ...args: any[]) => {
+    lines.push(String(chunk || ''));
+    return originalStderrWrite(chunk, ...args);
+  }) as typeof process.stderr.write;
+  try {
+    await callback();
+  } finally {
+    process.stdout.write = originalStdoutWrite as typeof process.stdout.write;
+    process.stderr.write = originalStderrWrite as typeof process.stderr.write;
   }
   return lines;
 }

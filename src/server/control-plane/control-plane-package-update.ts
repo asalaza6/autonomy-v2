@@ -50,7 +50,7 @@ interface DeferredRestartLaunchResult {
   error?: string;
 }
 
-function executeControlPlanePackageUpdate(rootDir: string) {
+async function executeControlPlanePackageUpdate(rootDir: string) {
   const config = loadControlPlaneConfig(rootDir);
   const packageUpdateCommand = normalizePackageUpdateCommandConfig(config.packageUpdateCommand, rootDir);
   if (packageUpdateCommand) {
@@ -89,12 +89,12 @@ function executeControlPlanePackageUpdate(rootDir: string) {
   };
 }
 
-function executeCustomControlPlanePackageUpdate(
+async function executeCustomControlPlanePackageUpdate(
   rootDir: string,
   packageUpdateCommand: NormalizedControlPlaneCommandConfig
 ) {
   const before = readAutonomyPackageStatus(rootDir);
-  const commandResult = runConfiguredControlPlaneCommand(packageUpdateCommand, rootDir, {
+  const commandResult = await runConfiguredControlPlaneCommand(packageUpdateCommand, rootDir, {
     failureLabel: 'Package update command',
     env: {
       AUTONOMY_PACKAGE_UPDATE_ROOT: rootDir,
@@ -512,7 +512,7 @@ function normalizeControlPlaneCommandConfig(
   };
 }
 
-function runConfiguredControlPlaneCommand(
+async function runConfiguredControlPlaneCommand(
   commandConfig: NormalizedControlPlaneCommandConfig,
   rootDir: string,
   options: {
@@ -520,6 +520,9 @@ function runConfiguredControlPlaneCommand(
     env?: Record<string, string>;
   }
 ) {
+  if (shouldStreamDebugChildLogs()) {
+    return runConfiguredControlPlaneCommandWithStreaming(commandConfig, rootDir, options);
+  }
   const result = spawnSync(commandConfig.command, commandConfig.args, {
     cwd: commandConfig.cwd,
     encoding: 'utf8',
@@ -548,6 +551,74 @@ function runConfiguredControlPlaneCommand(
   };
 }
 
+async function runConfiguredControlPlaneCommandWithStreaming(
+  commandConfig: NormalizedControlPlaneCommandConfig,
+  rootDir: string,
+  options: {
+    failureLabel: string;
+    env?: Record<string, string>;
+  }
+) {
+  return await new Promise<{
+    command: string;
+    cwd: string;
+    exitCode: number;
+    output: string | null;
+  }>((resolve, reject) => {
+    const child = spawn(commandConfig.command, commandConfig.args, {
+      cwd: commandConfig.cwd,
+      env: {
+        ...process.env,
+        ...(options.env || {}),
+        ...commandConfig.env,
+      },
+      shell: commandConfig.shell,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, DEFAULT_COMMAND_TIMEOUT_MS);
+
+    child.stdout?.on('data', (chunk) => {
+      const text = String(chunk || '');
+      stdoutChunks.push(text);
+      process.stdout.write(text);
+    });
+    child.stderr?.on('data', (chunk) => {
+      const text = String(chunk || '');
+      stderrChunks.push(text);
+      process.stderr.write(text);
+    });
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(new Error(`${options.failureLabel} "${commandConfig.displayCommand}" failed: ${error.message}`));
+    });
+    child.on('close', (code, signal) => {
+      clearTimeout(timeout);
+      const output = truncateCommandOutput(collectCommandOutput(stdoutChunks.join(''), stderrChunks.join('')));
+      if (timedOut) {
+        reject(new Error(`${options.failureLabel} "${commandConfig.displayCommand}" timed out after ${DEFAULT_COMMAND_TIMEOUT_MS}ms: ${output || 'no output'}`));
+        return;
+      }
+      if (code !== 0) {
+        const detail = output || signal || 'no output';
+        reject(new Error(`${options.failureLabel} "${commandConfig.displayCommand}" failed with exit code ${code}: ${detail}`));
+        return;
+      }
+      resolve({
+        command: commandConfig.displayCommand,
+        cwd: path.relative(rootDir, commandConfig.cwd) || '.',
+        exitCode: code || 0,
+        output: output || null,
+      });
+    });
+  });
+}
+
 function collectCommandOutput(...parts: unknown[]) {
   return parts
     .map((part) => String(part || '').trim())
@@ -560,6 +631,10 @@ function truncateCommandOutput(value: string) {
     return value;
   }
   return `${value.slice(0, MAX_COMMAND_OUTPUT_LENGTH)}\n[command output truncated]`;
+}
+
+function shouldStreamDebugChildLogs() {
+  return String(process.env.DEBUG || '').trim().toLowerCase() === 'true';
 }
 
 function resolveCommandCwd(rootDir: string, value: unknown) {

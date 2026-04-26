@@ -220,11 +220,21 @@ function runRefresh(
 ): RefreshResult {
   const installedCliPath = path.join(rootDir, 'node_modules', ...PACKAGE_NAME.split('/'), 'dist', 'bin', 'autonomy-v2.js');
   let result = '';
-  if (fs.existsSync(installedCliPath)) {
-    result = runCommand(process.execPath, [installedCliPath, 'init', '--root', rootDir, '--force', '--json'], rootDir);
-  } else {
-    const refreshCommand = buildRefreshCommand(packageManager, rootDir);
-    result = runCommand(refreshCommand.file, refreshCommand.args, rootDir);
+  const originalSkipStateLock = process.env.AUTONOMY_SKIP_STATE_LOCK;
+  process.env.AUTONOMY_SKIP_STATE_LOCK = '1';
+  try {
+    if (fs.existsSync(installedCliPath)) {
+      result = runCommand(process.execPath, [installedCliPath, 'init', '--root', rootDir, '--force', '--json'], rootDir);
+    } else {
+      const refreshCommand = buildRefreshCommand(packageManager, rootDir);
+      result = runCommand(refreshCommand.file, refreshCommand.args, rootDir);
+    }
+  } finally {
+    if (typeof originalSkipStateLock === 'undefined') {
+      delete process.env.AUTONOMY_SKIP_STATE_LOCK;
+    } else {
+      process.env.AUTONOMY_SKIP_STATE_LOCK = originalSkipStateLock;
+    }
   }
 
   try {
