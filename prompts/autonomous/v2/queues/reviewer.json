@@ -605,12 +605,11 @@
       "reviewRound": 6,
       "status": "merged",
       "createdAt": "2026-04-26T06:40:50.509Z",
-      "updatedAt": "2026-04-26T07:18:00.312Z",
+      "updatedAt": "2026-04-26T07:18:29.639Z",
       "reviewedAt": "2026-04-26T06:50:38.488Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T07:01:38.796Z",
-      "mergedAt": "2026-04-26T07:17:38Z"
+      "dispatchedAt": "2026-04-26T07:01:38.796Z"
     }
   ]
 }
