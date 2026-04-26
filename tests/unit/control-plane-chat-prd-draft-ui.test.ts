@@ -300,6 +300,7 @@ test('history detail renders continue source chat action for source chat metadat
   assert.match(html, /Continue source chat/);
   assert.match(html, /data-action="continue-prd-source-chat"/);
   assert.match(html, /data-conversation-id="chat-1"/);
+  assert.doesNotMatch(html, /Open pull request/);
 
   const fallbackHtml = renderToHtml(h(PrdHistoryDetail as any, {
     prd: {
@@ -314,6 +315,20 @@ test('history detail renders continue source chat action for source chat metadat
   }));
   assert.match(fallbackHtml, /chat not available/);
 
+  const withPullRequestHtml = renderToHtml(h(PrdHistoryDetail as any, {
+    prd: {
+      id: 'prd-history-pr',
+      title: 'History with linked PR',
+      stateLabel: 'Completed',
+      pullRequest: {
+        number: 24,
+        url: 'https://github.com/asalaza6/autonomy-v2/pull/24',
+      },
+    },
+  }));
+  assert.match(withPullRequestHtml, /Open pull request #24/);
+  assert.match(withPullRequestHtml, /href="https:\/\/github.com\/asalaza6\/autonomy-v2\/pull\/24"/);
+
   const normalHtml = renderToHtml(h(PrdHistoryDetail as any, {
     prd: {
       id: 'prd-normal-history',
@@ -323,6 +338,7 @@ test('history detail renders continue source chat action for source chat metadat
     },
   }));
   assert.doesNotMatch(normalHtml, /data-action="continue-prd-source-chat"/);
+  assert.doesNotMatch(normalHtml, /Open pull request/);
 });
 
 test('history continue chat resolves existing conversations and unavailable fallback', async () => {

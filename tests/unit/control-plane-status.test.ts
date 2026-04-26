@@ -148,11 +148,71 @@ test('status snapshots include archived PRDs for project history', () => {
   git(repoDir, ['commit', '-m', 'archive history prd']);
   git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
 
+  const paths = getAutonomyPathsForTest(repoDir);
+  fs.writeFileSync(paths.prsState, `${JSON.stringify({
+    pullRequests: [
+      {
+        id: 'pr-prd-history-001-architecture-agent',
+        taskId: 'task-history-001',
+        agentId: 'architecture-agent',
+        laneKey: 'prd-history-001:architecture-agent',
+        prdId: 'prd-history-001',
+        sprintId: 'multi-agent-mvp',
+        headBranch: 'agent/multi-agent-mvp/architecture-agent/prd-history-001-architecture-agent',
+        baseBranch: 'dev',
+        status: 'merged',
+        title: '[architecture-agent] History PRD',
+        createdAt: '2026-04-01T12:05:00.000Z',
+        updatedAt: '2026-04-01T12:10:00.000Z',
+        remote: {
+          number: 13,
+          url: 'https://github.com/asalaza6/autonomy-v2/pull/13',
+          mergedAt: '2026-04-01T12:10:00.000Z',
+        },
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+
   const snapshot = buildStatusSnapshot(repoDir);
   assert.equal(snapshot.prds.prds.some((prd) => prd.id === 'prd-history-001'), false);
   assert.equal(snapshot.prdHistory.prds.length, 1);
   assert.equal(snapshot.prdHistory.prds[0].id, 'prd-history-001');
   assert.equal(snapshot.prdHistory.prds[0].archivePath, 'prompts/autonomous/v2/specs/prds/archived/prd-history-001.json');
+  assert.deepEqual(snapshot.prdHistory.prds[0].pullRequest, {
+    number: 13,
+    url: 'https://github.com/asalaza6/autonomy-v2/pull/13',
+  });
+});
+
+test('status snapshots omit linked pull request metadata when history PRDs have no associated PR', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-history-no-pr-');
+  initAutonomyRepo(repoDir);
+
+  const archivedSpecPath = path.join(
+    repoDir,
+    'prompts',
+    'autonomous',
+    'v2',
+    'specs',
+    'prds',
+    'archived',
+    'prd-history-no-pr-001.json'
+  );
+  fs.mkdirSync(path.dirname(archivedSpecPath), { recursive: true });
+  fs.writeFileSync(archivedSpecPath, `${JSON.stringify({
+    id: 'prd-history-no-pr-001',
+    title: 'History PRD without PR',
+    createdAt: '2026-04-01T12:00:00.000Z',
+    specification: 'History item without a linked pull request.',
+  }, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', 'prompts/autonomous/v2/specs/prds/archived/prd-history-no-pr-001.json']);
+  git(repoDir, ['commit', '-m', 'archive history prd without pr']);
+  git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  assert.equal(snapshot.prdHistory.prds.length, 1);
+  assert.equal(snapshot.prdHistory.prds[0].id, 'prd-history-no-pr-001');
+  assert.equal('pullRequest' in snapshot.prdHistory.prds[0], false);
 });
 
 test('status snapshots derive completed PRD tasks from active PR records', () => {

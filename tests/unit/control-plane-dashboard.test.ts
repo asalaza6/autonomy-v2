@@ -85,6 +85,10 @@ Created: 2026-04-01T12:01:00.000Z`,
                 id: 'prd-finished-001',
                 title: 'Finished PRD',
                 status: 'completed',
+                pullRequest: {
+                  number: 11,
+                  url: 'https://github.com/asalaza6/autonomy-v2/pull/11',
+                },
                 specification: `Ship the completed workflow.
 
 ## Source Chat Message
@@ -220,6 +224,10 @@ Created: 2026-04-01T11:59:00.000Z`,
   });
   assert.equal(dashboard.repos[0].prdHistory[0].title, 'Finished PRD');
   assert.match(dashboard.repos[0].prdHistory[0].specification, /Ship the completed workflow/);
+  assert.deepEqual(dashboard.repos[0].prdHistory[0].pullRequest, {
+    number: 11,
+    url: 'https://github.com/asalaza6/autonomy-v2/pull/11',
+  });
   assert.deepEqual(dashboard.repos[0].prdHistory[0].sourceChat, {
     repoId: 'alpha',
     conversationId: 'chat-1',
@@ -279,6 +287,42 @@ test('status-view summaries normalize source chat metadata for PRD history', () 
     agentMessageId: 'msg-agent-archived',
     createdAt: '2026-04-01T10:00:00.000Z',
   });
+});
+
+test('status-view summaries preserve linked pull request metadata for PRD history', () => {
+  const summary = summarizeRepoStatus({
+    repoId: 'alpha',
+    updatedAt: '2026-04-01T12:00:00.000Z',
+    snapshot: {
+      prds: {
+        prds: [],
+      },
+      prdHistory: {
+        prds: [
+          {
+            id: 'prd-history-pr-001',
+            title: 'Archived PR PRD',
+            status: 'completed',
+            pullRequest: {
+              number: 17,
+              url: 'https://github.com/asalaza6/autonomy-v2/pull/17',
+            },
+          },
+          {
+            id: 'prd-history-no-pr-001',
+            title: 'Archived without PR',
+            status: 'completed',
+          },
+        ],
+      },
+    },
+  }, 'Alpha');
+
+  assert.deepEqual(summary.prdHistory[0].pullRequest, {
+    number: 17,
+    url: 'https://github.com/asalaza6/autonomy-v2/pull/17',
+  });
+  assert.equal('pullRequest' in summary.prdHistory[1], false);
 });
 
 test('control plane dashboard keeps partially completed PRDs in implementing while their PR is active', () => {

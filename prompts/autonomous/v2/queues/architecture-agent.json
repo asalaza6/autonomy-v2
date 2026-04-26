@@ -4133,10 +4133,14 @@
         "Add or update focused tests covering history snapshot shaping with and without associated pull request metadata and the conditional History detail rendering of the pull-request action.",
         "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-26T21:36:07.116Z",
-      "updatedAt": "2026-04-26T21:36:07.116Z"
+      "updatedAt": "2026-04-26T21:40:36.751Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-show-associated-pull-request-5ed56d-architecture-agent",
+      "startedAt": "2026-04-26T21:36:11.093Z",
+      "completedAt": "2026-04-26T21:40:36.751Z",
+      "completionMode": "code"
     }
   ]
 }

@@ -210,6 +210,11 @@ export interface ControlPlanePrdSourceChat extends AnyRecord {
   createdAt?: string;
 }
 
+export interface PrdLinkedPullRequestSummary extends AnyRecord {
+  number?: number | null;
+  url?: string | null;
+}
+
 export interface ControlPlanePrdProposal extends AnyRecord {
   schemaVersion?: number;
   kind: 'prd-proposal';
@@ -303,6 +308,7 @@ export interface TrackedPrdRecord extends PrdSpecPayload {
   remoteLaneStates?: AnyRecord;
   planningOnlySpec?: boolean;
   source?: AnyRecord;
+  pullRequest?: PrdLinkedPullRequestSummary | null;
 }
 
 export interface PullRequestRemote extends AnyRecord {
