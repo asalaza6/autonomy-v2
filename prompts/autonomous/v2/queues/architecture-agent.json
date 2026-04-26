@@ -1460,6 +1460,29 @@
       "updatedAt": "2026-04-26T07:56:49.559Z",
       "startedAt": null,
       "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
+      "description": "Blocking required check failure. The branch is not safe to merge into `dev` because `npm run typecheck` fails. The earlier resume-review regression in `src/server/control-plane/control-plane-client.tsx:702` appears addressed, but the required lane check is currently red.\n`npm run typecheck` fails in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:604`. `FakeButtonElement.closest<T>()` returns `this as unknown as T`, and TypeScript rejects that conversion for arbitrary `T`. Fix the test stub typing so the unit test file compiles, then rerun `npm run typecheck`.\nBlocking checks failed: npm run typecheck",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-dedicated-chat-prd-882bd5",
+      "laneKey": "prd-add-dedicated-chat-prd-882bd5:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking required check failure. The branch is not safe to merge into `dev` because `npm run typecheck` fails. The earlier resume-review regression in `src/server/control-plane/control-plane-client.tsx:702` appears addressed, but the required lane check is currently red.\n`npm run typecheck` fails in `tests/unit/control-plane-chat-prd-draft-ui.test.ts:604`. `FakeButtonElement.closest<T>()` returns `this as unknown as T`, and TypeScript rejects that conversion for arbitrary `T`. Fix the test stub typing so the unit test file compiles, then rerun `npm run typecheck`.\nBlocking checks failed: npm run typecheck"
+      ],
+      "state": "queued",
+      "status": "queued",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "createdAt": "2026-04-26T07:57:43.956Z",
+      "updatedAt": "2026-04-26T07:57:43.956Z",
+      "startedAt": null,
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent"
     }
   ],
   "schemaVersion": 1
