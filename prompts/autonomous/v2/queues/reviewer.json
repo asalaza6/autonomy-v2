@@ -789,10 +789,10 @@
         "Opening the PRD review popup, closing it, backing out to chat, and submitting through the existing PRD flow continue to behave as before after the responsive layout changes.",
         "Relevant control-plane tests covering the PRD review popup are added or updated for responsive layout and interaction behavior, and `npm run typecheck` passes."
       ],
-      "reviewRound": 40,
-      "status": "changes_requested",
+      "reviewRound": 41,
+      "status": "queued",
       "createdAt": "2026-04-26T10:34:19.626Z",
-      "updatedAt": "2026-04-26T10:59:19.370Z",
+      "updatedAt": "2026-04-26T10:59:33.854Z",
       "reviewedAt": "2026-04-26T10:59:19.370Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
@@ -802,7 +802,7 @@
           "conversationId": "019dc95d-402a-7ca1-ae90-f56d444c6b3c",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-26T10:59:19.370Z"
+          "updatedAt": "2026-04-26T10:59:33.854Z"
         }
       }
     }
