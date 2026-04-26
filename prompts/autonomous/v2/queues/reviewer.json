@@ -862,9 +862,9 @@
         "Verification includes `npm run typecheck` and the relevant focused control-plane or snapshot tests that cover History detail actions and completed-PRD status payloads."
       ],
       "reviewRound": 6,
-      "status": "queued",
+      "status": "approved",
       "createdAt": "2026-04-26T21:40:37.882Z",
-      "updatedAt": "2026-04-26T21:47:52.632Z",
+      "updatedAt": "2026-04-26T21:47:52.506Z",
       "reviewedAt": "2026-04-26T21:47:49.043Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
@@ -876,7 +876,9 @@
           "role": "review",
           "updatedAt": "2026-04-26T21:47:52.632Z"
         }
-      }
+      },
+      "lastMergeFailureCode": "pending_checks",
+      "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge"
     }
   ]
 }
