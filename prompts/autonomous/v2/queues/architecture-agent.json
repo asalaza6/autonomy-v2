@@ -2000,11 +2000,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-26T10:18:31.888Z",
-      "updatedAt": "2026-04-26T10:23:22.622Z",
+      "updatedAt": "2026-04-26T10:23:22.692Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-selectable-queued-prd-a6fbed-architecture-agent",
       "startedAt": "2026-04-26T10:18:35.158Z",
       "completedAt": "2026-04-26T10:23:22.622Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "4a7e4d39481e4c9f8158b601ff21aa26058de2ee"
     }
   ]
 }
