@@ -10,7 +10,6 @@ import {
   getPrdProposalStableKey,
   normalizePrdProposal,
 } from './control-plane-prd-proposal.js';
-import { selectActivePullRequestStatusForPrd } from '../../autonomy-v2/control-plane/status-view.js';
 import type { ControlPlanePrdProposal, ControlPlanePrdSourceChat } from '../../types.js';
 
 declare global {
@@ -1799,7 +1798,7 @@ function resolveProjectProgress(repo: RepoSummary | null) {
 
 function resolveProjectProgressPullRequestAction(repo: RepoSummary | null): ProjectProgressPullRequestAction | null {
   const activePrd = repo && repo.activePrd ? repo.activePrd : null;
-  const pullRequestStatus = selectActivePullRequestStatusForPrd(
+  const pullRequestStatus = selectActivePullRequestStatusForPrdForClient(
     activePrd,
     repo && Array.isArray(repo.pullRequestStatuses) ? repo.pullRequestStatuses : [],
     repo && Array.isArray(repo.queuedPrds) ? repo.queuedPrds : []
@@ -1820,6 +1819,163 @@ function formatProjectProgressPullRequestLabel(pullRequestStatus: PullRequestSum
     return `Open pull request #${number}`;
   }
   return 'Open active pull request';
+}
+
+function selectActivePullRequestStatusForPrdForClient(
+  activePrd: PrdSummary | null,
+  pullRequestStatuses: PullRequestSummary[] = [],
+  queuedPrds: PrdSummary[] = []
+) {
+  const prdPullRequestStatuses = selectPullRequestStatusesForPrdForClient(activePrd, pullRequestStatuses)
+    .filter((pullRequestStatus) => hasValidPullRequestUrlForClient(pullRequestStatus && pullRequestStatus.url));
+  if (!activePrd || prdPullRequestStatuses.length === 0) {
+    return null;
+  }
+
+  const currentStepId = resolvePrdRunStepForClient(activePrd, queuedPrds, prdPullRequestStatuses);
+  if (currentStepId !== 'implementing' && currentStepId !== 'reviewing') {
+    return null;
+  }
+
+  return prdPullRequestStatuses
+    .slice()
+    .sort((left, right) => compareActivePullRequestStatusesForClient(left, right, currentStepId))[0] || null;
+}
+
+function selectPullRequestStatusesForPrdForClient(
+  activePrd: PrdSummary | null,
+  pullRequestStatuses: PullRequestSummary[] = []
+) {
+  const prdId = String(activePrd && activePrd.id || '').trim();
+  if (!prdId) {
+    return [];
+  }
+  return (pullRequestStatuses || []).filter((prStatus) => pullRequestStatusMatchesPrdForClient(prStatus, prdId));
+}
+
+function resolvePrdRunStepForClient(
+  activePrd: PrdSummary | null,
+  queuedPrds: PrdSummary[] = [],
+  pullRequestStatuses: PullRequestSummary[] = []
+) {
+  if (!activePrd) {
+    return queuedPrds.length > 0 ? 'queued' : 'idle';
+  }
+  const status = String(activePrd.status || '');
+  if (status === 'planning') {
+    return 'planning';
+  }
+  if (status === 'completed') {
+    return 'finished';
+  }
+  if (status === 'failed') {
+    return Number(activePrd.plannedTaskCount || 0) > 0 ? 'implementing' : 'planning';
+  }
+  const plannedTaskCount = Number(activePrd.plannedTaskCount || 0);
+  const completedTaskCount = Number(activePrd.completedTaskCount || 0);
+  if (plannedTaskCount > 0 && completedTaskCount < plannedTaskCount) {
+    return 'implementing';
+  }
+  if (plannedTaskCount > 0 && completedTaskCount >= plannedTaskCount) {
+    return 'reviewing';
+  }
+  if (pullRequestStatuses.length > 0) {
+    return 'reviewing';
+  }
+  if (status === 'planned' || plannedTaskCount > 0) {
+    return 'implementing';
+  }
+  return 'planning';
+}
+
+function pullRequestStatusMatchesPrdForClient(prStatus: PullRequestSummary | null, prdId: string) {
+  const explicitPrdId = String(prStatus && prStatus.prdId || '').trim();
+  if (explicitPrdId) {
+    return explicitPrdId === prdId;
+  }
+
+  const prId = String(prStatus && prStatus.prId || '').trim();
+  const prdSlug = slugifyIdentifierForClient(prdId);
+  return Boolean(prdSlug && (prId === `pr-${prdSlug}` || prId.startsWith(`pr-${prdSlug}-`)));
+}
+
+function compareActivePullRequestStatusesForClient(
+  left: PullRequestSummary | null,
+  right: PullRequestSummary | null,
+  currentStepId: string
+) {
+  const leftRank = rankActivePullRequestStatusForClient(left, currentStepId);
+  const rightRank = rankActivePullRequestStatusForClient(right, currentStepId);
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  const leftTime = Date.parse(String(left && left.updatedAt || '')) || 0;
+  const rightTime = Date.parse(String(right && right.updatedAt || '')) || 0;
+  if (leftTime !== rightTime) {
+    return rightTime - leftTime;
+  }
+
+  const leftNumber = Number(left && left.number) || 0;
+  const rightNumber = Number(right && right.number) || 0;
+  if (leftNumber !== rightNumber) {
+    return rightNumber - leftNumber;
+  }
+
+  return String(left && left.prId || '').localeCompare(String(right && right.prId || ''));
+}
+
+function rankActivePullRequestStatusForClient(pullRequestStatus: PullRequestSummary | null, currentStepId: string) {
+  const kind = pullRequestStatusKindForClient(pullRequestStatus);
+  if (kind === 'review-active') {
+    return 0;
+  }
+  if (currentStepId === 'reviewing' && kind === 'merge-blocked') {
+    return 1;
+  }
+  if (currentStepId === 'reviewing' && kind === 'approved-waiting') {
+    return 2;
+  }
+  if (currentStepId === 'implementing' && kind === 'merge-blocked') {
+    return 3;
+  }
+  if (currentStepId === 'implementing' && kind === 'approved-waiting') {
+    return 4;
+  }
+  return 9;
+}
+
+function pullRequestStatusKindForClient(pullRequestStatus: PullRequestSummary | null) {
+  const statusLabel = String(pullRequestStatus && pullRequestStatus.statusLabel || '').toLowerCase();
+  const mergeState = String(pullRequestStatus && pullRequestStatus.mergeState || '').toLowerCase();
+  const status = String(pullRequestStatus && pullRequestStatus.status || '').toLowerCase();
+  if (statusLabel === 'blocked from merge' || mergeState === 'blocked') {
+    return 'merge-blocked';
+  }
+  if (statusLabel === 'approved waiting merge' || status === 'approved' || mergeState === 'waiting') {
+    return 'approved-waiting';
+  }
+  return 'review-active';
+}
+
+function hasValidPullRequestUrlForClient(value: unknown) {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) {
+    return false;
+  }
+  try {
+    const parsedUrl = new URL(rawValue);
+    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function slugifyIdentifierForClient(value: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function ProjectMainProgressActions(
