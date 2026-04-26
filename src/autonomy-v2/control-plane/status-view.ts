@@ -1,4 +1,5 @@
 import { extractPrdSourceChatMetadata } from './prd-source-chat.js';
+import type { PrdLinkedPullRequestSummary } from '../../types.js';
 
 const HEARTBEAT_ONLINE_MS = 15000;
 const HEARTBEAT_OFFLINE_MS = 45000;
@@ -103,6 +104,7 @@ function describePrd(prd: any) {
   }
 
   const sourceChat = extractPrdSourceChatMetadata(prd);
+  const pullRequest = normalizeLinkedPullRequest(prd && prd.pullRequest);
 
   return {
     id: String(prd && prd.id || ''),
@@ -145,8 +147,26 @@ function describePrd(prd: any) {
         actor: prd.archive.actor ? String(prd.archive.actor) : null,
       }
       : null,
+    ...(pullRequest ? { pullRequest } : {}),
     ...(sourceChat ? { sourceChat } : {}),
   };
+}
+
+function normalizeLinkedPullRequest(value: unknown): PrdLinkedPullRequestSummary | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as PrdLinkedPullRequestSummary;
+  const url = String(record.url || '').trim();
+  const number = Number(record.number);
+  const normalized: PrdLinkedPullRequestSummary = {};
+  if (Number.isFinite(number) && number > 0) {
+    normalized.number = number;
+  }
+  if (url) {
+    normalized.url = url;
+  }
+  return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
 function extractStructuredPrdContent(prd: any) {

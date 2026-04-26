@@ -25,6 +25,7 @@ function buildStatusSnapshot(rootDir) {
   });
   const prdHistory = loadTrackedPrdHistory(rootDir, config, {
     prds,
+    prs,
   });
   const taskCounts = countBy(listTasks(taskQueues), 'status');
   const prCounts = countBy(prs.pullRequests, 'status');

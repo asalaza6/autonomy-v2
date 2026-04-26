@@ -64,6 +64,73 @@ function isMergedPullRequest(pr) {
   return isPullRequestResolved(pr);
 }
 
+function hasValidPullRequestUrl(value) {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) {
+    return false;
+  }
+  try {
+    const parsedUrl = new URL(rawValue);
+    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function compareLinkedPullRequests(left, right) {
+  const leftMergedAt = Date.parse(String(left && left.remote && (left.remote.mergedAt || left.remote.merged_at) || '')) || 0;
+  const rightMergedAt = Date.parse(String(right && right.remote && (right.remote.mergedAt || right.remote.merged_at) || '')) || 0;
+  if (leftMergedAt !== rightMergedAt) {
+    return rightMergedAt - leftMergedAt;
+  }
+
+  const leftUpdatedAt = Date.parse(String(left && left.updatedAt || left && left.createdAt || '')) || 0;
+  const rightUpdatedAt = Date.parse(String(right && right.updatedAt || right && right.createdAt || '')) || 0;
+  if (leftUpdatedAt !== rightUpdatedAt) {
+    return rightUpdatedAt - leftUpdatedAt;
+  }
+
+  const leftNumber = Number(left && left.remote && left.remote.number) || 0;
+  const rightNumber = Number(right && right.remote && right.remote.number) || 0;
+  if (leftNumber !== rightNumber) {
+    return rightNumber - leftNumber;
+  }
+
+  return String(left && left.id || '').localeCompare(String(right && right.id || ''));
+}
+
+function selectLinkedPullRequestSummary(linkedPullRequests = []) {
+  const bestPullRequest = (linkedPullRequests || [])
+    .filter((pr) => {
+      const remote = pr && pr.remote;
+      return Boolean(
+        remote
+        && (
+          Number(remote.number) > 0
+          || hasValidPullRequestUrl(remote.url)
+          || hasValidPullRequestUrl(remote.html_url)
+        )
+      );
+    })
+    .slice()
+    .sort(compareLinkedPullRequests)[0] || null;
+  if (!bestPullRequest) {
+    return null;
+  }
+
+  const remote = bestPullRequest.remote || {};
+  const url = hasValidPullRequestUrl(remote.url)
+    ? String(remote.url).trim()
+    : hasValidPullRequestUrl(remote.html_url)
+      ? String(remote.html_url).trim()
+      : null;
+  const number = Number(remote.number);
+  return {
+    number: Number.isFinite(number) && number > 0 ? number : null,
+    url,
+  };
+}
+
 function isActiveLinkedPullRequest(pr, linkedTasks) {
   if (!isPullRequestActive(pr)) {
     return false;
@@ -186,23 +253,42 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
 }
 
 function loadTrackedPrdHistory(rootDir: string, config: AutonomyConfig, options: AnyRecord = {}): { prds: TrackedPrdRecord[] } {
+  const prs = (options.prs as PrState) || readJson<PrState>(getAutonomyPaths(rootDir).prsState);
+  const prsByPrdId = new Map<string, any[]>();
+  ((prs && prs.pullRequests) || []).forEach((pr) => {
+    const prdId = String(pr && pr.prdId || '').trim();
+    if (!prdId) {
+      return;
+    }
+    const pullRequests = prsByPrdId.get(prdId) || [];
+    pullRequests.push(pr);
+    prsByPrdId.set(prdId, pullRequests);
+  });
   const activePrds = ((options.prds && Array.isArray(options.prds.prds)) ? options.prds.prds : [])
     .filter((prd) => prd && String(prd.status || '') === 'completed')
-    .map((prd) => ({
-      ...prd,
-      status: 'completed',
+    .map((prd) => {
+      const pullRequest = selectLinkedPullRequestSummary(prsByPrdId.get(String(prd && prd.id || '').trim()) || []);
+      return {
+        ...prd,
+        status: 'completed',
+        isQueued: false,
+        ...(pullRequest ? { pullRequest } : {}),
+      };
+    });
+  const archivedPrds = listArchivedPrdSpecs(rootDir, config.integrationBranch).map((entry) => {
+    const pullRequest = selectLinkedPullRequestSummary(prsByPrdId.get(String(entry.spec && entry.spec.id || '').trim()) || []);
+    return {
+      ...entry.spec,
       isQueued: false,
-    }));
-  const archivedPrds = listArchivedPrdSpecs(rootDir, config.integrationBranch).map((entry) => ({
-    ...entry.spec,
-    isQueued: false,
-    status: String(entry.spec && entry.spec.archive && entry.spec.archive.kind || '').trim() === 'reset'
-      ? 'reset'
-      : 'completed',
-    updatedAt: String(entry.spec && entry.spec.archive && entry.spec.archive.archivedAt || entry.spec.createdAt),
-    archived: true,
-    archivePath: entry.relativePath,
-  }));
+      status: String(entry.spec && entry.spec.archive && entry.spec.archive.kind || '').trim() === 'reset'
+        ? 'reset'
+        : 'completed',
+      updatedAt: String(entry.spec && entry.spec.archive && entry.spec.archive.archivedAt || entry.spec.createdAt),
+      archived: true,
+      archivePath: entry.relativePath,
+      ...(pullRequest ? { pullRequest } : {}),
+    };
+  });
   const historyById = new Map<string, TrackedPrdRecord>();
   [...activePrds, ...archivedPrds].forEach((prd) => {
     if (!prd || !prd.id || historyById.has(prd.id)) {

@@ -10,7 +10,11 @@ import {
   getPrdProposalStableKey,
   normalizePrdProposal,
 } from './control-plane-prd-proposal.js';
-import type { ControlPlanePrdProposal, ControlPlanePrdSourceChat } from '../../types.js';
+import type {
+  ControlPlanePrdProposal,
+  ControlPlanePrdSourceChat,
+  PrdLinkedPullRequestSummary,
+} from '../../types.js';
 
 declare global {
   interface Window {
@@ -49,10 +53,12 @@ type PrdSummary = {
   updatedAt?: string | null;
   archived?: boolean;
   archivePath?: string | null;
+  pullRequest?: PrdPullRequestSummary | null;
   sourceChat?: PrdSourceChatSummary | null;
 };
 
 type PrdSourceChatSummary = ControlPlanePrdSourceChat;
+type PrdPullRequestSummary = PrdLinkedPullRequestSummary;
 
 type PrdTaskSummary = {
   id?: string;
@@ -1546,6 +1552,22 @@ function normalizePrdSourceChatSummary(value: unknown): PrdSourceChatSummary | n
   return Object.keys(normalized).length > 0 ? normalized : null;
 }
 
+function normalizePrdPullRequestSummary(value: unknown): PrdPullRequestSummary | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as PrdPullRequestSummary;
+  const url = String(record.url || '').trim();
+  const number = Number(record.number);
+  if (!hasValidPullRequestUrlForClient(url)) {
+    return null;
+  }
+  return {
+    url,
+    ...(Number.isFinite(number) && number > 0 ? { number } : {}),
+  };
+}
+
 function renderChat(conversations: ChatConversationSummary[]) {
   if (
     entranceContext.entrance !== 'project'
@@ -2127,6 +2149,7 @@ function PrdHistoryDetail({
   const requirements = Array.isArray(prd.requirements) ? prd.requirements.filter(Boolean) : [];
   const tasks = Array.isArray(prd.tasks) ? prd.tasks : [];
   const sourceChat = normalizePrdSourceChatSummary(prd.sourceChat);
+  const pullRequest = normalizePrdPullRequestSummary(prd.pullRequest);
   const sourceChatDetail = sourceChat ? [
     sourceChat.repoId ? `Repo ${sourceChat.repoId}` : '',
     sourceChat.conversationId ? `Conversation ${sourceChat.conversationId}` : '',
@@ -2167,6 +2190,23 @@ function PrdHistoryDetail({
           {continueChatMessage ? (
             <div className="list-note" role="status">{continueChatMessage}</div>
           ) : null}
+        </div>
+      ) : null}
+      {pullRequest ? (
+        <div className="history-block">
+          <h4>Pull Request</h4>
+          <div className="history-actions">
+            <a
+              className="action-link"
+              href={pullRequest.url || ''}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {Number.isFinite(Number(pullRequest.number)) && Number(pullRequest.number) > 0
+                ? `Open pull request #${Number(pullRequest.number)}`
+                : 'Open pull request'}
+            </a>
+          </div>
         </div>
       ) : null}
       {prd.specification ? (
