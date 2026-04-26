@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -1415,6 +1414,30 @@
       "completedAt": "2026-04-26T07:54:04.791Z",
       "completionMode": "code",
       "commitSha": "fd408bd57307f1e0822218c585a5552672c8e728"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement Add dedicated chat PRD review popup before submission",
+      "description": "Found a blocking regression in the new review flow. `npm run typecheck` passed, but the PR is not safe to merge yet.\n`src/server/control-plane/control-plane-client.tsx:702` rebuilds `activeChatPrdDraft` from the original proposal every time the review button is clicked, and `src/server/control-plane/control-plane-client.tsx:1941` now leaves that button enabled as `Resume review`. That means a manager can edit the preserved draft, close the popup, then click `Resume review` and silently lose those edits because the form and localStorage are overwritten with a fresh draft. This breaks the acceptance requirement to preserve the draft for later review. Update the resume path to reopen the existing active draft when the proposal key matches, and add a focused test covering edit -> close/back -> resume without losing changes.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-dedicated-chat-prd-882bd5",
+      "laneKey": "prd-add-dedicated-chat-prd-882bd5:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Found a blocking regression in the new review flow. `npm run typecheck` passed, but the PR is not safe to merge yet.\n`src/server/control-plane/control-plane-client.tsx:702` rebuilds `activeChatPrdDraft` from the original proposal every time the review button is clicked, and `src/server/control-plane/control-plane-client.tsx:1941` now leaves that button enabled as `Resume review`. That means a manager can edit the preserved draft, close the popup, then click `Resume review` and silently lose those edits because the form and localStorage are overwritten with a fresh draft. This breaks the acceptance requirement to preserve the draft for later review. Update the resume path to reopen the existing active draft when the proposal key matches, and add a focused test covering edit -> close/back -> resume without losing changes."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-dedicated-chat-prd-882bd5-architecture-agent",
+      "createdAt": "2026-04-26T07:55:34.557Z",
+      "updatedAt": "2026-04-26T07:55:34.557Z",
+      "startedAt": "2026-04-26T07:55:34.557Z",
+      "prId": "pr-prd-add-dedicated-chat-prd-882bd5-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
