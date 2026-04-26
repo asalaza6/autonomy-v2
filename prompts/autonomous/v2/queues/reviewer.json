@@ -925,13 +925,13 @@
         "Cannot approve for merge into `dev`. `origin/dev` is available and the branch is in scope, but merge-blocking verification is incomplete: `npm run lint` fails, and there is no evidence the focused control-plane/sync test targets added for this high-risk status-reconciliation change were executed.\n`npm run lint` is failing, which is a merge blocker. In [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:129) and [src/sync/review-reconciliation.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/src/sync/review-reconciliation.ts:133), `isPullRequestMerged` and `isPullRequestClosed` are defined but unused. Remove them or use them so the lane can pass repo-level lint before review can approve.\nThis PR changes high-risk control-plane/sync behavior and adds targeted coverage in [tests/unit/review-reconciliation.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/review-reconciliation.test.ts:1) and [tests/unit/control-plane-status.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-make-control-plane-pr-and-027e4d-architecture-agent/tests/unit/control-plane-status.test.ts:304), but the provided deterministic results only show `npm run typecheck` and a failing lint run. Re-run and report the relevant focused unit/control-plane test targets for the new reconciliation and status-snapshot scenarios before this is safe to merge.\nBlocking checks failed: npm run lint"
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-26T22:46:25.731Z",
       "updatedAt": "2026-04-26T22:49:00.478Z",
       "reviewedAt": "2026-04-26T22:47:43.126Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-26T22:46:29.257Z",
+      "dispatchedAt": "2026-04-26T22:49:02.299Z",
       "scopeViolations": []
     }
   ]
