@@ -13,6 +13,7 @@ import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../t
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import type { ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
 import { loadControlPlaneLifecycle, validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
+import { prepareManagedProcessOutput } from './control-plane-process-output.js';
 import { getManagedProcesses } from './control-plane-store.js';
 import { runDefaultControlPlaneRestart, type DefaultRestartHelperPlan } from './control-plane-restart-helper.js';
 
@@ -36,6 +37,8 @@ interface NormalizedControlPlaneCommandConfig {
 interface ConfiguredDeferredRestartCommand {
   mode: 'configured';
   target: RestartTarget;
+  rootDir: string;
+  repoId?: string;
   commandConfig: NormalizedControlPlaneCommandConfig;
   existingPid?: number | null;
 }
@@ -58,6 +61,7 @@ interface DeferredRestartLaunchResult {
   status: 'launched' | 'failed';
   targets?: RestartTarget[];
   postRestartPid?: number | null;
+  outputSessionId?: string;
   completedAt: string;
   error?: string;
 }
@@ -361,6 +365,7 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
     'controlBridge',
     config.controlBridgeRestartCommand,
     managedProcesses.controlBridge || null,
+    context,
   );
   const controlBridge = controlBridgePlan.status;
   const serverPlan = prepareRestartTarget(
@@ -368,6 +373,7 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
     'server',
     config.serverRestartCommand,
     managedProcesses.server || null,
+    context,
   );
   const server = serverPlan.status;
   const targetStatuses = [controlBridge.status, server.status];
@@ -391,6 +397,9 @@ function prepareRestartTarget(
   target: RestartTarget,
   value: DeployCommandConfig | null | undefined,
   managedProcess: { pid?: number | null; running?: boolean } | null = null,
+  context: {
+    repoId?: string;
+  } = {},
 ) {
   const lifecycleMetadata = readLifecycleMetadata(rootDir, target);
   const managedPid = normalizeManagedPid(managedProcess?.pid);
@@ -434,6 +443,8 @@ function prepareRestartTarget(
       configuredCommand: {
         mode: 'configured' as const,
         target,
+        rootDir,
+        repoId: String(context.repoId || '').trim() || undefined,
         commandConfig,
         existingPid: activeManagedPid,
       },
@@ -570,6 +581,7 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
   }
 
   const { target, commandConfig, existingPid } = deferredCommand;
+  const repoId = String(deferredCommand.repoId || '').trim();
   const base = {
     target,
     mode: 'configured' as const,
@@ -600,6 +612,12 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
       }
 
       let child: ReturnType<typeof spawn>;
+      const outputCapture = repoId
+        ? prepareManagedProcessOutput(deferredCommand.rootDir, repoId, target, {
+          command: commandConfig.displayCommand,
+          cwd: commandConfig.cwd,
+        })
+        : null;
       try {
         child = spawn(commandConfig.command, commandConfig.args, {
           cwd: commandConfig.cwd,
@@ -609,9 +627,10 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
             ...commandConfig.env,
           },
           shell: commandConfig.shell,
-          stdio: 'ignore',
+          stdio: outputCapture ? outputCapture.stdio : 'ignore',
         });
       } catch (error) {
+        outputCapture?.close();
         settle({
           ...base,
           status: 'failed',
@@ -622,6 +641,7 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
         return;
       }
       child.once('spawn', () => {
+        outputCapture?.close();
         void waitForManagedRestartReadiness(child, MANAGED_RESTART_READY_TIMEOUT_MS).then((outcome) => {
           if (outcome.status === 'launched') {
             child.unref();
@@ -629,16 +649,19 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
           settle({
             ...base,
             ...outcome,
+            outputSessionId: outputCapture?.outputSessionId,
           });
         });
       });
       child.once('error', (error) => {
+        outputCapture?.close();
         settle({
           ...base,
           status: 'failed',
           postRestartPid: child.pid || null,
           completedAt: new Date().toISOString(),
           error: error.message,
+          outputSessionId: outputCapture?.outputSessionId,
         });
       });
     });

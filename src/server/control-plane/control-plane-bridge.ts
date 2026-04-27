@@ -123,6 +123,9 @@ function mergeDeferredRestartLaunchResults(
       postRestartPid,
       completedAt: launchResult.completedAt,
     };
+    if (launchResult.outputSessionId) {
+      nextTarget.outputSessionId = launchResult.outputSessionId;
+    }
     if (launchResult.error) {
       nextTarget.error = launchResult.error;
     } else {
@@ -177,6 +180,7 @@ type DeferredLaunchResult = {
     status: 'launched' | 'failed';
     completedAt: string;
     postRestartPid?: number | null;
+    outputSessionId?: string;
     targets?: Array<'server' | 'controlBridge'>;
     error?: string;
 };

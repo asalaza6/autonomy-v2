@@ -192,6 +192,18 @@ type ControlPlaneHeartbeatSummary = {
   bridge?: HeartbeatSummary;
 };
 
+type ProcessOutputSummary = {
+  repoId?: string;
+  target?: 'server' | 'controlBridge';
+  outputSessionId?: string | null;
+  pid?: number | null;
+  running?: boolean;
+  available?: boolean;
+  truncated?: boolean;
+  updatedAt?: string | null;
+  content?: string;
+};
+
 type RepoSummary = {
   repoId?: string;
   label?: string;
@@ -215,6 +227,15 @@ type RepoSummary = {
     pid?: number | null;
     running?: boolean;
     singletonOutcome?: string;
+    command?: string | null;
+    cwd?: string | null;
+    requestedBySessionId?: string | null;
+    requestedBySessionLabel?: string | null;
+    exitReason?: string | null;
+    error?: string | null;
+    preRestartPid?: number | null;
+    postRestartPid?: number | null;
+    replacementOfPid?: number | null;
     requestedAt?: string | null;
     startedAt?: string | null;
     completedAt?: string | null;
@@ -233,6 +254,8 @@ type RepoSummary = {
       sessionLabel?: string | null;
       claimedAt?: string;
       lastSeenAt?: string;
+      takeoverAt?: string | null;
+      takeoverCount?: number;
     } | null;
   } | null;
   repoAssistant?: {
@@ -359,6 +382,9 @@ const mainProgressFillEl = document.getElementById('main-progress-fill');
 const mainProgressStepsEl = document.getElementById('main-progress-steps');
 const mainProgressActionsEl = document.getElementById('main-progress-actions');
 const mainDeployActionsEl = document.getElementById('main-deploy-actions');
+const mainProcessSummaryEl = document.getElementById('main-process-summary');
+const mainProcessControlsEl = document.getElementById('main-process-controls');
+const mainProcessPanelEl = document.getElementById('main-process-panel');
 const mainQueuedPrdSummaryEl = document.getElementById('main-queued-prd-summary');
 const mainQueuedPrdListEl = document.getElementById('main-queued-prd-list');
 const mainQueuedPrdDetailEl = document.getElementById('main-queued-prd-detail');
@@ -415,6 +441,9 @@ let forceChatScrollToLatest = false;
 let chatJumpLatestVisible = false;
 let lastRenderedChatConversationId = '';
 let lastRenderedChatFingerprint = '';
+let latestProcessOutputByKey: Record<string, ProcessOutputSummary> = {};
+let activeProcessTargetsByRepo: Record<string, 'server' | 'controlBridge'> = {};
+let pendingProcessPanelFocus: { repoId: string; target: 'server' | 'controlBridge' } | null = null;
 
 function mountControlPlane() {
   if (
@@ -540,6 +569,36 @@ function mountControlPlane() {
           messageEl.textContent = getErrorMessage(error);
         }
       });
+      return;
+    }
+
+    const takeoverButton = target ? target.closest<HTMLButtonElement>('[data-action="takeover-control"]') : null;
+    if (takeoverButton) {
+      const repoId = String(takeoverButton.dataset.repoId || '').trim();
+      if (!repoId) {
+        return;
+      }
+      handleTakeover(repoId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
+    const processTargetButton = target ? target.closest<HTMLButtonElement>('[data-action="select-process-target"]') : null;
+    if (processTargetButton) {
+      const repoId = String(processTargetButton.dataset.repoId || '').trim();
+      const selectedTarget = String(processTargetButton.dataset.target || '').trim();
+      if (!repoId || (selectedTarget !== 'server' && selectedTarget !== 'controlBridge')) {
+        return;
+      }
+      activeProcessTargetsByRepo = {
+        ...activeProcessTargetsByRepo,
+        [repoId]: selectedTarget,
+      };
+      renderDashboard(latestDashboard);
+      renderProjectMain(latestDashboard);
       return;
     }
 
@@ -751,10 +810,46 @@ async function refresh() {
   renderProjectMain(state.dashboard || {});
   renderChat(extractRepoConversations(state));
   renderAdvanced(state);
+  await refreshManagedProcessOutputs(state.dashboard || {});
 
   if (lastUpdatedEl) {
     lastUpdatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
+}
+
+async function refreshManagedProcessOutputs(dashboard: DashboardSummary) {
+  const repos = Array.isArray(dashboard.repos) ? dashboard.repos : [];
+  const targets = repos.flatMap((repo) => listManagedProcessTargets(repo).map((target) => ({
+    repoId: String(repo.repoId || '').trim(),
+    target,
+  })));
+  if (targets.length === 0) {
+    latestProcessOutputByKey = {};
+    return;
+  }
+
+  const nextEntries = await Promise.all(targets.map(async ({ repoId, target }) => {
+    try {
+      const output = await requestJson<ProcessOutputSummary>(
+        `/api/repos/${encodeURIComponent(repoId)}/processes/${encodeURIComponent(target)}/output`
+      );
+      return [[buildProcessOutputKey(repoId, target), output] as const];
+    } catch {
+      return [[buildProcessOutputKey(repoId, target), {
+        repoId,
+        target,
+        available: false,
+        content: '',
+        truncated: false,
+        updatedAt: null,
+      } satisfies ProcessOutputSummary] as const];
+    }
+  }));
+
+  latestProcessOutputByKey = Object.fromEntries(nextEntries.flat());
+  renderDashboard(latestDashboard);
+  renderProjectMain(latestDashboard);
+  focusPendingProcessPanel();
 }
 
 async function submitPrd({
@@ -1245,20 +1340,54 @@ async function handleRestart(repoId: string) {
     return;
   }
 
+  const repo = findRepoSummary(repoId);
+  const focusTarget = resolvePreferredProcessTarget(repo);
+  queueProcessPanelFocus(repoId, focusTarget);
+  if (entranceContext.entrance === 'project') {
+    setActiveTab('main');
+  }
   restartingRepoIds = new Set(restartingRepoIds).add(repoId);
   if (messageEl) {
     messageEl.textContent = `Queueing restart for ${repoId}...`;
   }
 
   try {
-    await requestJson(`/api/repos/${encodeURIComponent(repoId)}/restart`, {
-      method: 'POST',
-      body: JSON.stringify({ repoId }),
-    });
+    await requestControlAction(`/api/repos/${encodeURIComponent(repoId)}/restart`, { repoId });
     await refresh();
     if (messageEl) {
-      messageEl.textContent = `Restart queued for ${repoId}.`;
+      messageEl.textContent = `Restart queued for ${repoId}. Live process output is now focused below.`;
     }
+  } catch (error) {
+    await refresh().catch(() => {});
+    throw error;
+  } finally {
+    const next = new Set(restartingRepoIds);
+    next.delete(repoId);
+    restartingRepoIds = next;
+  }
+}
+
+async function handleTakeover(repoId: string) {
+  if (!repoId || restartingRepoIds.has(repoId)) {
+    return;
+  }
+  const repo = findRepoSummary(repoId);
+  const focusTarget = resolvePreferredProcessTarget(repo);
+  queueProcessPanelFocus(repoId, focusTarget);
+  restartingRepoIds = new Set(restartingRepoIds).add(repoId);
+  if (messageEl) {
+    messageEl.textContent = `Taking over controls for ${repoId}...`;
+  }
+
+  try {
+    await requestControlAction(`/api/repos/${encodeURIComponent(repoId)}/control/takeover`, { repoId });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `Control takeover succeeded for ${repoId}. Lifecycle actions are enabled for this session.`;
+    }
+  } catch (error) {
+    await refresh().catch(() => {});
+    throw error;
   } finally {
     const next = new Set(restartingRepoIds);
     next.delete(repoId);
@@ -1329,6 +1458,76 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+async function requestControlAction<T>(url: string, body: Record<string, unknown>) {
+  const controlSession = getControlSession();
+  const response = await fetch(resolveApiUrl(url), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-autonomy-control-session-id': controlSession.sessionId,
+      'x-autonomy-control-session-label': controlSession.sessionLabel,
+    },
+    body: JSON.stringify(body),
+  });
+  const raw = await response.text();
+  const payload = raw ? safeParseJson(raw) : null;
+
+  if (!response.ok) {
+    const message = extractControlActionErrorMessage(payload, raw, response.statusText);
+    const error = new Error(message) as Error & { payload?: unknown; status?: number };
+    error.payload = payload;
+    error.status = response.status;
+    throw error;
+  }
+
+  return (payload || {}) as T;
+}
+
+function safeParseJson(raw: string) {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function extractControlActionErrorMessage(payload: unknown, raw: string, fallback: string) {
+  const controlAccessMessage = describeControlActionAccessError(payload);
+  if (controlAccessMessage) {
+    return controlAccessMessage;
+  }
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const message = String((payload as { error?: unknown }).error || '').trim();
+    if (message) {
+      return message;
+    }
+  }
+  return String(raw || fallback || 'Request failed.').trim();
+}
+
+function describeControlActionAccessError(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return '';
+  }
+  const response = payload as {
+    error?: unknown;
+    controlAccess?: RepoSummary['controlAccess'];
+  };
+  const errorText = String(response.error || '').trim();
+  const access = response.controlAccess || null;
+  if (!access) {
+    return '';
+  }
+  const accessMessage = describeControlAccessMessage(access);
+  const ownerLabel = formatControlOwnerLabel(access.owner || null);
+  const messageParts = [
+    errorText || 'Lifecycle controls are unavailable for this session.',
+    accessMessage,
+    ownerLabel ? `Owner ${ownerLabel}.` : '',
+  ].filter(Boolean);
+  return messageParts.join(' ').trim();
 }
 
 async function checkForUiReload() {
@@ -1455,6 +1654,15 @@ function renderProjectMain(dashboard: DashboardSummary) {
   if (mainDeployActionsEl) {
     mainDeployActionsEl.innerHTML = renderToHtml(<ProjectMainDeployActions repo={repo} />);
   }
+  if (mainProcessSummaryEl) {
+    mainProcessSummaryEl.textContent = buildMainProcessSummary(repo);
+  }
+  if (mainProcessControlsEl) {
+    mainProcessControlsEl.innerHTML = renderToHtml(<RepoLifecycleControls repo={repo} compact />);
+  }
+  if (mainProcessPanelEl) {
+    mainProcessPanelEl.innerHTML = renderToHtml(<LiveProcessPanel repo={repo} context="project" />);
+  }
   if (mainQueuedPrdSummaryEl && mainQueuedPrdListEl && mainQueuedPrdDetailEl) {
     const queuedPrds = repo && Array.isArray(repo.queuedPrds) ? repo.queuedPrds : [];
     const queuedSelection = resolveSelectedQueuedPrdState(queuedPrds, selectedQueuedPrdId);
@@ -1513,6 +1721,66 @@ function findHistoryPrdById(dashboard: DashboardSummary, prdId: string) {
 
 function findRepoSummary(repoId: string) {
   return (latestDashboard.repos || []).find((entry) => String(entry && entry.repoId || '').trim() === repoId) || null;
+}
+
+function buildProcessOutputKey(repoId: string, target: 'server' | 'controlBridge') {
+  return `${repoId}:${target}`;
+}
+
+function listManagedProcessTargets(repo: RepoSummary | null) {
+  const managedTargets = Object.keys(repo && repo.managedProcesses || {})
+    .filter((target): target is 'server' | 'controlBridge' => target === 'server' || target === 'controlBridge');
+  return (['server', 'controlBridge'] as const).filter((target) => managedTargets.includes(target));
+}
+
+function resolvePreferredProcessTarget(repo: RepoSummary | null): 'server' | 'controlBridge' {
+  const repoId = String(repo && repo.repoId || '').trim();
+  const selected = repoId ? activeProcessTargetsByRepo[repoId] : undefined;
+  if (selected === 'server' || selected === 'controlBridge') {
+    return selected;
+  }
+  const targets = listManagedProcessTargets(repo);
+  if (targets.includes('server')) {
+    return 'server';
+  }
+  return targets[0] || 'server';
+}
+
+function queueProcessPanelFocus(repoId: string, target: 'server' | 'controlBridge') {
+  activeProcessTargetsByRepo = {
+    ...activeProcessTargetsByRepo,
+    [repoId]: target,
+  };
+  pendingProcessPanelFocus = { repoId, target };
+}
+
+function focusPendingProcessPanel() {
+  if (!pendingProcessPanelFocus || typeof document === 'undefined') {
+    return;
+  }
+  const { repoId, target } = pendingProcessPanelFocus;
+  const panel = document.getElementById(`process-view-${repoId}-${target}`);
+  if (!panel) {
+    return;
+  }
+  panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  pendingProcessPanelFocus = null;
+}
+
+function setLiveProcessPanelTestState(options: {
+  dashboard?: DashboardSummary;
+  outputs?: Record<string, ProcessOutputSummary>;
+  activeTargets?: Record<string, 'server' | 'controlBridge'>;
+  pendingFocus?: { repoId: string; target: 'server' | 'controlBridge' } | null;
+} = {}) {
+  latestDashboard = options.dashboard || {};
+  latestProcessOutputByKey = options.outputs || {};
+  activeProcessTargetsByRepo = options.activeTargets || {};
+  pendingProcessPanelFocus = typeof options.pendingFocus === 'undefined' ? null : options.pendingFocus;
+}
+
+function getManagedProcessOutput(repoId: string, target: 'server' | 'controlBridge') {
+  return latestProcessOutputByKey[buildProcessOutputKey(repoId, target)] || null;
 }
 
 function resolveSelectedHistoryState(history: PrdSummary[], selectedPrdId: string, preferredPrdId: string) {
@@ -2933,6 +3201,9 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
         <RepoSection title="Restart">
           <ManagerRestartSummary repo={repo} restartEvidence={restartEvidence} />
         </RepoSection>
+        <RepoSection title="Live Process">
+          <LiveProcessPanel repo={repo} context="manager" />
+        </RepoSection>
         <RepoSection title="Deployment">
           <div className={`status-chip ${statusClass(deployment && deployment.status)}`}>
             <span className="status-dot" />
@@ -3004,8 +3275,8 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
           <PackageStatus packageStatus={repo.packageStatus || null} />
           <PackageUpdateButton repo={repo} />
         </RepoSection>
-        <RepoSection title="Restart Evidence">
-          <ProjectRestartPanel repo={repo} restartEvidence={restartEvidence} />
+        <RepoSection title="Live Process">
+          <LiveProcessPanel repo={repo} context="project" />
         </RepoSection>
         <RepoSection title="Deployment">
           <div className="queued-prd">
@@ -3196,6 +3467,232 @@ function ProjectRestartPanel({
   );
 }
 
+function LiveProcessPanel({
+  repo,
+  context,
+}: {
+  repo: RepoSummary | null;
+  context: 'manager' | 'project';
+}) {
+  if (!repo || !repo.repoId) {
+    return <div className="list-note">No repo selected.</div>;
+  }
+  const repoId = String(repo.repoId || '').trim();
+  const targets = listManagedProcessTargets(repo);
+  const selectedTarget = resolvePreferredProcessTarget(repo);
+  const process = repo.managedProcesses && repo.managedProcesses[selectedTarget]
+    ? repo.managedProcesses[selectedTarget]
+    : null;
+  const output = getManagedProcessOutput(repoId, selectedTarget);
+  const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
+  const targetEvidence = findRestartEvidenceTarget(restartEvidence, selectedTarget);
+  const access = repo.controlAccess || null;
+  const ownerLabel = formatControlOwnerLabel(access && access.owner ? access.owner : null);
+  const accessMessage = describeControlAccessMessage(access);
+  const singletonMessage = describeSingletonOutcome(process);
+
+  if (targets.length === 0) {
+    return (
+      <div className="queued-prd">
+        <div className="queue-detail">No managed process has been observed yet. Restart services to create a live target session.</div>
+        <RepoLifecycleControls repo={repo} />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`queued-prd live-process-card${pendingProcessPanelFocus && pendingProcessPanelFocus.repoId === repoId ? ' process-focus-pending' : ''}`}>
+      <div className="item-head">
+        <div>
+          <div className={`status-chip ${statusClass(process && process.running === false ? 'offline' : 'online')}`}>
+            <span className="status-dot" />
+            <span>{process && process.running === false ? 'Stopped' : 'Running or launching'}</span>
+          </div>
+          <div className="queue-title" id={`process-view-${repoId}-${selectedTarget}`}>Live {selectedTarget === 'controlBridge' ? 'bridge' : selectedTarget} process</div>
+        </div>
+        {process && process.completedAt ? <span className="pill">{formatTimestamp(process.completedAt)}</span> : null}
+      </div>
+      {targets.length > 1 ? (
+        <div className="repo-actions">
+          {targets.map((target) => (
+            <button
+              type="button"
+              className={`secondary process-target-button${target === selectedTarget ? ' selected' : ''}`}
+              data-action="select-process-target"
+              data-repo-id={repoId}
+              data-target={target}
+              aria-pressed={target === selectedTarget ? 'true' : 'false'}
+            >
+              {target === 'controlBridge' ? 'Bridge' : 'Server'}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <div className="queue-detail">
+        PID {formatPidValue(process && process.pid)} | state {process && process.running === false ? 'stopped' : 'running'}
+        {singletonMessage ? ` | ${singletonMessage}` : ''}
+      </div>
+      {targetEvidence ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          Restart evidence: {buildTargetLifecycleLabel(targetEvidence)}
+          {targetEvidence.pidChanged === true ? ' | pid changed' : targetEvidence.pidChanged === false ? ' | pid unchanged' : ''}
+        </div>
+      ) : process && (process.preRestartPid || process.postRestartPid) ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          Restart evidence: {selectedTarget} pid {formatPidValue(process.preRestartPid)} -&gt; {formatPidValue(process.postRestartPid ?? process.pid)}
+        </div>
+      ) : null}
+      {process && (process.command || process.cwd) ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          {process.command ? `command ${process.command}` : ''}
+          {process.command && process.cwd ? ' | ' : ''}
+          {process.cwd ? `cwd ${process.cwd}` : ''}
+        </div>
+      ) : null}
+      {process && (process.error || process.exitReason) ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          {process.error || process.exitReason}
+        </div>
+      ) : null}
+      {accessMessage ? (
+        <div className={`list-note${access && access.readOnly ? ' control-read-only-note' : ''}`} style={{ marginTop: '8px' }}>
+          {accessMessage}
+          {ownerLabel ? ` | owner ${ownerLabel}` : ''}
+        </div>
+      ) : null}
+      {context === 'manager' ? <RepoLifecycleControls repo={repo} /> : null}
+      <div className="history-block" style={{ marginTop: '12px' }}>
+        <h4>Live Output</h4>
+        {output && output.available ? (
+          <>
+            <div className="queue-detail">
+              {output.updatedAt ? `Updated ${formatTimestamp(output.updatedAt)}` : 'Output captured'}
+              {output.truncated ? ' | showing recent output only' : ''}
+            </div>
+            <pre className="process-output">{String(output.content || '').trim() || 'No stdout or stderr captured yet.'}</pre>
+          </>
+        ) : (
+          <div className="list-note">No managed output is available yet for this target.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RepoLifecycleControls({ repo, compact = false }: { repo: RepoSummary | null; compact?: boolean }) {
+  const updateState = buildPackageUpdateButtonState(repo);
+  const restartState = buildRestartButtonState(repo);
+  const access = repo && repo.controlAccess ? repo.controlAccess : null;
+  const disabledForOwnership = Boolean(access && access.canManage === false);
+  const canTakeOver = Boolean(access && access.readOnly && access.takeoverPolicy === 'takeover');
+  if (!repo || !repo.repoId) {
+    return null;
+  }
+  return (
+    <div className="repo-actions" style={{ marginTop: compact ? '0' : '12px' }}>
+      {!compact ? (
+        <button
+          type="button"
+          className={`secondary deploy-button${updateState.busy ? ' is-loading' : ''}`}
+          data-action="package-update"
+          data-repo-id={repo.repoId || ''}
+          disabled={updateState.disabled || disabledForOwnership}
+          aria-busy={updateState.busy}
+        >
+          {updateState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+          <span>{updateState.label}</span>
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className={`secondary deploy-button${restartState.busy ? ' is-loading' : ''}`}
+        data-action="restart"
+        data-repo-id={repo.repoId || ''}
+        disabled={restartState.disabled || disabledForOwnership}
+        aria-busy={restartState.busy}
+      >
+        {restartState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+        <span>{restartState.label}</span>
+      </button>
+      {canTakeOver ? (
+        <button
+          type="button"
+          className="secondary"
+          data-action="takeover-control"
+          data-repo-id={repo.repoId || ''}
+        >
+          Take over controls
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function findRestartEvidenceTarget(restartEvidence: RestartEvidenceSummary | null, target: 'server' | 'controlBridge') {
+  const targets = Array.isArray(restartEvidence && restartEvidence.targets) ? restartEvidence!.targets : [];
+  return targets.find((entry) => String(entry && entry.target || '').trim() === target) || null;
+}
+
+function describeSingletonOutcome(process: RepoSummary['managedProcesses'][string] | null | undefined) {
+  const outcome = String(process && process.singletonOutcome || '').trim();
+  if (outcome === 'replaced') {
+    return `replaced existing process ${formatPidValue(process && process.replacementOfPid)}`;
+  }
+  if (outcome === 'reused') {
+    return 'reused the existing managed process';
+  }
+  if (outcome === 'refused') {
+    return 'refused because another managed process already owned this target';
+  }
+  if (outcome === 'started') {
+    return 'started a new managed process';
+  }
+  if (outcome === 'failed') {
+    return 'managed start failed';
+  }
+  return '';
+}
+
+function formatControlOwnerLabel(owner: RepoSummary['controlAccess'] extends { owner?: infer T } ? T : never) {
+  if (!owner || typeof owner !== 'object') {
+    return '';
+  }
+  const sessionLabel = String((owner as { sessionLabel?: unknown }).sessionLabel || '').trim();
+  const sessionId = String((owner as { sessionId?: unknown }).sessionId || '').trim();
+  return sessionLabel || sessionId;
+}
+
+function describeControlAccessMessage(access: RepoSummary['controlAccess']) {
+  if (!access || access.exclusiveControl !== true) {
+    return '';
+  }
+  if (access.isOwner) {
+    return 'This session currently owns lifecycle controls for this repo.';
+  }
+  if (access.readOnly) {
+    if (access.refusalReason === 'takeover-refused') {
+      return 'This session is read-only. Repo ownership does not allow takeover.';
+    }
+    return 'This session is read-only until it takes over repo controls.';
+  }
+  return 'Exclusive repo ownership is enabled.';
+}
+
+function buildMainProcessSummary(repo: RepoSummary | null) {
+  if (!repo) {
+    return 'No repo process status yet.';
+  }
+  const targets = listManagedProcessTargets(repo);
+  if (targets.length === 0) {
+    return 'Restart services to open a live process panel with managed output.';
+  }
+  const selectedTarget = resolvePreferredProcessTarget(repo);
+  const process = repo.managedProcesses && repo.managedProcesses[selectedTarget]
+    ? repo.managedProcesses[selectedTarget]
+    : null;
+  return `${targets.length} managed target${targets.length === 1 ? '' : 's'} visible · focusing ${selectedTarget}${process && process.pid ? ` pid ${process.pid}` : ''}`;
+}
+
 function RestartTargetRow({ target }: { target: RestartEvidenceTargetSummary }) {
   const heartbeat = resolveTargetHeartbeat(target.target);
   const detailParts = [
@@ -3315,37 +3812,7 @@ function pullRequestStatusClass(pullRequest: PullRequestSummary) {
 }
 
 function PackageUpdateButton({ repo }: { repo: RepoSummary }) {
-  const updateState = buildPackageUpdateButtonState(repo);
-  const restartState = buildRestartButtonState(repo);
-  if (!repo.repoId) {
-    return null;
-  }
-  return (
-    <div className="repo-actions" style={{ marginTop: '12px' }}>
-      <button
-        type="button"
-        className={`secondary deploy-button${updateState.busy ? ' is-loading' : ''}`}
-        data-action="package-update"
-        data-repo-id={repo.repoId || ''}
-        disabled={updateState.disabled}
-        aria-busy={updateState.busy}
-      >
-        {updateState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
-        <span>{updateState.label}</span>
-      </button>
-      <button
-        type="button"
-        className={`secondary deploy-button${restartState.busy ? ' is-loading' : ''}`}
-        data-action="restart"
-        data-repo-id={repo.repoId || ''}
-        disabled={restartState.disabled}
-        aria-busy={restartState.busy}
-      >
-        {restartState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
-        <span>{restartState.label}</span>
-      </button>
-    </div>
-  );
+  return <RepoLifecycleControls repo={repo} />;
 }
 
 function PrdResetButton({ repo }: { repo: RepoSummary }) {
@@ -3579,6 +4046,10 @@ function buildTargetLifecycleLabel(target: RestartEvidenceTargetSummary) {
   return `${target.label || target.target || 'target'} pid ${pre} -> ${post}`;
 }
 
+function formatPidValue(pid: number | null | undefined) {
+  return pid == null ? 'missing' : String(pid);
+}
+
 function resolveTargetHeartbeat(target?: string) {
   const dashboard = latestDashboard || {};
   if (target === 'server') {
@@ -3627,6 +4098,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 export {
   ChatMessage,
   ChatPrdReviewSummary,
+  LiveProcessPanel,
   ManagerRepoCard,
   ChatPrdProposalCard,
   PackageUpdateButton,
@@ -3647,5 +4119,6 @@ export {
   resolveSelectedHistoryState,
   resolveChatScrollDecision,
   resolvePrdHistoryContinueChat,
+  setLiveProcessPanelTestState,
   submitActiveChatPrdDraftReview,
 };

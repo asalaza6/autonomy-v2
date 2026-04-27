@@ -13,6 +13,7 @@ import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './control-plane-browser.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
+import { readManagedProcessOutput } from './control-plane-process-output.js';
 import {
   claimJob,
   claimNextJob,
@@ -529,6 +530,57 @@ async function handleRequest(
     const repoId = url.pathname.split('/')[3];
     const statuses = getRepoStatuses(rootDir);
     sendJson(res, 200, statuses[repoId] || null);
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.includes('/processes/') && url.pathname.endsWith('/output') && req.method === 'GET') {
+    const segments = url.pathname.split('/');
+    const repoId = decodeURIComponent(segments[3] || '');
+    const target = String(segments[5] || '').trim();
+    if (target !== 'server' && target !== 'controlBridge') {
+      sendJson(res, 404, { error: 'Unknown managed process target.' });
+      return;
+    }
+    const maxBytes = Number(url.searchParams.get('maxBytes'));
+    const state = loadControlPlaneState(rootDir);
+    const processRecord = state.managedProcesses?.[repoId]?.[target] || null;
+    const output = readManagedProcessOutput(rootDir, repoId, target, Number.isFinite(maxBytes) ? maxBytes : undefined);
+    sendJson(res, 200, {
+      repoId,
+      target,
+      outputSessionId: String(processRecord && processRecord.outputSessionId || '').trim() || null,
+      pid: Number(processRecord && processRecord.pid) || null,
+      running: processRecord ? processRecord.running !== false : false,
+      ...output,
+    });
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/control/takeover') && req.method === 'POST') {
+    const repoId = decodeURIComponent(url.pathname.split('/')[3] || '');
+    try {
+      const body = await readJsonBody(req);
+      const repo = listDiscoveredRepos(rootDir).find((entry) => String(entry.repoId || '').trim() === String(repoId || '').trim());
+      if (!repo) {
+        sendJson(res, 404, { error: 'Unknown repo.' });
+        return;
+      }
+      const controlSession = readControlSession(req, body);
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, {
+        ...controlSession,
+        takeover: true,
+      });
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session could not take over lifecycle controls for this repo.',
+          controlAccess,
+        });
+        return;
+      }
+      sendJson(res, 200, { controlAccess });
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
     return;
   }
 
