@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4748,11 +4749,11 @@
       "acceptance": [
         "`npm run typecheck` and `npm run lint` pass, and the diff is in scope, but approval is still blocked because this high-risk control-plane change set does not include executed focused verification results.\nThis PR changes high-risk control-plane behavior across the server, bridge, and UI: managed restart state, live process output, exclusive ownership, and takeover flow. The only reported executed checks are `npm run typecheck` and `npm run lint`, which are not sufficient by themselves for merge safety here.\nBefore re-requesting review, run and report the focused tests that cover the changed behavior, specifically the added or updated coverage in [tests/unit/control-plane-restart-ui.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/tests/unit/control-plane-restart-ui.test.ts:1), [tests/unit/control-plane-control-access.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/tests/unit/control-plane-control-access.test.ts:1), and [tests/smoke/control-plane.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/tests/smoke/control-plane.test.ts:1).\nWithout executed results for those focused control-plane tests, I cannot verify that restart focus, live stdout/stderr rendering, PID evidence refresh, singleton outcome messaging, and non-owner/takeover behavior are regression-safe enough to merge into `dev`."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "createdAt": "2026-04-27T01:08:55.209Z",
-      "updatedAt": "2026-04-27T01:08:55.209Z",
+      "updatedAt": "2026-04-27T01:09:19.450Z",
       "startedAt": "2026-04-27T01:08:55.209Z",
       "prId": "pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "conversationReferences": {
@@ -4760,11 +4761,12 @@
           "conversationId": "019dcc77-c51e-7f83-a337-fb56578cc325",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-27T01:08:55.209Z"
+          "updatedAt": "2026-04-27T01:09:19.450Z"
         }
       },
-      "implementationConversationId": "019dcc77-c51e-7f83-a337-fb56578cc325"
+      "implementationConversationId": "019dcc77-c51e-7f83-a337-fb56578cc325",
+      "completedAt": "2026-04-27T01:09:19.450Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
