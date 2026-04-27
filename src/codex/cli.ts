@@ -562,7 +562,7 @@ function resolveCodexExecTimeoutMs() {
     return DEFAULT_CODEX_EXEC_TIMEOUT_MS;
   }
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  if (!Number.isFinite(parsed) || parsed < 0) {
     return DEFAULT_CODEX_EXEC_TIMEOUT_MS;
   }
   return parsed;

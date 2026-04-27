@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { runCodexStructured } from '../../src/codex/cli.js';
+import { runCodexExec, runCodexStructured } from '../../src/codex/cli.js';
 
 test('runCodexStructured can launch Codex with a restricted env and GitHub-only network config', async () => {
   const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-'));
@@ -152,3 +152,70 @@ function restoreEnv(key: string, value: string | undefined) {
   }
   process.env[key] = value;
 }
+
+test('runCodexExec enforces the configured wall-clock timeout', async () => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-timeout-'));
+  const fakeCodexPath = path.join(fixtureDir, 'fake-codex-delay.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  const originalTimeout = process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS;
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    'setTimeout(() => {',
+    "  process.stdout.write(JSON.stringify({ session_id: 'sess-timeout' }) + '\\n');",
+    '  process.exit(0);',
+    '}, 200);',
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+  process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS = '50';
+
+  try {
+    await assert.rejects(
+      runCodexExec({
+        cwd: fixtureDir,
+        prompt: 'Make a small change.',
+        readOnly: false,
+        captureConversationId: true,
+      }),
+      /Codex CLI failed: Codex exceeded wall-clock timeout of 50ms/
+    );
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
+    restoreEnv('AUTONOMY_CODEX_EXEC_TIMEOUT_MS', originalTimeout);
+  }
+});
+
+test('runCodexExec disables the wall-clock timeout when configured to 0', async () => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-no-timeout-'));
+  const fakeCodexPath = path.join(fixtureDir, 'fake-codex-delay.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  const originalTimeout = process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS;
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    'setTimeout(() => {',
+    "  process.stdout.write(JSON.stringify({ session_id: 'sess-no-timeout' }) + '\\n');",
+    '  process.exit(0);',
+    '}, 200);',
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+  process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS = '0';
+
+  try {
+    const output: any = await runCodexExec({
+      cwd: fixtureDir,
+      prompt: 'Make a small change.',
+      readOnly: false,
+      captureConversationId: true,
+    });
+
+    assert.equal(output.conversationId, 'sess-no-timeout');
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
+    restoreEnv('AUTONOMY_CODEX_EXEC_TIMEOUT_MS', originalTimeout);
+  }
+});
