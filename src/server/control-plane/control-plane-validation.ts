@@ -37,6 +37,8 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     serverRestartCommand: repo.serverRestartCommand,
     deploymentUrl: repo.deploymentUrl,
     deploymentLabel: repo.deploymentLabel,
+    exclusiveControl: repo.exclusiveControl,
+    controlTakeover: repo.controlTakeover,
   };
 }
 
@@ -62,6 +64,10 @@ function normalizeRepoRecord(
     serverRestartCommand: (repo as ControlPlaneRepoRecord).serverRestartCommand,
     deploymentUrl: String((repo as Record<string, unknown>).deploymentUrl || '').trim() || undefined,
     deploymentLabel: String((repo as Record<string, unknown>).deploymentLabel || '').trim() || undefined,
+    exclusiveControl: (repo as Record<string, unknown>).exclusiveControl === true,
+    controlTakeover: String((repo as Record<string, unknown>).controlTakeover || '').trim() === 'refuse'
+      ? 'refuse'
+      : 'takeover',
   } as ControlPlaneRepoRecord;
 }
 
@@ -173,6 +179,9 @@ function validateRestartSubmission(
     repo,
     payload: {
       repoId: repo.repoId,
+      controlSessionId: String(submission.controlSessionId || '').trim() || undefined,
+      controlSessionLabel: String(submission.controlSessionLabel || '').trim() || undefined,
+      takeoverControl: submission.takeoverControl === true,
     },
   };
 }

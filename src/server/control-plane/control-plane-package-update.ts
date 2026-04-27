@@ -13,7 +13,8 @@ import type { AnyRecord, ControlPlaneConfig, DeployCommandConfig } from '../../t
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import type { ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
 import { loadControlPlaneLifecycle, validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
-import type { DefaultRestartHelperPlan } from './control-plane-restart-helper.js';
+import { getManagedProcesses } from './control-plane-store.js';
+import { runDefaultControlPlaneRestart, type DefaultRestartHelperPlan } from './control-plane-restart-helper.js';
 
 type RestartTarget = 'controlBridge' | 'server';
 type DeferredRestartTarget = RestartTarget | 'default';
@@ -21,6 +22,7 @@ type DeferredRestartTarget = RestartTarget | 'default';
 const DEFAULT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_COMMAND_OUTPUT_LENGTH = 4000;
 const PACKAGE_UPDATE_COMMIT_MESSAGE = 'autonomy(update): refresh autonomy-v2 package';
+const MANAGED_RESTART_READY_TIMEOUT_MS = 750;
 
 interface NormalizedControlPlaneCommandConfig {
   command: string;
@@ -35,6 +37,7 @@ interface ConfiguredDeferredRestartCommand {
   mode: 'configured';
   target: RestartTarget;
   commandConfig: NormalizedControlPlaneCommandConfig;
+  existingPid?: number | null;
 }
 
 interface DefaultDeferredRestartCommand {
@@ -350,9 +353,22 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
   jobId?: string;
   repoId?: string;
 } = {}) {
-  const controlBridgePlan = prepareRestartTarget(rootDir, 'controlBridge', config.controlBridgeRestartCommand);
+  const managedProcesses = (String(context.repoId || '').trim()
+    ? getManagedProcesses(rootDir, context.repoId)
+    : {}) as Partial<Record<RestartTarget, { pid?: number | null; running?: boolean }>>;
+  const controlBridgePlan = prepareRestartTarget(
+    rootDir,
+    'controlBridge',
+    config.controlBridgeRestartCommand,
+    managedProcesses.controlBridge || null,
+  );
   const controlBridge = controlBridgePlan.status;
-  const serverPlan = prepareRestartTarget(rootDir, 'server', config.serverRestartCommand);
+  const serverPlan = prepareRestartTarget(
+    rootDir,
+    'server',
+    config.serverRestartCommand,
+    managedProcesses.server || null,
+  );
   const server = serverPlan.status;
   const targetStatuses = [controlBridge.status, server.status];
   const status = targetStatuses.includes('failed')
@@ -373,9 +389,15 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
 function prepareRestartTarget(
   rootDir: string,
   target: RestartTarget,
-  value: DeployCommandConfig | null | undefined
+  value: DeployCommandConfig | null | undefined,
+  managedProcess: { pid?: number | null; running?: boolean } | null = null,
 ) {
   const lifecycleMetadata = readLifecycleMetadata(rootDir, target);
+  const managedPid = normalizeManagedPid(managedProcess?.pid);
+  const activeManagedPid = managedProcess?.running !== false && managedPid && isProcessAlive(managedPid)
+    ? managedPid
+    : null;
+  const preRestartPid = activeManagedPid ?? lifecycleMetadata?.pid;
   let commandConfig: NormalizedControlPlaneCommandConfig | null;
   try {
     commandConfig = normalizeRestartCommandConfig(value, rootDir);
@@ -386,7 +408,7 @@ function prepareRestartTarget(
         status: 'failed' as const,
         error: formatErrorMessage(error),
         mode: 'configured' as const,
-        preRestartPid: lifecycleMetadata?.pid,
+        preRestartPid,
         recordedAt: lifecycleMetadata?.recordedAt,
         completedAt: new Date().toISOString(),
       },
@@ -406,14 +428,15 @@ function prepareRestartTarget(
         mode: 'configured' as const,
         command: commandConfig.displayCommand,
         cwd: path.relative(rootDir, commandConfig.cwd) || '.',
-        preRestartPid: lifecycleMetadata?.pid,
+        preRestartPid,
         recordedAt: lifecycleMetadata?.recordedAt,
       },
       configuredCommand: {
         mode: 'configured' as const,
-      target,
-      commandConfig,
-    },
+        target,
+        commandConfig,
+        existingPid: activeManagedPid,
+      },
     defaultTarget: null,
   };
 }
@@ -546,7 +569,7 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
     return startDetachedDefaultRestartHelper(deferredCommand);
   }
 
-  const { target, commandConfig } = deferredCommand;
+  const { target, commandConfig, existingPid } = deferredCommand;
   const base = {
     target,
     mode: 'configured' as const,
@@ -564,52 +587,65 @@ function startDetachedRestartCommand(deferredCommand: DeferredRestartCommand): P
       resolve(result);
     };
 
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(commandConfig.command, commandConfig.args, {
-        cwd: commandConfig.cwd,
-        detached: true,
-        env: {
-          ...process.env,
-          ...commandConfig.env,
-        },
-        shell: commandConfig.shell,
-        stdio: 'ignore',
+    void stopExistingManagedProcess(existingPid).then((stopError) => {
+      if (stopError) {
+        settle({
+          ...base,
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+          postRestartPid: existingPid ?? null,
+          error: stopError,
+        });
+        return;
+      }
+
+      let child: ReturnType<typeof spawn>;
+      try {
+        child = spawn(commandConfig.command, commandConfig.args, {
+          cwd: commandConfig.cwd,
+          detached: true,
+          env: {
+            ...process.env,
+            ...commandConfig.env,
+          },
+          shell: commandConfig.shell,
+          stdio: 'ignore',
+        });
+      } catch (error) {
+        settle({
+          ...base,
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+          postRestartPid: null,
+          error: formatErrorMessage(error),
+        });
+        return;
+      }
+      child.once('spawn', () => {
+        void waitForManagedRestartReadiness(child, MANAGED_RESTART_READY_TIMEOUT_MS).then((outcome) => {
+          if (outcome.status === 'launched') {
+            child.unref();
+          }
+          settle({
+            ...base,
+            ...outcome,
+          });
+        });
       });
-    } catch (error) {
-      settle({
-        ...base,
-        status: 'failed',
-        completedAt: new Date().toISOString(),
-        postRestartPid: null,
-        error: formatErrorMessage(error),
-      });
-      return;
-    }
-    child.once('spawn', () => {
-      child.unref();
-      settle({
-        ...base,
-        status: 'launched',
-        postRestartPid: child.pid || null,
-        completedAt: new Date().toISOString(),
-      });
-    });
-    child.once('error', (error) => {
-      settle({
-        ...base,
-        status: 'failed',
-        postRestartPid: child.pid || null,
-        completedAt: new Date().toISOString(),
-        error: error.message,
+      child.once('error', (error) => {
+        settle({
+          ...base,
+          status: 'failed',
+          postRestartPid: child.pid || null,
+          completedAt: new Date().toISOString(),
+          error: error.message,
+        });
       });
     });
   });
 }
 
 function startDetachedDefaultRestartHelper(deferredCommand: DefaultDeferredRestartCommand): Promise<DeferredRestartLaunchResult> {
-  const helperPath = fileURLToPath(new URL('./control-plane-restart-helper.js', import.meta.url));
-  const payload = Buffer.from(JSON.stringify(deferredCommand.helperPlan)).toString('base64url');
   const base = {
     target: 'default' as const,
     mode: 'default' as const,
@@ -628,42 +664,118 @@ function startDetachedDefaultRestartHelper(deferredCommand: DefaultDeferredResta
       resolve(result);
     };
 
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(process.execPath, [helperPath, '--payload', payload], {
-        cwd: deferredCommand.cwd,
-        detached: true,
-        env: process.env,
-        stdio: 'ignore',
+    void runDefaultControlPlaneRestart(deferredCommand.helperPlan).then(() => {
+      settle({
+        ...base,
+        status: 'launched',
+        completedAt: new Date().toISOString(),
       });
-    } catch (error) {
+    }).catch((error) => {
       settle({
         ...base,
         status: 'failed',
         completedAt: new Date().toISOString(),
-        postRestartPid: null,
         error: formatErrorMessage(error),
       });
-      return;
+    });
+  });
+}
+
+async function stopExistingManagedProcess(pid: number | null | undefined) {
+  const normalizedPid = normalizeManagedPid(pid);
+  if (!normalizedPid || !isProcessAlive(normalizedPid)) {
+    return null;
+  }
+  if (normalizedPid === process.pid) {
+    return `Refusing to stop restart helper PID ${normalizedPid}.`;
+  }
+  try {
+    process.kill(normalizedPid, 'SIGTERM');
+  } catch (error) {
+    return isNoSuchProcessError(error) ? null : formatErrorMessage(error);
+  }
+  const exited = await waitForManagedProcessExit(normalizedPid, 4000);
+  if (exited) {
+    return null;
+  }
+  try {
+    process.kill(normalizedPid, 'SIGKILL');
+  } catch (error) {
+    return isNoSuchProcessError(error) ? null : formatErrorMessage(error);
+  }
+  return await waitForManagedProcessExit(normalizedPid, 500)
+    ? null
+    : `Managed process PID ${normalizedPid} did not exit before replacement.`;
+}
+
+async function waitForManagedProcessExit(pid: number, timeoutMs: number) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt <= timeoutMs) {
+    if (!isProcessAlive(pid)) {
+      return true;
     }
-    child.once('spawn', () => {
-      child.unref();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return false;
+}
+
+function waitForManagedRestartReadiness(
+  child: ReturnType<typeof spawn>,
+  readyTimeoutMs: number
+): Promise<Pick<DeferredRestartLaunchResult, 'status' | 'postRestartPid' | 'completedAt' | 'error'>> {
+  const observedReadyTimeoutMs = Number.isFinite(readyTimeoutMs)
+    ? Math.max(100, readyTimeoutMs)
+    : MANAGED_RESTART_READY_TIMEOUT_MS;
+  return new Promise((resolve) => {
+    let settled = false;
+    let readinessTimer: NodeJS.Timeout | undefined;
+    let onExit: (code: number | null, signal: NodeJS.Signals | null) => void = () => {};
+    const settle = (result: Pick<DeferredRestartLaunchResult, 'status' | 'postRestartPid' | 'completedAt' | 'error'>) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (readinessTimer) {
+        clearTimeout(readinessTimer);
+      }
+      child.off('exit', onExit);
+      resolve(result);
+    };
+
+    onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (code === 0 && signal === null) {
+        settle({
+          status: 'launched',
+          postRestartPid: child.pid || null,
+          completedAt: new Date().toISOString(),
+        });
+        return;
+      }
       settle({
-        ...base,
+        status: 'failed',
+        postRestartPid: child.pid || null,
+        completedAt: new Date().toISOString(),
+        error: `Restarted process exited with ${formatExitStatus(code, signal)} before readiness.`,
+      });
+    };
+
+    child.once('exit', onExit);
+    readinessTimer = setTimeout(() => {
+      if (child.pid && !isProcessAlive(child.pid)) {
+        settle({
+          status: 'failed',
+          postRestartPid: child.pid,
+          completedAt: new Date().toISOString(),
+          error: `Restarted process PID ${child.pid} exited before readiness.`,
+        });
+        return;
+      }
+      settle({
         status: 'launched',
         postRestartPid: child.pid || null,
         completedAt: new Date().toISOString(),
       });
-    });
-    child.once('error', (error) => {
-      settle({
-        ...base,
-        status: 'failed',
-        postRestartPid: child.pid || null,
-        completedAt: new Date().toISOString(),
-        error: error.message,
-      });
-    });
+    }, observedReadyTimeoutMs);
   });
 }
 
@@ -733,6 +845,42 @@ function normalizeControlPlaneCommandConfig(
     env: normalizeCommandEnv((value as AnyRecord).env),
     shell: (value as AnyRecord).shell === true,
   };
+}
+
+function isProcessAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return !isZombieProcess(pid);
+  } catch (error) {
+    return Boolean(error && typeof error === 'object' && (error as NodeJS.ErrnoException).code === 'EPERM');
+  }
+}
+
+function normalizeManagedPid(value: unknown) {
+  const pid = Number(value);
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+function isZombieProcess(pid: number) {
+  const result = spawnSync('ps', ['-p', String(pid), '-o', 'stat='], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  return result.status === 0 && /\bZ/.test(String(result.stdout || '').trim());
+}
+
+function isNoSuchProcessError(error: unknown) {
+  return Boolean(error && typeof error === 'object' && (error as NodeJS.ErrnoException).code === 'ESRCH');
+}
+
+function formatExitStatus(code: number | null, signal: NodeJS.Signals | null) {
+  if (code !== null) {
+    return `exit code ${code}`;
+  }
+  if (signal) {
+    return `signal ${signal}`;
+  }
+  return 'an unknown status';
 }
 
 async function runConfiguredControlPlaneCommand(

@@ -151,6 +151,8 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   serverRestartCommand?: DeployCommandConfig;
   deploymentUrl?: string;
   deploymentLabel?: string;
+  exclusiveControl?: boolean;
+  controlTakeover?: 'refuse' | 'takeover';
 }
 
 export interface ControlPlaneConfig extends ControlPlaneRepoRecord {
@@ -183,6 +185,62 @@ export interface ControlPlanePackageUpdatePayload extends AnyRecord {
 
 export interface ControlPlaneRestartPayload extends AnyRecord {
   repoId: string;
+  controlSessionId?: string;
+  controlSessionLabel?: string;
+  takeoverControl?: boolean;
+}
+
+export interface ControlPlaneManagedProcessRecord extends AnyRecord {
+  repoId: string;
+  target: 'server' | 'controlBridge';
+  sessionId: string;
+  outputSessionId?: string;
+  pid?: number | null;
+  running?: boolean;
+  launchMode?: 'configured' | 'default';
+  lifecycleAction?: 'restart';
+  singletonPolicy?: 'replace';
+  singletonOutcome?: 'started' | 'replaced' | 'reused' | 'refused' | 'failed';
+  command?: string | null;
+  cwd?: string | null;
+  requestedBySessionId?: string | null;
+  requestedBySessionLabel?: string | null;
+  requestedAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt?: string;
+  exitedAt?: string | null;
+  exitReason?: string | null;
+  preRestartPid?: number | null;
+  postRestartPid?: number | null;
+  replacementOfSessionId?: string | null;
+  replacementOfPid?: number | null;
+  error?: string | null;
+}
+
+export interface ControlPlaneRepoControlOwner extends AnyRecord {
+  repoId: string;
+  sessionId: string;
+  sessionLabel?: string | null;
+  exclusiveControl?: boolean;
+  takeoverPolicy?: 'refuse' | 'takeover';
+  claimedAt: string;
+  lastSeenAt: string;
+  takeoverAt?: string | null;
+  takeoverCount?: number;
+}
+
+export interface ControlPlaneRepoControlAccess extends AnyRecord {
+  repoId: string;
+  sessionId?: string | null;
+  sessionLabel?: string | null;
+  exclusiveControl: boolean;
+  canManage: boolean;
+  isOwner: boolean;
+  readOnly: boolean;
+  owner?: ControlPlaneRepoControlOwner | null;
+  takeoverPolicy?: 'refuse' | 'takeover';
+  refusalReason?: string | null;
 }
 
 export interface ControlPlaneAgentChatMessagePayload extends AnyRecord {
@@ -271,6 +329,8 @@ export interface ControlPlaneRepoStatusRecord extends AnyRecord {
   default?: boolean;
   deploymentUrl?: string;
   deploymentLabel?: string;
+  exclusiveControl?: boolean;
+  controlTakeover?: 'refuse' | 'takeover';
   snapshot: AnyRecord;
 }
 
@@ -280,6 +340,8 @@ export interface ControlPlaneState extends AnyRecord {
   repoStatuses: Record<string, ControlPlaneRepoStatusRecord>;
   conversations: Record<string, ControlPlaneConversationRecord[]>;
   heartbeats: Record<string, ControlPlaneHeartbeatRecord>;
+  managedProcesses?: Record<string, Partial<Record<'server' | 'controlBridge', ControlPlaneManagedProcessRecord>>>;
+  controlOwnership?: Record<string, ControlPlaneRepoControlOwner>;
 }
 
 export interface ControlPlaneHeartbeatRecord extends AnyRecord {

@@ -4619,10 +4619,14 @@
         "Unit tests cover restart result normalization, singleton replacement or refusal rules, ownership acquisition, read-only behavior for non-owner sessions, takeover outcomes, and PID evidence generation.",
         "Integration coverage exercises bridge or control-plane restart flow through the managed-process lifecycle and asserts that status refresh reflects the new PID, managed running state, and ownership metadata."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-27T00:14:39.472Z",
-      "updatedAt": "2026-04-27T00:14:39.472Z"
+      "updatedAt": "2026-04-27T00:47:16.941Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
+      "startedAt": "2026-04-27T00:14:59.399Z",
+      "completedAt": "2026-04-27T00:47:16.941Z",
+      "completionMode": "code"
     },
     {
       "id": "prd-live-terminal-restart-and-f8b24d-architecture-agent-2",
@@ -4649,10 +4653,12 @@
         "Manual verification instructions remain satisfiable: one scenario confirms restart opens a live process view with output and PID change evidence, and a second scenario confirms two concurrent panels respect exclusive ownership and takeover behavior.",
         "Verification includes `npm run typecheck` plus the focused unit, UI, or smoke tests for the control-plane views and refresh behavior affected by this change."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "active",
+      "status": "active",
       "createdAt": "2026-04-27T00:14:39.472Z",
-      "updatedAt": "2026-04-27T00:14:39.472Z"
+      "updatedAt": "2026-04-27T00:47:16.941Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
+      "startedAt": "2026-04-27T00:47:16.941Z"
     }
   ]
 }

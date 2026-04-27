@@ -43,6 +43,8 @@ test('control plane config preserves optional deployment metadata', () => {
     serverRestartCommand: 'systemctl restart autonomy-v2-server',
     deploymentUrl: ' https://deploy.example.com/app ',
     deploymentLabel: ' Live app ',
+    exclusiveControl: true,
+    controlTakeover: 'refuse',
   });
 
   assert.equal(config.repoId, 'alpha');
@@ -52,6 +54,8 @@ test('control plane config preserves optional deployment metadata', () => {
   assert.equal(config.serverRestartCommand, 'systemctl restart autonomy-v2-server');
   assert.equal(config.deploymentUrl, 'https://deploy.example.com/app');
   assert.equal(config.deploymentLabel, 'Live app');
+  assert.equal(config.exclusiveControl, true);
+  assert.equal(config.controlTakeover, 'refuse');
 });
 
 test('repo-local autonomy-v2 control plane config uses release patch package update command', () => {
@@ -230,11 +234,17 @@ test('restart jobs validate, queue, claim, and complete for one repo', () => {
 
   const { payload } = validateRestartSubmission(repos, {
     repoId: 'alpha',
+    controlSessionId: 'session-1',
+    controlSessionLabel: 'Viewer',
+    takeoverControl: true,
   });
   const job = enqueueJob(rootDir, createControlPlaneRestartJob(payload));
 
   assert.equal(job.type, 'restart');
   assert.equal(job.repoId, 'alpha');
+  assert.equal(job.payload.controlSessionId, 'session-1');
+  assert.equal(job.payload.controlSessionLabel, 'Viewer');
+  assert.equal(job.payload.takeoverControl, true);
   assert.equal(listJobs(rootDir, { type: 'restart' as any }).length, 1);
   assert.equal(claimJob(rootDir, job.id, { repoIds: ['beta'] }), null);
 

@@ -1,5 +1,6 @@
 import type { AnyRecord, ControlPlaneRepoRecord, ControlPlaneState } from '../../types.js';
 import { normalizeRepoRecord } from './control-plane-validation.js';
+import { describeRepoControlAccess } from './control-plane-store.js';
 import {
   buildControlPlaneHeartbeatSummary,
   summarizeControlPlaneJob,
@@ -22,7 +23,11 @@ interface ControlPlaneDashboard {
   repos: AnyRecord[];
 }
 
-function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): ControlPlaneDashboard {
+function buildControlPlaneDashboard(
+  rootDir: string,
+  state: ControlPlaneState,
+  viewerSession: { sessionId?: string; sessionLabel?: string } = {}
+): ControlPlaneDashboard {
   const repoConfigById = new Map(
     Object.values(state.repoStatuses || {})
       .map((repo) => normalizeRepoRecord(repo))
@@ -41,10 +46,12 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
       return leftLabel.localeCompare(rightLabel);
     })
     .map((repoId) => buildRepoDashboard(
+      rootDir,
       repoId,
       repoConfigById.get(repoId) || null,
       state.repoStatuses?.[repoId] || null,
       jobs,
+      viewerSession,
     ));
 
   const summarizedJobs = jobs
@@ -78,10 +85,12 @@ function buildControlPlaneDashboard(rootDir: string, state: ControlPlaneState): 
 }
 
 function buildRepoDashboard(
+  rootDir: string,
   repoId: string,
   repoConfig: ControlPlaneRepoRecord | null,
   repoStatus: AnyRecord | null,
   jobs: AnyRecord[],
+  viewerSession: { sessionId?: string; sessionLabel?: string } = {},
 ): AnyRecord {
   const label = String(repoConfig?.label || repoId || 'Repository');
   const description = String(repoConfig?.description || '');
@@ -108,6 +117,15 @@ function buildRepoDashboard(
   const prdResetJob = jobs.find((job) => job.repoId === repoId && job.type === 'prd:reset') || null;
   const packageUpdateJob = jobs.find((job) => job.repoId === repoId && job.type === 'package:update') || null;
   const restartJob = jobs.find((job) => job.repoId === repoId && job.type === 'restart') || null;
+  const controlAccess = repoConfig
+    ? describeRepoControlAccess(rootDir, repoConfig, viewerSession)
+    : null;
+  const managedProcesses = repoStatus
+    && repoStatus.snapshot
+    && repoStatus.snapshot.controlPlane
+    && repoStatus.snapshot.controlPlane.managedProcesses
+      ? repoStatus.snapshot.controlPlane.managedProcesses
+      : {};
 
   return {
     ...summary,
@@ -121,6 +139,9 @@ function buildRepoDashboard(
     prdResetJob: prdResetJob ? summarizeControlPlaneJob(prdResetJob, label) : null,
     packageUpdateJob: packageUpdateJob ? summarizeControlPlaneJob(packageUpdateJob, label) : null,
     restartJob: restartJob ? summarizeControlPlaneJob(restartJob, label) : null,
+    managedProcesses,
+    controlAccess,
+    controlOwner: controlAccess && controlAccess.owner ? controlAccess.owner : null,
     versionStatus: buildRepoVersionStatus(repoId, repoStatus, jobs),
     packageStatus: buildRepoPackageStatus(repoStatus),
   };

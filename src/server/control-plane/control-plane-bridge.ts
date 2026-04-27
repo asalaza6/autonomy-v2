@@ -7,7 +7,7 @@ import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
-import { completeJob, enqueueJob, getControlPlanePaths, loadControlPlaneState } from './control-plane-store.js';
+import { completeJob, enqueueJob, getControlPlanePaths, loadControlPlaneState, setManagedProcess } from './control-plane-store.js';
 import {
   executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
@@ -197,6 +197,72 @@ function summarizeRestartStatus(targetStatuses: string[]) {
   return targetStatuses[0] || 'skipped';
 }
 
+function reconcileManagedRestartProcesses(
+  repoRoot: string,
+  repoId: string,
+  job: Pick<ControlPlaneJobRecord, 'id' | 'payload'>,
+  result: Record<string, unknown>
+) {
+  const restartStatus = result && result.restartStatus && typeof result.restartStatus === 'object'
+    ? result.restartStatus as Record<string, unknown>
+    : null;
+  if (!restartStatus) {
+    return;
+  }
+  (['server', 'controlBridge'] as const).forEach((target) => {
+    const targetStatus = restartStatus[target];
+    if (!targetStatus || typeof targetStatus !== 'object') {
+      return;
+    }
+    const entry = targetStatus as Record<string, unknown>;
+    const status = String(entry.status || '').trim();
+    const preRestartPid = normalizeManagedPid(entry.preRestartPid);
+    const postRestartPid = normalizeManagedPid(entry.postRestartPid);
+    const pid = postRestartPid ?? normalizeManagedPid(entry.pid);
+    const singletonOutcome = resolveSingletonOutcome(status, preRestartPid, postRestartPid, entry.reason);
+    setManagedProcess(repoRoot, repoId, target, {
+      sessionId: String(entry.processSessionId || `${job.id}:${target}`).trim(),
+      outputSessionId: String(entry.outputSessionId || entry.processSessionId || `${job.id}:${target}`).trim(),
+      pid: pid ?? undefined,
+      running: status === 'restarted' && Boolean(pid),
+      launchMode: String(entry.mode || '').trim() === 'default' ? 'default' : 'configured',
+      singletonOutcome,
+      command: String(entry.command || '').trim() || null,
+      cwd: String(entry.cwd || '').trim() || null,
+      requestedBySessionId: String((job.payload as Record<string, unknown>)?.controlSessionId || '').trim() || null,
+      requestedBySessionLabel: String((job.payload as Record<string, unknown>)?.controlSessionLabel || '').trim() || null,
+      requestedAt: String(restartStatus.completedAt || entry.completedAt || new Date().toISOString()),
+      startedAt: String(entry.recordedAt || restartStatus.completedAt || new Date().toISOString()),
+      completedAt: String(entry.completedAt || restartStatus.completedAt || new Date().toISOString()),
+      preRestartPid: preRestartPid ?? undefined,
+      postRestartPid: postRestartPid ?? pid ?? undefined,
+      replacementOfPid: preRestartPid ?? undefined,
+      error: String(entry.error || '').trim() || null,
+      exitReason: status === 'failed' || status === 'relaunch-failed' ? String(entry.reason || status).trim() || status : null,
+    });
+  });
+}
+
+function normalizeManagedPid(value: unknown) {
+  const pid = Number(value);
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+function resolveSingletonOutcome(status: string, preRestartPid: number | null, postRestartPid: number | null, reason: unknown) {
+  if (status === 'restarted') {
+    if (preRestartPid && postRestartPid && preRestartPid !== postRestartPid) {
+      return 'replaced';
+    }
+    if (postRestartPid) {
+      return preRestartPid ? 'reused' : 'started';
+    }
+  }
+  if (String(reason || '').trim() === 'owned-by-another-session') {
+    return 'refused';
+  }
+  return status === 'failed' || status === 'relaunch-failed' ? 'failed' : preRestartPid ? 'reused' : 'started';
+}
+
 async function runControlPlaneBridgeOnce(rootDir: string, options: {
   serverUrl: string;
   repoRoots: Record<string, string>;
@@ -209,6 +275,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     jobId: string;
     repoId: string;
     repoRoot: string;
+    payload: ControlPlaneJobRecord['payload'];
     commands: Parameters<typeof runDeferredControlPlaneRestartCommands>[0];
     result: Record<string, unknown>;
   }> = [];
@@ -426,6 +493,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           jobId: job.id,
           repoId: job.repoId,
           repoRoot,
+          payload: job.payload,
           commands: deferredRestartCommandsForJob,
           result,
         });
@@ -437,6 +505,16 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           status: completionResponseStatus || '',
           error: completionError || '',
         });
+      } else if (job.type === 'restart') {
+        reconcileManagedRestartProcesses(repoRoot, job.repoId, job, result);
+        const updatedSnapshot = buildStatusSnapshot(repoRoot);
+        await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+          method: 'POST',
+          body: {
+            repo: registration.repo,
+            snapshot: updatedSnapshot,
+          },
+        }).catch(() => null);
       }
       processed.push({ jobId: job.id, status: completedStatus });
     } catch (error) {
@@ -498,22 +576,37 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     });
     const defaultTargets = collectDefaultRestartTargets(restart.commands);
     const persistedResult = await waitForPersistedDefaultRestartResult(restart.repoRoot, restart.jobId, defaultTargets, results);
+    const unresolvedDefaultTargets = defaultTargets.filter((target) => {
+      if (!persistedResult || !persistedResult.restartStatus || typeof persistedResult.restartStatus !== 'object') {
+        return true;
+      }
+      const targetResult = persistedResult.restartStatus[target];
+      return !targetResult
+        || typeof targetResult !== 'object'
+        || String((targetResult as Record<string, unknown>).status || '').trim() === 'deferred';
+    });
+    const finalResult = mergeDeferredRestartLaunchResults(restart.result, results, {
+      persistedResult,
+      unresolvedDefaultTargets,
+    });
     const updated = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(restart.jobId)}/complete`, {
       method: 'POST',
       body: {
         status: 'completed',
-        result: mergeDeferredRestartLaunchResults(restart.result, results, {
-          persistedResult,
-          unresolvedDefaultTargets: defaultTargets.filter((target) => {
-            if (!persistedResult || !persistedResult.restartStatus || typeof persistedResult.restartStatus !== 'object') {
-              return true;
-            }
-            const targetResult = persistedResult.restartStatus[target];
-            return !targetResult
-              || typeof targetResult !== 'object'
-              || String((targetResult as Record<string, unknown>).status || '').trim() === 'deferred';
-          }),
-        }),
+        result: finalResult,
+      },
+    }).catch(() => null);
+    const localJob = {
+      id: restart.jobId,
+      payload: restart.payload,
+    } as Pick<ControlPlaneJobRecord, 'id' | 'payload'>;
+    reconcileManagedRestartProcesses(restart.repoRoot, restart.repoId, localJob, finalResult);
+    const refreshedSnapshot = buildStatusSnapshot(restart.repoRoot);
+    await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(restart.repoId)}/status`, {
+      method: 'POST',
+      body: {
+        repo: registeredRepoRoots[restart.repoId]?.repo,
+        snapshot: refreshedSnapshot,
       },
     }).catch(() => null);
     logBridgeEvent('bridge:restart:deferred-complete', {

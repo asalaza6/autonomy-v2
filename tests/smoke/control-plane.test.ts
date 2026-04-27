@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'child_process';
+import fs from 'fs';
 import net from 'net';
 import path from 'path';
 
@@ -443,26 +444,223 @@ test('control plane reset endpoint validates confirmation and clears active PRD 
   }
 });
 
-async function fetchJson(url: string): Promise<any> {
-  const response = await fetch(url);
+test('control plane restart status exposes managed process state and exclusive owner metadata', async () => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-restart-owned-');
+  initAutonomyRepo(repoDir);
+
+  const serverPidPath = path.join(repoDir, 'managed-server.pid');
+  const bridgePidPath = path.join(repoDir, 'managed-bridge.pid');
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.exclusiveControl = true;
+  controlPlaneConfig.controlTakeover = 'takeover';
+  controlPlaneConfig.serverRestartCommand = {
+    command: process.execPath,
+    args: ['-e', [
+      'const fs = require("fs");',
+      `fs.writeFileSync(${JSON.stringify(serverPidPath)}, String(process.pid), "utf8");`,
+      'setInterval(() => {}, 1000);',
+    ].join('\n')],
+  };
+  controlPlaneConfig.controlBridgeRestartCommand = {
+    command: process.execPath,
+    args: ['-e', [
+      'const fs = require("fs");',
+      `fs.writeFileSync(${JSON.stringify(bridgePidPath)}, String(process.pid), "utf8");`,
+      'setInterval(() => {}, 1000);',
+    ].join('\n')],
+  };
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
+
+  const port = await getFreePort();
+  const server = spawn(process.execPath, [
+    CONTROL_BIN,
+    'serve',
+    '--root',
+    repoDir,
+    '--port',
+    String(port),
+  ], {
+    cwd: path.join(repoDir, '.'),
+    env: {
+      ...process.env,
+      AUTONOMY_CONTROL_PLANE_PERSIST: '0',
+      PATH: process.env.PATH || '',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const stopServer = async () => {
+    if (server.exitCode !== null || server.signalCode !== null) {
+      return;
+    }
+    server.kill('SIGTERM');
+    await onceExit(server);
+  };
+
+  try {
+    await waitForHttp(`http://127.0.0.1:${port}/api/repos`);
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ]);
+
+    const ownerHeaders = {
+      'content-type': 'application/json',
+      'x-autonomy-control-session-id': 'owner-session',
+      'x-autonomy-control-session-label': 'Owner Session',
+    };
+    const viewerHeaders = {
+      'content-type': 'application/json',
+      'x-autonomy-control-session-id': 'viewer-session',
+      'x-autonomy-control-session-label': 'Viewer Session',
+    };
+
+    const ownerRestartResponse = await fetch(`http://127.0.0.1:${port}/api/repos/default/restart`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        repoId: 'default',
+      }),
+    });
+    assert.equal(ownerRestartResponse.status, 201);
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ]);
+
+    const firstServerPid = Number(fs.readFileSync(serverPidPath, 'utf8').trim());
+    const firstBridgePid = Number(fs.readFileSync(bridgePidPath, 'utf8').trim());
+    const ownerState = await fetchJsonUntil(
+      `http://127.0.0.1:${port}/api/state?repoId=default`,
+      10000,
+      ownerHeaders,
+      (state) => (
+        state?.dashboard?.repos?.[0]?.managedProcesses?.server?.pid === firstServerPid
+        && state?.dashboard?.repos?.[0]?.managedProcesses?.controlBridge?.pid === firstBridgePid
+      )
+    );
+    assert.equal(ownerState.dashboard.repos[0].managedProcesses.server.pid, firstServerPid);
+    assert.equal(ownerState.dashboard.repos[0].managedProcesses.server.running, true);
+    assert.equal(ownerState.dashboard.repos[0].managedProcesses.server.singletonOutcome, 'replaced');
+    assert.equal(ownerState.dashboard.repos[0].managedProcesses.controlBridge.pid, firstBridgePid);
+    assert.equal(ownerState.dashboard.repos[0].controlAccess.canManage, true);
+    assert.equal(ownerState.dashboard.repos[0].controlAccess.isOwner, true);
+    assert.equal(ownerState.dashboard.repos[0].controlAccess.owner.sessionId, 'owner-session');
+
+    const viewerState = await fetchJson(
+      `http://127.0.0.1:${port}/api/state?repoId=default`,
+      viewerHeaders
+    );
+    assert.equal(viewerState.dashboard.repos[0].controlAccess.readOnly, true);
+    assert.equal(viewerState.dashboard.repos[0].controlAccess.owner.sessionId, 'owner-session');
+
+    const viewerRestartResponse = await fetch(`http://127.0.0.1:${port}/api/repos/default/restart`, {
+      method: 'POST',
+      headers: viewerHeaders,
+      body: JSON.stringify({
+        repoId: 'default',
+      }),
+    });
+    assert.equal(viewerRestartResponse.status, 409);
+
+    const takeoverResponse = await fetch(`http://127.0.0.1:${port}/api/repos/default/restart`, {
+      method: 'POST',
+      headers: viewerHeaders,
+      body: JSON.stringify({
+        repoId: 'default',
+        takeoverControl: true,
+      }),
+    });
+    assert.equal(takeoverResponse.status, 201);
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ]);
+
+    const secondServerPid = Number(fs.readFileSync(serverPidPath, 'utf8').trim());
+    const takeoverState = await fetchJsonUntil(
+      `http://127.0.0.1:${port}/api/state?repoId=default`,
+      10000,
+      viewerHeaders,
+      (state) => state?.dashboard?.repos?.[0]?.managedProcesses?.server?.pid === secondServerPid
+    );
+    assert.notEqual(secondServerPid, firstServerPid);
+    assert.equal(takeoverState.dashboard.repos[0].managedProcesses.server.pid, secondServerPid);
+    assert.equal(takeoverState.dashboard.repos[0].managedProcesses.server.preRestartPid, firstServerPid);
+    assert.equal(takeoverState.dashboard.repos[0].managedProcesses.server.singletonOutcome, 'replaced');
+    assert.equal(takeoverState.dashboard.repos[0].controlAccess.canManage, true);
+    assert.equal(takeoverState.dashboard.repos[0].controlAccess.isOwner, true);
+    assert.equal(takeoverState.dashboard.repos[0].controlAccess.owner.sessionId, 'viewer-session');
+    assert.equal(takeoverState.dashboard.repos[0].controlAccess.owner.takeoverCount, 1);
+  } finally {
+    await stopPidFromFile(serverPidPath);
+    await stopPidFromFile(bridgePidPath);
+    await stopServer();
+  }
+});
+
+async function fetchJson(url: string, headers?: Record<string, string>): Promise<any> {
+  const response = await fetch(url, {
+    headers,
+  });
   if (!response.ok) {
     throw new Error(await response.text());
   }
   return response.json();
 }
 
-async function fetchJsonWithRetry(url: string, timeoutMs = 10000): Promise<any> {
+async function fetchJsonWithRetry(url: string, timeoutMs = 10000, headers?: Record<string, string>): Promise<any> {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown = null;
   while (Date.now() < deadline) {
     try {
-      return await fetchJson(url);
+      return await fetchJson(url, headers);
     } catch (error) {
       lastError = error;
       await delay(100);
     }
   }
   throw lastError instanceof Error ? lastError : new Error(`Timed out fetching ${url}`);
+}
+
+async function fetchJsonUntil(
+  url: string,
+  timeoutMs = 10000,
+  headers?: Record<string, string>,
+  predicate?: (value: any) => boolean,
+): Promise<any> {
+  const deadline = Date.now() + timeoutMs;
+  let lastValue: any = null;
+  while (Date.now() < deadline) {
+    lastValue = await fetchJson(url, headers);
+    if (!predicate || predicate(lastValue)) {
+      return lastValue;
+    }
+    await delay(100);
+  }
+  throw new Error(`Timed out waiting for matching JSON at ${url}: ${JSON.stringify(lastValue)}`);
 }
 
 async function waitForHttp(url: string, timeoutMs = 30000) {
@@ -488,6 +686,35 @@ async function onceExit(child) {
   await new Promise((resolve) => {
     child.once('exit', resolve);
   });
+}
+
+async function stopPidFromFile(filePath: string) {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+  const pid = Number(fs.readFileSync(filePath, 'utf8').trim());
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return;
+  }
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return;
+  }
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(pid, 0);
+      await delay(50);
+    } catch {
+      return;
+    }
+  }
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // Process already exited.
+  }
 }
 
 function delay(ms: number) {

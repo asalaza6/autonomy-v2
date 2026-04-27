@@ -2,7 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 import type {
+  ControlPlaneManagedProcessRecord,
   ControlPlaneRepoRecord,
+  ControlPlaneRepoControlAccess,
+  ControlPlaneRepoControlOwner,
   ControlPlanePrdAddPayload,
   ControlPlaneDeployPayload,
   ControlPlanePrdResetPayload,
@@ -28,7 +31,11 @@ const DEFAULT_CONTROL_PLANE_STATE: ControlPlaneState = {
   repoStatuses: {},
   conversations: {},
   heartbeats: {},
+  managedProcesses: {},
+  controlOwnership: {},
 };
+
+const CONTROL_OWNER_ACTIVE_MS = 30_000;
 
 const MEMORY_CONTROL_PLANE_STATES = new Map<string, ControlPlaneState>();
 
@@ -74,7 +81,47 @@ function normalizeControlPlaneState(state: Partial<ControlPlaneState> = {}): Con
     repoStatuses: normalizeRepoStatuses(state.repoStatuses),
     conversations: normalizeConversations(state.conversations),
     heartbeats: normalizeHeartbeats(state.heartbeats),
+    managedProcesses: normalizeManagedProcesses(state.managedProcesses),
+    controlOwnership: normalizeControlOwnership(state.controlOwnership),
   };
+}
+
+function normalizeManagedProcesses(
+  value: Record<string, Partial<Record<'server' | 'controlBridge', ControlPlaneManagedProcessRecord>>> | undefined | null
+) {
+  const normalized: Record<string, Partial<Record<'server' | 'controlBridge', ControlPlaneManagedProcessRecord>>> = {};
+  Object.entries(value || {}).forEach(([repoId, record]) => {
+    const normalizedRepoId = String(repoId || '').trim();
+    if (!normalizedRepoId || !record || typeof record !== 'object') {
+      return;
+    }
+    const next: Partial<Record<'server' | 'controlBridge', ControlPlaneManagedProcessRecord>> = {};
+    (['server', 'controlBridge'] as const).forEach((target) => {
+      const entry = record[target];
+      if (entry) {
+        next[target] = normalizeManagedProcessRecord({
+          ...entry,
+          repoId: normalizedRepoId,
+          target,
+        });
+      }
+    });
+    if (Object.keys(next).length > 0) {
+      normalized[normalizedRepoId] = next;
+    }
+  });
+  return normalized;
+}
+
+function normalizeControlOwnership(value: Record<string, ControlPlaneRepoControlOwner> | undefined | null) {
+  const normalized: Record<string, ControlPlaneRepoControlOwner> = {};
+  Object.entries(value || {}).forEach(([repoId, entry]) => {
+    const record = normalizeControlOwnerRecord(entry, repoId);
+    if (record) {
+      normalized[record.repoId] = record;
+    }
+  });
+  return normalized;
 }
 
 function normalizeConversations(
@@ -186,6 +233,8 @@ function normalizeRepoStatuses(repoStatuses: Record<string, ControlPlaneRepoStat
       default: repo?.default,
       deploymentUrl: repo?.deploymentUrl,
       deploymentLabel: repo?.deploymentLabel,
+      exclusiveControl: repo?.exclusiveControl,
+      controlTakeover: repo?.controlTakeover,
       snapshot: statusRecord.snapshot || {},
     };
   });
@@ -262,6 +311,9 @@ function normalizeJobPayload(
   if (type === 'restart') {
     return {
       repoId: String((payload as ControlPlaneRestartPayload).repoId || repoId).trim() || repoId,
+      controlSessionId: String((payload as ControlPlaneRestartPayload).controlSessionId || '').trim() || undefined,
+      controlSessionLabel: String((payload as ControlPlaneRestartPayload).controlSessionLabel || '').trim() || undefined,
+      takeoverControl: (payload as ControlPlaneRestartPayload).takeoverControl === true,
     } as ControlPlaneRestartPayload;
   }
 
@@ -302,6 +354,78 @@ function normalizeJobPayload(
 function normalizeOptionalString(value: unknown) {
   const text = String(value || '').trim();
   return text || undefined;
+}
+
+function normalizeOptionalNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+function normalizeSingletonOutcome(value: unknown) {
+  const normalized = String(value || '').trim();
+  if (normalized === 'started' || normalized === 'replaced' || normalized === 'reused' || normalized === 'refused' || normalized === 'failed') {
+    return normalized;
+  }
+  return 'started';
+}
+
+function normalizeManagedProcessRecord(
+  value: Partial<ControlPlaneManagedProcessRecord> | null | undefined
+): ControlPlaneManagedProcessRecord {
+  const repoId = String(value?.repoId || '').trim();
+  const target = value?.target === 'controlBridge' ? 'controlBridge' : 'server';
+  const startedAt = String(value?.startedAt || value?.requestedAt || new Date().toISOString());
+  const pid = normalizeOptionalNumber(value?.pid ?? value?.postRestartPid);
+  return {
+    repoId,
+    target,
+    sessionId: String(value?.sessionId || '').trim() || createControlPlaneRecordId(`proc-${target}`),
+    outputSessionId: normalizeOptionalString(value?.outputSessionId) || normalizeOptionalString(value?.sessionId),
+    pid,
+    running: value?.running === true,
+    launchMode: value?.launchMode === 'default' ? 'default' : 'configured',
+    lifecycleAction: 'restart',
+    singletonPolicy: 'replace',
+    singletonOutcome: normalizeSingletonOutcome(value?.singletonOutcome),
+    command: normalizeOptionalString(value?.command),
+    cwd: normalizeOptionalString(value?.cwd),
+    requestedBySessionId: normalizeOptionalString(value?.requestedBySessionId),
+    requestedBySessionLabel: normalizeOptionalString(value?.requestedBySessionLabel),
+    requestedAt: String(value?.requestedAt || startedAt),
+    startedAt,
+    completedAt: normalizeOptionalString(value?.completedAt),
+    updatedAt: String(value?.updatedAt || value?.completedAt || startedAt),
+    exitedAt: normalizeOptionalString(value?.exitedAt),
+    exitReason: normalizeOptionalString(value?.exitReason),
+    preRestartPid: normalizeOptionalNumber(value?.preRestartPid),
+    postRestartPid: normalizeOptionalNumber(value?.postRestartPid ?? pid),
+    replacementOfSessionId: normalizeOptionalString(value?.replacementOfSessionId),
+    replacementOfPid: normalizeOptionalNumber(value?.replacementOfPid),
+    error: normalizeOptionalString(value?.error),
+  };
+}
+
+function normalizeControlOwnerRecord(
+  value: Partial<ControlPlaneRepoControlOwner> | null | undefined,
+  fallbackRepoId = ''
+) {
+  const repoId = String(value?.repoId || fallbackRepoId || '').trim();
+  const sessionId = String(value?.sessionId || '').trim();
+  if (!repoId || !sessionId) {
+    return null;
+  }
+  const claimedAt = String(value?.claimedAt || new Date().toISOString());
+  return {
+    repoId,
+    sessionId,
+    sessionLabel: normalizeOptionalString(value?.sessionLabel),
+    exclusiveControl: value?.exclusiveControl === true,
+    takeoverPolicy: String(value?.takeoverPolicy || '').trim() === 'refuse' ? 'refuse' : 'takeover',
+    claimedAt,
+    lastSeenAt: String(value?.lastSeenAt || claimedAt),
+    takeoverAt: normalizeOptionalString(value?.takeoverAt),
+    takeoverCount: Number.isFinite(Number(value?.takeoverCount)) ? Number(value?.takeoverCount) : 0,
+  } satisfies ControlPlaneRepoControlOwner;
 }
 
 function normalizeChatHistory(history: ControlPlaneAgentChatMessagePayload['history'] | undefined) {
@@ -579,10 +703,258 @@ function setRepoStatus(
     default: normalizedRepo?.default === true || existing?.default === true,
     deploymentUrl: normalizedRepo?.deploymentUrl || existing?.deploymentUrl,
     deploymentLabel: normalizedRepo?.deploymentLabel || existing?.deploymentLabel,
+    exclusiveControl: normalizedRepo?.exclusiveControl === true || existing?.exclusiveControl === true,
+    controlTakeover: normalizedRepo?.controlTakeover || existing?.controlTakeover,
     snapshot,
   };
   saveControlPlaneState(rootDir, state);
   return state.repoStatuses[normalizedRepoId];
+}
+
+function setManagedProcess(
+  rootDir: string,
+  repoId: string,
+  target: 'server' | 'controlBridge',
+  patch: Partial<ControlPlaneManagedProcessRecord>
+) {
+  const state = loadControlPlaneState(rootDir);
+  const normalizedRepoId = String(repoId || '').trim();
+  if (!normalizedRepoId) {
+    throw new Error('Missing repoId.');
+  }
+  const repoProcesses = state.managedProcesses?.[normalizedRepoId] || {};
+  const existing = repoProcesses[target];
+  const nextRecord = normalizeManagedProcessRecord({
+    ...(existing || {}),
+    ...(existing && existing.sessionId && !patch.replacementOfSessionId && patch.singletonOutcome === 'replaced'
+      ? { replacementOfSessionId: existing.sessionId }
+      : {}),
+    ...(existing && existing.pid && !patch.replacementOfPid && patch.singletonOutcome === 'replaced'
+      ? { replacementOfPid: existing.pid }
+      : {}),
+    ...patch,
+    repoId: normalizedRepoId,
+    target,
+  });
+  state.managedProcesses = state.managedProcesses || {};
+  state.managedProcesses[normalizedRepoId] = {
+    ...repoProcesses,
+    [target]: nextRecord,
+  };
+  saveControlPlaneState(rootDir, state);
+  return nextRecord;
+}
+
+function getManagedProcesses(rootDir: string, repoId?: string) {
+  const state = loadControlPlaneState(rootDir);
+  if (!repoId) {
+    return state.managedProcesses || {};
+  }
+  return state.managedProcesses?.[String(repoId || '').trim()] || {};
+}
+
+function clearExpiredRepoControlOwner(state: ControlPlaneState, repoId: string) {
+  const owner = state.controlOwnership?.[repoId];
+  if (!owner) {
+    return;
+  }
+  const lastSeenAt = Date.parse(String(owner.lastSeenAt || ''));
+  if (!Number.isFinite(lastSeenAt) || Date.now() - lastSeenAt <= CONTROL_OWNER_ACTIVE_MS) {
+    return;
+  }
+  delete state.controlOwnership?.[repoId];
+}
+
+function getActiveRepoControlOwner(state: ControlPlaneState, repoId: string) {
+  const owner = state.controlOwnership?.[repoId] || null;
+  if (!owner) {
+    return null;
+  }
+  const lastSeenAt = Date.parse(String(owner.lastSeenAt || ''));
+  if (Number.isFinite(lastSeenAt) && Date.now() - lastSeenAt > CONTROL_OWNER_ACTIVE_MS) {
+    return null;
+  }
+  return owner;
+}
+
+function buildRepoControlAccess(
+  repo: Partial<ControlPlaneRepoRecord> & { repoId: string },
+  session: { sessionId?: string; sessionLabel?: string; takeover?: boolean } = {},
+  owner: ControlPlaneRepoControlOwner | null = null
+) {
+  const repoId = String(repo.repoId || '').trim();
+  const sessionId = String(session.sessionId || '').trim();
+  const sessionLabel = String(session.sessionLabel || '').trim() || undefined;
+  const exclusiveControl = repo.exclusiveControl === true;
+  const takeoverPolicy = repo.controlTakeover === 'refuse' ? 'refuse' : 'takeover';
+
+  if (!exclusiveControl) {
+    return {
+      repoId,
+      sessionId: sessionId || null,
+      sessionLabel: sessionLabel || null,
+      exclusiveControl: false,
+      canManage: true,
+      isOwner: owner ? owner.sessionId === sessionId : false,
+      readOnly: false,
+      owner,
+      takeoverPolicy,
+      refusalReason: null,
+    } satisfies ControlPlaneRepoControlAccess;
+  }
+
+  if (!owner) {
+    return {
+      repoId,
+      sessionId: sessionId || null,
+      sessionLabel: sessionLabel || null,
+      exclusiveControl: true,
+      canManage: Boolean(sessionId),
+      isOwner: false,
+      readOnly: !sessionId,
+      owner: null,
+      takeoverPolicy,
+      refusalReason: sessionId ? null : 'owner-required',
+    } satisfies ControlPlaneRepoControlAccess;
+  }
+
+  if (!sessionId) {
+    return {
+      repoId,
+      sessionId: null,
+      sessionLabel: sessionLabel || null,
+      exclusiveControl: true,
+      canManage: false,
+      isOwner: false,
+      readOnly: true,
+      owner,
+      takeoverPolicy,
+      refusalReason: 'missing-session',
+    } satisfies ControlPlaneRepoControlAccess;
+  }
+
+  if (owner.sessionId === sessionId) {
+    return {
+      repoId,
+      sessionId,
+      sessionLabel: sessionLabel || owner.sessionLabel || null,
+      exclusiveControl: true,
+      canManage: true,
+      isOwner: true,
+      readOnly: false,
+      owner,
+      takeoverPolicy,
+      refusalReason: null,
+    } satisfies ControlPlaneRepoControlAccess;
+  }
+
+  if (session.takeover === true && takeoverPolicy === 'takeover') {
+    return {
+      repoId,
+      sessionId,
+      sessionLabel: sessionLabel || null,
+      exclusiveControl: true,
+      canManage: true,
+      isOwner: false,
+      readOnly: false,
+      owner,
+      takeoverPolicy,
+      refusalReason: null,
+    } satisfies ControlPlaneRepoControlAccess;
+  }
+
+  return {
+    repoId,
+    sessionId,
+    sessionLabel: sessionLabel || null,
+    exclusiveControl: true,
+    canManage: false,
+    isOwner: false,
+    readOnly: true,
+    owner,
+    takeoverPolicy,
+    refusalReason: takeoverPolicy === 'refuse' ? 'takeover-refused' : 'owned-by-another-session',
+  } satisfies ControlPlaneRepoControlAccess;
+}
+
+function ensureRepoControlAccess(
+  rootDir: string,
+  repo: Partial<ControlPlaneRepoRecord> & { repoId: string },
+  session: { sessionId?: string; sessionLabel?: string; takeover?: boolean } = {}
+) {
+  const state = loadControlPlaneState(rootDir);
+  const repoId = String(repo.repoId || '').trim();
+  const sessionId = String(session.sessionId || '').trim();
+  const sessionLabel = String(session.sessionLabel || '').trim() || undefined;
+  const exclusiveControl = repo.exclusiveControl === true;
+  const takeoverPolicy = repo.controlTakeover === 'refuse' ? 'refuse' : 'takeover';
+  clearExpiredRepoControlOwner(state, repoId);
+  let owner = state.controlOwnership?.[repoId] || null;
+
+  if (!exclusiveControl) {
+    return buildRepoControlAccess(repo, session, owner);
+  }
+
+  if (!sessionId) {
+    return buildRepoControlAccess(repo, session, owner);
+  }
+
+  const now = new Date().toISOString();
+  if (!owner) {
+    owner = {
+      repoId,
+      sessionId,
+      sessionLabel: sessionLabel || null,
+      exclusiveControl: true,
+      takeoverPolicy,
+      claimedAt: now,
+      lastSeenAt: now,
+      takeoverCount: 0,
+    };
+    state.controlOwnership = state.controlOwnership || {};
+    state.controlOwnership[repoId] = owner;
+    saveControlPlaneState(rootDir, state);
+    return buildRepoControlAccess(repo, session, owner);
+  }
+
+  if (owner.sessionId === sessionId) {
+    owner.lastSeenAt = now;
+    if (sessionLabel) {
+      owner.sessionLabel = sessionLabel;
+    }
+    saveControlPlaneState(rootDir, state);
+    return buildRepoControlAccess(repo, session, owner);
+  }
+
+  if (session.takeover === true && takeoverPolicy === 'takeover') {
+    owner = {
+      ...owner,
+      sessionId,
+      sessionLabel: sessionLabel || owner.sessionLabel || null,
+      lastSeenAt: now,
+      takeoverAt: now,
+      takeoverCount: Number(owner.takeoverCount || 0) + 1,
+    };
+    state.controlOwnership![repoId] = owner;
+    saveControlPlaneState(rootDir, state);
+    return buildRepoControlAccess(repo, session, owner);
+  }
+
+  return buildRepoControlAccess(repo, session, owner);
+}
+
+function describeRepoControlAccess(
+  rootDir: string,
+  repo: Partial<ControlPlaneRepoRecord> & { repoId: string },
+  session: { sessionId?: string; sessionLabel?: string } = {}
+) {
+  const state = loadControlPlaneState(rootDir);
+  const owner = getActiveRepoControlOwner(state, String(repo.repoId || '').trim());
+  return buildRepoControlAccess(repo, {
+    sessionId: session.sessionId,
+    sessionLabel: session.sessionLabel,
+    takeover: false,
+  }, owner);
 }
 
 function getRepoStatuses(rootDir: string) {
@@ -682,6 +1054,9 @@ function createControlPlaneRestartJob(payload: ControlPlaneRestartPayload): Cont
     repoId: payload.repoId,
     payload: {
       repoId: payload.repoId,
+      controlSessionId: payload.controlSessionId,
+      controlSessionLabel: payload.controlSessionLabel,
+      takeoverControl: payload.takeoverControl === true,
     },
     status: 'queued' as const,
     createdAt: new Date().toISOString(),
@@ -842,6 +1217,8 @@ function shouldPersistControlPlaneState(rootDir: string) {
 }
 
 export {
+  describeRepoControlAccess,
+  ensureRepoControlAccess,
   claimJob,
   claimNextJob,
   completeJob,
@@ -854,6 +1231,7 @@ export {
   ensureControlPlaneDataDir,
   enqueueJob,
   getControlPlanePaths,
+  getManagedProcesses,
   listConversations,
   listDiscoveredRepos,
   getRepoStatuses,
@@ -861,6 +1239,7 @@ export {
   loadControlPlaneState,
   queueAgentChatMessage,
   saveControlPlaneState,
+  setManagedProcess,
   setRepoStatus,
   touchHeartbeat,
   shouldPersistControlPlaneState,

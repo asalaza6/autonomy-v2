@@ -208,6 +208,33 @@ type RepoSummary = {
   prdHistory?: PrdSummary[];
   agentStatuses?: AgentSummary[];
   pullRequestStatuses?: PullRequestSummary[];
+  managedProcesses?: Record<string, {
+    target?: string;
+    sessionId?: string;
+    outputSessionId?: string | null;
+    pid?: number | null;
+    running?: boolean;
+    singletonOutcome?: string;
+    requestedAt?: string | null;
+    startedAt?: string | null;
+    completedAt?: string | null;
+  }>;
+  controlAccess?: {
+    sessionId?: string | null;
+    sessionLabel?: string | null;
+    exclusiveControl?: boolean;
+    canManage?: boolean;
+    isOwner?: boolean;
+    readOnly?: boolean;
+    takeoverPolicy?: string;
+    refusalReason?: string | null;
+    owner?: {
+      sessionId?: string;
+      sessionLabel?: string | null;
+      claimedAt?: string;
+      lastSeenAt?: string;
+    } | null;
+  } | null;
   repoAssistant?: {
     github?: {
       available?: boolean;
@@ -374,6 +401,7 @@ let deployingRepoIds = new Set<string>();
 let resettingPrdRepoIds = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
 let restartingRepoIds = new Set<string>();
+const CONTROL_SESSION_STORAGE_KEY = 'autonomy.control.session';
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedQueuedPrdId = '';
 let selectedHistoryPrdId = '';
@@ -1123,6 +1151,39 @@ function safeLocalStorageRemove(key: string) {
   }
 }
 
+function getControlSession() {
+  const existing = safeLocalStorageGet(CONTROL_SESSION_STORAGE_KEY);
+  if (existing) {
+    try {
+      const parsed = JSON.parse(existing) as { sessionId?: string; sessionLabel?: string };
+      const sessionId = String(parsed.sessionId || '').trim();
+      const sessionLabel = String(parsed.sessionLabel || '').trim();
+      if (sessionId) {
+        return {
+          sessionId,
+          sessionLabel: sessionLabel || buildControlSessionLabel(sessionId),
+        };
+      }
+    } catch {
+      // Ignore malformed storage.
+    }
+  }
+  const sessionId = `cp_${Math.random().toString(16).slice(2)}${Date.now().toString(16)}`;
+  const session = {
+    sessionId,
+    sessionLabel: buildControlSessionLabel(sessionId),
+  };
+  safeLocalStorageSet(CONTROL_SESSION_STORAGE_KEY, JSON.stringify(session));
+  return session;
+}
+
+function buildControlSessionLabel(sessionId: string) {
+  const suffix = sessionId.slice(-6);
+  return entranceContext.entrance === 'project'
+    ? `project:${entranceContext.repoId || 'repo'}:${suffix}`
+    : `manager:${suffix}`;
+}
+
 function hasOwn(value: object, key: string) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -1251,10 +1312,13 @@ async function handlePrdReset(repoId: string) {
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const controlSession = getControlSession();
   const response = await fetch(resolveApiUrl(url), {
     ...init,
     headers: {
       'content-type': 'application/json',
+      'x-autonomy-control-session-id': controlSession.sessionId,
+      'x-autonomy-control-session-label': controlSession.sessionLabel,
       ...(init && init.headers ? init.headers : {}),
     },
   });

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { buildStatusSnapshot } from '../../src/autonomy-v2/control-plane/status-service.js';
 import { selectActivePullRequestStatusForPrd } from '../../src/autonomy-v2/control-plane/status-view.js';
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
+import { setManagedProcess } from '../../src/server/control-plane/control-plane-store.js';
 import {
   addPrdWithTasks,
   CLI_BIN,
@@ -218,6 +219,31 @@ test('status snapshots include archived PRDs for project history', () => {
     number: 13,
     url: 'https://github.com/asalaza6/autonomy-v2/pull/13',
   });
+});
+
+test('status snapshots expose managed process records for the current repo target scope', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-managed-processes-');
+  initAutonomyRepo(repoDir);
+
+  setManagedProcess(repoDir, 'default', 'server', {
+    sessionId: 'proc-server-1',
+    outputSessionId: 'output-server-1',
+    pid: process.pid,
+    running: true,
+    singletonOutcome: 'replaced',
+    preRestartPid: 12345,
+    postRestartPid: process.pid,
+  });
+
+  const snapshot = buildStatusSnapshot(repoDir);
+
+  assert.equal(snapshot.controlPlane.managedProcesses.server.sessionId, 'proc-server-1');
+  assert.equal(snapshot.controlPlane.managedProcesses.server.outputSessionId, 'output-server-1');
+  assert.equal(snapshot.controlPlane.managedProcesses.server.pid, process.pid);
+  assert.equal(snapshot.controlPlane.managedProcesses.server.running, true);
+  assert.equal(snapshot.controlPlane.managedProcesses.server.singletonOutcome, 'replaced');
+  assert.equal(snapshot.controlPlane.managedProcesses.server.preRestartPid, 12345);
+  assert.equal('default' in snapshot.controlPlane.managedProcesses, false);
 });
 
 test('status snapshots omit linked pull request metadata when history PRDs have no associated PR', () => {

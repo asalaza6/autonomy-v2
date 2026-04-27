@@ -10,6 +10,8 @@ import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapsh
 import { readAutonomyPackageStatus } from '../commands/update.js';
 import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../sync/review-reconciliation.js';
 import { resolveRepoAssistantGithubCapabilityStatus } from '../../server/control-plane/control-plane-github.js';
+import { loadControlPlaneConfig } from '../../server/control-plane/control-plane-config.js';
+import { getManagedProcesses } from '../../server/control-plane/control-plane-store.js';
 
 function buildStatusSnapshot(rootDir) {
   ensureInitialized(rootDir);
@@ -57,6 +59,7 @@ function buildStatusSnapshot(rootDir) {
   const repoAssistant = {
     github: resolveRepoAssistantGithubCapabilityStatus(rootDir),
   };
+  const managedProcesses = buildManagedProcessSnapshot(rootDir);
 
   return {
     configPath: pathRelative(rootDir, paths.agentsConfig),
@@ -76,10 +79,47 @@ function buildStatusSnapshot(rootDir) {
     deployment: buildDeploymentSnapshot(rootDir, config),
     autonomyPackage: readAutonomyPackageStatus(rootDir),
     repoAssistant,
+    controlPlane: {
+      managedProcesses,
+    },
     runtime,
     prds,
     prdHistory,
   };
+}
+
+function buildManagedProcessSnapshot(rootDir) {
+  const repoId = String(loadControlPlaneConfig(rootDir)?.repoId || '').trim();
+  const managedProcesses = getManagedProcesses(rootDir, repoId) || {};
+  return Object.fromEntries(Object.entries(managedProcesses).map(([target, process]) => {
+    const pid = normalizeManagedPid(process && (process.pid ?? process.postRestartPid));
+    const running = pid ? isProcessAlive(pid) : false;
+    return [target, {
+      ...process,
+      pid,
+      postRestartPid: normalizeManagedPid(process && process.postRestartPid) ?? pid,
+      preRestartPid: normalizeManagedPid(process && process.preRestartPid),
+      running,
+      updatedAt: String(process && process.updatedAt || process && process.completedAt || process && process.startedAt || new Date().toISOString()),
+    }];
+  }));
+}
+
+function normalizeManagedPid(value) {
+  const pid = Number(value);
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+function isProcessAlive(pid) {
+  if (!pid || pid === process.pid) {
+    return pid === process.pid;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return Boolean(error && typeof error === 'object' && error.code === 'EPERM');
+  }
 }
 
 function reconcileTaskQueuesForStatus(taskQueues, prs) {
