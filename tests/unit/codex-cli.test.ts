@@ -219,3 +219,36 @@ test('runCodexExec disables the wall-clock timeout when configured to 0', async 
     restoreEnv('AUTONOMY_CODEX_EXEC_TIMEOUT_MS', originalTimeout);
   }
 });
+
+test('runCodexExec defaults to no wall-clock timeout when unset', async () => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-default-no-timeout-'));
+  const fakeCodexPath = path.join(fixtureDir, 'fake-codex-delay.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  const originalTimeout = process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS;
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    'setTimeout(() => {',
+    "  process.stdout.write(JSON.stringify({ session_id: 'sess-default-no-timeout' }) + '\\n');",
+    '  process.exit(0);',
+    '}, 200);',
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+  delete process.env.AUTONOMY_CODEX_EXEC_TIMEOUT_MS;
+
+  try {
+    const output: any = await runCodexExec({
+      cwd: fixtureDir,
+      prompt: 'Make a small change.',
+      readOnly: false,
+      captureConversationId: true,
+    });
+
+    assert.equal(output.conversationId, 'sess-default-no-timeout');
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
+    restoreEnv('AUTONOMY_CODEX_EXEC_TIMEOUT_MS', originalTimeout);
+  }
+});

@@ -11,7 +11,7 @@ import {
 } from './codex-shared.js';
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
-const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 0;
 const SAFE_CODEX_ENV_KEYS = [
   'HOME',
   'PATH',
