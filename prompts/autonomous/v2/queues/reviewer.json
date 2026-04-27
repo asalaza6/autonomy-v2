@@ -972,11 +972,21 @@
         "Verification includes `npm run typecheck` plus the focused unit, UI, or smoke tests for the control-plane views and refresh behavior affected by this change."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-04-27T01:03:15.217Z",
-      "updatedAt": "2026-04-27T01:03:37.648Z",
+      "updatedAt": "2026-04-27T01:03:56.409Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-27T01:03:18.786Z"
+      "dispatchedAt": "2026-04-27T01:03:18.786Z",
+      "conversationReferences": {
+        "agent:reviewer": {
+          "conversationId": "019dcc76-62cc-7ed0-9e14-23df926be8af",
+          "agentId": "reviewer",
+          "role": "review",
+          "updatedAt": "2026-04-27T01:03:56.409Z"
+        }
+      },
+      "reviewedAt": "2026-04-27T01:03:56.409Z",
+      "lastDecision": "changes_requested"
     }
   ]
 }
