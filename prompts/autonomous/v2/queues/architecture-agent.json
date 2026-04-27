@@ -4753,7 +4753,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "createdAt": "2026-04-27T01:08:55.209Z",
-      "updatedAt": "2026-04-27T01:09:19.450Z",
+      "updatedAt": "2026-04-27T01:09:19.511Z",
       "startedAt": "2026-04-27T01:08:55.209Z",
       "prId": "pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "conversationReferences": {
@@ -4766,7 +4766,8 @@
       },
       "implementationConversationId": "019dcc77-c51e-7f83-a337-fb56578cc325",
       "completedAt": "2026-04-27T01:09:19.450Z",
-      "completionMode": "noop"
+      "completionMode": "noop",
+      "commitSha": "d34652229db889f1b737e461ab27b763a392221c"
     }
   ]
 }
