@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-simplify-repo-summary-surfaces-2d485f",
+  "title": "Simplify repo summary surfaces with progressive disclosure",
+  "createdAt": "2026-04-27T04:47:26.695Z",
+  "specification": "# PRD: Simplify repo summary surfaces with progressive disclosure\n\nPriority: medium\n\n## Problem\nManager and repo summary surfaces still expose too much operational detail at once, which makes the default view hard to scan and unclear about what matters first for each repo.\n\n## Goal\nMake the default per-repo view minimal and high-signal, with deeper operational detail available only after opening the repo page or expanding a detail panel.\n\n## Requirements\n- Define a minimal default summary for manager repo cards and repo main surfaces that prioritizes repo identity, freshness, top status, active PRD state, and deploy/restart attention signals.\n- Move secondary operational details such as GitHub validation metadata, package controls, live process internals, PID evidence, and detailed deployment/restart diagnostics behind the repo control page and/or explicit expanders.\n- Keep the repo control page as the authoritative detailed surface for agents, pull requests, GitHub access, restart evidence, live process output, and raw status.\n- Use progressive disclosure consistently so managers can scan many repos quickly before drilling into one repo.\n- Preserve existing actions such as open repo control page, deploy, restart, package update, and PRD creation without changing their backend behavior.\n- Ensure stale or conflicting states such as PR drift and failed GitHub validation still surface as concise attention labels in the minimal view rather than disappearing.\n\n## Acceptance Criteria\n- Manager dashboard cards show a compact summary by default and are materially less dense than the current multi-section card layout.\n- Opening a repo control page provides the fuller operational detail without losing existing actions or diagnostics.\n- The repo main surface remains focused on current work/progress, while detailed status remains accessible in a clearly labeled deeper view.\n- Failed GitHub validation, failed restart state, deploy available, and PR drift appear as concise summary signals in the default view.\n- Existing control-plane actions continue to function with no backend contract changes.\n\n## Verification\n- Inspect manager and repo control-plane rendering paths to confirm summary fields and detailed fields are separated as intended.\n- Add or update focused UI tests for compact manager cards and detailed repo drill-down behavior.\n- Run `npm run typecheck`.\n- Run relevant control-plane unit or smoke tests covering dashboard and repo-page rendering.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777265132670_c2038aaf60f028\nManager message: msg_1777265132670_61dfd92db4c738\nAgent message: msg_1777265132670_5be5bff0737b08\nCreated: 2026-04-27T04:46:46.943Z",
+  "requirements": [
+    "Define a minimal default summary for manager repo cards and repo main surfaces that prioritizes repo identity",
+    "freshness",
+    "top status",
+    "active PRD state",
+    "and deploy/restart attention signals.",
+    "Move secondary operational details such as GitHub validation metadata",
+    "package controls",
+    "live process internals",
+    "PID evidence",
+    "and detailed deployment/restart diagnostics behind the repo control page and/or explicit expanders.",
+    "Keep the repo control page as the authoritative detailed surface for agents",
+    "pull requests",
+    "GitHub access",
+    "restart evidence",
+    "live process output",
+    "and raw status.",
+    "Use progressive disclosure consistently so managers can scan many repos quickly before drilling into one repo.",
+    "Preserve existing actions such as open repo control page",
+    "deploy",
+    "restart",
+    "package update",
+    "and PRD creation without changing their backend behavior.",
+    "Ensure stale or conflicting states such as PR drift and failed GitHub validation still surface as concise attention labels in the minimal view rather than disappearing."
+  ]
+}
