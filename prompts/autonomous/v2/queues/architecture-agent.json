@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4663,6 +4662,30 @@
       "completedAt": "2026-04-27T01:03:13.939Z",
       "completionMode": "code",
       "commitSha": "4bde562aee61bb3d0b0792c518b44352598f2e7b"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-live-terminal-restart-and-f8b24d-architecture-agent-1",
+      "title": "Address review for [architecture-agent] architecture lane work for prd-live-terminal-restart-and-f8b24d",
+      "description": "Merge is blocked by a failing repo-level check. `npm run typecheck` passed, but `npm run lint` failed against the current branch, so this is not safe to merge into `dev` yet.\n`npm run lint` is failing in [src/server/control-plane/control-plane-client.tsx](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-client.tsx:3237) and [src/server/control-plane/control-plane-client.tsx](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-client.tsx:3431): `restartEvidence` is assigned but unused, and `ProjectRestartPanel` is defined but unused. Remove or wire these code paths so the control-plane UI change passes the repo merge blocker.\n`npm run lint` is also failing in [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-package-update.ts:4) because `fileURLToPath` is imported but unused. Clean up the import and rerun the required checks.\nAfter fixing the lint errors, rerun the minimum required verification for this lane: `npm run typecheck` and `npm run lint`. The focused control-plane tests added in this branch are in place, but the current failed merge-blocking check prevents approval.\nBlocking checks failed: npm run lint",
+      "agentId": "architecture-agent",
+      "prdId": "prd-live-terminal-restart-and-f8b24d",
+      "laneKey": "prd-live-terminal-restart-and-f8b24d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Merge is blocked by a failing repo-level check. `npm run typecheck` passed, but `npm run lint` failed against the current branch, so this is not safe to merge into `dev` yet.\n`npm run lint` is failing in [src/server/control-plane/control-plane-client.tsx](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-client.tsx:3237) and [src/server/control-plane/control-plane-client.tsx](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-client.tsx:3431): `restartEvidence` is assigned but unused, and `ProjectRestartPanel` is defined but unused. Remove or wire these code paths so the control-plane UI change passes the repo merge blocker.\n`npm run lint` is also failing in [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-package-update.ts:4) because `fileURLToPath` is imported but unused. Clean up the import and rerun the required checks.\nAfter fixing the lint errors, rerun the minimum required verification for this lane: `npm run typecheck` and `npm run lint`. The focused control-plane tests added in this branch are in place, but the current failed merge-blocking check prevents approval.\nBlocking checks failed: npm run lint"
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
+      "createdAt": "2026-04-27T01:03:56.409Z",
+      "updatedAt": "2026-04-27T01:03:56.409Z",
+      "startedAt": "2026-04-27T01:03:56.409Z",
+      "prId": "pr-prd-live-terminal-restart-and-f8b24d-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
