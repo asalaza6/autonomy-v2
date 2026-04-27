@@ -972,9 +972,9 @@
         "Verification includes `npm run typecheck` plus the focused unit, UI, or smoke tests for the control-plane views and refresh behavior affected by this change."
       ],
       "reviewRound": 5,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-27T01:03:15.217Z",
-      "updatedAt": "2026-04-27T01:10:43.652Z",
+      "updatedAt": "2026-04-27T01:10:48.503Z",
       "reviewedAt": "2026-04-27T01:10:43.652Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
@@ -986,7 +986,8 @@
           "role": "review",
           "updatedAt": "2026-04-27T01:10:43.652Z"
         }
-      }
+      },
+      "mergedAt": "2026-04-27T01:10:48.503Z"
     }
   ]
 }
