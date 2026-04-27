@@ -145,6 +145,7 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   label?: string;
   description?: string;
   default?: boolean;
+  repoAssistantValidationPullRequest?: number;
   deployCommand?: DeployCommandConfig;
   packageUpdateCommand?: DeployCommandConfig;
   controlBridgeRestartCommand?: DeployCommandConfig;

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { buildStatusSnapshot } from '../../src/autonomy-v2/control-plane/status-service.js';
 import { selectActivePullRequestStatusForPrd } from '../../src/autonomy-v2/control-plane/status-view.js';
 import { buildControlPlaneDashboard } from '../../src/server/control-plane/control-plane-dashboard.js';
+import { resolveRepoAssistantGithubCapability } from '../../src/server/control-plane/control-plane-github.js';
 import { setManagedProcess } from '../../src/server/control-plane/control-plane-store.js';
 import {
   addPrdWithTasks,
@@ -71,6 +72,95 @@ test('status snapshots do not perform live GitHub validation during repeated ref
       owner: 'asalaza6',
       repo: 'autonomy-v2',
     });
+  } finally {
+    if (typeof originalGithubToken === 'string') {
+      process.env.GITHUB_TOKEN = originalGithubToken;
+    } else {
+      delete process.env.GITHUB_TOKEN;
+    }
+    if (typeof originalGhToken === 'string') {
+      process.env.GH_TOKEN = originalGhToken;
+    } else {
+      delete process.env.GH_TOKEN;
+    }
+  }
+});
+
+test('status snapshots surface configured validation pull request overrides and cached validation state', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-github-configured-');
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['remote', 'add', 'origin', 'https://github.com/example/repo.git']);
+
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify({
+    schemaVersion: 1,
+    repoId: 'default',
+    label: 'Current workspace',
+    description: 'Allowed PRD target for the control plane.',
+    repoAssistantValidationPullRequest: 91,
+  }, null, 2)}\n`, 'utf8');
+
+  process.env.GITHUB_TOKEN = 'configured-status-token';
+  delete process.env.GH_TOKEN;
+
+  try {
+    const pendingSnapshot = buildStatusSnapshot(repoDir);
+    assert.equal(pendingSnapshot.repoAssistant.github.status, 'validation-pending');
+    assert.equal(pendingSnapshot.repoAssistant.github.validation.pullRequestNumber, 91);
+    assert.equal(pendingSnapshot.repoAssistant.github.validation.pullRequestSource, 'config');
+
+    resolveRepoAssistantGithubCapability(repoDir, {
+      repository: {
+        owner: 'example',
+        repo: 'repo',
+      },
+      configuredValidationPullNumber: 91,
+      githubApiRunner(args) {
+        if (args[0] === 'repos/example/repo') {
+          return JSON.stringify({
+            private: false,
+            visibility: 'public',
+            default_branch: 'dev',
+          });
+        }
+        if (args[0] === 'repos/example/repo/pulls/91') {
+          return JSON.stringify({
+            number: 91,
+            title: 'Configured validation',
+            state: 'open',
+            html_url: 'https://github.com/example/repo/pull/91',
+            user: { login: 'example' },
+            base: { ref: 'dev' },
+            head: { ref: 'feature/repo-assistant' },
+          });
+        }
+        if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+          return '[]';
+        }
+        if (args[0] === 'graphql') {
+          return JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  reviewThreads: {
+                    nodes: [],
+                  },
+                },
+              },
+            },
+          });
+        }
+        throw new Error(`Unexpected route: ${args[0]}`);
+      },
+    });
+
+    const validatedSnapshot = buildStatusSnapshot(repoDir);
+    assert.equal(validatedSnapshot.repoAssistant.github.available, true);
+    assert.equal(validatedSnapshot.repoAssistant.github.status, 'enabled');
+    assert.equal(validatedSnapshot.repoAssistant.github.validation.pullRequestNumber, 91);
+    assert.equal(validatedSnapshot.repoAssistant.github.validation.pullRequestSource, 'config');
   } finally {
     if (typeof originalGithubToken === 'string') {
       process.env.GITHUB_TOKEN = originalGithubToken;

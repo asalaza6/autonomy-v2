@@ -238,9 +238,60 @@ test('repo assistant GitHub capability classifies invalid and unauthorized token
     },
   });
   assert.equal(unauthorizedToken.available, false);
-  assert.equal(unauthorizedToken.status, 'unauthorized-token');
+  assert.equal(unauthorizedToken.status, 'unauthorized-repo');
   assert.equal(unauthorizedToken.statusLabel, 'GitHub repo access denied');
   assert.doesNotMatch(JSON.stringify(unauthorizedToken), /another-secret-token/);
+});
+
+test('repo assistant GitHub capability classifies inaccessible and stale validation pull requests', () => {
+  const unauthorizedPull = resolveRepoAssistantGithubCapability('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'pull-secret-token',
+    } as NodeJS.ProcessEnv,
+    repository: TEST_REPO,
+    validationPullNumber: 27,
+    githubApiRunner(args) {
+      if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}`) {
+        return JSON.stringify({
+          private: true,
+          visibility: 'private',
+          default_branch: 'dev',
+        });
+      }
+      const error = new Error('gh failed') as Error & { stderr?: string; status?: number };
+      error.stderr = 'HTTP 403 Resource not accessible by integration';
+      error.status = 1;
+      throw error;
+    },
+  });
+  assert.equal(unauthorizedPull.available, false);
+  assert.equal(unauthorizedPull.status, 'unauthorized-pull');
+  assert.equal(unauthorizedPull.statusLabel, 'GitHub validation PR access denied');
+
+  const stalePull = resolveRepoAssistantGithubCapability('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'stale-secret-token',
+    } as NodeJS.ProcessEnv,
+    repository: TEST_REPO,
+    validationPullNumber: 999,
+    githubApiRunner(args) {
+      if (args[0] === `repos/${TEST_REPO.owner}/${TEST_REPO.repo}`) {
+        return JSON.stringify({
+          private: false,
+          visibility: 'public',
+          default_branch: 'dev',
+        });
+      }
+      const error = new Error('gh failed') as Error & { stderr?: string; status?: number };
+      error.stderr = 'HTTP 404 Not Found';
+      error.status = 1;
+      throw error;
+    },
+  });
+  assert.equal(stalePull.available, false);
+  assert.equal(stalePull.status, 'stale-validation-pull');
+  assert.equal(stalePull.statusLabel, 'GitHub validation PR stale');
+  assert.match(stalePull.detail, /validation pull request #999 is unavailable/i);
 });
 
 test('repo assistant GitHub capability returns validated PR read context for enabled access', () => {
@@ -582,5 +633,110 @@ test('repo assistant GitHub status capability stays lightweight until validation
   assert.equal(statusAfterValidation.available, true);
   assert.equal(statusAfterValidation.status, 'enabled');
   assert.equal(statusAfterValidation.pullRequest.summary.fileCount, 0);
+  assert.equal(githubApiCalls, 6);
+});
+
+test('repo assistant GitHub resolves validation pull request from config and explicit override', () => {
+  const fromConfig: any = resolveRepoAssistantGithubCapabilityStatus('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'status-config-token',
+    } as NodeJS.ProcessEnv,
+    repository: {
+      owner: 'example',
+      repo: 'repo',
+    },
+    configuredValidationPullNumber: 91,
+  });
+
+  assert.equal(fromConfig.validation.pullRequestNumber, 91);
+  assert.equal(fromConfig.validation.pullRequestSource, 'config');
+
+  const fromOverride: any = resolveRepoAssistantGithubCapabilityStatus('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'status-config-token',
+    } as NodeJS.ProcessEnv,
+    repository: {
+      owner: 'example',
+      repo: 'repo',
+    },
+    configuredValidationPullNumber: 91,
+    validationPullNumber: 77,
+  });
+
+  assert.equal(fromOverride.validation.pullRequestNumber, 77);
+  assert.equal(fromOverride.validation.pullRequestSource, 'override');
+});
+
+test('repo assistant GitHub cache refreshes validation source metadata on cache reuse', () => {
+  let githubApiCalls = 0;
+
+  const validatedFromConfig: any = resolveRepoAssistantGithubCapability('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'cached-source-token',
+    } as NodeJS.ProcessEnv,
+    repository: {
+      owner: 'example',
+      repo: 'repo',
+    },
+    configuredValidationPullNumber: 91,
+    githubApiRunner(args) {
+      githubApiCalls += 1;
+      if (args[0] === 'repos/example/repo') {
+        return JSON.stringify({
+          private: false,
+          visibility: 'public',
+          default_branch: 'dev',
+        });
+      }
+      if (args[0] === 'repos/example/repo/pulls/91') {
+        return JSON.stringify({
+          number: 91,
+          title: 'Configured validation',
+          state: 'open',
+          html_url: 'https://github.com/example/repo/pull/91',
+          user: { login: 'example' },
+          base: { ref: 'dev' },
+          head: { ref: 'feature/repo-assistant' },
+        });
+      }
+      if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+        return '[]';
+      }
+      if (args[0] === 'graphql') {
+        return JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  nodes: [],
+                },
+              },
+            },
+          },
+        });
+      }
+      throw new Error(`Unexpected route: ${args[0]}`);
+    },
+  });
+
+  assert.equal(validatedFromConfig.validation.pullRequestNumber, 91);
+  assert.equal(validatedFromConfig.validation.pullRequestSource, 'config');
+  assert.equal(githubApiCalls, 6);
+
+  const validatedFromOverride: any = resolveRepoAssistantGithubCapabilityStatus('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'cached-source-token',
+    } as NodeJS.ProcessEnv,
+    repository: {
+      owner: 'example',
+      repo: 'repo',
+    },
+    configuredValidationPullNumber: 91,
+    validationPullNumber: 91,
+  });
+
+  assert.equal(validatedFromOverride.validation.pullRequestNumber, 91);
+  assert.equal(validatedFromOverride.validation.pullRequestSource, 'override');
+  assert.equal(validatedFromOverride.status, 'enabled');
   assert.equal(githubApiCalls, 6);
 });

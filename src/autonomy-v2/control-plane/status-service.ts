@@ -10,7 +10,7 @@ import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapsh
 import { readAutonomyPackageStatus } from '../commands/update.js';
 import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../sync/review-reconciliation.js';
 import { resolveRepoAssistantGithubCapabilityStatus } from '../../server/control-plane/control-plane-github.js';
-import { loadControlPlaneConfig } from '../../server/control-plane/control-plane-config.js';
+import { loadControlPlaneConfig, readControlPlaneConfig } from '../../server/control-plane/control-plane-config.js';
 import { getManagedProcesses } from '../../server/control-plane/control-plane-store.js';
 
 function buildStatusSnapshot(rootDir) {
@@ -56,8 +56,13 @@ function buildStatusSnapshot(rootDir) {
     runtime,
     branchLocks,
   });
+  const controlPlaneConfig = readControlPlaneConfig(rootDir);
   const repoAssistant = {
-    github: resolveRepoAssistantGithubCapabilityStatus(rootDir),
+    github: resolveRepoAssistantGithubCapabilityStatus(rootDir, {
+      configuredValidationPullNumber: controlPlaneConfig && typeof controlPlaneConfig.repoAssistantValidationPullRequest === 'number'
+        ? controlPlaneConfig.repoAssistantValidationPullRequest
+        : null,
+    }),
   };
   const managedProcesses = buildManagedProcessSnapshot(rootDir);
 

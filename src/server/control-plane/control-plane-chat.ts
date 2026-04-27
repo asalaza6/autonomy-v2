@@ -14,6 +14,7 @@ import {
   resolveRepoAssistantGithubEnv,
   resolveRepoAssistantGithubCapability,
 } from './control-plane-github.js';
+import { readControlPlaneConfig } from './control-plane-config.js';
 
 const CHAT_RESPONSE_SCHEMA = {
   type: 'object',
@@ -78,8 +79,12 @@ async function answerControlPlaneAgentChat({
   }
 
   const projectContext = await readProjectContextForChatPrompt(repoRoot);
+  const controlPlaneConfig = readControlPlaneConfig(repoRoot);
   const githubCapability = resolveRepoAssistantGithubCapability(repoRoot, {
     includePullRequestData: true,
+    configuredValidationPullNumber: controlPlaneConfig && typeof controlPlaneConfig.repoAssistantValidationPullRequest === 'number'
+      ? controlPlaneConfig.repoAssistantValidationPullRequest
+      : null,
   });
   const runtimeGithubEnv = resolveRepoAssistantGithubEnv(repoRoot).env;
   const repoAssistantEnv = githubCapability.available === true

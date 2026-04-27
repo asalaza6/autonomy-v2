@@ -273,6 +273,7 @@ type RepoSummary = {
       } | null;
       validation?: {
         pullRequestNumber?: number | null;
+        pullRequestSource?: string | null;
         validatedAt?: string | null;
       } | null;
     } | null;
@@ -3376,6 +3377,9 @@ function RepoGithubAccess({ repo }: { repo: RepoSummary }) {
       {validation && validation.pullRequestNumber ? (
         <div className="queue-detail" style={{ marginTop: '8px' }}>
           Validation PR: #{validation.pullRequestNumber}
+          {validation.pullRequestSource && validation.pullRequestSource !== 'unconfigured'
+            ? ` (${validation.pullRequestSource})`
+            : ''}
         </div>
       ) : null}
       {allowlist.length > 0 ? (

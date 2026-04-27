@@ -18,7 +18,16 @@ function loadControlPlaneConfig(rootDir: string) {
   return config;
 }
 
+function readControlPlaneConfig(rootDir: string) {
+  try {
+    return loadControlPlaneConfig(rootDir);
+  } catch {
+    return null;
+  }
+}
+
 export {
   getControlPlaneConfigPath,
   loadControlPlaneConfig,
+  readControlPlaneConfig,
 };
