@@ -948,7 +948,7 @@
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
-      "sourceTaskId": "architecture-agent-followup-pr-prd-live-terminal-restart-and-f8b24d-architecture-agent-2",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-live-terminal-restart-and-f8b24d-architecture-agent-3",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "baseBranch": "dev",
@@ -972,9 +972,9 @@
         "Verification includes `npm run typecheck` plus the focused unit, UI, or smoke tests for the control-plane views and refresh behavior affected by this change."
       ],
       "reviewRound": 4,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-27T01:03:15.217Z",
-      "updatedAt": "2026-04-27T01:08:58.212Z",
+      "updatedAt": "2026-04-27T01:09:26.688Z",
       "reviewedAt": "2026-04-27T01:08:55.209Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
@@ -984,7 +984,7 @@
           "conversationId": "019dcc76-62cc-7ed0-9e14-23df926be8af",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-27T01:08:58.212Z"
+          "updatedAt": "2026-04-27T01:09:26.688Z"
         }
       }
     }
