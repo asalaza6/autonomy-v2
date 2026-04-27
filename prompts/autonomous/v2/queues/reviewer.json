@@ -940,6 +940,34 @@
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-26T22:57:34.136Z",
       "mergedAt": "2026-04-26T22:58:45.263Z"
+    },
+    {
+      "id": "review-pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
+      "title": "Review [architecture-agent] architecture lane work for prd-live-terminal-restart-and-f8b24d",
+      "description": "Review pr-prd-live-terminal-restart-and-f8b24d-architecture-agent for Implement control-panel live terminal UX, restart focus behavior, and owner-aware read-only states",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
+      "sourceTaskId": "prd-live-terminal-restart-and-f8b24d-architecture-agent-2",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-27T01:03:15.217Z",
+      "updatedAt": "2026-04-27T01:03:15.217Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "After a manager triggers a restart for a managed repo target, the control panel opens or focuses a live terminal or process panel for that same repo target instead of only showing detached restart status.",
+        "The live panel renders target-specific stdout or stderr output, current PID, and running or stopped state from the managed process contract without requiring the operator to open a shell separately.",
+        "When a restart completes successfully, the UI renders normalized restart evidence including `preRestartPid` and `postRestartPid` in a visible target-level summary tied to the live process view.",
+        "If a managed process for the same repo and target already exists, the UI shows a clear message describing whether the request reused, replaced, or refused the existing process, and the visible panel state matches that outcome.",
+        "When exclusive control ownership is enabled and another session owns controls, the non-owner session remains visible but lifecycle control actions are disabled or read-only, with clear owner-session identification and takeover affordance or refusal messaging.",
+        "After a successful takeover, the UI refreshes to show the new owner state and re-enables lifecycle controls only for the session that now owns the repo controls.",
+        "Client or UI-focused tests cover live process panel rendering, restart focus behavior, restart evidence display, singleton outcome messaging, read-only non-owner state, and takeover state refresh.",
+        "Manual verification instructions remain satisfiable: one scenario confirms restart opens a live process view with output and PID change evidence, and a second scenario confirms two concurrent panels respect exclusive ownership and takeover behavior.",
+        "Verification includes `npm run typecheck` plus the focused unit, UI, or smoke tests for the control-plane views and refresh behavior affected by this change."
+      ],
+      "scopeViolations": []
     }
   ]
 }
