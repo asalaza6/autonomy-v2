@@ -15,5 +15,42 @@
     "Add optional per-repo exclusive control ownership so only one control-panel session can use control actions at a time.",
     "Allow non-owner sessions to remain open in read-only mode with clear indication of who owns controls and how takeover works.",
     "Ensure server and bridge lifecycle semantics are explicitly defined rather than relying on incidental behavior such as port collisions."
+  ],
+  "tasks": [
+    {
+      "id": "prd-live-terminal-restart-and-f8b24d-architecture-agent-1",
+      "title": "Implement managed live process lifecycle and exclusive control ownership contracts for control-panel targets",
+      "agentId": "architecture-agent",
+      "description": "Replace the detached restart path for control-plane managed targets with an explicit managed-process lifecycle that the control plane can observe directly, and define repo-target singleton semantics plus optional per-repo exclusive control ownership. Scope includes the bridge and control-plane server/runtime layers that launch, replace, refuse, or reconnect to managed `server` and `controlBridge` processes; persisted restart result normalization and PID evidence; ownership state and takeover rules for concurrent control-panel sessions; any dashboard or API contract updates needed to expose managed process status, output handles or identifiers, owner session metadata, and replacement outcomes; and focused automated coverage for lifecycle, singleton, and ownership logic. Prefer the narrowest changes in `src/server/control-plane/`, `src/autonomy-v2/control-plane/`, and adjacent runtime modules, and target `dev` semantics only.",
+      "acceptance": [
+        "Restarting a managed `server` or `controlBridge` target no longer relies on a detached background relaunch path and instead produces a managed process/session record that the control plane can observe directly.",
+        "The lifecycle contract explicitly defines what happens when a managed process for the same repo and target already exists, including whether the request replaces the existing process, reuses it, or refuses to start, and the chosen outcome is returned as structured status rather than inferred from port collisions.",
+        "Successful replacement-style restarts persist normalized restart evidence for the target including at least `preRestartPid` and `postRestartPid`, with clear non-success reasons preserved when either PID is unavailable or replacement does not occur.",
+        "The control-plane status/dashboard contract exposes current managed-process running state, current PID, and enough process-session metadata for the UI to subscribe to or focus the live process view without shell access.",
+        "When optional exclusive control ownership is enabled for a repo session, only one active control-panel session can execute lifecycle control actions for that repo at a time, while non-owner sessions remain connected in read-only mode.",
+        "Ownership state includes clear owner-session metadata and deterministic takeover behavior so a later control-panel session can either be refused control or explicitly take ownership according to the documented rule.",
+        "Unit tests cover restart result normalization, singleton replacement or refusal rules, ownership acquisition, read-only behavior for non-owner sessions, takeover outcomes, and PID evidence generation.",
+        "Integration coverage exercises bridge or control-plane restart flow through the managed-process lifecycle and asserts that status refresh reflects the new PID, managed running state, and ownership metadata."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-live-terminal-restart-and-f8b24d-architecture-agent-2",
+      "title": "Implement control-panel live terminal UX, restart focus behavior, and owner-aware read-only states",
+      "agentId": "architecture-agent",
+      "description": "Update the control-panel client and any supporting server wiring so restarting a managed target opens or focuses a live terminal or process panel for that repo target and surfaces current output, PID, lifecycle state, restart evidence, and ownership messaging in the UI. Scope includes project or manager control views under `src/server/control-plane/`, process-output streaming or polling integration already supported by the managed-process contract, clear user-visible messaging for singleton replacement or refusal outcomes, owner-versus-non-owner control affordances with takeover interaction, and focused UI or smoke coverage proving state refresh behavior. Use the managed-process and ownership contracts from the paired task rather than introducing a second lifecycle path.",
+      "acceptance": [
+        "After a manager triggers a restart for a managed repo target, the control panel opens or focuses a live terminal or process panel for that same repo target instead of only showing detached restart status.",
+        "The live panel renders target-specific stdout or stderr output, current PID, and running or stopped state from the managed process contract without requiring the operator to open a shell separately.",
+        "When a restart completes successfully, the UI renders normalized restart evidence including `preRestartPid` and `postRestartPid` in a visible target-level summary tied to the live process view.",
+        "If a managed process for the same repo and target already exists, the UI shows a clear message describing whether the request reused, replaced, or refused the existing process, and the visible panel state matches that outcome.",
+        "When exclusive control ownership is enabled and another session owns controls, the non-owner session remains visible but lifecycle control actions are disabled or read-only, with clear owner-session identification and takeover affordance or refusal messaging.",
+        "After a successful takeover, the UI refreshes to show the new owner state and re-enables lifecycle controls only for the session that now owns the repo controls.",
+        "Client or UI-focused tests cover live process panel rendering, restart focus behavior, restart evidence display, singleton outcome messaging, read-only non-owner state, and takeover state refresh.",
+        "Manual verification instructions remain satisfiable: one scenario confirms restart opens a live process view with output and PID change evidence, and a second scenario confirms two concurrent panels respect exclusive ownership and takeover behavior.",
+        "Verification includes `npm run typecheck` plus the focused unit, UI, or smoke tests for the control-plane views and refresh behavior affected by this change."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
