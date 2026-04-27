@@ -666,3 +666,77 @@ test('repo assistant GitHub resolves validation pull request from config and exp
   assert.equal(fromOverride.validation.pullRequestNumber, 77);
   assert.equal(fromOverride.validation.pullRequestSource, 'override');
 });
+
+test('repo assistant GitHub cache refreshes validation source metadata on cache reuse', () => {
+  let githubApiCalls = 0;
+
+  const validatedFromConfig: any = resolveRepoAssistantGithubCapability('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'cached-source-token',
+    } as NodeJS.ProcessEnv,
+    repository: {
+      owner: 'example',
+      repo: 'repo',
+    },
+    configuredValidationPullNumber: 91,
+    githubApiRunner(args) {
+      githubApiCalls += 1;
+      if (args[0] === 'repos/example/repo') {
+        return JSON.stringify({
+          private: false,
+          visibility: 'public',
+          default_branch: 'dev',
+        });
+      }
+      if (args[0] === 'repos/example/repo/pulls/91') {
+        return JSON.stringify({
+          number: 91,
+          title: 'Configured validation',
+          state: 'open',
+          html_url: 'https://github.com/example/repo/pull/91',
+          user: { login: 'example' },
+          base: { ref: 'dev' },
+          head: { ref: 'feature/repo-assistant' },
+        });
+      }
+      if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+        return '[]';
+      }
+      if (args[0] === 'graphql') {
+        return JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  nodes: [],
+                },
+              },
+            },
+          },
+        });
+      }
+      throw new Error(`Unexpected route: ${args[0]}`);
+    },
+  });
+
+  assert.equal(validatedFromConfig.validation.pullRequestNumber, 91);
+  assert.equal(validatedFromConfig.validation.pullRequestSource, 'config');
+  assert.equal(githubApiCalls, 6);
+
+  const validatedFromOverride: any = resolveRepoAssistantGithubCapabilityStatus('/tmp/fixture', {
+    env: {
+      GITHUB_TOKEN: 'cached-source-token',
+    } as NodeJS.ProcessEnv,
+    repository: {
+      owner: 'example',
+      repo: 'repo',
+    },
+    configuredValidationPullNumber: 91,
+    validationPullNumber: 91,
+  });
+
+  assert.equal(validatedFromOverride.validation.pullRequestNumber, 91);
+  assert.equal(validatedFromOverride.validation.pullRequestSource, 'override');
+  assert.equal(validatedFromOverride.status, 'enabled');
+  assert.equal(githubApiCalls, 6);
+});

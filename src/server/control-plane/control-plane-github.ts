@@ -174,13 +174,7 @@ function resolveRepoAssistantGithubCapability(
   const cacheKey = buildRepoAssistantGithubCapabilityCacheKey(base, githubEnv.GITHUB_TOKEN);
   const cachedCapability = repoAssistantGithubCapabilityCache.get(cacheKey);
   if (cachedCapability) {
-    return {
-      ...cachedCapability,
-      validation: {
-        ...cachedCapability.validation,
-        pullRequestNumber: pullNumber,
-      },
-    };
+    return refreshCachedCapabilityValidation(cachedCapability, base.validation);
   }
 
   const token = githubEnv.GITHUB_TOKEN;
@@ -242,13 +236,7 @@ function resolveRepoAssistantGithubCapabilityStatus(
   const cacheKey = buildRepoAssistantGithubCapabilityCacheKey(base, githubEnv.GITHUB_TOKEN);
   const cachedCapability = repoAssistantGithubCapabilityCache.get(cacheKey);
   if (cachedCapability) {
-    return {
-      ...cachedCapability,
-      validation: {
-        ...cachedCapability.validation,
-        pullRequestNumber: pullNumber,
-      },
-    };
+    return refreshCachedCapabilityValidation(cachedCapability, base.validation);
   }
   return {
     ...base,
@@ -384,6 +372,19 @@ function buildRepoAssistantGithubCapabilityCacheKey(base: Record<string, any>, t
     authFiles: Array.isArray(base.authFiles) ? base.authFiles : [],
     token,
   });
+}
+
+function refreshCachedCapabilityValidation(
+  capability: Record<string, any>,
+  validation: Record<string, any>,
+) {
+  return {
+    ...capability,
+    validation: {
+      ...(capability.validation || {}),
+      ...validation,
+    },
+  };
 }
 
 function buildRepoAssistantGithubPromptContext(capability: Record<string, any> | null | undefined) {

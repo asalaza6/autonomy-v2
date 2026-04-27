@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4851,14 +4852,15 @@
       "acceptance": [
         "Requesting changes. The PR has a correctness gap in cached validation-source reporting, and the required focused control-plane tests are not evidenced as passing.\n`src/server/control-plane/control-plane-github.ts:176` and `src/server/control-plane/control-plane-github.ts:244` reuse cached validation results but only overwrite `validation.pullRequestNumber`, not `validation.pullRequestSource`. Because the UI renders that source in `src/server/control-plane/control-plane-client.tsx:3377`, an explicit config/override can still display the stale prior source label after a cache hit. Reproduce by validating a PR under one source, then resolving the same PR number from a different source; status will keep showing the old source. Update the cache-hit path to refresh the full validation metadata and add a regression test for source changes on cache reuse.\nFocused verification is still blocking for this high-risk control-plane/GitHub change. The wrapper only supplied `npm run typecheck` and `npm run lint`; the required targeted tests (`tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts`) are not shown as passing. I attempted to run them, but `npm test -- --test ...` rebuilds `dist/` and fails in this read-only environment with `TS5033 EPERM` writes to `dist/`. Please provide passing targeted test evidence from a writable environment before merge."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
       "createdAt": "2026-04-27T03:05:18.181Z",
-      "updatedAt": "2026-04-27T03:05:18.181Z",
+      "updatedAt": "2026-04-27T03:07:21.826Z",
       "startedAt": "2026-04-27T03:05:18.181Z",
-      "prId": "pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent"
+      "prId": "pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
+      "completedAt": "2026-04-27T03:07:21.826Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
