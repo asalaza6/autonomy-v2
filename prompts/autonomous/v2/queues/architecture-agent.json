@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4713,11 +4714,11 @@
       "acceptance": [
         "`npm run typecheck` and `npm run lint` now pass, and the diff stays in scope, but approval is still blocked by missing focused verification for this high-risk control-plane change set.\nThis PR changes high-risk control-plane server, bridge, and UI behavior across managed restarts, live process output, and exclusive ownership, but the provided check results only show `npm run typecheck` and `npm run lint`. Per the project context and review rules, that is not enough verification for merge safety here.\nRun and report the focused tests that cover the new behavior before re-requesting review. At minimum, include the added or updated coverage in `tests/unit/control-plane-restart-ui.test.ts`, `tests/unit/control-plane-control-access.test.ts`, and `tests/smoke/control-plane.test.ts`, since those files are where this branch validates restart focus/output, ownership read-only/takeover behavior, and bridge-backed managed process status refresh.\nWithout executed focused unit or smoke results for those control-plane paths, I cannot confirm the live terminal panel, PID evidence refresh, singleton outcome messaging, and owner-takeover flow are regression-safe enough to merge into `dev`."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "createdAt": "2026-04-27T01:07:30.021Z",
-      "updatedAt": "2026-04-27T01:07:30.021Z",
+      "updatedAt": "2026-04-27T01:08:29.120Z",
       "startedAt": "2026-04-27T01:07:30.021Z",
       "prId": "pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "conversationReferences": {
@@ -4725,11 +4726,12 @@
           "conversationId": "019dcc77-c51e-7f83-a337-fb56578cc325",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-27T01:07:30.021Z"
+          "updatedAt": "2026-04-27T01:08:29.120Z"
         }
       },
-      "implementationConversationId": "019dcc77-c51e-7f83-a337-fb56578cc325"
+      "implementationConversationId": "019dcc77-c51e-7f83-a337-fb56578cc325",
+      "completedAt": "2026-04-27T01:08:29.120Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
