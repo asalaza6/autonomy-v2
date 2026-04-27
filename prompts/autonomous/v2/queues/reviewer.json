@@ -1010,11 +1010,13 @@
         "Verification covers `npm run typecheck`, `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` if prompt or status context wiring changes."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-04-27T03:03:08.011Z",
-      "updatedAt": "2026-04-27T03:03:24.255Z",
+      "updatedAt": "2026-04-27T03:05:18.181Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-27T03:03:11.407Z"
+      "dispatchedAt": "2026-04-27T03:03:11.407Z",
+      "reviewedAt": "2026-04-27T03:05:18.181Z",
+      "lastDecision": "changes_requested"
     }
   ]
 }
