@@ -31,6 +31,7 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     label: repo.label,
     description: repo.description,
     default: repo.default,
+    repoAssistantValidationPullRequest: repo.repoAssistantValidationPullRequest,
     deployCommand: repo.deployCommand,
     packageUpdateCommand: repo.packageUpdateCommand,
     controlBridgeRestartCommand: repo.controlBridgeRestartCommand,
@@ -53,11 +54,18 @@ function normalizeRepoRecord(
   if (!repoId) {
     return null;
   }
+  const rawValidationPullRequest = (repo as Record<string, unknown>).repoAssistantValidationPullRequest
+    ?? (repo as Record<string, unknown>).validationPullRequestNumber
+    ?? null;
+  const parsedValidationPullRequest = Number(rawValidationPullRequest);
   return {
     repoId,
     label: String((repo as Record<string, unknown>).label || repoId).trim(),
     description: String((repo as Record<string, unknown>).description || '').trim() || undefined,
     default: (repo as Record<string, unknown>).default === true,
+    repoAssistantValidationPullRequest: Number.isInteger(parsedValidationPullRequest) && parsedValidationPullRequest > 0
+      ? parsedValidationPullRequest
+      : undefined,
     deployCommand: (repo as ControlPlaneRepoRecord).deployCommand,
     packageUpdateCommand: (repo as ControlPlaneRepoRecord).packageUpdateCommand,
     controlBridgeRestartCommand: (repo as ControlPlaneRepoRecord).controlBridgeRestartCommand,

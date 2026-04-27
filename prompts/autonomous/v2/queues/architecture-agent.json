@@ -4827,10 +4827,14 @@
         "Focused unit coverage exists for validation success with startup or session enablement, cached status behavior without repeated live validation, missing-token failure, invalid-token failure, unauthorized-token or unauthorized-repo-or-PR failure, and stale validation PR failure.",
         "Verification covers `npm run typecheck`, `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` if prompt or status context wiring changes."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-27T02:57:27.483Z",
-      "updatedAt": "2026-04-27T02:57:27.483Z"
+      "updatedAt": "2026-04-27T03:03:06.867Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
+      "startedAt": "2026-04-27T02:57:46.882Z",
+      "completedAt": "2026-04-27T03:03:06.867Z",
+      "completionMode": "code"
     }
   ]
 }

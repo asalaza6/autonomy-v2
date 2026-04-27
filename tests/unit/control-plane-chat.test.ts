@@ -69,6 +69,7 @@ test('control plane chat prompt includes project context for a first-turn conver
     },
     validation: {
       pullRequestNumber: 27,
+      pullRequestSource: 'config',
     },
   });
 
@@ -114,6 +115,7 @@ test('repo assistant GitHub prompt context stays secret-safe', () => {
     },
     validation: {
       pullRequestNumber: 27,
+      pullRequestSource: 'override',
     },
   });
 

@@ -14,6 +14,7 @@ type GithubApiRunner = (args: string[], options: {
   token: string;
   baseEnv?: NodeJS.ProcessEnv;
   accept?: string;
+  operation?: string;
 }) => string;
 
 function selectRepoAssistantGithubEnv(env: NodeJS.ProcessEnv = process.env) {
@@ -111,19 +112,47 @@ function parseEnvFile(filePath: string) {
   return parsed;
 }
 
+function resolvePositiveInteger(value: unknown) {
+  const parsed = Number(String(value || '').trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function resolveValidationPullNumber(
   repo: { owner: string; repo: string },
   explicitPullNumber?: unknown,
+  configuredPullNumber?: unknown,
 ) {
-  const raw = String(explicitPullNumber || process.env.AUTONOMY_CONTROL_PLANE_GITHUB_VALIDATION_PR || '').trim();
-  const parsed = Number(raw);
-  if (Number.isInteger(parsed) && parsed > 0) {
-    return parsed;
+  const override = resolvePositiveInteger(explicitPullNumber);
+  if (override) {
+    return {
+      pullRequestNumber: override,
+      pullRequestSource: 'override',
+    };
+  }
+  const configured = resolvePositiveInteger(configuredPullNumber);
+  if (configured) {
+    return {
+      pullRequestNumber: configured,
+      pullRequestSource: 'config',
+    };
+  }
+  const envOverride = resolvePositiveInteger(process.env.AUTONOMY_CONTROL_PLANE_GITHUB_VALIDATION_PR);
+  if (envOverride) {
+    return {
+      pullRequestNumber: envOverride,
+      pullRequestSource: 'override',
+    };
   }
   if (repo.owner === 'asalaza6' && repo.repo === 'autonomy-v2') {
-    return DEFAULT_AUTONOMY_REPO_VALIDATION_PR;
+    return {
+      pullRequestNumber: DEFAULT_AUTONOMY_REPO_VALIDATION_PR,
+      pullRequestSource: 'default',
+    };
   }
-  return null;
+  return {
+    pullRequestNumber: null,
+    pullRequestSource: 'unconfigured',
+  };
 }
 
 function resolveRepoAssistantGithubCapability(
@@ -132,6 +161,7 @@ function resolveRepoAssistantGithubCapability(
     env?: NodeJS.ProcessEnv;
     includePullRequestData?: boolean;
     validationPullNumber?: number | null;
+    configuredValidationPullNumber?: number | null;
     githubApiRunner?: GithubApiRunner;
     repository?: { owner: string; repo: string } | null;
   } = {},
@@ -159,7 +189,7 @@ function resolveRepoAssistantGithubCapability(
     const repositoryMetadata = readGithubJson(
       runner,
       [`repos/${repo.owner}/${repo.repo}`],
-      { token, baseEnv: env },
+      { token, baseEnv: env, operation: 'repository' },
     );
     const pullRequestBundle = readPullRequestBundle(
       runner,
@@ -200,6 +230,7 @@ function resolveRepoAssistantGithubCapabilityStatus(
   options: {
     env?: NodeJS.ProcessEnv;
     validationPullNumber?: number | null;
+    configuredValidationPullNumber?: number | null;
     repository?: { owner: string; repo: string } | null;
   } = {},
 ): any {
@@ -233,6 +264,7 @@ function resolveRepoAssistantGithubCapabilityBase(
   options: {
     env?: NodeJS.ProcessEnv;
     validationPullNumber?: number | null;
+    configuredValidationPullNumber?: number | null;
     repository?: { owner: string; repo: string } | null;
   } = {},
 ): any {
@@ -262,7 +294,12 @@ function resolveRepoAssistantGithubCapabilityBase(
       result: buildRepoAssistantGithubRepoUnavailable(authSource, authEnvKeys, approvedRuntimeSecrets.loadedFrom),
     };
   }
-  const pullNumber = resolveValidationPullNumber(repo, options.validationPullNumber);
+  const validationPull = resolveValidationPullNumber(
+    repo,
+    options.validationPullNumber,
+    options.configuredValidationPullNumber,
+  );
+  const pullNumber = validationPull.pullRequestNumber;
   const base = {
     provider: 'gh',
     authSource,
@@ -275,6 +312,7 @@ function resolveRepoAssistantGithubCapabilityBase(
     },
     validation: {
       pullRequestNumber: pullNumber,
+      pullRequestSource: validationPull.pullRequestSource,
     },
   };
 
@@ -327,6 +365,7 @@ function buildRepoAssistantGithubRepoUnavailable(
     repository: null,
     validation: {
       pullRequestNumber: null,
+      pullRequestSource: 'unconfigured',
     },
     available: false,
     status: 'repo-unavailable',
@@ -372,8 +411,12 @@ function buildGithubCapabilityFailure(base: Record<string, any>, error: unknown,
   const classification = classifyGithubFailure(error);
   const detail = classification === 'invalid-token'
     ? 'The runtime GitHub token was rejected during repo assistant validation.'
-    : classification === 'unauthorized-token'
-      ? `The runtime GitHub token does not have read access to ${base.repository.owner}/${base.repository.repo}${pullNumber ? `#${pullNumber}` : ''}.`
+    : classification === 'unauthorized-repo'
+      ? `The runtime GitHub token does not have read access to ${base.repository.owner}/${base.repository.repo}.`
+      : classification === 'unauthorized-pull'
+        ? `The runtime GitHub token cannot inspect validation pull request #${pullNumber} for ${base.repository.owner}/${base.repository.repo}.`
+        : classification === 'stale-validation-pull'
+          ? `Validation pull request #${pullNumber} is unavailable for ${base.repository.owner}/${base.repository.repo}.`
       : 'GitHub validation failed for repo assistant PR inspection.';
   return {
     ...base,
@@ -381,8 +424,12 @@ function buildGithubCapabilityFailure(base: Record<string, any>, error: unknown,
     status: classification,
     statusLabel: classification === 'invalid-token'
       ? 'GitHub token invalid'
-      : classification === 'unauthorized-token'
+      : classification === 'unauthorized-repo'
         ? 'GitHub repo access denied'
+        : classification === 'unauthorized-pull'
+          ? 'GitHub validation PR access denied'
+          : classification === 'stale-validation-pull'
+            ? 'GitHub validation PR stale'
         : 'GitHub validation failed',
     detail,
   };
@@ -404,12 +451,33 @@ function classifyGithubFailure(error: unknown) {
       ? (error as { status?: number }).status
       : 0,
   );
+  const operation = String(
+    error && typeof error === 'object' && 'githubOperation' in error
+      ? (error as { githubOperation?: string }).githubOperation
+      : '',
+  );
   const content = `${stderr}\n${stdout}`;
   if (content.includes('http 401') || content.includes('requires authentication') || content.includes('bad credentials')) {
     return 'invalid-token';
   }
+  if (operation === 'pull-request' && (
+    content.includes('http 404')
+    || content.includes('could not resolve to a pullrequest')
+    || content.includes('pull request could not be found')
+  )) {
+    return 'stale-validation-pull';
+  }
+  if (operation === 'repository' && (content.includes('http 403') || content.includes('http 404') || content.includes('resource not accessible'))) {
+    return 'unauthorized-repo';
+  }
+  if (
+    operation.startsWith('pull-request')
+    && (content.includes('http 403') || content.includes('resource not accessible'))
+  ) {
+    return 'unauthorized-pull';
+  }
   if (content.includes('http 403') || content.includes('http 404') || content.includes('resource not accessible')) {
-    return 'unauthorized-token';
+    return 'validation-failed';
   }
   if (status === 1 && content.includes('authentication')) {
     return 'invalid-token';
@@ -428,22 +496,22 @@ function readPullRequestBundle(
   const metadata = readGithubJson(
     runner,
     [`repos/${repo.owner}/${repo.repo}/pulls/${pullNumber}`],
-    { token, baseEnv },
+    { token, baseEnv, operation: 'pull-request' },
   );
   const files = readGithubJson(
     runner,
     [`repos/${repo.owner}/${repo.repo}/pulls/${pullNumber}/files?per_page=100`],
-    { token, baseEnv },
+    { token, baseEnv, operation: 'pull-request-files' },
   );
   const comments = readGithubJson(
     runner,
     [`repos/${repo.owner}/${repo.repo}/issues/${pullNumber}/comments?per_page=100`],
-    { token, baseEnv },
+    { token, baseEnv, operation: 'pull-request-comments' },
   );
   const reviews = readGithubJson(
     runner,
     [`repos/${repo.owner}/${repo.repo}/pulls/${pullNumber}/reviews?per_page=100`],
-    { token, baseEnv },
+    { token, baseEnv, operation: 'pull-request-reviews' },
   );
   const reviewThreads = readGithubReviewThreads(runner, repo, pullNumber, token, baseEnv);
   const unresolvedThreads = reviewThreads.filter((thread) => thread.isResolved !== true);
@@ -556,7 +624,7 @@ function readGithubReviewThreads(
       '-F', `repo=${repo.repo}`,
       '-F', `number=${pullNumber}`,
     ],
-    { token, baseEnv },
+    { token, baseEnv, operation: 'pull-request-review-threads' },
   );
   const nodes = result
     && result.data
@@ -588,10 +656,18 @@ function readGithubJson(
     token: string;
     baseEnv: NodeJS.ProcessEnv;
     accept?: string;
+    operation?: string;
   },
 ) {
-  const raw = runner(args, options).trim();
-  return raw ? JSON.parse(raw) : null;
+  try {
+    const raw = runner(args, options).trim();
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    if (error && typeof error === 'object') {
+      (error as Record<string, any>).githubOperation = options.operation || 'unknown';
+    }
+    throw error;
+  }
 }
 
 function defaultGithubApiRunner(

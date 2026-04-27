@@ -168,7 +168,7 @@ Created: 2026-04-01T11:59:00.000Z`,
           repoAssistant: {
             github: {
               available: false,
-              status: 'unauthorized-token',
+              status: 'unauthorized-repo',
               statusLabel: 'GitHub repo access denied',
               detail: 'The runtime GitHub token does not have read access to asalaza6/autonomy-v2#27.',
               authEnvKeys: ['GITHUB_TOKEN', 'GH_TOKEN'],
@@ -180,6 +180,7 @@ Created: 2026-04-01T11:59:00.000Z`,
               },
               validation: {
                 pullRequestNumber: 27,
+                pullRequestSource: 'config',
                 validatedAt: '2026-04-01T12:11:00.000Z',
               },
             },
@@ -265,7 +266,7 @@ Created: 2026-04-01T11:59:00.000Z`,
   assert.equal(dashboard.repos[0].packageStatus.installedVersion, '1.4.45');
   assert.equal(dashboard.repos[0].packageStatus.declaredVersion, '^1.4.45');
   assert.equal(dashboard.repos[0].packageStatus.packageManager, 'npm');
-  assert.equal(dashboard.repos[0].repoAssistant.github.status, 'unauthorized-token');
+  assert.equal(dashboard.repos[0].repoAssistant.github.status, 'unauthorized-repo');
   assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
