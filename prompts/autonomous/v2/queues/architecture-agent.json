@@ -4830,11 +4830,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-27T02:57:27.483Z",
-      "updatedAt": "2026-04-27T03:03:06.867Z",
+      "updatedAt": "2026-04-27T03:03:06.950Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
       "startedAt": "2026-04-27T02:57:46.882Z",
       "completedAt": "2026-04-27T03:03:06.867Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "802b946176a40d3805ec16e1da1f8026927c09e5"
     }
   ]
 }
