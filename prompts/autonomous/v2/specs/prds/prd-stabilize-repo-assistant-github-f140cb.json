@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-stabilize-repo-assistant-github-f140cb",
+  "title": "Stabilize repo assistant GitHub PR inspection validation",
+  "createdAt": "2026-04-27T02:56:36.588Z",
+  "specification": "# PRD: Stabilize repo assistant GitHub PR inspection validation\n\nPriority: high\n\n## Problem\nRepo assistant GitHub PR inspection is currently unavailable in `autonomy-v2` with `validation-failed`, so the manager cannot read live PR comments or review threads. The current implementation depends on validation against a configured PR, defaults this repo to PR `#27`, and prior review findings indicate the validation path is brittle and too coupled to normal status refreshes.\n\n## Goal\nMake GitHub PR inspection reliably available when runtime auth is valid, while surfacing precise failure reasons when it is not and avoiding live validation work on ordinary status refreshes.\n\n## Requirements\n- Support an explicit validation PR override for the repo and make the effective validation PR visible in status/UI.\n- Classify failures clearly as missing token, invalid token, unauthorized repo/PR access, repo unavailable, or validation unconfigured.\n- Do not perform blocking live GitHub validation on ordinary repeated status snapshot refreshes; use cached or startup/session-scoped validation state instead.\n- Keep GitHub network scope limited to the required `api.github.com` PR inspection reads.\n- Ensure repo assistant prompt/status context remains secret-safe and never exposes raw token values.\n- Add focused tests for valid startup/session enablement and for missing-token, invalid-token, unauthorized-token, and stale validation PR cases.\n\n## Acceptance Criteria\n- When runtime auth is valid and the configured validation PR is readable, repo assistant GitHub inspection reports `available: true` and can read PR metadata/comments/threads.\n- When auth is invalid or unauthorized, status/UI reports the specific failure reason without exposing secrets.\n- Repeated status refreshes do not trigger live GitHub validation calls unless a session/startup validation is explicitly happening.\n- The effective validation PR number is visible in repo status so operators can detect stale configuration quickly.\n- Focused unit coverage exists for validation success, cached status behavior, and each major failure mode.\n\n## Verification\n- Run `npm run typecheck`.\n- Run `tests/unit/control-plane-github.test.ts`.\n- Run `tests/unit/control-plane-status.test.ts`.\n- Run `tests/unit/control-plane-chat.test.ts` if prompt/status context changes.\n- Confirm repo status shows either `GitHub access ready` or a precise failure classification with the effective validation PR number.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777258046908_3096f8f57fa34\nManager message: msg_1777258389389_e1caec6ff418b8\nAgent message: msg_1777258389389_8a038155bf3288\nCreated: 2026-04-27T02:54:12.266Z",
+  "requirements": [
+    "Support an explicit validation PR override for the repo and make the effective validation PR visible in status/UI.",
+    "Classify failures clearly as missing token",
+    "invalid token",
+    "unauthorized repo/PR access",
+    "repo unavailable",
+    "or validation unconfigured.",
+    "Do not perform blocking live GitHub validation on ordinary repeated status snapshot refreshes; use cached or startup/session-scoped validation state instead.",
+    "Keep GitHub network scope limited to the required `api.github.com` PR inspection reads.",
+    "Ensure repo assistant prompt/status context remains secret-safe and never exposes raw token values.",
+    "Add focused tests for valid startup/session enablement and for missing-token",
+    "invalid-token",
+    "unauthorized-token",
+    "and stale validation PR cases."
+  ]
+}
