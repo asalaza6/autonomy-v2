@@ -998,10 +998,6 @@
       "prId": "pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
       "sourceTaskId": "prd-stabilize-repo-assistant-github-f140cb-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-27T03:03:08.011Z",
-      "updatedAt": "2026-04-27T03:03:08.011Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1013,9 +1009,12 @@
         "Focused unit coverage exists for validation success with startup or session enablement, cached status behavior without repeated live validation, missing-token failure, invalid-token failure, unauthorized-token or unauthorized-repo-or-PR failure, and stale validation PR failure.",
         "Verification covers `npm run typecheck`, `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` if prompt or status context wiring changes."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-27T03:03:11.407Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-27T03:03:08.011Z",
+      "updatedAt": "2026-04-27T03:03:24.255Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-27T03:03:11.407Z"
     }
   ]
 }
