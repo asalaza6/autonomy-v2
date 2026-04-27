@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync, spawn, spawnSync } from 'child_process';
-import { fileURLToPath } from 'url';
 import { AGENT_ROLES } from '../../agents/role-catalog.js';
 import { validateAutonomyConfig } from '../../config/config-main.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';

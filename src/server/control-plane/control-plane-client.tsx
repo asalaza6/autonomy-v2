@@ -3275,6 +3275,9 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
           <PackageStatus packageStatus={repo.packageStatus || null} />
           <PackageUpdateButton repo={repo} />
         </RepoSection>
+        <RepoSection title="Restart">
+          <ProjectRestartPanel repo={repo} restartEvidence={restartEvidence} />
+        </RepoSection>
         <RepoSection title="Live Process">
           <LiveProcessPanel repo={repo} context="project" />
         </RepoSection>
