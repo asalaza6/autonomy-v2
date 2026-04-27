@@ -944,7 +944,7 @@
     {
       "id": "review-pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "title": "Review [architecture-agent] architecture lane work for prd-live-terminal-restart-and-f8b24d",
-      "description": "Review pr-prd-live-terminal-restart-and-f8b24d-architecture-agent for Address review for [architecture-agent] architecture lane work for prd-live-terminal-restart-and-f8b24d",
+      "description": "Review pr-prd-live-terminal-restart-and-f8b24d-architecture-agent for Implement control-panel live terminal UX, restart focus behavior, and owner-aware read-only states",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-live-terminal-restart-and-f8b24d-architecture-agent",
@@ -953,12 +953,28 @@
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-live-terminal-restart-and-f8b24d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "Merge is blocked by a failing repo-level check. `npm run typecheck` passed, but `npm run lint` failed against the current branch, so this is not safe to merge into `dev` yet.\n`npm run lint` is failing in [src/server/control-plane/control-plane-client.tsx](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-client.tsx:3237) and [src/server/control-plane/control-plane-client.tsx](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-client.tsx:3431): `restartEvidence` is assigned but unused, and `ProjectRestartPanel` is defined but unused. Remove or wire these code paths so the control-plane UI change passes the repo merge blocker.\n`npm run lint` is also failing in [src/server/control-plane/control-plane-package-update.ts](/Users/macmini/Documents/GitHub/autonomy-v2/.autonomy/worktrees/architecture-agent/multi-agent-mvp-prd-live-terminal-restart-and-f8b24d-architecture-agent/src/server/control-plane/control-plane-package-update.ts:4) because `fileURLToPath` is imported but unused. Clean up the import and rerun the required checks.\nAfter fixing the lint errors, rerun the minimum required verification for this lane: `npm run typecheck` and `npm run lint`. The focused control-plane tests added in this branch are in place, but the current failed merge-blocking check prevents approval.\nBlocking checks failed: npm run lint"
+        "Restarting a managed `server` or `controlBridge` target no longer relies on a detached background relaunch path and instead produces a managed process/session record that the control plane can observe directly.",
+        "The lifecycle contract explicitly defines what happens when a managed process for the same repo and target already exists, including whether the request replaces the existing process, reuses it, or refuses to start, and the chosen outcome is returned as structured status rather than inferred from port collisions.",
+        "Successful replacement-style restarts persist normalized restart evidence for the target including at least `preRestartPid` and `postRestartPid`, with clear non-success reasons preserved when either PID is unavailable or replacement does not occur.",
+        "The control-plane status/dashboard contract exposes current managed-process running state, current PID, and enough process-session metadata for the UI to subscribe to or focus the live process view without shell access.",
+        "When optional exclusive control ownership is enabled for a repo session, only one active control-panel session can execute lifecycle control actions for that repo at a time, while non-owner sessions remain connected in read-only mode.",
+        "Ownership state includes clear owner-session metadata and deterministic takeover behavior so a later control-panel session can either be refused control or explicitly take ownership according to the documented rule.",
+        "Unit tests cover restart result normalization, singleton replacement or refusal rules, ownership acquisition, read-only behavior for non-owner sessions, takeover outcomes, and PID evidence generation.",
+        "Integration coverage exercises bridge or control-plane restart flow through the managed-process lifecycle and asserts that status refresh reflects the new PID, managed running state, and ownership metadata.",
+        "After a manager triggers a restart for a managed repo target, the control panel opens or focuses a live terminal or process panel for that same repo target instead of only showing detached restart status.",
+        "The live panel renders target-specific stdout or stderr output, current PID, and running or stopped state from the managed process contract without requiring the operator to open a shell separately.",
+        "When a restart completes successfully, the UI renders normalized restart evidence including `preRestartPid` and `postRestartPid` in a visible target-level summary tied to the live process view.",
+        "If a managed process for the same repo and target already exists, the UI shows a clear message describing whether the request reused, replaced, or refused the existing process, and the visible panel state matches that outcome.",
+        "When exclusive control ownership is enabled and another session owns controls, the non-owner session remains visible but lifecycle control actions are disabled or read-only, with clear owner-session identification and takeover affordance or refusal messaging.",
+        "After a successful takeover, the UI refreshes to show the new owner state and re-enables lifecycle controls only for the session that now owns the repo controls.",
+        "Client or UI-focused tests cover live process panel rendering, restart focus behavior, restart evidence display, singleton outcome messaging, read-only non-owner state, and takeover state refresh.",
+        "Manual verification instructions remain satisfiable: one scenario confirms restart opens a live process view with output and PID change evidence, and a second scenario confirms two concurrent panels respect exclusive ownership and takeover behavior.",
+        "Verification includes `npm run typecheck` plus the focused unit, UI, or smoke tests for the control-plane views and refresh behavior affected by this change."
       ],
       "reviewRound": 2,
-      "status": "assigned",
+      "status": "merged",
       "createdAt": "2026-04-27T01:03:15.217Z",
-      "updatedAt": "2026-04-27T01:06:03.783Z",
+      "updatedAt": "2026-04-27T01:06:25.149Z",
       "reviewedAt": "2026-04-27T01:03:56.409Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
@@ -968,10 +984,9 @@
           "conversationId": "019dcc76-62cc-7ed0-9e14-23df926be8af",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-27T01:06:03.783Z"
+          "updatedAt": "2026-04-27T01:06:25.149Z"
         }
-      },
-      "scopeViolations": []
+      }
     }
   ]
 }
