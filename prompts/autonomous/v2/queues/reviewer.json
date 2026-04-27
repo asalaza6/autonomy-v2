@@ -992,7 +992,7 @@
     {
       "id": "review-pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
       "title": "Review [architecture-agent] Stabilize repo assistant GitHub PR inspection validation and status reporting",
-      "description": "Review pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent for Stabilize repo assistant GitHub PR inspection validation and status reporting",
+      "description": "Review pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent for Address review for [architecture-agent] Stabilize repo assistant GitHub PR inspection validation and status reporting",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
@@ -1007,12 +1007,13 @@
         "Ordinary repeated status snapshot refreshes do not perform blocking live GitHub validation calls; validation state is reused from startup, session, or cached state unless an explicit validation flow is running.",
         "The implementation does not broaden GitHub access beyond the required `api.github.com` read operations needed for PR inspection and validation, and no prompt, status payload, log message, or UI string exposes raw token values.",
         "Focused unit coverage exists for validation success with startup or session enablement, cached status behavior without repeated live validation, missing-token failure, invalid-token failure, unauthorized-token or unauthorized-repo-or-PR failure, and stale validation PR failure.",
-        "Verification covers `npm run typecheck`, `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` if prompt or status context wiring changes."
+        "Verification covers `npm run typecheck`, `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` if prompt or status context wiring changes.",
+        "Requesting changes. The PR has a correctness gap in cached validation-source reporting, and the required focused control-plane tests are not evidenced as passing.\n`src/server/control-plane/control-plane-github.ts:176` and `src/server/control-plane/control-plane-github.ts:244` reuse cached validation results but only overwrite `validation.pullRequestNumber`, not `validation.pullRequestSource`. Because the UI renders that source in `src/server/control-plane/control-plane-client.tsx:3377`, an explicit config/override can still display the stale prior source label after a cache hit. Reproduce by validating a PR under one source, then resolving the same PR number from a different source; status will keep showing the old source. Update the cache-hit path to refresh the full validation metadata and add a regression test for source changes on cache reuse.\nFocused verification is still blocking for this high-risk control-plane/GitHub change. The wrapper only supplied `npm run typecheck` and `npm run lint`; the required targeted tests (`tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts`) are not shown as passing. I attempted to run them, but `npm test -- --test ...` rebuilds `dist/` and fails in this read-only environment with `TS5033 EPERM` writes to `dist/`. Please provide passing targeted test evidence from a writable environment before merge."
       ],
       "reviewRound": 2,
       "status": "merged",
       "createdAt": "2026-04-27T03:03:08.011Z",
-      "updatedAt": "2026-04-27T03:07:25.193Z",
+      "updatedAt": "2026-04-27T04:59:01.092Z",
       "reviewedAt": "2026-04-27T03:05:18.181Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
