@@ -4803,6 +4803,34 @@
       "completedAt": "2026-04-27T01:10:23.821Z",
       "completionMode": "noop",
       "commitSha": "f4d7a669cc0a41c15d31b9488e505f9c1238022b"
+    },
+    {
+      "id": "prd-stabilize-repo-assistant-github-f140cb-architecture-agent-1",
+      "title": "Stabilize repo assistant GitHub PR inspection validation and status reporting",
+      "description": "Refactor the repo assistant GitHub validation path so PR inspection availability is established from startup or session-scoped validation state instead of repeated blocking live checks during ordinary status refreshes, while preserving secret safety and limiting network access to the required `api.github.com` PR inspection reads. Add support for an explicit repo validation PR override, surface the effective validation PR number and precise readiness or failure classification in repo status/UI, and keep repo assistant PR metadata/comment/thread inspection available whenever runtime auth is valid and the validation PR is readable. Likely change areas include GitHub validation and PR inspection logic under `src/server/control-plane/`, runtime status snapshot or dashboard summary code under `src/autonomy-v2/control-plane/` or `src/sync/`, repo assistant prompt or status-context handling if the surfaced messaging changes, and focused unit coverage in `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` only if prompt/status context behavior changes there.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-stabilize-repo-assistant-github-f140cb",
+      "laneKey": "prd-stabilize-repo-assistant-github-f140cb:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "The repo assistant supports an explicit validation PR override for the current repo, resolves an effective validation PR number from configuration or override, and surfaces that effective PR number in repo status or equivalent operator-visible UI.",
+        "When runtime GitHub auth is valid and the effective validation PR is readable, repo assistant GitHub inspection reports `available: true` and can read PR metadata, PR comments, and review-thread data through the existing inspection path.",
+        "When validation cannot be established, status or UI reports a specific non-secret failure classification that distinguishes missing token, invalid token, unauthorized repo or PR access, repo unavailable, and validation unconfigured or stale validation PR conditions.",
+        "Ordinary repeated status snapshot refreshes do not perform blocking live GitHub validation calls; validation state is reused from startup, session, or cached state unless an explicit validation flow is running.",
+        "The implementation does not broaden GitHub access beyond the required `api.github.com` read operations needed for PR inspection and validation, and no prompt, status payload, log message, or UI string exposes raw token values.",
+        "Focused unit coverage exists for validation success with startup or session enablement, cached status behavior without repeated live validation, missing-token failure, invalid-token failure, unauthorized-token or unauthorized-repo-or-PR failure, and stale validation PR failure.",
+        "Verification covers `npm run typecheck`, `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` if prompt or status context wiring changes."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-27T02:57:27.483Z",
+      "updatedAt": "2026-04-27T02:57:27.483Z"
     }
   ]
 }

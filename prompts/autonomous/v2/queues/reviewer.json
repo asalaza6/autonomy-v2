@@ -988,6 +988,33 @@
         }
       },
       "mergedAt": "2026-04-27T01:10:48.503Z"
+    },
+    {
+      "id": "review-pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
+      "title": "Review [architecture-agent] Stabilize repo assistant GitHub PR inspection validation and status reporting",
+      "description": "Review pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent for Stabilize repo assistant GitHub PR inspection validation and status reporting",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
+      "sourceTaskId": "prd-stabilize-repo-assistant-github-f140cb-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-repo-assistant-github-f140cb-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "The repo assistant supports an explicit validation PR override for the current repo, resolves an effective validation PR number from configuration or override, and surfaces that effective PR number in repo status or equivalent operator-visible UI.",
+        "When runtime GitHub auth is valid and the effective validation PR is readable, repo assistant GitHub inspection reports `available: true` and can read PR metadata, PR comments, and review-thread data through the existing inspection path.",
+        "When validation cannot be established, status or UI reports a specific non-secret failure classification that distinguishes missing token, invalid token, unauthorized repo or PR access, repo unavailable, and validation unconfigured or stale validation PR conditions.",
+        "Ordinary repeated status snapshot refreshes do not perform blocking live GitHub validation calls; validation state is reused from startup, session, or cached state unless an explicit validation flow is running.",
+        "The implementation does not broaden GitHub access beyond the required `api.github.com` read operations needed for PR inspection and validation, and no prompt, status payload, log message, or UI string exposes raw token values.",
+        "Focused unit coverage exists for validation success with startup or session enablement, cached status behavior without repeated live validation, missing-token failure, invalid-token failure, unauthorized-token or unauthorized-repo-or-PR failure, and stale validation PR failure.",
+        "Verification covers `npm run typecheck`, `tests/unit/control-plane-github.test.ts`, `tests/unit/control-plane-status.test.ts`, and `tests/unit/control-plane-chat.test.ts` if prompt or status context wiring changes."
+      ],
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-27T03:03:08.011Z",
+      "updatedAt": "2026-04-27T03:03:24.255Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-27T03:03:11.407Z"
     }
   ]
 }

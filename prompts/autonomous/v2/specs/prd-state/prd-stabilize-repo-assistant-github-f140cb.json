@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-stabilize-repo-assistant-github-f140cb",
+  "status": "planned",
+  "createdAt": "2026-04-27T02:57:27.578Z",
+  "updatedAt": "2026-04-27T02:57:27.578Z",
+  "plannedTaskIds": [
+    "prd-stabilize-repo-assistant-github-f140cb-architecture-agent-1"
+  ]
+}
