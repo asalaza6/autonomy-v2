@@ -6,11 +6,34 @@ import { h, renderToHtml } from '../../src/server/control-plane/control-plane-js
 test('manager and project restart views render successful, skipped, and failed evidence', async () => {
   installBrowserStubs();
   const client = await import('../../src/server/control-plane/control-plane-client.js');
+  client.setLiveProcessPanelTestState({
+    outputs: {},
+  });
 
   const successHtml = renderToHtml(h(client.ProjectRepoCard as any, {
     repo: {
       repoId: 'alpha',
       label: 'Alpha',
+      managedProcesses: {
+        server: {
+          target: 'server',
+          pid: 456,
+          running: true,
+          singletonOutcome: 'replaced',
+          replacementOfPid: 123,
+          preRestartPid: 123,
+          postRestartPid: 456,
+        },
+        controlBridge: {
+          target: 'controlBridge',
+          pid: 812,
+          running: true,
+          singletonOutcome: 'replaced',
+          replacementOfPid: 789,
+          preRestartPid: 789,
+          postRestartPid: 812,
+        },
+      },
       restartJob: {
         status: 'completed',
         statusLabel: 'Restart recorded',
@@ -52,16 +75,23 @@ test('manager and project restart views render successful, skipped, and failed e
     },
   }));
 
-  assert.match(successHtml, /Restart Evidence/);
+  assert.match(successHtml, /Live server process/);
   assert.match(successHtml, /server pid 123 -&gt; 456/);
-  assert.match(successHtml, /bridge pid 789 -&gt; 812/);
-  assert.match(successHtml, /Heartbeat unavailable/);
+  assert.match(successHtml, /replaced existing process 123/);
   assert.match(successHtml, /pid changed/);
 
   const skippedHtml = renderToHtml(h(client.ProjectRepoCard as any, {
     repo: {
       repoId: 'alpha',
       label: 'Alpha',
+      managedProcesses: {
+        server: {
+          target: 'server',
+          pid: null,
+          running: false,
+          singletonOutcome: 'failed',
+        },
+      },
       restartJob: {
         status: 'completed',
         statusLabel: 'Restart recorded',
@@ -90,8 +120,8 @@ test('manager and project restart views render successful, skipped, and failed e
     },
   }));
 
-  assert.match(skippedHtml, /missing metadata/);
-  assert.match(skippedHtml, /pid missing/);
+  assert.match(skippedHtml, /managed start failed/);
+  assert.match(skippedHtml, /server pid missing -&gt; missing/);
 
   const failedManagerHtml = renderToHtml(h(client.ManagerRepoCard as any, {
     repo: {
@@ -142,6 +172,141 @@ test('manager and project restart views render successful, skipped, and failed e
   assert.match(failedManagerHtml, /Restart/);
   assert.match(failedManagerHtml, /0\/2 targets relaunched/);
   assert.match(failedManagerHtml, /server failed \(stale pid\) \| pid 222/);
+});
+
+test('live process panel renders focused output, restart evidence, singleton messaging, and takeover affordance', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?live=${Date.now()}`);
+
+  client.setLiveProcessPanelTestState({
+    outputs: {
+      'alpha:server': {
+        repoId: 'alpha',
+        target: 'server',
+        outputSessionId: 'output-server-2',
+        pid: 456,
+        running: true,
+        available: true,
+        truncated: false,
+        updatedAt: '2026-04-22T01:06:15.000Z',
+        content: 'server ready on :3333\nbridge connected',
+      },
+    },
+    pendingFocus: {
+      repoId: 'alpha',
+      target: 'server',
+    },
+  });
+
+  const html = renderToHtml(h(client.LiveProcessPanel as any, {
+    context: 'manager',
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      managedProcesses: {
+        server: {
+          target: 'server',
+          pid: 456,
+          running: true,
+          singletonOutcome: 'replaced',
+          replacementOfPid: 123,
+          command: 'npm run dev',
+          cwd: '/tmp/alpha',
+          preRestartPid: 123,
+          postRestartPid: 456,
+          completedAt: '2026-04-22T01:06:20.000Z',
+        },
+      },
+      controlAccess: {
+        exclusiveControl: true,
+        canManage: false,
+        isOwner: false,
+        readOnly: true,
+        takeoverPolicy: 'takeover',
+        refusalReason: 'owned-by-another-session',
+        owner: {
+          sessionId: 'session-owner',
+          sessionLabel: 'Owner Session',
+        },
+      },
+      restartJob: {
+        status: 'completed',
+        statusLabel: 'Restart recorded',
+        restartEvidence: {
+          status: 'restarted',
+          statusLabel: 'Restarted',
+          completedAt: '2026-04-22T01:06:30.000Z',
+          targets: [
+            {
+              target: 'server',
+              label: 'server',
+              status: 'restarted',
+              statusLabel: 'Restarted',
+              preRestartPid: 123,
+              postRestartPid: 456,
+              pidChanged: true,
+            },
+          ],
+        },
+      },
+    },
+  }));
+
+  assert.match(html, /Live server process/);
+  assert.match(html, /process-focus-pending/);
+  assert.match(html, /PID 456 \| state running \| replaced existing process 123/);
+  assert.match(html, /Restart evidence: server pid 123 -&gt; 456 \| pid changed/);
+  assert.match(html, /command npm run dev \| cwd \/tmp\/alpha/);
+  assert.match(html, /This session is read-only until it takes over repo controls\./);
+  assert.match(html, /owner Owner Session/);
+  assert.match(html, /Take over controls/);
+  assert.match(html, /server ready on :3333/);
+  assert.match(html, /Restart services/);
+});
+
+test('live process panel shows refusal messaging without takeover affordance', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?refusal=${Date.now()}`);
+
+  client.setLiveProcessPanelTestState({
+    outputs: {},
+  });
+
+  const html = renderToHtml(h(client.LiveProcessPanel as any, {
+    context: 'project',
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      managedProcesses: {
+        controlBridge: {
+          target: 'controlBridge',
+          pid: 789,
+          running: false,
+          singletonOutcome: 'refused',
+          preRestartPid: 777,
+          postRestartPid: null,
+          exitReason: 'existing process kept ownership',
+        },
+      },
+      controlAccess: {
+        exclusiveControl: true,
+        canManage: false,
+        isOwner: false,
+        readOnly: true,
+        takeoverPolicy: 'refuse',
+        refusalReason: 'takeover-refused',
+        owner: {
+          sessionId: 'session-owner',
+        },
+      },
+    },
+  }));
+
+  assert.match(html, /Live bridge process/);
+  assert.match(html, /PID 789 \| state stopped \| refused because another managed process already owned this target/);
+  assert.match(html, /existing process kept ownership/);
+  assert.match(html, /This session is read-only\. Repo ownership does not allow takeover\./);
+  assert.doesNotMatch(html, /Take over controls/);
 });
 
 test('manager repo card renders reset controls and reset job state for active PRDs', async () => {

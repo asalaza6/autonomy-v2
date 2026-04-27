@@ -4,6 +4,7 @@ import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import type { ControlPlaneServiceKind, ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
 import { validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
+import { prepareManagedProcessOutput } from './control-plane-process-output.js';
 import { loadControlPlaneState, saveControlPlaneState } from './control-plane-store.js';
 
 type RestartOutcomeStatus = 'restarted' | 'skipped' | 'missing-metadata' | 'stale-pid' | 'relaunch-failed' | 'failed';
@@ -103,7 +104,12 @@ async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Pr
     ...launchOutcomes,
   ]);
   for (const target of orderedTargets(stoppedTargets)) {
-    launchOutcomes.push(await relaunchService(target, relaunchReadyTimeoutMs));
+    launchOutcomes.push(await relaunchService(
+      normalizedPlan.rootDir,
+      normalizedPlan.repoId,
+      target,
+      relaunchReadyTimeoutMs
+    ));
     outcome = buildDefaultRestartOutcome([
       ...validationOutcomes,
       ...stopOutcomes,
@@ -227,6 +233,8 @@ async function stopRegisteredProcess(
 }
 
 function relaunchService(
+  rootDir: string,
+  repoId: string | undefined,
   target: DefaultRestartTarget,
   readyTimeoutMs: number
 ): Promise<DefaultRestartTargetOutcome> {
@@ -243,14 +251,21 @@ function relaunchService(
     };
 
     let child: ReturnType<typeof spawn>;
+    const outputCapture = repoId
+      ? prepareManagedProcessOutput(rootDir, repoId, target.target, {
+        command: metadata.launchCommand,
+        cwd: launch.cwd,
+      })
+      : null;
     try {
       child = spawn(launch.command, launch.args, {
         cwd: launch.cwd,
         detached: true,
         env: buildRelaunchEnv(target.target, launch.env || {}, readyTimeoutMs),
-        stdio: 'ignore',
+        stdio: outputCapture ? outputCapture.stdio : 'ignore',
       });
     } catch (error) {
+      outputCapture?.close();
       settle({
         target: target.target,
         status: 'relaunch-failed',
@@ -266,6 +281,7 @@ function relaunchService(
     }
 
     child.once('spawn', () => {
+      outputCapture?.close();
       void waitForRelaunchReadiness(target, child, readyTimeoutMs).then((outcome) => {
         if (outcome.status === 'restarted') {
           child.unref();
@@ -274,6 +290,7 @@ function relaunchService(
       });
     });
     child.once('error', (error) => {
+      outputCapture?.close();
       settle({
         target: target.target,
         status: 'relaunch-failed',

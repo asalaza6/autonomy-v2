@@ -13,11 +13,13 @@ import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './control-plane-browser.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
+import { readManagedProcessOutput } from './control-plane-process-output.js';
 import {
   claimJob,
   claimNextJob,
   completeJob,
   createControlPlaneDeployJob,
+  ensureRepoControlAccess,
   createControlPlanePackageUpdateJob,
   createControlPlanePrdResetJob,
   createControlPlaneRestartJob,
@@ -214,9 +216,10 @@ async function handleRequest(
   if (url.pathname === '/api/state' && req.method === 'GET') {
     const repoId = String(url.searchParams.get('repoId') || '').trim();
     const state = filterControlPlaneState(loadControlPlaneState(rootDir), repoId);
+    const controlSession = readControlSession(req);
     sendJson(res, 200, {
       ...state,
-      dashboard: buildControlPlaneDashboard(rootDir, state),
+      dashboard: buildControlPlaneDashboard(rootDir, state, controlSession),
     });
     return;
   }
@@ -304,9 +307,17 @@ async function handleRequest(
     const repoId = url.pathname.split('/')[3];
     try {
       const body = await readJsonBody(req);
-      const { payload } = validateDeploySubmission(listDiscoveredRepos(rootDir), {
+      const { repo, payload } = validateDeploySubmission(listDiscoveredRepos(rootDir), {
         repoId: String(body && body.repoId || repoId || '').trim(),
       });
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, readControlSession(req));
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session is read-only for lifecycle actions on this repo.',
+          controlAccess,
+        });
+        return;
+      }
       const job = enqueueJob(rootDir, createControlPlaneDeployJob(payload));
       logControlPlaneEvent('control-plane:job:queued', {
         jobId: job.id,
@@ -324,10 +335,18 @@ async function handleRequest(
     const repoId = url.pathname.split('/')[3];
     try {
       const body = await readJsonBody(req);
-      const { payload } = validatePrdResetSubmission(listDiscoveredRepos(rootDir), {
+      const { repo, payload } = validatePrdResetSubmission(listDiscoveredRepos(rootDir), {
         ...body,
         repoId: String(body && body.repoId || repoId || '').trim(),
       });
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, readControlSession(req));
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session is read-only for lifecycle actions on this repo.',
+          controlAccess,
+        });
+        return;
+      }
       const job = enqueueJob(rootDir, createControlPlanePrdResetJob(payload));
       logControlPlaneEvent('control-plane:job:queued', {
         jobId: job.id,
@@ -345,9 +364,17 @@ async function handleRequest(
     const repoId = url.pathname.split('/')[3];
     try {
       const body = await readJsonBody(req);
-      const { payload } = validatePackageUpdateSubmission(listDiscoveredRepos(rootDir), {
+      const { repo, payload } = validatePackageUpdateSubmission(listDiscoveredRepos(rootDir), {
         repoId: String(body && body.repoId || repoId || '').trim(),
       });
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, readControlSession(req));
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session is read-only for lifecycle actions on this repo.',
+          controlAccess,
+        });
+        return;
+      }
       const job = enqueueJob(rootDir, createControlPlanePackageUpdateJob(payload));
       logControlPlaneEvent('control-plane:job:queued', {
         jobId: job.id,
@@ -365,9 +392,24 @@ async function handleRequest(
     const repoId = url.pathname.split('/')[3];
     try {
       const body = await readJsonBody(req);
-      const { payload } = validateRestartSubmission(listDiscoveredRepos(rootDir), {
+      const controlSession = readControlSession(req, body);
+      const { repo, payload } = validateRestartSubmission(listDiscoveredRepos(rootDir), {
         repoId: String(body && body.repoId || repoId || '').trim(),
+        controlSessionId: controlSession.sessionId,
+        controlSessionLabel: controlSession.sessionLabel,
+        takeoverControl: body && body.takeoverControl === true,
       });
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, {
+        ...controlSession,
+        takeover: body && body.takeoverControl === true,
+      });
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session is read-only for lifecycle actions on this repo.',
+          controlAccess,
+        });
+        return;
+      }
       const job = enqueueJob(rootDir, createControlPlaneRestartJob(payload));
       logControlPlaneEvent('control-plane:job:queued', {
         jobId: job.id,
@@ -491,6 +533,57 @@ async function handleRequest(
     return;
   }
 
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.includes('/processes/') && url.pathname.endsWith('/output') && req.method === 'GET') {
+    const segments = url.pathname.split('/');
+    const repoId = decodeURIComponent(segments[3] || '');
+    const target = String(segments[5] || '').trim();
+    if (target !== 'server' && target !== 'controlBridge') {
+      sendJson(res, 404, { error: 'Unknown managed process target.' });
+      return;
+    }
+    const maxBytes = Number(url.searchParams.get('maxBytes'));
+    const state = loadControlPlaneState(rootDir);
+    const processRecord = state.managedProcesses?.[repoId]?.[target] || null;
+    const output = readManagedProcessOutput(rootDir, repoId, target, Number.isFinite(maxBytes) ? maxBytes : undefined);
+    sendJson(res, 200, {
+      repoId,
+      target,
+      outputSessionId: String(processRecord && processRecord.outputSessionId || '').trim() || null,
+      pid: Number(processRecord && processRecord.pid) || null,
+      running: processRecord ? processRecord.running !== false : false,
+      ...output,
+    });
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/control/takeover') && req.method === 'POST') {
+    const repoId = decodeURIComponent(url.pathname.split('/')[3] || '');
+    try {
+      const body = await readJsonBody(req);
+      const repo = listDiscoveredRepos(rootDir).find((entry) => String(entry.repoId || '').trim() === String(repoId || '').trim());
+      if (!repo) {
+        sendJson(res, 404, { error: 'Unknown repo.' });
+        return;
+      }
+      const controlSession = readControlSession(req, body);
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, {
+        ...controlSession,
+        takeover: true,
+      });
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session could not take over lifecycle controls for this repo.',
+          controlAccess,
+        });
+        return;
+      }
+      sendJson(res, 200, { controlAccess });
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
   sendJson(res, 404, { error: 'Not found.' });
 }
 
@@ -539,6 +632,31 @@ function filterControlPlaneState(state: ControlPlaneState, repoId: string) {
     conversations: normalizedRepoId && state.conversations[normalizedRepoId]
       ? { [normalizedRepoId]: state.conversations[normalizedRepoId] }
       : {},
+    managedProcesses: normalizedRepoId && state.managedProcesses && state.managedProcesses[normalizedRepoId]
+      ? { [normalizedRepoId]: state.managedProcesses[normalizedRepoId] }
+      : {},
+    controlOwnership: normalizedRepoId && state.controlOwnership && state.controlOwnership[normalizedRepoId]
+      ? { [normalizedRepoId]: state.controlOwnership[normalizedRepoId] }
+      : {},
+  };
+}
+
+function readControlSession(req: http.IncomingMessage, body: Record<string, unknown> | null = null) {
+  const sessionId = String(
+    req.headers['x-autonomy-control-session-id']
+    || req.headers['x-control-session-id']
+    || body?.controlSessionId
+    || ''
+  ).trim();
+  const sessionLabel = String(
+    req.headers['x-autonomy-control-session-label']
+    || req.headers['x-control-session-label']
+    || body?.controlSessionLabel
+    || ''
+  ).trim();
+  return {
+    sessionId: sessionId || undefined,
+    sessionLabel: sessionLabel || undefined,
   };
 }
 
@@ -675,7 +793,7 @@ function sendJson(res: http.ServerResponse, statusCode: number, payload: unknown
 function applyCors(res: http.ServerResponse, method: string) {
   res.setHeader('access-control-allow-origin', '*');
   res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
-  res.setHeader('access-control-allow-headers', 'content-type');
+  res.setHeader('access-control-allow-headers', 'content-type,x-autonomy-control-session-id,x-autonomy-control-session-label,x-control-session-id,x-control-session-label');
   if (method === 'OPTIONS') {
     res.setHeader('access-control-max-age', '86400');
   }

@@ -444,6 +444,22 @@ const styles = `
     flex-wrap: wrap;
     align-items: center;
   }
+  .process-target-button.selected {
+    background: rgba(36, 91, 117, 0.12);
+    border-color: rgba(36, 91, 117, 0.4);
+  }
+  .process-output {
+    min-height: 200px;
+    max-height: 340px;
+    overflow: auto;
+    background: #171a1f;
+    color: #f4f8ff;
+    font-family: "SFMono-Regular", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
+    line-height: 1.45;
+  }
+  .control-read-only-note {
+    color: #8d3a43;
+  }
   .action-link {
     display: inline-flex;
     align-items: center;
@@ -531,6 +547,16 @@ const styles = `
   }
 
   .main-queue-shell {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 22px;
+    background: rgba(255, 253, 248, 0.92);
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    box-shadow: var(--shadow);
+  }
+
+  .main-process-shell {
     display: grid;
     gap: 14px;
     padding: 18px;
