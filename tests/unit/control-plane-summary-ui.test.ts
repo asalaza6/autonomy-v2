@@ -11,6 +11,7 @@ test('manager repo card renders a compact summary with attention signals and con
     repo: {
       repoId: 'alpha',
       label: 'Alpha',
+      description: 'Primary customer repo',
       freshnessStatus: 'stale',
       freshnessStatusLabel: 'Stale',
       updatedAt: '2026-04-26T10:10:00.000Z',
@@ -35,6 +36,8 @@ test('manager repo card renders a compact summary with attention signals and con
         statusLabel: 'Deploy available',
         detail: 'dev is 2 commits ahead of main',
       },
+      deploymentUrl: 'https://alpha.example.com',
+      deploymentLabel: 'Production site',
       repoAssistant: {
         github: {
           available: false,
@@ -50,15 +53,20 @@ test('manager repo card renders a compact summary with attention signals and con
     },
   }));
 
+  assert.match(html, /Alpha/);
+  assert.match(html, /alpha · Primary customer repo/);
+  assert.match(html, /Open repo control page/);
+  assert.match(html, /Production site/);
+  assert.match(html, /<details class=\"repo-disclosure\">/);
+  assert.match(html, /Repo status and details/);
   assert.match(html, /Current work/);
   assert.match(html, /Compact summary PRD/);
   assert.match(html, /33% complete/);
-  assert.match(html, /GitHub validation failed/);
+  assert.match(html, /Implementation is running: 1\/3 tasks complete\./);
   assert.match(html, /Deploy available/);
+  assert.match(html, /dev is 2 commits ahead of main/);
+  assert.match(html, /GitHub validation failed/);
   assert.match(html, /PR drift/);
-  assert.match(html, /Open repo control page/);
-  assert.doesNotMatch(html, /Live Process/);
-  assert.doesNotMatch(html, /Autonomy v2/);
 });
 
 test('project repo card hides operational diagnostics behind labeled disclosures', async () => {

@@ -3155,13 +3155,17 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
   const attentionSignals = buildRepoAttentionSignals(repo);
   const snapshotItems = buildManagerSnapshotItems(repo);
   const currentWork = buildRepoCurrentWorkSummary(repo);
+  const deployment = repo.deployment || null;
+  const repoIdentityLine = [repo.repoId, repo.description && repo.description !== repo.repoId ? repo.description : '']
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <article className="repo repo-compact">
       <div className="repo-head">
         <div>
           <h3>{repo.label || repo.repoId || 'Repository'}</h3>
-          <div className="muted">{repo.description || repo.repoId || ''}</div>
+          <div className="muted">{repoIdentityLine}</div>
         </div>
         <div className="row" style={{ justifyContent: 'flex-end', flex: '0 0 auto' }}>
           <div className={`status-chip ${statusClass(freshnessStatus)}`}>
@@ -3171,45 +3175,6 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
           <span className="pill">{updated}</span>
         </div>
       </div>
-      <p className="overview">{currentWork.detail}</p>
-      <div className="snapshot-grid">
-        {snapshotItems.map((item) => (
-          <div className="snapshot-item">
-            <div className="pill">{item.label}</div>
-            <div className="queue-detail">{item.value}</div>
-          </div>
-        ))}
-      </div>
-      <div className="repo-section" style={{ marginTop: '16px' }}>
-        <h4>Current work</h4>
-        <div className="queued-prd">
-          <div className="item-head">
-            <div>
-              <div className={`status-chip ${statusClass(repo.activePrd ? repo.activePrd.status : repo.prdRun ? repo.prdRun.currentStepId : 'offline')}`}>
-                <span className="status-dot" />
-                <span>{currentWork.status}</span>
-              </div>
-              <div className="queue-title">{currentWork.title}</div>
-            </div>
-            {currentWork.progress ? <span className="pill">{currentWork.progress}</span> : null}
-          </div>
-          <div className="queue-detail">{currentWork.detail}</div>
-          {repo.activePrd ? (
-            <div className="queue-detail" style={{ marginTop: '8px' }}>
-              {repo.activePrd.id || 'unknown PRD'}
-              {repo.activePrd.detail ? ` | ${repo.activePrd.detail}` : ''}
-            </div>
-          ) : null}
-          {repo.prdResetJob ? (
-            <div className="queue-detail" style={{ marginTop: '8px' }}>
-              Latest reset job: {repo.prdResetJob.statusLabel || repo.prdResetJob.status || 'queued'}
-              {repo.prdResetJob.detail ? ` | ${repo.prdResetJob.detail}` : ''}
-            </div>
-          ) : null}
-          <PrdResetButton repo={repo} />
-        </div>
-      </div>
-      <RepoAttentionPanel signals={attentionSignals} />
       <div className="repo-actions" style={{ marginTop: '16px' }}>
         {projectUrl ? (
           <a className="action-link" href={projectUrl}>
@@ -3226,6 +3191,77 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
             {repo.deploymentLabel || 'Deployment site'}
           </a>
         ) : null}
+      </div>
+      <div className="repo-section" style={{ marginTop: '16px' }}>
+        <RepoDisclosure title="Repo status and details">
+          {snapshotItems.length > 0 ? (
+            <div className="snapshot-grid">
+              {snapshotItems.map((item) => (
+                <div className="snapshot-item">
+                  <div className="pill">{item.label}</div>
+                  <div className="queue-detail">{item.value}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <RepoSection title="Current work">
+            <div className="queued-prd">
+              <div className="item-head">
+                <div>
+                  <div className={`status-chip ${statusClass(repo.activePrd ? repo.activePrd.status : repo.prdRun ? repo.prdRun.currentStepId : 'offline')}`}>
+                    <span className="status-dot" />
+                    <span>{currentWork.status}</span>
+                  </div>
+                  <div className="queue-title">{currentWork.title}</div>
+                </div>
+                {currentWork.progress ? <span className="pill">{currentWork.progress}</span> : null}
+              </div>
+              <div className="queue-detail">{currentWork.detail}</div>
+              {repo.activePrd ? (
+                <div className="queue-detail" style={{ marginTop: '8px' }}>
+                  {repo.activePrd.id || 'unknown PRD'}
+                  {repo.activePrd.detail ? ` | ${repo.activePrd.detail}` : ''}
+                </div>
+              ) : null}
+              {repo.prdResetJob ? (
+                <div className="queue-detail" style={{ marginTop: '8px' }}>
+                  Latest reset job: {repo.prdResetJob.statusLabel || repo.prdResetJob.status || 'queued'}
+                  {repo.prdResetJob.detail ? ` | ${repo.prdResetJob.detail}` : ''}
+                </div>
+              ) : null}
+              <PrdResetButton repo={repo} />
+            </div>
+          </RepoSection>
+          {deployment ? (
+            <RepoSection title="Deployment">
+              <div className="queued-prd">
+                <div className="item-head">
+                  <div>
+                    <div className={`status-chip ${statusClass(deployment.status)}`}>
+                      <span className="status-dot" />
+                      <span>{deployment.statusLabel || 'Deploy status unavailable'}</span>
+                    </div>
+                    <div className="queue-title">
+                      {deployment.sourceBranch || 'dev'} -&gt; {deployment.targetBranch || 'main'}
+                    </div>
+                  </div>
+                </div>
+                <div className="queue-detail">{deployment.detail || 'No deployment status snapshot yet.'}</div>
+                {repo.deployJob ? (
+                  <div className="queue-detail" style={{ marginTop: '8px' }}>
+                    Latest deploy job: {repo.deployJob.statusLabel || repo.deployJob.status || 'queued'}
+                    {repo.deployJob.detail ? ` | ${repo.deployJob.detail}` : ''}
+                  </div>
+                ) : null}
+              </div>
+            </RepoSection>
+          ) : null}
+          {attentionSignals.length > 0 ? (
+            <RepoSection title="Attention">
+              <RepoAttentionList signals={attentionSignals} />
+            </RepoSection>
+          ) : null}
+        </RepoDisclosure>
       </div>
     </article>
   );
@@ -3427,12 +3463,7 @@ function CompactDeploymentPanel({
 }
 
 function buildManagerSnapshotItems(repo: RepoSummary): RepoSnapshotItem[] {
-  const items: RepoSnapshotItem[] = [
-    {
-      label: 'Repo',
-      value: repo.repoId || 'unknown',
-    },
-  ];
+  const items: RepoSnapshotItem[] = [];
   if (repo.activePrd && typeof repo.activePrd.completedTaskCount === 'number' && typeof repo.activePrd.remainingTaskCount === 'number') {
     items.push({
       label: 'Progress',
@@ -3556,18 +3587,6 @@ function summarizePullRequestState(pullRequestStatuses: PullRequestSummary[] = [
   return [reviewActive ? `${reviewActive} active review` : '', waiting ? `${waiting} waiting` : '', blocked ? `${blocked} blocked` : '']
     .filter(Boolean)
     .join(' | ');
-}
-
-function RepoAttentionPanel({ signals }: { signals: RepoAttentionSignal[] }) {
-  if (!signals.length) {
-    return null;
-  }
-  return (
-    <div className="repo-section" style={{ marginTop: '16px' }}>
-      <h4>Attention</h4>
-      <RepoAttentionList signals={signals} />
-    </div>
-  );
 }
 
 function RepoAttentionList({ signals }: { signals: RepoAttentionSignal[] }) {
