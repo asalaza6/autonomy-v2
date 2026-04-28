@@ -28,5 +28,22 @@
     "package update",
     "and PRD creation without changing their backend behavior.",
     "Ensure stale or conflicting states such as PR drift and failed GitHub validation still surface as concise attention labels in the minimal view rather than disappearing."
+  ],
+  "tasks": [
+    {
+      "id": "prd-simplify-repo-summary-surfaces-2d485f-architecture-agent-1",
+      "title": "Refactor repo summary surfaces to use compact default summaries with progressive disclosure",
+      "agentId": "architecture-agent",
+      "description": "Update the control-plane manager dashboard and per-repo surfaces so the default repo summary is compact and high-signal, while detailed operational diagnostics move behind the repo control page and/or clearly labeled expanders. Likely touch points include `src/server/control-plane/` rendering paths for manager repo cards, repo main views, and repo control views, plus any summary/status shaping code under `src/autonomy-v2/control-plane/` that feeds those surfaces. Preserve existing actions and backend contracts for open repo control page, deploy, restart, package update, and PRD creation.",
+      "acceptance": [
+        "Manager dashboard repo cards render a materially simplified default summary that prioritizes repo identity, freshness, top status, active PRD state, and concise deploy/restart attention labels instead of the current dense multi-section layout.",
+        "The default repo main surface emphasizes current work and progress, while secondary operational details such as GitHub validation metadata, package controls, live process internals, PID evidence, and detailed deploy/restart diagnostics are moved behind the repo control page and/or explicit expanders.",
+        "The repo control page remains the authoritative detailed surface for agents, pull requests, GitHub access, restart evidence, live process output, and raw status, with existing diagnostics still reachable after the UI refactor.",
+        "Default summary views still surface concise attention signals for failed GitHub validation, failed restart state, deploy available, and PR drift when those states are present.",
+        "Existing control-plane actions continue to work without backend contract changes or changes to the `dev`-targeted deploy/restart/package/PRD workflows.",
+        "Focused UI coverage is added or updated for compact manager cards and repo drill-down or expander behavior, and verification includes `npm run typecheck` plus relevant control-plane unit or smoke tests covering dashboard and repo-page rendering."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
