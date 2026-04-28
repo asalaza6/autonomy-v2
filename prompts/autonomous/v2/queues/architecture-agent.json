@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4929,6 +4928,39 @@
       },
       "implementationConversationId": "019dd189-fe05-7603-b6d7-576c93d64623",
       "commitSha": "a0a35b0751a650bd3582a7ae74342bee16ec688e"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-simplify-repo-summary-surfaces-2d485f-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Refactor repo summary surfaces to use compact default summaries with progressive disclosure",
+      "description": "Blocking issue: this branch changes high-risk control-plane summary surfaces in `src/server/control-plane/control-plane-client.tsx` and `src/server/control-plane/control-plane-page.tsx`, but there is still no passing focused control-plane test run evidenced for the new/updated coverage in `tests/unit/control-plane-summary-ui.test.ts` and `tests/unit/control-plane-restart-ui.test.ts`. The deterministic merge blockers now pass (`npm run typecheck`, `npm run lint`), but this PR is not merge-safe until the changed dashboard/repo-summary rendering paths are verified with a passing focused unit or smoke run from a writable environment.\nFocused verification is still missing for the high-risk UI behavior change. This PR materially refactors manager and repo summary rendering in `src/server/control-plane/control-plane-client.tsx`/`src/server/control-plane/control-plane-page.tsx` and adds or updates coverage in `tests/unit/control-plane-summary-ui.test.ts` and `tests/unit/control-plane-restart-ui.test.ts`, but no passing execution result for those focused tests (or equivalent control-plane smoke/unit coverage) is provided. Please supply a passing focused test run covering the changed dashboard and repo-page rendering paths before merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-simplify-repo-summary-surfaces-2d485f",
+      "laneKey": "prd-simplify-repo-summary-surfaces-2d485f:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issue: this branch changes high-risk control-plane summary surfaces in `src/server/control-plane/control-plane-client.tsx` and `src/server/control-plane/control-plane-page.tsx`, but there is still no passing focused control-plane test run evidenced for the new/updated coverage in `tests/unit/control-plane-summary-ui.test.ts` and `tests/unit/control-plane-restart-ui.test.ts`. The deterministic merge blockers now pass (`npm run typecheck`, `npm run lint`), but this PR is not merge-safe until the changed dashboard/repo-summary rendering paths are verified with a passing focused unit or smoke run from a writable environment.\nFocused verification is still missing for the high-risk UI behavior change. This PR materially refactors manager and repo summary rendering in `src/server/control-plane/control-plane-client.tsx`/`src/server/control-plane/control-plane-page.tsx` and adds or updates coverage in `tests/unit/control-plane-summary-ui.test.ts` and `tests/unit/control-plane-restart-ui.test.ts`, but no passing execution result for those focused tests (or equivalent control-plane smoke/unit coverage) is provided. Please supply a passing focused test run covering the changed dashboard and repo-page rendering paths before merge."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
+      "createdAt": "2026-04-28T00:45:34.455Z",
+      "updatedAt": "2026-04-28T00:45:34.455Z",
+      "startedAt": "2026-04-28T00:45:34.455Z",
+      "prId": "pr-prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd189-fe05-7603-b6d7-576c93d64623",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-28T00:45:34.455Z"
+        }
+      },
+      "implementationConversationId": "019dd189-fe05-7603-b6d7-576c93d64623"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
