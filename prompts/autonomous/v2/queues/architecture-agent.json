@@ -5086,7 +5086,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-hide-advanced-raw-state-465930-architecture-agent",
       "createdAt": "2026-04-28T08:01:35.512Z",
-      "updatedAt": "2026-04-28T08:02:34.720Z",
+      "updatedAt": "2026-04-28T08:02:34.787Z",
       "startedAt": "2026-04-28T08:01:35.512Z",
       "prId": "pr-prd-hide-advanced-raw-state-465930-architecture-agent",
       "completedAt": "2026-04-28T08:02:34.720Z",
@@ -5099,7 +5099,8 @@
           "updatedAt": "2026-04-28T08:02:34.720Z"
         }
       },
-      "implementationConversationId": "019dd31b-aaa9-7682-a8cc-569cddf3d92f"
+      "implementationConversationId": "019dd31b-aaa9-7682-a8cc-569cddf3d92f",
+      "commitSha": "f2f57cd08be70bfe639e19da830f9c8b2b0af5cb"
     }
   ]
 }
