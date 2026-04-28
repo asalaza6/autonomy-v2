@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-hide-advanced-raw-state-465930",
+  "status": "planned",
+  "createdAt": "2026-04-28T07:53:48.293Z",
+  "updatedAt": "2026-04-28T07:53:48.293Z",
+  "plannedTaskIds": [
+    "prd-hide-advanced-raw-state-465930-architecture-agent-1"
+  ]
+}

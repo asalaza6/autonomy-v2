@@ -18,5 +18,22 @@
     "preserve reasonable UX behavior without forcing unnecessary rerenders while hidden.",
     "Maintain existing non-debug Advanced content and existing tab navigation behavior.",
     "Keep manager-vs-project visibility rules unchanged; this request applies to the project control-plane Advanced view."
+  ],
+  "tasks": [
+    {
+      "id": "prd-hide-advanced-raw-state-465930-architecture-agent-1",
+      "title": "Hide project Advanced raw debug payloads behind a lazy-open disclosure",
+      "agentId": "architecture-agent",
+      "description": "Update the project control-plane `Advanced` tab so the raw debug payload area is collapsed by default behind a clearly labeled dropdown or disclosure, and defer creation/rendering of the raw JSON view until the disclosure is opened. Scope this to the project page Advanced view only, preserving existing tab navigation, non-debug Advanced content, and current manager-vs-project visibility rules. Likely touch points include the project-page rendering code under `src/server/control-plane/` and any related client-side state or view helpers that currently populate the state, dashboard, jobs, and repo-status raw JSON blocks.",
+      "acceptance": [
+        "Opening a project page still shows the `Advanced` tab, but the raw debug payload area for state, dashboard, jobs, and repo status is collapsed by default behind a visible disclosure control.",
+        "While the disclosure remains closed, the raw JSON payloads for current state, rendered dashboard, jobs, and repo status are not populated or rendered into the Advanced view.",
+        "Opening the disclosure renders the current raw payloads for state, dashboard, jobs, and repo status without changing existing non-debug Advanced content.",
+        "Closing the disclosure again hides the raw debug area without regressing tab behavior or causing unnecessary hidden rerender work on subsequent state refreshes.",
+        "Manager-vs-project visibility rules remain unchanged, and this behavior change applies only to the project control-plane Advanced view.",
+        "Focused control-plane UI coverage is added or updated for collapsed-by-default Advanced debug content and open-to-render behavior, smoke coverage confirms the project page still exposes the `Advanced` tab while raw debug content stays hidden by default, and verification includes `npm run typecheck`, `tests/smoke/control-plane.test.ts`, and relevant targeted control-plane unit coverage for Advanced rendering behavior."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
