@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-provider-agnostic-service-auth-and-0cd09a",
+  "status": "planned",
+  "createdAt": "2026-04-28T23:14:59.571Z",
+  "updatedAt": "2026-04-28T23:14:59.571Z",
+  "plannedTaskIds": [
+    "prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent-1"
+  ]
+}
