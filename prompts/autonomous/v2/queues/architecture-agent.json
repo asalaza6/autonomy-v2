@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5101,6 +5100,39 @@
       },
       "implementationConversationId": "019dd31b-aaa9-7682-a8cc-569cddf3d92f",
       "commitSha": "f2f57cd08be70bfe639e19da830f9c8b2b0af5cb"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-hide-advanced-raw-state-465930-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Hide project Advanced raw debug payloads behind a lazy-open disclosure",
+      "description": "Changes requested. Compared against `origin/dev` and re-checked the follow-up diff. The prior focused-unit blocker is resolved: `package.json` now includes `dist/tests/unit/control-plane-advanced-ui.test.js` in `npm run test:control-plane-summary-ui`, and that deterministic check passed. The remaining merge blocker is verification: this PR changes a high-risk control-plane project view and updates `tests/smoke/control-plane.test.ts`, but there is still no passing execution evidence for `tests/smoke/control-plane.test.ts`. Per the project context and task acceptance, that smoke run is required before merge.\nBlocking: missing required smoke verification for a high-risk control-plane UI change. The branch updates the project Advanced view in `src/server/control-plane/control-plane-client.tsx` and `src/server/control-plane/control-plane-page.tsx`, and it adds assertions in `tests/smoke/control-plane.test.ts`, but the only provided deterministic results are `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. Please provide a passing run for `tests/smoke/control-plane.test.ts` (or an equivalent command that executes that smoke test) before merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-hide-advanced-raw-state-465930",
+      "laneKey": "prd-hide-advanced-raw-state-465930:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Changes requested. Compared against `origin/dev` and re-checked the follow-up diff. The prior focused-unit blocker is resolved: `package.json` now includes `dist/tests/unit/control-plane-advanced-ui.test.js` in `npm run test:control-plane-summary-ui`, and that deterministic check passed. The remaining merge blocker is verification: this PR changes a high-risk control-plane project view and updates `tests/smoke/control-plane.test.ts`, but there is still no passing execution evidence for `tests/smoke/control-plane.test.ts`. Per the project context and task acceptance, that smoke run is required before merge.\nBlocking: missing required smoke verification for a high-risk control-plane UI change. The branch updates the project Advanced view in `src/server/control-plane/control-plane-client.tsx` and `src/server/control-plane/control-plane-page.tsx`, and it adds assertions in `tests/smoke/control-plane.test.ts`, but the only provided deterministic results are `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. Please provide a passing run for `tests/smoke/control-plane.test.ts` (or an equivalent command that executes that smoke test) before merge."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-hide-advanced-raw-state-465930-architecture-agent",
+      "createdAt": "2026-04-28T08:03:51.934Z",
+      "updatedAt": "2026-04-28T08:03:51.934Z",
+      "startedAt": "2026-04-28T08:03:51.934Z",
+      "prId": "pr-prd-hide-advanced-raw-state-465930-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd31b-aaa9-7682-a8cc-569cddf3d92f",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-28T08:03:51.934Z"
+        }
+      },
+      "implementationConversationId": "019dd31b-aaa9-7682-a8cc-569cddf3d92f"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
