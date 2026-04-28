@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5136,6 +5135,39 @@
       "completedAt": "2026-04-28T08:04:27.264Z",
       "completionMode": "noop",
       "commitSha": "1d774ed267c7fe6c4cfc17a664df0eedbae9d426"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-hide-advanced-raw-state-465930-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Hide project Advanced raw debug payloads behind a lazy-open disclosure",
+      "description": "Compared against `origin/dev`. The implementation for the project Advanced disclosure looks aligned with the acceptance criteria, and the provided deterministic blockers passed (`npm run typecheck`, `npm run lint`, `npm run test:control-plane-summary-ui`). The PR is still not merge-safe because required high-risk control-plane verification is incomplete: there is no passing execution evidence for `tests/smoke/control-plane.test.ts`, even though this branch changes the project Advanced view in `src/server/control-plane/control-plane-client.tsx` and `src/server/control-plane/control-plane-page.tsx` and updates that smoke test. Please provide a passing run for `tests/smoke/control-plane.test.ts` (or an equivalent command that executes that smoke test) before merge.\nBlocking: missing required smoke verification for a high-risk control-plane UI change. The diff updates the project-page Advanced rendering and adds assertions in `tests/smoke/control-plane.test.ts`, but the only provided deterministic results are `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. Per the project context and task acceptance, a passing control-plane smoke run is required before approval.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-hide-advanced-raw-state-465930",
+      "laneKey": "prd-hide-advanced-raw-state-465930:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Compared against `origin/dev`. The implementation for the project Advanced disclosure looks aligned with the acceptance criteria, and the provided deterministic blockers passed (`npm run typecheck`, `npm run lint`, `npm run test:control-plane-summary-ui`). The PR is still not merge-safe because required high-risk control-plane verification is incomplete: there is no passing execution evidence for `tests/smoke/control-plane.test.ts`, even though this branch changes the project Advanced view in `src/server/control-plane/control-plane-client.tsx` and `src/server/control-plane/control-plane-page.tsx` and updates that smoke test. Please provide a passing run for `tests/smoke/control-plane.test.ts` (or an equivalent command that executes that smoke test) before merge.\nBlocking: missing required smoke verification for a high-risk control-plane UI change. The diff updates the project-page Advanced rendering and adds assertions in `tests/smoke/control-plane.test.ts`, but the only provided deterministic results are `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. Per the project context and task acceptance, a passing control-plane smoke run is required before approval."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-hide-advanced-raw-state-465930-architecture-agent",
+      "createdAt": "2026-04-28T08:05:42.923Z",
+      "updatedAt": "2026-04-28T08:05:42.923Z",
+      "startedAt": "2026-04-28T08:05:42.923Z",
+      "prId": "pr-prd-hide-advanced-raw-state-465930-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd31b-aaa9-7682-a8cc-569cddf3d92f",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-28T08:05:42.923Z"
+        }
+      },
+      "implementationConversationId": "019dd31b-aaa9-7682-a8cc-569cddf3d92f"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
