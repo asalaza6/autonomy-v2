@@ -13,6 +13,7 @@ import {
   validatePackageUpdateSubmission,
   validatePrdAddSubmission,
   validateRestartSubmission,
+  validateServiceAuthSubmission,
 } from '../../src/server/control-plane/control-plane-validation.js';
 import { parseRepoRoots } from '../../src/server/control-plane/control-plane-main.js';
 import {
@@ -21,6 +22,7 @@ import {
   completeJob,
   createControlPlanePackageUpdateJob,
   createControlPlaneRestartJob,
+  createControlPlaneServiceAuthJob,
   enqueueJob,
   listJobs,
 } from '../../src/server/control-plane/control-plane-store.js';
@@ -45,6 +47,29 @@ test('control plane config preserves optional deployment metadata', () => {
     deploymentLabel: ' Live app ',
     exclusiveControl: true,
     controlTakeover: 'refuse',
+    providerDeploy: {
+      providerId: 'netlify-like',
+      connectionId: 'primary',
+    },
+    serviceProviders: [
+      {
+        providerId: 'netlify-like',
+        authStrategies: ['manual-token'],
+        authFields: [
+          { field: 'apiToken', required: true },
+        ],
+      },
+    ],
+    serviceConnections: [
+      {
+        providerId: 'netlify-like',
+        connectionId: 'primary',
+        authStrategy: 'manual-token',
+        envAliases: {
+          apiToken: 'NETLIFY_TOKEN',
+        },
+      },
+    ],
   });
 
   assert.equal(config.repoId, 'alpha');
@@ -56,6 +81,9 @@ test('control plane config preserves optional deployment metadata', () => {
   assert.equal(config.deploymentLabel, 'Live app');
   assert.equal(config.exclusiveControl, true);
   assert.equal(config.controlTakeover, 'refuse');
+  assert.equal(config.providerDeploy?.providerId, 'netlify-like');
+  assert.equal(config.serviceProviders?.[0]?.providerId, 'netlify-like');
+  assert.equal(config.serviceConnections?.[0]?.envAliases?.apiToken, 'NETLIFY_TOKEN');
 });
 
 test('repo-local autonomy-v2 control plane config uses release patch package update command', () => {
@@ -133,9 +161,49 @@ test('deploy submission validation enforces discovered repo registration', () =>
 
   const { payload } = validateDeploySubmission(repos, {
     repoId: 'alpha',
+    providerId: 'netlify-like',
+    connectionId: 'primary',
   });
 
   assert.equal(payload.repoId, 'alpha');
+  assert.equal(payload.providerId, 'netlify-like');
+  assert.equal(payload.connectionId, 'primary');
+  assert.throws(() => validateDeploySubmission(repos, {
+    repoId: 'alpha',
+    providerId: 'netlify-like',
+  }));
+});
+
+test('service auth jobs queue, claim, and complete with provider context', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-service-auth-'));
+  const repos = [
+    {
+      repoId: 'alpha',
+      label: 'Alpha',
+    },
+  ];
+  const { payload } = validateServiceAuthSubmission(repos, {
+    repoId: 'alpha',
+    providerId: 'netlify-like',
+    connectionId: 'primary',
+    authStrategy: 'manual-token',
+  });
+  const job = enqueueJob(rootDir, createControlPlaneServiceAuthJob('service:auth:verify', payload));
+  const claimed = claimJob(rootDir, job.id, { repoIds: ['alpha'] });
+  const completed = completeJob(rootDir, job.id, {
+    status: 'completed',
+    result: {
+      connection: {
+        providerId: 'netlify-like',
+        connectionId: 'primary',
+        status: 'connected',
+      },
+    },
+  });
+
+  assert.equal(job.type, 'service:auth:verify');
+  assert.equal(claimed?.payload.providerId, 'netlify-like');
+  assert.equal(completed?.result?.connection?.connectionId, 'primary');
 });
 
 test('package update jobs validate, queue, claim, and complete for one repo', () => {

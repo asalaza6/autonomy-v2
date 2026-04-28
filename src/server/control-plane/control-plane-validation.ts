@@ -7,6 +7,10 @@ import type {
   ControlPlanePrdResetPayload,
   ControlPlaneRestartPayload,
   ControlPlaneRepoRecord,
+  ControlPlaneServiceAuthPayload,
+  ControlPlaneServiceConnectionRecord,
+  ControlPlaneServiceDeploySelection,
+  ControlPlaneServiceProviderRecord,
 } from '../../types.js';
 import { randomBytes } from 'crypto';
 
@@ -40,6 +44,9 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     deploymentLabel: repo.deploymentLabel,
     exclusiveControl: repo.exclusiveControl,
     controlTakeover: repo.controlTakeover,
+    serviceProviders: repo.serviceProviders,
+    serviceConnections: repo.serviceConnections,
+    providerDeploy: repo.providerDeploy,
   };
 }
 
@@ -76,6 +83,9 @@ function normalizeRepoRecord(
     controlTakeover: String((repo as Record<string, unknown>).controlTakeover || '').trim() === 'refuse'
       ? 'refuse'
       : 'takeover',
+    serviceProviders: normalizeServiceProviders((repo as Record<string, unknown>).serviceProviders),
+    serviceConnections: normalizeServiceConnections((repo as Record<string, unknown>).serviceConnections),
+    providerDeploy: normalizeDeploySelection((repo as Record<string, unknown>).providerDeploy),
   } as ControlPlaneRepoRecord;
 }
 
@@ -138,10 +148,41 @@ function validateDeploySubmission(
   submission: Partial<ControlPlaneDeployPayload> = {}
 ) {
   const repo = resolveRepoById(repos, submission.repoId || '');
+  const providerId = String(submission.providerId || '').trim() || undefined;
+  const connectionId = String(submission.connectionId || '').trim() || undefined;
+  if ((providerId && !connectionId) || (!providerId && connectionId)) {
+    throw new Error('Provide both providerId and connectionId when selecting a provider-backed deploy.');
+  }
   return {
     repo,
     payload: {
       repoId: repo.repoId,
+      providerId,
+      connectionId,
+    },
+  };
+}
+
+function validateServiceAuthSubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlaneServiceAuthPayload> = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
+  const providerId = String(submission.providerId || '').trim();
+  const connectionId = String(submission.connectionId || '').trim();
+  if (!providerId) {
+    throw new Error('Provide providerId for the service connection.');
+  }
+  if (!connectionId) {
+    throw new Error('Provide connectionId for the service connection.');
+  }
+  return {
+    repo,
+    payload: {
+      repoId: repo.repoId,
+      providerId,
+      connectionId,
+      authStrategy: String(submission.authStrategy || '').trim() || undefined,
     },
   };
 }
@@ -240,6 +281,163 @@ function normalizeTaskSpec(taskSpec: Record<string, unknown> | null | undefined,
   };
 }
 
+function normalizeServiceProviders(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized = value.map((provider) => normalizeServiceProvider(provider)).filter(Boolean) as ControlPlaneServiceProviderRecord[];
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeServiceProvider(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const providerId = String((value as Record<string, unknown>).providerId || '').trim();
+  if (!providerId) {
+    return null;
+  }
+  return {
+    providerId,
+    label: String((value as Record<string, unknown>).label || providerId).trim(),
+    authStrategies: normalizeStringList((value as Record<string, unknown>).authStrategies),
+    authFields: normalizeServiceFields((value as Record<string, unknown>).authFields),
+    requiredScopes: normalizeStringList((value as Record<string, unknown>).requiredScopes),
+    verifyCommand: normalizeServiceCommand((value as Record<string, unknown>).verifyCommand),
+    preflightCommand: normalizeServiceCommand((value as Record<string, unknown>).preflightCommand),
+    deployCommand: normalizeServiceCommand((value as Record<string, unknown>).deployCommand),
+    postDeployMetadataCommand: normalizeServiceCommand((value as Record<string, unknown>).postDeployMetadataCommand),
+    capabilityMetadata: normalizeFlatMetadata((value as Record<string, unknown>).capabilityMetadata),
+  } satisfies ControlPlaneServiceProviderRecord;
+}
+
+function normalizeServiceConnections(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized = value.map((connection) => normalizeServiceConnection(connection)).filter(Boolean) as ControlPlaneServiceConnectionRecord[];
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeServiceConnection(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const providerId = String((value as Record<string, unknown>).providerId || '').trim();
+  const connectionId = String((value as Record<string, unknown>).connectionId || '').trim();
+  const authStrategy = String((value as Record<string, unknown>).authStrategy || '').trim();
+  if (!providerId || !connectionId || !authStrategy) {
+    return null;
+  }
+  return {
+    providerId,
+    connectionId,
+    label: String((value as Record<string, unknown>).label || connectionId).trim() || undefined,
+    authStrategy,
+    envAliases: normalizeStringMap((value as Record<string, unknown>).envAliases),
+    accountMetadata: normalizeFlatMetadata((value as Record<string, unknown>).accountMetadata),
+    capabilityMetadata: normalizeFlatMetadata((value as Record<string, unknown>).capabilityMetadata),
+  } satisfies ControlPlaneServiceConnectionRecord;
+}
+
+function normalizeServiceFields(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized = value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null;
+      }
+      const field = String((entry as Record<string, unknown>).field || '').trim();
+      if (!field) {
+        return null;
+      }
+      return {
+        field,
+        label: String((entry as Record<string, unknown>).label || field).trim() || undefined,
+        description: String((entry as Record<string, unknown>).description || '').trim() || undefined,
+        required: (entry as Record<string, unknown>).required !== false,
+        secret: (entry as Record<string, unknown>).secret !== false,
+      };
+    })
+    .filter(Boolean);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeStringList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized = value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeStringMap(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized = Object.entries(value as Record<string, unknown>).reduce((record, [key, entry]) => {
+    const normalizedKey = String(key || '').trim();
+    const normalizedValue = String(entry || '').trim();
+    if (!normalizedKey || !normalizedValue) {
+      return record;
+    }
+    record[normalizedKey] = normalizedValue;
+    return record;
+  }, {} as Record<string, string>);
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeFlatMetadata(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const normalized = Object.entries(value as Record<string, unknown>).reduce((record, [key, entry]) => {
+    const normalizedKey = String(key || '').trim();
+    if (!normalizedKey) {
+      return record;
+    }
+    if (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'boolean') {
+      record[normalizedKey] = entry;
+      return record;
+    }
+    if (entry === null) {
+      record[normalizedKey] = null;
+    }
+    return record;
+  }, {} as Record<string, string | number | boolean | null>);
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeServiceCommand(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const command = (value as Record<string, unknown>).command;
+  if (typeof command === 'undefined' || command === null || (typeof command === 'string' && !command.trim())) {
+    return undefined;
+  }
+  return {
+    command: command as any,
+  };
+}
+
+function normalizeDeploySelection(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const providerId = String((value as Record<string, unknown>).providerId || '').trim();
+  const connectionId = String((value as Record<string, unknown>).connectionId || '').trim();
+  if (!providerId || !connectionId) {
+    return undefined;
+  }
+  return {
+    providerId,
+    connectionId,
+  } satisfies ControlPlaneServiceDeploySelection;
+}
+
 function generatePrdTitle(input: {
   specification?: string;
   requirements?: string[];
@@ -287,4 +485,5 @@ export {
   validatePrdAddSubmission,
   validatePrdResetSubmission,
   validateRestartSubmission,
+  validateServiceAuthSubmission,
 };

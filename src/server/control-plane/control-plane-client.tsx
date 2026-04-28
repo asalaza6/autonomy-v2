@@ -298,6 +298,30 @@ type RepoSummary = {
   versionStatus?: VersionStatusSummary | null;
   packageStatus?: PackageStatusSummary | null;
   packageUpdateJob?: JobSummary | null;
+  serviceConnections?: Array<{
+    providerId?: string;
+    providerLabel?: string;
+    connectionId?: string;
+    label?: string;
+    authStrategy?: string;
+    status?: string;
+    statusLabel?: string;
+    lastVerifiedAt?: string | null;
+    failureClass?: string | null;
+    failureLabel?: string | null;
+    requiredScopes?: string[];
+    accountMetadata?: Record<string, string | number | boolean | null>;
+    capabilityMetadata?: Record<string, string | number | boolean | null>;
+    fieldStatuses?: Array<{
+      field?: string;
+      label?: string;
+      envKey?: string | null;
+      required?: boolean;
+      secret?: boolean;
+      resolved?: boolean;
+      source?: string;
+    }>;
+  }>;
 };
 
 type DashboardSummary = {
@@ -3270,6 +3294,11 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
               </div>
             </RepoSection>
           ) : null}
+          {repo.serviceConnections && repo.serviceConnections.length > 0 ? (
+            <RepoSection title="Service Connections">
+              <RepoServiceConnections repo={repo} />
+            </RepoSection>
+          ) : null}
           {attentionSignals.length > 0 ? (
             <RepoSection title="Attention">
               <RepoAttentionList signals={attentionSignals} />
@@ -3329,6 +3358,9 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
         </RepoSection>
         <RepoSection title="Deployment">
           <CompactDeploymentPanel repo={repo} showDeployButton={showDeployButton} deployButtonState={deployButtonState} />
+        </RepoSection>
+        <RepoSection title="Service Connections">
+          <RepoServiceConnections repo={repo} />
         </RepoSection>
       </div>
       <div className="repo-actions" style={{ marginTop: '16px' }}>
@@ -3606,6 +3638,13 @@ function buildManagerSnapshotItems(repo: RepoSummary): RepoSnapshotItem[] {
       value: repo.deployment.statusLabel,
     });
   }
+  if (repo.serviceConnections && repo.serviceConnections.length > 0) {
+    const connectedCount = repo.serviceConnections.filter((connection) => String(connection && connection.status || '') === 'connected').length;
+    items.push({
+      label: 'Services',
+      value: `${connectedCount}/${repo.serviceConnections.length} connected`,
+    });
+  }
   return items;
 }
 
@@ -3676,6 +3715,14 @@ function buildRepoAttentionSignals(repo: RepoSummary): RepoAttentionSignal[] {
       tone: 'waiting',
       label: 'PR drift',
       detail: prDriftDetail,
+    });
+  }
+  const brokenConnection = (repo.serviceConnections || []).find((connection) => String(connection && connection.status || '') !== 'connected');
+  if (brokenConnection) {
+    signals.push({
+      tone: 'blocked',
+      label: 'Service auth needs attention',
+      detail: `${brokenConnection.providerLabel || brokenConnection.providerId || 'Provider'} / ${brokenConnection.label || brokenConnection.connectionId || 'connection'}: ${brokenConnection.failureLabel || brokenConnection.statusLabel || brokenConnection.status || 'Needs reconnect'}`,
     });
   }
   return signals;
@@ -3802,6 +3849,60 @@ function RepoGithubAccess({ repo }: { repo: RepoSummary }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function RepoServiceConnections({ repo }: { repo: RepoSummary }) {
+  const connections = Array.isArray(repo.serviceConnections) ? repo.serviceConnections : [];
+  if (connections.length === 0) {
+    return <div className="list-note">No provider-backed service connections configured.</div>;
+  }
+  return (
+    <>
+      {connections.map((connection) => {
+        const label = connection.label || connection.connectionId || 'connection';
+        const provider = connection.providerLabel || connection.providerId || 'provider';
+        const fieldStatuses = Array.isArray(connection.fieldStatuses) ? connection.fieldStatuses : [];
+        const fieldSummary = fieldStatuses.length > 0
+          ? `${fieldStatuses.filter((field) => field && field.resolved === true).length}/${fieldStatuses.length} required fields resolved`
+          : 'No logical fields declared';
+        const metadataEntries = Object.entries(connection.accountMetadata || {}).filter(([, value]) => value !== null && typeof value !== 'undefined' && String(value).trim() !== '');
+        return (
+          <div className="queued-prd">
+            <div className="item-head">
+              <div>
+                <div className={`status-chip ${statusClass(connection.status)}`}>
+                  <span className="status-dot" />
+                  <span>{connection.statusLabel || connection.status || 'Unknown'}</span>
+                </div>
+                <div className="queue-title">{provider} / {label}</div>
+              </div>
+              <span className="pill">{fieldSummary}</span>
+            </div>
+            <div className="queue-detail">
+              Auth: {connection.authStrategy || 'manual-token'}
+              {connection.lastVerifiedAt ? ` | Verified ${formatTimestamp(connection.lastVerifiedAt)}` : ' | Not yet verified'}
+              {connection.failureLabel ? ` | ${connection.failureLabel}` : ''}
+            </div>
+            {metadataEntries.length > 0 ? (
+              <div className="queue-detail" style={{ marginTop: '8px' }}>
+                {metadataEntries.map(([key, value]) => `${key}: ${String(value)}`).join(' | ')}
+              </div>
+            ) : null}
+            {fieldStatuses.length > 0 ? (
+              <div className="queue-detail" style={{ marginTop: '8px' }}>
+                {fieldStatuses.map((field) => {
+                  const fieldLabel = field.label || field.field || 'field';
+                  const envKey = field.envKey || 'missing alias';
+                  const statusLabel = field.resolved ? 'resolved' : 'missing';
+                  return `${fieldLabel} (${envKey}): ${statusLabel}`;
+                }).join(' | ')}
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
   );
 }
 

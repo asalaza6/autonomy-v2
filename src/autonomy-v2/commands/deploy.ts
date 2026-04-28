@@ -2,6 +2,7 @@ import path from 'path';
 import { validateAutonomyConfig } from '../../config/config-main.js';
 import { performLocalDeploy } from './shared-github.js';
 import type { ControlPlaneConfig } from '../autonomy-types.js';
+import { createProviderDeployExecution } from '../control-plane/service-auth.js';
 import {
   ensureInitialized,
   getAutonomyPaths,
@@ -18,14 +19,35 @@ function run(rootDir, options) {
     path.join(paths.configDir, 'control-plane.json'),
     {}
   );
-  const deployCommand = resolveDeployCommand(rootDir, paths, config, controlPlaneConfig);
+  const providerDeploy = createProviderDeployExecution(rootDir, {
+    providerId: String(options.providerId || '').trim() || undefined,
+    connectionId: String(options.connectionId || '').trim() || undefined,
+  }, {
+    runtimeEnv: options.runtimeEnv,
+  });
+  const deployCommand = providerDeploy?.deployCommand || resolveDeployCommand(rootDir, paths, config, controlPlaneConfig);
   const result = performLocalDeploy(rootDir, {
     ...config,
     deployCommand,
+  }, {
+    redactions: providerDeploy?.redactions || [],
   });
 
   if (!result.ok) {
     throw new Error(result.message);
+  }
+  const mutableResult = result as typeof result & {
+    providerConnection?: unknown;
+    providerMetadata?: unknown;
+  };
+  if (providerDeploy?.selection) {
+    mutableResult.providerConnection = providerDeploy.selection;
+  }
+  if (providerDeploy?.postDeployMetadata) {
+    mutableResult.providerMetadata = providerDeploy.postDeployMetadata({
+      rootDir,
+      deployResult: result,
+    });
   }
 
   printOutput(options, result, () => {

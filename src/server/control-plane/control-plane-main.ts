@@ -23,6 +23,7 @@ import {
   createControlPlanePackageUpdateJob,
   createControlPlanePrdResetJob,
   createControlPlaneRestartJob,
+  createControlPlaneServiceAuthJob,
   createControlPlaneJob,
   ensureControlPlaneDataDir,
   enqueueJob,
@@ -43,6 +44,7 @@ import {
   validatePrdAddSubmission,
   validatePrdResetSubmission,
   validateRestartSubmission,
+  validateServiceAuthSubmission,
 } from './control-plane-validation.js';
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
@@ -309,6 +311,8 @@ async function handleRequest(
       const body = await readJsonBody(req);
       const { repo, payload } = validateDeploySubmission(listDiscoveredRepos(rootDir), {
         repoId: String(body && body.repoId || repoId || '').trim(),
+        providerId: String(body && body.providerId || '').trim() || undefined,
+        connectionId: String(body && body.connectionId || '').trim() || undefined,
       });
       const controlAccess = ensureRepoControlAccess(rootDir, repo, readControlSession(req));
       if (!controlAccess.canManage) {
@@ -329,6 +333,47 @@ async function handleRequest(
       sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
     }
     return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.includes('/service-connections/') && req.method === 'POST') {
+    const pathMatch = url.pathname.match(/^\/api\/repos\/([^/]+)\/service-connections\/([^/]+)\/auth\/(start|complete|verify)$/);
+    if (pathMatch) {
+      const [, rawRepoId, rawConnectionId, rawAction] = pathMatch;
+      try {
+        const body = await readJsonBody(req);
+        const { repo, payload } = validateServiceAuthSubmission(listDiscoveredRepos(rootDir), {
+          repoId: String(body && body.repoId || rawRepoId || '').trim(),
+          providerId: String(body && body.providerId || '').trim(),
+          connectionId: String(body && body.connectionId || rawConnectionId || '').trim(),
+          authStrategy: String(body && body.authStrategy || '').trim() || undefined,
+        });
+        const controlAccess = ensureRepoControlAccess(rootDir, repo, readControlSession(req));
+        if (!controlAccess.canManage) {
+          sendJson(res, 409, {
+            error: 'This control-panel session is read-only for lifecycle actions on this repo.',
+            controlAccess,
+          });
+          return;
+        }
+        const jobType = rawAction === 'start'
+          ? 'service:auth:start' as const
+          : rawAction === 'complete'
+            ? 'service:auth:complete' as const
+            : 'service:auth:verify' as const;
+        const job = enqueueJob(rootDir, createControlPlaneServiceAuthJob(jobType, payload));
+        logControlPlaneEvent('control-plane:job:queued', {
+          jobId: job.id,
+          repoId: job.repoId,
+          type: job.type,
+          providerId: payload.providerId,
+          connectionId: payload.connectionId,
+        });
+        sendJson(res, 201, job);
+      } catch (error) {
+        sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+      }
+      return;
+    }
   }
 
   if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/reset-prds') && req.method === 'POST') {

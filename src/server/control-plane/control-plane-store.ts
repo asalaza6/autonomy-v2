@@ -17,6 +17,7 @@ import type {
   ControlPlaneJobRecord,
   ControlPlaneHeartbeatRecord,
   ControlPlaneRepoStatusRecord,
+  ControlPlaneServiceAuthPayload,
   ControlPlaneState,
 } from '../../types.js';
 import { normalizeRepoRecord } from './control-plane-validation.js';
@@ -235,6 +236,7 @@ function normalizeRepoStatuses(repoStatuses: Record<string, ControlPlaneRepoStat
       deploymentLabel: repo?.deploymentLabel,
       exclusiveControl: repo?.exclusiveControl,
       controlTakeover: repo?.controlTakeover,
+      serviceConnections: Array.isArray(statusRecord.serviceConnections) ? statusRecord.serviceConnections : undefined,
       snapshot: statusRecord.snapshot || {},
     };
   });
@@ -268,6 +270,15 @@ function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null
   if (normalized === 'deploy') {
     return 'deploy' as const;
   }
+  if (normalized === 'service:auth:start') {
+    return 'service:auth:start' as const;
+  }
+  if (normalized === 'service:auth:complete') {
+    return 'service:auth:complete' as const;
+  }
+  if (normalized === 'service:auth:verify') {
+    return 'service:auth:verify' as const;
+  }
   if (normalized === 'prd:reset') {
     return 'prd:reset' as const;
   }
@@ -291,7 +302,28 @@ function normalizeJobPayload(
   if (type === 'deploy') {
     return {
       repoId: String((payload as ControlPlaneDeployPayload).repoId || repoId).trim() || repoId,
+      providerId: String((payload as ControlPlaneDeployPayload).providerId || '').trim() || undefined,
+      connectionId: String((payload as ControlPlaneDeployPayload).connectionId || '').trim() || undefined,
     } as ControlPlaneDeployPayload;
+  }
+
+  if (
+    type === 'service:auth:start'
+    || type === 'service:auth:complete'
+    || type === 'service:auth:verify'
+  ) {
+    const authPayload = payload as ControlPlaneServiceAuthPayload;
+    const providerId = String(authPayload.providerId || '').trim();
+    const connectionId = String(authPayload.connectionId || '').trim();
+    if (!providerId || !connectionId) {
+      return null;
+    }
+    return {
+      repoId: String(authPayload.repoId || repoId).trim() || repoId,
+      providerId,
+      connectionId,
+      authStrategy: String(authPayload.authStrategy || '').trim() || undefined,
+    } as ControlPlaneServiceAuthPayload;
   }
 
   if (type === 'prd:reset') {
@@ -705,6 +737,9 @@ function setRepoStatus(
     deploymentLabel: normalizedRepo?.deploymentLabel || existing?.deploymentLabel,
     exclusiveControl: normalizedRepo?.exclusiveControl === true || existing?.exclusiveControl === true,
     controlTakeover: normalizedRepo?.controlTakeover || existing?.controlTakeover,
+    serviceConnections: Array.isArray(snapshot.serviceConnections)
+      ? snapshot.serviceConnections as ControlPlaneRepoStatusRecord['serviceConnections']
+      : existing?.serviceConnections,
     snapshot,
   };
   saveControlPlaneState(rootDir, state);
@@ -1007,12 +1042,34 @@ function createControlPlaneDeployJob(payload: ControlPlaneDeployPayload): Contro
     repoId: payload.repoId,
     payload: {
       repoId: payload.repoId,
+      providerId: payload.providerId,
+      connectionId: payload.connectionId,
     },
     status: 'queued' as const,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
   return job;
+}
+
+function createControlPlaneServiceAuthJob(
+  type: 'service:auth:start' | 'service:auth:complete' | 'service:auth:verify',
+  payload: ControlPlaneServiceAuthPayload,
+): ControlPlaneJobRecord {
+  return {
+    id: createControlPlaneRecordId('job'),
+    type,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+      providerId: payload.providerId,
+      connectionId: payload.connectionId,
+      authStrategy: payload.authStrategy,
+    },
+    status: 'queued',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function createControlPlanePrdResetJob(payload: ControlPlanePrdResetPayload): ControlPlaneJobRecord {
@@ -1228,6 +1285,7 @@ export {
   createControlPlanePackageUpdateJob,
   createControlPlanePrdResetJob,
   createControlPlaneRestartJob,
+  createControlPlaneServiceAuthJob,
   ensureControlPlaneDataDir,
   enqueueJob,
   getControlPlanePaths,

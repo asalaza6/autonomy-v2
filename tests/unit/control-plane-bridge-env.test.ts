@@ -158,6 +158,272 @@ test('bridge executes deploy jobs for mapped repos', async (t) => {
   assert.equal(git(repoDir, ['rev-parse', 'main']), git(repoDir, ['rev-parse', 'dev']));
 });
 
+test('bridge verifies service auth and runs provider-backed deploys with redacted output', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-provider-bridge-');
+  initAutonomyRepo(repoDir);
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.serviceProviders = [
+    {
+      providerId: 'netlify-like',
+      label: 'Netlify-like',
+      authStrategies: ['manual-token'],
+      authFields: [
+        { field: 'apiToken', required: true, secret: true },
+        { field: 'siteId', required: true, secret: false },
+      ],
+      verifyCommand: {
+        command: {
+          command: process.execPath,
+          args: ['-e', 'if (process.env.NETLIFY_TOKEN === "bridge-secret" && process.env.NETLIFY_SITE_ID === "site-999") { console.log(JSON.stringify({ ok: true, accountMetadata: { site: "Bridge Site" } })); process.exit(0); } process.exit(1);'],
+          env: {
+            NETLIFY_TOKEN: '{{apiToken}}',
+            NETLIFY_SITE_ID: '{{siteId}}',
+          },
+        },
+      },
+      deployCommand: {
+        command: {
+          command: process.execPath,
+          args: ['-e', 'console.log(`token=${process.argv[1]}`); console.log(`site=${process.argv[2]}`);', '{{apiToken}}', '{{siteId}}'],
+          env: {
+            NETLIFY_TOKEN: '{{apiToken}}',
+            NETLIFY_SITE_ID: '{{siteId}}',
+          },
+        },
+      },
+    },
+  ];
+  controlPlaneConfig.serviceConnections = [
+    {
+      providerId: 'netlify-like',
+      connectionId: 'primary',
+      label: 'Primary site',
+      authStrategy: 'manual-token',
+      envAliases: {
+        apiToken: 'NETLIFY_TOKEN_SECRET',
+        siteId: 'NETLIFY_SITE_ID_SECRET',
+      },
+    },
+  ];
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(path.join(repoDir, '.env.autonomy.local'), 'NETLIFY_TOKEN_SECRET=bridge-secret\nNETLIFY_SITE_ID_SECRET=site-999\n', 'utf8');
+  fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ version: '1.0.0' }, null, 2) + '\n', 'utf8');
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize provider bridge']);
+  git(repoDir, ['branch', '-f', 'dev', 'main']);
+  git(repoDir, ['switch', 'dev']);
+  fs.appendFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'index.js'), '\nexport const providerDeploy = true;\n', 'utf8');
+  git(repoDir, ['add', 'src/apps/fixture/index.js']);
+  git(repoDir, ['commit', '-m', 'provider deploy change']);
+  git(repoDir, ['switch', 'main']);
+
+  let completedVerifyJob: any = null;
+  let completedDeployJob: any = null;
+  let claimCount = 0;
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      claimCount += 1;
+      if (claimCount === 1) {
+        res.end(JSON.stringify({
+          job: {
+            id: 'job-auth-1',
+            type: 'service:auth:verify',
+            repoId: 'default',
+            payload: {
+              repoId: 'default',
+              providerId: 'netlify-like',
+              connectionId: 'primary',
+            },
+            status: 'claimed',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }));
+        return;
+      }
+      if (claimCount === 2) {
+        res.end(JSON.stringify({
+          job: {
+            id: 'job-deploy-2',
+            type: 'deploy',
+            repoId: 'default',
+            payload: {
+              repoId: 'default',
+              providerId: 'netlify-like',
+              connectionId: 'primary',
+            },
+            status: 'claimed',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }));
+        return;
+      }
+      res.end(JSON.stringify({ job: null }));
+      return;
+    }
+    if (req.url === '/api/jobs/job-auth-1/complete' && req.method === 'POST') {
+      completedVerifyJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-auth-1', status: 'completed' }));
+      return;
+    }
+    if (req.url === '/api/jobs/job-deploy-2/complete' && req.method === 'POST') {
+      completedDeployJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-deploy-2', status: 'completed' }));
+      return;
+    }
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+  });
+
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
+  });
+
+  assert.equal(completedVerifyJob.result.connection.status, 'connected');
+  assert.equal(completedVerifyJob.result.connection.accountMetadata.site, 'Bridge Site');
+  assert.equal(JSON.stringify(completedVerifyJob).includes('bridge-secret'), false);
+  assert.equal(completedDeployJob.result.providerConnection.providerId, 'netlify-like');
+  assert.equal(completedDeployJob.result.deployCommand.command.includes('bridge-secret'), false);
+  assert.equal(completedDeployJob.result.deployCommand.command.includes('site-999'), false);
+  assert.equal(completedDeployJob.result.deployCommand.output.includes('bridge-secret'), false);
+  assert.match(completedDeployJob.result.deployCommand.output, /token=\[REDACTED\]/);
+  assert.match(completedDeployJob.result.deployCommand.output, /site=\[REDACTED\]/);
+  assert.equal(logs.join('\n').includes('bridge-secret'), false);
+});
+
+test('bridge redacts provider deploy secrets from failed job payloads and logs', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-provider-bridge-failed-');
+  initAutonomyRepo(repoDir);
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.serviceProviders = [
+    {
+      providerId: 'failing-provider',
+      authStrategies: ['manual-token'],
+      authFields: [
+        { field: 'apiToken', required: true, secret: true },
+      ],
+      deployCommand: {
+        command: {
+          command: process.execPath,
+          args: ['-e', 'console.log(`token=${process.argv[1]}`); console.error(`stderr=${process.argv[1]}`); process.exit(7);', '{{apiToken}}'],
+        },
+      },
+    },
+  ];
+  controlPlaneConfig.serviceConnections = [
+    {
+      providerId: 'failing-provider',
+      connectionId: 'primary',
+      authStrategy: 'manual-token',
+      envAliases: {
+        apiToken: 'FAILING_PROVIDER_TOKEN',
+      },
+    },
+  ];
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(path.join(repoDir, '.env.autonomy.local'), 'FAILING_PROVIDER_TOKEN=bridge-secret-failure\n', 'utf8');
+  fs.writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify({ version: '1.0.0' }, null, 2) + '\n', 'utf8');
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize failed provider bridge']);
+  git(repoDir, ['branch', '-f', 'dev', 'main']);
+  git(repoDir, ['switch', 'dev']);
+  fs.appendFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'index.js'), '\nexport const failedProviderDeploy = true;\n', 'utf8');
+  git(repoDir, ['add', 'src/apps/fixture/index.js']);
+  git(repoDir, ['commit', '-m', 'provider deploy failure change']);
+  git(repoDir, ['switch', 'main']);
+
+  let failedDeployJob: any = null;
+  let jobClaimed = false;
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
+      res.end(JSON.stringify({
+        job: {
+          id: 'job-deploy-failed',
+          type: 'deploy',
+          repoId: 'default',
+          payload: {
+            repoId: 'default',
+            providerId: 'failing-provider',
+            connectionId: 'primary',
+          },
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      return;
+    }
+    if (req.url === '/api/jobs/job-deploy-failed/complete' && req.method === 'POST') {
+      failedDeployJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-deploy-failed', status: 'failed' }));
+      return;
+    }
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+  });
+
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
+  });
+
+  assert.equal(failedDeployJob.status, 'failed');
+  assert.match(String(failedDeployJob.error || ''), /\[REDACTED\]/);
+  assert.equal(String(failedDeployJob.error || '').includes('bridge-secret-failure'), false);
+  assert.equal(logs.join('\n').includes('bridge-secret-failure'), false);
+});
+
 test('bridge executes agent chat jobs for mapped repos', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-chat-bridge-');
   initAutonomyRepo(repoDir);
