@@ -185,7 +185,7 @@ test('bridge verifies service auth and runs provider-backed deploys with redacte
       deployCommand: {
         command: {
           command: process.execPath,
-          args: ['-e', 'console.log(`token=${process.env.NETLIFY_TOKEN}`); console.log(`site=${process.env.NETLIFY_SITE_ID}`);'],
+          args: ['-e', 'console.log(`token=${process.argv[1]}`); console.log(`site=${process.argv[2]}`);', '{{apiToken}}', '{{siteId}}'],
           env: {
             NETLIFY_TOKEN: '{{apiToken}}',
             NETLIFY_SITE_ID: '{{siteId}}',
@@ -294,20 +294,25 @@ test('bridge verifies service auth and runs provider-backed deploys with redacte
     await closeServer(server);
   });
 
-  await runControlPlaneBridgeOnce(repoDir, {
-    serverUrl,
-    repoRoots: {
-      default: repoDir,
-    },
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
   });
 
   assert.equal(completedVerifyJob.result.connection.status, 'connected');
   assert.equal(completedVerifyJob.result.connection.accountMetadata.site, 'Bridge Site');
   assert.equal(JSON.stringify(completedVerifyJob).includes('bridge-secret'), false);
   assert.equal(completedDeployJob.result.providerConnection.providerId, 'netlify-like');
+  assert.equal(completedDeployJob.result.deployCommand.command.includes('bridge-secret'), false);
+  assert.equal(completedDeployJob.result.deployCommand.command.includes('site-999'), false);
   assert.equal(completedDeployJob.result.deployCommand.output.includes('bridge-secret'), false);
   assert.match(completedDeployJob.result.deployCommand.output, /token=\[REDACTED\]/);
   assert.match(completedDeployJob.result.deployCommand.output, /site=\[REDACTED\]/);
+  assert.equal(logs.join('\n').includes('bridge-secret'), false);
 });
 
 test('bridge executes agent chat jobs for mapped repos', async (t) => {

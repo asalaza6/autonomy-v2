@@ -188,6 +188,106 @@ test('service auth verification classifies invalid credentials and insufficient 
   assert.equal(insufficient.failureClass, 'insufficient-scopes');
 });
 
+test('service auth executes repo-relative provider commands from the selected repo root', () => {
+  const repoDir = createServiceAuthRepo({
+    serviceProviders: [
+      {
+        providerId: 'repo-relative',
+        authFields: [
+          { field: 'apiToken', required: true, secret: true },
+        ],
+        verifyCommand: {
+          command: {
+            command: process.execPath,
+            args: ['verify.js'],
+            cwd: 'scripts',
+          },
+        },
+        preflightCommand: {
+          command: {
+            command: process.execPath,
+            args: ['preflight.js'],
+            cwd: 'scripts',
+          },
+        },
+        deployCommand: {
+          command: {
+            command: process.execPath,
+            args: ['deploy.js'],
+            cwd: 'scripts',
+          },
+        },
+        postDeployMetadataCommand: {
+          command: {
+            command: process.execPath,
+            args: ['post-deploy.js'],
+            cwd: 'scripts',
+          },
+        },
+      },
+    ],
+    serviceConnections: [
+      {
+        providerId: 'repo-relative',
+        connectionId: 'primary',
+        authStrategy: 'manual-token',
+        envAliases: {
+          apiToken: 'REPO_RELATIVE_TOKEN',
+        },
+      },
+    ],
+  });
+  fs.writeFileSync(path.join(repoDir, '.env.autonomy.local'), 'REPO_RELATIVE_TOKEN=repo-relative-token\n', 'utf8');
+  fs.mkdirSync(path.join(repoDir, 'scripts'), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoDir, 'scripts', 'verify.js'),
+    "console.log(JSON.stringify({ ok: process.cwd().endsWith('/scripts'), status: 'connected', accountMetadata: { cwd: process.cwd() } }));\n",
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(repoDir, 'scripts', 'preflight.js'),
+    "require('fs').writeFileSync('preflight-marker.txt', process.cwd(), 'utf8');\n",
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(repoDir, 'scripts', 'deploy.js'),
+    "console.log('repo-relative deploy');\n",
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(repoDir, 'scripts', 'post-deploy.js'),
+    "console.log(JSON.stringify({ ok: true, accountMetadata: { scriptCwd: process.cwd() }, capabilityMetadata: { verifiedFrom: require('path').basename(process.cwd()) } }));\n",
+    'utf8',
+  );
+
+  const summary = verifyServiceConnection(repoDir, {
+    providerId: 'repo-relative',
+    connectionId: 'primary',
+  });
+  const deployExecution = createProviderDeployExecution(repoDir, {
+    providerId: 'repo-relative',
+    connectionId: 'primary',
+  });
+  const metadata = deployExecution?.postDeployMetadata?.({
+    rootDir: repoDir,
+    deployResult: {},
+  });
+  const scriptsDir = fs.realpathSync(path.join(repoDir, 'scripts'));
+
+  assert.equal(summary.status, 'connected');
+  assert.equal(fs.realpathSync(String(summary.accountMetadata?.cwd || '')), scriptsDir);
+  assert.equal(fs.realpathSync(fs.readFileSync(path.join(repoDir, 'scripts', 'preflight-marker.txt'), 'utf8')), scriptsDir);
+  assert.equal((deployExecution?.deployCommand as any).cwd, 'scripts');
+  assert.deepEqual(metadata, {
+    accountMetadata: {
+      scriptCwd: scriptsDir,
+    },
+    capabilityMetadata: {
+      verifiedFrom: 'scripts',
+    },
+  });
+});
+
 function createServiceAuthRepo(controlPlaneConfig: Record<string, unknown>) {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-service-auth-'));
   const configDir = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config');

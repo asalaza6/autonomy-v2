@@ -127,7 +127,7 @@ function verifyServiceConnection(rootDir: string, selection: ControlPlaneService
   }
 
   const providerContext = buildProviderCommandContext(provider, connection, resolution.fields);
-  const outcome = executeProviderVerify(provider, providerContext);
+  const outcome = executeProviderVerify(rootDir, provider, providerContext);
   const nextState: PersistedConnectionState = {
     providerId: connection.providerId,
     connectionId: connection.connectionId,
@@ -177,7 +177,7 @@ function createProviderDeployExecution(
   }
   const context = buildProviderCommandContext(provider, connection, resolution.fields);
   if (provider.preflightCommand?.command) {
-    const preflight = executeProviderCommand(provider.preflightCommand.command, context);
+    const preflight = executeProviderCommand(rootDir, provider.preflightCommand.command, context);
     if (!preflight.ok) {
       throw new Error(`Provider preflight failed for ${provider.providerId}/${connection.connectionId}.`);
     }
@@ -190,6 +190,7 @@ function createProviderDeployExecution(
     postDeployMetadata: provider.postDeployMetadataCommand?.command
       ? ({ deployResult }) => {
         const metadata = executeProviderCommand(
+          rootDir,
           provider.postDeployMetadataCommand!.command,
           {
             ...context,
@@ -291,21 +292,23 @@ function buildProviderCommandContext(
 }
 
 function executeProviderVerify(
+  rootDir: string,
   provider: ControlPlaneServiceProviderRecord,
   context: ProviderCommandContext,
 ): ProviderCommandOutcome {
   if (!provider.verifyCommand?.command) {
     return { ok: true, status: 'connected' };
   }
-  return executeProviderCommand(provider.verifyCommand.command, context);
+  return executeProviderCommand(rootDir, provider.verifyCommand.command, context);
 }
 
 function executeProviderCommand(
+  rootDir: string,
   commandConfig: DeployCommandConfig,
   context: ProviderCommandContext,
 ): ProviderCommandOutcome {
   const materialized = materializeProviderCommand(commandConfig, context);
-  const normalized = normalizeCommandConfig(materialized, process.cwd());
+  const normalized = normalizeCommandConfig(materialized, rootDir);
   if (!normalized) {
     return { ok: true };
   }

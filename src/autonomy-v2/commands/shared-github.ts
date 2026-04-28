@@ -175,7 +175,11 @@ function performLocalDeploy(rootDir, config, options: {
   try {
     const targetRef = gitRefExists(rootDir, targetBranch) ? targetBranch : resolveBaseRef(rootDir, targetBranch);
     const sourceRef = gitRefExists(rootDir, sourceBranch) ? sourceBranch : resolveBaseRef(rootDir, sourceBranch);
-    const deployCommandConfig = normalizeDeployCommandConfig(config.deployCommand, rootDir);
+    const deployCommandConfig = normalizeDeployCommandConfig(
+      config.deployCommand,
+      rootDir,
+      Array.isArray(options.redactions) ? options.redactions : [],
+    );
     if (!gitIsAncestor(rootDir, targetRef, sourceRef)) {
       return {
         ok: false,
@@ -225,7 +229,11 @@ function performLocalDeploy(rootDir, config, options: {
   }
 }
 
-function normalizeDeployCommandConfig(value: DeployCommandConfig | null | undefined, rootDir: string) {
+function normalizeDeployCommandConfig(
+  value: DeployCommandConfig | null | undefined,
+  rootDir: string,
+  redactions: string[] = [],
+) {
   if (typeof value === 'undefined' || value === null) {
     return null;
   }
@@ -237,7 +245,7 @@ function normalizeDeployCommandConfig(value: DeployCommandConfig | null | undefi
         command,
         args: [] as string[],
         cwd: rootDir,
-        displayCommand: command,
+        displayCommand: redactDeployCommandOutput(command, redactions) || command,
         env: {} as Record<string, string>,
         shell: true,
       }
@@ -252,7 +260,9 @@ function normalizeDeployCommandConfig(value: DeployCommandConfig | null | undefi
         command,
         args: rawArgs.map((arg) => String(arg)),
         cwd: rootDir,
-        displayCommand: formatDeployCommand(command, rawArgs.map((arg) => String(arg))),
+        displayCommand: formatDeployCommand(
+          redactDeployCommandParts([command, ...rawArgs.map((arg) => String(arg))], redactions),
+        ),
         env: {} as Record<string, string>,
         shell: false,
       }
@@ -274,7 +284,9 @@ function normalizeDeployCommandConfig(value: DeployCommandConfig | null | undefi
     command,
     args,
     cwd: resolveDeployCommandCwd(rootDir, (value as AnyRecord).cwd),
-    displayCommand: formatDeployCommand(command, args),
+    displayCommand: formatDeployCommand(
+      redactDeployCommandParts([command, ...args], redactions),
+    ),
     env: normalizeDeployCommandEnv((value as AnyRecord).env),
     shell: (value as AnyRecord).shell === true,
   };
@@ -369,8 +381,12 @@ function redactDeployCommandOutput(value: string | null, redactions: string[]) {
   }, value);
 }
 
-function formatDeployCommand(command: string, args: string[]) {
-  return [command, ...args].map((part) => {
+function redactDeployCommandParts(parts: string[], redactions: string[]) {
+  return parts.map((part) => redactDeployCommandOutput(part, redactions) || part);
+}
+
+function formatDeployCommand(parts: string[]) {
+  return parts.map((part) => {
     return /\s/.test(part) ? JSON.stringify(part) : part;
   }).join(' ');
 }
