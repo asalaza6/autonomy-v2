@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5239,6 +5238,30 @@
       "completedAt": "2026-04-28T09:05:01.760Z",
       "completionMode": "code",
       "commitSha": "5f1ff2bad6f948d13b0df3933f15e66986edcd9e"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-collapse-manager-repo-card-7560dc-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Collapse manager repo card detail sections behind a default-closed disclosure",
+      "description": "Blocking issue: `npm run lint` fails on this branch, so the PR is not safe to merge into `dev` yet. `npm run typecheck` and `npm run test:control-plane-summary-ui` passed, and the manager-card/test changes otherwise look aligned with the task.\n`src/server/control-plane/control-plane-client.tsx:3592` leaves `RepoAttentionPanel` defined but unused after the manager-card refactor. This fails the repo merge blocker `npm run lint` (`@typescript-eslint/no-unused-vars`). Remove the dead helper or reuse it so lint passes before re-review.\nBlocking checks failed: npm run lint",
+      "agentId": "architecture-agent",
+      "prdId": "prd-collapse-manager-repo-card-7560dc",
+      "laneKey": "prd-collapse-manager-repo-card-7560dc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issue: `npm run lint` fails on this branch, so the PR is not safe to merge into `dev` yet. `npm run typecheck` and `npm run test:control-plane-summary-ui` passed, and the manager-card/test changes otherwise look aligned with the task.\n`src/server/control-plane/control-plane-client.tsx:3592` leaves `RepoAttentionPanel` defined but unused after the manager-card refactor. This fails the repo merge blocker `npm run lint` (`@typescript-eslint/no-unused-vars`). Remove the dead helper or reuse it so lint passes before re-review.\nBlocking checks failed: npm run lint"
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-collapse-manager-repo-card-7560dc-architecture-agent",
+      "createdAt": "2026-04-28T09:05:58.941Z",
+      "updatedAt": "2026-04-28T09:05:58.941Z",
+      "startedAt": "2026-04-28T09:05:58.941Z",
+      "prId": "pr-prd-collapse-manager-repo-card-7560dc-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
