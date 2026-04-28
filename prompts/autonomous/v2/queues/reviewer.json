@@ -1106,9 +1106,9 @@
         "Verification includes `npm run typecheck`, the manager UI unit tests covering repo summaries, and a manual manager-page check confirming collapsed cards are shorter by default and reveal the moved details when expanded."
       ],
       "reviewRound": 2,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-28T09:05:02.957Z",
-      "updatedAt": "2026-04-28T09:07:01.732Z",
+      "updatedAt": "2026-04-28T09:07:07.415Z",
       "reviewedAt": "2026-04-28T09:07:01.732Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
@@ -1120,7 +1120,8 @@
           "role": "review",
           "updatedAt": "2026-04-28T09:07:01.732Z"
         }
-      }
+      },
+      "mergedAt": "2026-04-28T09:07:07.415Z"
     }
   ]
 }
