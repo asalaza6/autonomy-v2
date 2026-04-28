@@ -1094,10 +1094,6 @@
       "prId": "pr-prd-collapse-manager-repo-card-7560dc-architecture-agent",
       "sourceTaskId": "prd-collapse-manager-repo-card-7560dc-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-28T09:05:02.957Z",
-      "updatedAt": "2026-04-28T09:05:02.957Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-collapse-manager-repo-card-7560dc-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1109,9 +1105,12 @@
         "Manager-card tests are updated to assert the new collapsed structure and expanded disclosure content instead of assuming inline-expanded detail, including focused coverage in `tests/unit/control-plane-summary-ui.test.ts` and any related control-plane UI tests affected by the refactor.",
         "Verification includes `npm run typecheck`, the manager UI unit tests covering repo summaries, and a manual manager-page check confirming collapsed cards are shorter by default and reveal the moved details when expanded."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-28T09:05:07.450Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-28T09:05:02.957Z",
+      "updatedAt": "2026-04-28T09:05:27.931Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-28T09:05:07.450Z"
     }
   ]
 }
