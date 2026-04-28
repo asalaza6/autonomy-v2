@@ -1242,7 +1242,7 @@
       "sourceTaskId": "prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-28T23:56:12.652Z",
       "updatedAt": "2026-04-28T23:56:12.652Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
@@ -1256,7 +1256,9 @@
         "Keep current read-only repo assistant behavior and existing conversation-history prompt continuity.",
         "Handle missing or stale persisted conversation/session references safely without breaking chat UX."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-28T23:56:16.727Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
