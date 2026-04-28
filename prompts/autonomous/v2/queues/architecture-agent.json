@@ -5297,10 +5297,15 @@
         "Focused unit coverage is added for a manager-view refresh case and a project-view refresh case that re-render updated repo data and assert disclosure state persistence, including at least one isolation assertion showing state does not leak between repo cards.",
         "Verification includes `npm run typecheck` and the relevant control-plane unit tests covering repo-card or disclosure refresh behavior."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-28T19:47:37.750Z",
-      "updatedAt": "2026-04-28T19:47:37.750Z"
+      "updatedAt": "2026-04-28T19:52:25.422Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-preserve-control-plane-disclosure-state-02f0ad-architecture-agent",
+      "startedAt": "2026-04-28T19:47:57.328Z",
+      "completedAt": "2026-04-28T19:52:25.344Z",
+      "completionMode": "code",
+      "commitSha": "ef62e78154c85469a55e3632b05fa57d58f83a6f"
     }
   ]
 }

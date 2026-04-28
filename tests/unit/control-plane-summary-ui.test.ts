@@ -57,7 +57,7 @@ test('manager repo card renders a compact summary with attention signals and con
   assert.match(html, /alpha · Primary customer repo/);
   assert.match(html, /Open repo control page/);
   assert.match(html, /Production site/);
-  assert.match(html, /<details class=\"repo-disclosure\">/);
+  assert.match(html, /<details class=\"repo-disclosure\" data-repo-disclosure-key=\"manager:alpha:repo-status-details\">/);
   assert.match(html, /Repo status and details/);
   assert.match(html, /Current work/);
   assert.match(html, /Compact summary PRD/);
@@ -167,6 +167,139 @@ test('project repo card hides operational diagnostics behind labeled disclosures
   assert.match(html, /GitHub repo access denied/);
   assert.match(html, /Update package/);
   assert.match(html, /Restart failed/);
+});
+
+test('manager repo disclosure state persists across refresh re-renders and stays isolated per repo', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?manager-refresh=${Date.now()}`);
+  const disclosureKey = client.buildRepoDisclosurePersistenceKey('manager', 'alpha', 'repo-status-details');
+  const otherRepoDisclosureKey = client.buildRepoDisclosurePersistenceKey('manager', 'beta', 'repo-status-details');
+
+  let html = renderToHtml(h(client.ManagerRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      updatedAt: '2026-04-26T10:10:00.000Z',
+      activePrd: {
+        id: 'prd-active-001',
+        title: 'Original PRD',
+        stateLabel: 'In progress',
+        detail: '2 tasks remaining',
+      },
+    },
+  }));
+  assert.doesNotMatch(html, /<details class=\"repo-disclosure\"[^>]* open(?:=\"\")?>/);
+
+  client.persistRepoDisclosureOpenState(disclosureKey, true);
+  html = renderToHtml(h(client.ManagerRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      updatedAt: '2026-04-27T10:10:00.000Z',
+      activePrd: {
+        id: 'prd-active-002',
+        title: 'Updated PRD',
+        stateLabel: 'Review active',
+        detail: 'Waiting on review',
+      },
+    },
+  }));
+  assert.match(html, /<details class=\"repo-disclosure\" data-repo-disclosure-key=\"manager:alpha:repo-status-details\" open>/);
+  assert.match(html, /Updated PRD/);
+  assert.equal(client.resolveRepoDisclosureOpenState(disclosureKey), true);
+  assert.equal(client.resolveRepoDisclosureOpenState(otherRepoDisclosureKey), false);
+
+  client.persistRepoDisclosureOpenState(disclosureKey, false);
+  html = renderToHtml(h(client.ManagerRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      updatedAt: '2026-04-28T10:10:00.000Z',
+      activePrd: {
+        id: 'prd-active-003',
+        title: 'Closed PRD',
+        stateLabel: 'Queued',
+        detail: 'Ready to start',
+      },
+    },
+  }));
+  assert.doesNotMatch(html, /data-repo-disclosure-key=\"manager:alpha:repo-status-details\" open/);
+});
+
+test('project repo disclosures persist across refresh re-renders and stay isolated by view and repo', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?project-refresh=${Date.now()}`);
+  client.setLiveProcessPanelTestState({
+    outputs: {},
+  });
+
+  const workDisclosureKey = client.buildRepoDisclosurePersistenceKey('project', 'alpha', 'work-coordination-details');
+  const diagnosticsDisclosureKey = client.buildRepoDisclosurePersistenceKey('project', 'alpha', 'operational-diagnostics-controls');
+  const managerDisclosureKey = client.buildRepoDisclosurePersistenceKey('manager', 'alpha', 'repo-status-details');
+  const otherRepoWorkDisclosureKey = client.buildRepoDisclosurePersistenceKey('project', 'beta', 'work-coordination-details');
+
+  client.persistRepoDisclosureOpenState(workDisclosureKey, true);
+  client.persistRepoDisclosureOpenState(diagnosticsDisclosureKey, false);
+
+  const html = renderToHtml(h(client.ProjectRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      updatedAt: '2026-04-28T10:10:00.000Z',
+      activePrd: {
+        id: 'prd-active-010',
+        title: 'Refresh PRD',
+        stateLabel: 'In progress',
+        detail: 'Still running',
+      },
+      prdRun: {
+        currentStepId: 'implementing',
+        currentStepLabel: 'Implementing',
+        detail: 'Implementation is running: 2/4 tasks complete.',
+      },
+      agentStatuses: [
+        {
+          agentId: 'architecture-agent',
+          role: 'implementation',
+          workerStatus: 'running',
+          detail: 'Carrying disclosure state through refresh',
+        },
+      ],
+      pullRequestStatuses: [
+        {
+          prdId: 'prd-active-010',
+          number: 43,
+          title: 'Refresh PR',
+          url: 'https://github.com/asalaza6/autonomy-v2/pull/43',
+          status: 'open',
+          statusLabel: 'review active',
+          updatedAt: '2026-04-28T10:10:00.000Z',
+        },
+      ],
+      repoAssistant: {
+        github: {
+          available: true,
+          statusLabel: 'GitHub access ready',
+        },
+      },
+      managedProcesses: {
+        server: {
+          target: 'server',
+          pid: 789,
+          running: true,
+          command: 'npm run dev',
+          cwd: '/tmp/alpha',
+        },
+      },
+    },
+  }));
+
+  assert.match(html, /data-repo-disclosure-key=\"project:alpha:work-coordination-details\" open/);
+  assert.doesNotMatch(html, /data-repo-disclosure-key=\"project:alpha:operational-diagnostics-controls\" open/);
+  assert.equal(client.resolveRepoDisclosureOpenState(workDisclosureKey), true);
+  assert.equal(client.resolveRepoDisclosureOpenState(diagnosticsDisclosureKey), false);
+  assert.equal(client.resolveRepoDisclosureOpenState(managerDisclosureKey), false);
+  assert.equal(client.resolveRepoDisclosureOpenState(otherRepoWorkDisclosureKey), false);
 });
 
 function installBrowserStubs() {

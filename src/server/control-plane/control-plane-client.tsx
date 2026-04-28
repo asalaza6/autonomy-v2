@@ -344,6 +344,8 @@ type ChatPrdDraftState = {
   updatedAt: string;
 };
 
+type RepoDisclosureView = 'manager' | 'project';
+
 const repoSelect = document.getElementById('repo-id') as HTMLSelectElement | null;
 const lastUpdatedEl = document.getElementById('last-updated');
 const messageEl = document.getElementById('form-message');
@@ -418,6 +420,7 @@ const apiBaseUrl = String(window.__AUTONOMY_CONTROL_PLANE_API_BASE_URL__ || '').
 const NEW_CHAT_VALUE = '__new__';
 const CHAT_PRD_DRAFT_STORAGE_PREFIX = 'autonomy.controlPlane.chatPrdDraft';
 const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 96;
+const REPO_DISCLOSURE_STATE_STORAGE_KEY = 'autonomy.controlPlane.repoDisclosureState';
 
 let latestRepos: RepoRecord[] = [];
 let latestDashboard: DashboardSummary = {};
@@ -445,6 +448,7 @@ let activeProcessTargetsByRepo: Record<string, 'server' | 'controlBridge'> = {};
 let pendingProcessPanelFocus: { repoId: string; target: 'server' | 'controlBridge' } | null = null;
 let latestStateSnapshot: StateSnapshot | null = null;
 let advancedDebugDisclosureOpen = Boolean(advancedDebugDisclosureEl?.open);
+let repoDisclosureStateCache: Record<string, boolean> | null = null;
 
 function mountControlPlane() {
   if (
@@ -1602,6 +1606,7 @@ function renderDashboard(dashboard: DashboardSummary) {
         : 'No repository snapshots yet.'}
     />
   );
+  bindRepoDisclosurePersistence(dashboardReposEl);
   if (dashboardJobsEl) {
     dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
   }
@@ -3152,6 +3157,7 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
   const freshnessStatus = String(repo.freshnessStatus || 'offline');
   const freshnessLabel = repo.freshnessStatusLabel || 'Offline';
   const projectUrl = repo.repoId ? `/project/${encodeURIComponent(repo.repoId)}` : '';
+  const disclosureRepoId = getRepoDisclosureRepoId(repo);
   const attentionSignals = buildRepoAttentionSignals(repo);
   const snapshotItems = buildManagerSnapshotItems(repo);
   const currentWork = buildRepoCurrentWorkSummary(repo);
@@ -3159,6 +3165,11 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
   const repoIdentityLine = [repo.repoId, repo.description && repo.description !== repo.repoId ? repo.description : '']
     .filter(Boolean)
     .join(' · ');
+  const statusDisclosureKey = buildRepoDisclosurePersistenceKey(
+    'manager',
+    disclosureRepoId,
+    'repo-status-details',
+  );
 
   return (
     <article className="repo repo-compact">
@@ -3193,7 +3204,10 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
         ) : null}
       </div>
       <div className="repo-section" style={{ marginTop: '16px' }}>
-        <RepoDisclosure title="Repo status and details">
+        <RepoDisclosure
+          title="Repo status and details"
+          persistenceKey={statusDisclosureKey}
+        >
           {snapshotItems.length > 0 ? (
             <div className="snapshot-grid">
               {snapshotItems.map((item) => (
@@ -3276,6 +3290,17 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
   const progress = resolveProjectProgress(repo);
   const attentionSignals = buildRepoAttentionSignals(repo);
   const projectUrl = repo.repoId ? `/project/${encodeURIComponent(repo.repoId)}` : '';
+  const disclosureRepoId = getRepoDisclosureRepoId(repo);
+  const workCoordinationDisclosureKey = buildRepoDisclosurePersistenceKey(
+    'project',
+    disclosureRepoId,
+    'work-coordination-details',
+  );
+  const operationalDisclosureKey = buildRepoDisclosurePersistenceKey(
+    'project',
+    disclosureRepoId,
+    'operational-diagnostics-controls',
+  );
 
   return (
     <article className="repo">
@@ -3324,7 +3349,10 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
         ) : null}
       </div>
       <div className="repo-section" style={{ marginTop: '16px' }}>
-        <RepoDisclosure title="Work coordination details">
+        <RepoDisclosure
+          title="Work coordination details"
+          persistenceKey={workCoordinationDisclosureKey}
+        >
           <RepoSection title="Pull Requests">
             {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
               ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
@@ -3336,7 +3364,10 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
               : <div className="list-note">No agent status yet.</div>}
           </RepoSection>
         </RepoDisclosure>
-        <RepoDisclosure title="Operational diagnostics and controls">
+        <RepoDisclosure
+          title="Operational diagnostics and controls"
+          persistenceKey={operationalDisclosureKey}
+        >
           <RepoSection title="Autonomy v2">
             <VersionStatus versionStatus={repo.versionStatus || null} />
             <PackageStatus packageStatus={repo.packageStatus || null} />
@@ -3357,13 +3388,100 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
   );
 }
 
-function RepoDisclosure({ title, children }: { title: string; children: JSX.Element | JSX.Element[] }) {
+function RepoDisclosure({
+  title,
+  children,
+  persistenceKey,
+}: {
+  title: string;
+  children: JSX.Element | JSX.Element[];
+  persistenceKey?: string;
+}) {
   return (
-    <details className="repo-disclosure">
+    <details
+      className="repo-disclosure"
+      data-repo-disclosure-key={persistenceKey || ''}
+      open={persistenceKey ? resolveRepoDisclosureOpenState(persistenceKey) : undefined}
+    >
       <summary>{title}</summary>
       <div className="repo-disclosure-body">{children}</div>
     </details>
   );
+}
+
+function getRepoDisclosureRepoId(repo: RepoSummary) {
+  return String(repo.repoId || repo.label || 'unknown-repo').trim() || 'unknown-repo';
+}
+
+function buildRepoDisclosurePersistenceKey(
+  view: RepoDisclosureView,
+  repoId: string,
+  disclosureId: string,
+) {
+  return `${view}:${repoId}:${disclosureId}`;
+}
+
+function readRepoDisclosureStateStorage() {
+  if (repoDisclosureStateCache) {
+    return repoDisclosureStateCache;
+  }
+
+  const rawState = window.localStorage?.getItem(REPO_DISCLOSURE_STATE_STORAGE_KEY);
+  if (!rawState) {
+    repoDisclosureStateCache = {};
+    return repoDisclosureStateCache;
+  }
+
+  try {
+    const parsed = JSON.parse(rawState) as Record<string, unknown>;
+    repoDisclosureStateCache = Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => typeof value === 'boolean'),
+    ) as Record<string, boolean>;
+  } catch {
+    repoDisclosureStateCache = {};
+  }
+  return repoDisclosureStateCache;
+}
+
+function writeRepoDisclosureStateStorage(nextState: Record<string, boolean>) {
+  repoDisclosureStateCache = nextState;
+  window.localStorage?.setItem(REPO_DISCLOSURE_STATE_STORAGE_KEY, JSON.stringify(nextState));
+}
+
+function resolveRepoDisclosureOpenState(persistenceKey: string) {
+  const state = readRepoDisclosureStateStorage();
+  return state[persistenceKey] === true;
+}
+
+function persistRepoDisclosureOpenState(persistenceKey: string, open: boolean) {
+  const state = readRepoDisclosureStateStorage();
+  if (state[persistenceKey] === open) {
+    return;
+  }
+  writeRepoDisclosureStateStorage({
+    ...state,
+    [persistenceKey]: open,
+  });
+}
+
+function bindRepoDisclosurePersistence(root: ParentNode | null | undefined) {
+  if (!root || typeof root.querySelectorAll !== 'function') {
+    return;
+  }
+
+  for (const disclosure of root.querySelectorAll<HTMLDetailsElement>('details[data-repo-disclosure-key]')) {
+    if (disclosure.dataset.repoDisclosureBound === 'true') {
+      continue;
+    }
+    disclosure.dataset.repoDisclosureBound = 'true';
+    disclosure.addEventListener('toggle', () => {
+      const persistenceKey = String(disclosure.dataset.repoDisclosureKey || '').trim();
+      if (!persistenceKey) {
+        return;
+      }
+      persistRepoDisclosureOpenState(persistenceKey, disclosure.open);
+    });
+  }
 }
 
 function ProjectCurrentWorkPanel({
@@ -4363,6 +4481,7 @@ export {
   QueuedPrdDetail,
   QueuedPrdList,
   ProjectRepoCard,
+  buildRepoDisclosurePersistenceKey,
   buildChatPrdDraftFormState,
   captureChatScrollSnapshot,
   closeChatPrdReviewModal,
@@ -4375,7 +4494,9 @@ export {
   resolveSelectedQueuedPrdState,
   resolveSelectedHistoryState,
   resolveChatScrollDecision,
+  persistRepoDisclosureOpenState,
   resolvePrdHistoryContinueChat,
+  resolveRepoDisclosureOpenState,
   setLiveProcessPanelTestState,
   submitActiveChatPrdDraftReview,
 };
