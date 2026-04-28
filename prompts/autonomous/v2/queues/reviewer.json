@@ -1105,10 +1105,12 @@
         "Manager-card tests are updated to assert the new collapsed structure and expanded disclosure content instead of assuming inline-expanded detail, including focused coverage in `tests/unit/control-plane-summary-ui.test.ts` and any related control-plane UI tests affected by the refactor.",
         "Verification includes `npm run typecheck`, the manager UI unit tests covering repo summaries, and a manual manager-page check confirming collapsed cards are shorter by default and reveal the moved details when expanded."
       ],
-      "reviewRound": 1,
-      "status": "changes_requested",
+      "reviewRound": 2,
+      "status": "queued",
       "createdAt": "2026-04-28T09:05:02.957Z",
-      "updatedAt": "2026-04-28T09:05:58.941Z",
+      "updatedAt": "2026-04-28T09:06:29.167Z",
+      "reviewedAt": "2026-04-28T09:05:58.941Z",
+      "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-28T09:05:07.450Z",
       "conversationReferences": {
@@ -1116,11 +1118,9 @@
           "conversationId": "019dd355-e1c7-7bf0-bc81-9637c878937d",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-28T09:05:58.941Z"
+          "updatedAt": "2026-04-28T09:06:29.167Z"
         }
-      },
-      "reviewedAt": "2026-04-28T09:05:58.941Z",
-      "lastDecision": "changes_requested"
+      }
     }
   ]
 }
