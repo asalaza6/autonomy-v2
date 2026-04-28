@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -4964,6 +4963,39 @@
       "completedAt": "2026-04-28T00:46:22.458Z",
       "completionMode": "noop",
       "commitSha": "be0125081bd5f3eafc4e0f4d86e7fa74ed41ebcb"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-simplify-repo-summary-surfaces-2d485f-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Refactor repo summary surfaces to use compact default summaries with progressive disclosure",
+      "description": "Requesting changes. The branch is directionally aligned with the compact-summary task and the deterministic merge blockers passed (`npm run typecheck`, `npm run lint`), but it is still not merge-safe because the high-risk control-plane UI refactor has no passing focused test execution evidenced for the new or updated coverage.\nBlocking: this PR materially changes high-risk control-plane summary rendering in `src/server/control-plane/control-plane-client.tsx` and styling in `src/server/control-plane/control-plane-page.tsx`, while the only provided check results are `npm run typecheck` and `npm run lint`. The acceptance criteria and project context require focused verification for control-plane dashboard/repo UI changes, but there is still no passing execution result for `tests/unit/control-plane-summary-ui.test.ts`, `tests/unit/control-plane-restart-ui.test.ts`, or equivalent control-plane smoke/unit coverage covering the changed manager card and repo-page rendering paths. Please provide a passing focused test run from a writable environment before merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-simplify-repo-summary-surfaces-2d485f",
+      "laneKey": "prd-simplify-repo-summary-surfaces-2d485f:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Requesting changes. The branch is directionally aligned with the compact-summary task and the deterministic merge blockers passed (`npm run typecheck`, `npm run lint`), but it is still not merge-safe because the high-risk control-plane UI refactor has no passing focused test execution evidenced for the new or updated coverage.\nBlocking: this PR materially changes high-risk control-plane summary rendering in `src/server/control-plane/control-plane-client.tsx` and styling in `src/server/control-plane/control-plane-page.tsx`, while the only provided check results are `npm run typecheck` and `npm run lint`. The acceptance criteria and project context require focused verification for control-plane dashboard/repo UI changes, but there is still no passing execution result for `tests/unit/control-plane-summary-ui.test.ts`, `tests/unit/control-plane-restart-ui.test.ts`, or equivalent control-plane smoke/unit coverage covering the changed manager card and repo-page rendering paths. Please provide a passing focused test run from a writable environment before merge."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
+      "createdAt": "2026-04-28T00:47:49.002Z",
+      "updatedAt": "2026-04-28T00:47:49.002Z",
+      "startedAt": "2026-04-28T00:47:49.002Z",
+      "prId": "pr-prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd189-fe05-7603-b6d7-576c93d64623",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-28T00:47:49.002Z"
+        }
+      },
+      "implementationConversationId": "019dd189-fe05-7603-b6d7-576c93d64623"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
