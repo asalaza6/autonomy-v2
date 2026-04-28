@@ -5259,7 +5259,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-collapse-manager-repo-card-7560dc-architecture-agent",
       "createdAt": "2026-04-28T09:05:58.941Z",
-      "updatedAt": "2026-04-28T09:06:36.470Z",
+      "updatedAt": "2026-04-28T09:06:36.539Z",
       "startedAt": "2026-04-28T09:05:58.941Z",
       "prId": "pr-prd-collapse-manager-repo-card-7560dc-architecture-agent",
       "completedAt": "2026-04-28T09:06:36.470Z",
@@ -5272,7 +5272,8 @@
           "updatedAt": "2026-04-28T09:06:36.470Z"
         }
       },
-      "implementationConversationId": "019dd356-9e58-70a3-a2e6-3e758fc7b1bf"
+      "implementationConversationId": "019dd356-9e58-70a3-a2e6-3e758fc7b1bf",
+      "commitSha": "007493e476d9f10e144179c19340b7b8335a2c74"
     }
   ]
 }
