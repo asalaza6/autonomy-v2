@@ -1034,13 +1034,13 @@
         "Requesting changes. The summary-surface refactor is generally aligned with the task, but the branch is not merge-safe yet because a provided merge-blocking check is failing and the required focused control-plane test run is not evidenced.\n`npm run lint` failed on this branch, which is merge-blocking per the provided check results. The failure is `@typescript-eslint/no-unused-vars` for `pullNumber` in `src/server/control-plane/control-plane-github.ts:235`. Even though that file is outside the UI diff, the branch cannot be approved while the required check is red.\nThis PR changes a high-risk control-plane UI surface (`src/server/control-plane/control-plane-client.tsx`, `src/server/control-plane/control-plane-page.tsx`), and the acceptance explicitly requires focused dashboard/repo-page verification in addition to `npm run typecheck`. The diff adds coverage in `tests/unit/control-plane-summary-ui.test.ts` and updates `tests/unit/control-plane-restart-ui.test.ts`, but no passing execution result for those focused tests (or an equivalent smoke/unit run covering the changed rendering paths) is provided in the deterministic check results. Please supply passing focused test evidence from a writable environment before merge.\nBlocking checks failed: npm run lint"
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-28T00:40:44.129Z",
       "updatedAt": "2026-04-28T00:44:03.944Z",
       "reviewedAt": "2026-04-28T00:42:48.324Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-28T00:40:54.907Z",
+      "dispatchedAt": "2026-04-28T00:44:06.018Z",
       "scopeViolations": []
     }
   ]
