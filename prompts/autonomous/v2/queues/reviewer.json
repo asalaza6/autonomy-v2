@@ -1070,7 +1070,7 @@
       "reviewRound": 5,
       "status": "approved",
       "createdAt": "2026-04-28T07:59:41.110Z",
-      "updatedAt": "2026-04-28T08:07:48.124Z",
+      "updatedAt": "2026-04-28T08:07:51.993Z",
       "reviewedAt": "2026-04-28T08:07:48.124Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
@@ -1082,7 +1082,9 @@
           "role": "review",
           "updatedAt": "2026-04-28T08:07:48.124Z"
         }
-      }
+      },
+      "lastMergeFailureCode": "pending_checks",
+      "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge"
     }
   ]
 }
