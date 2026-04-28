@@ -5206,6 +5206,34 @@
       "completedAt": "2026-04-28T08:07:29.649Z",
       "completionMode": "noop",
       "commitSha": "86a734bae4a803aa8ce551141f5360b3dc31fd9e"
+    },
+    {
+      "id": "prd-collapse-manager-repo-card-7560dc-architecture-agent-1",
+      "title": "Collapse manager repo card detail sections behind a default-closed disclosure",
+      "description": "Update only the manager-page repo card rendering so the default card stays compact and scan-friendly while preserving the existing repo status wording and signals inside a lazy-open disclosure or details pattern. Likely touch points are the manager control-plane UI components under `src/server/control-plane/` that render repo cards and the related summary/status presentation tests, especially `tests/unit/control-plane-summary-ui.test.ts`. Keep project-specific repo pages on their current richer layout unless a shared component can be refactored without changing that page's visible behavior.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-collapse-manager-repo-card-7560dc",
+      "laneKey": "prd-collapse-manager-repo-card-7560dc:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "On the manager page, each repo card renders in a collapsed default state that keeps visible at card level the repo id, repo name or label, the repo control panel action, and the production site action when one is configured.",
+        "Verbose operational status content that was previously always visible on the manager repo card is moved behind a default-closed disclosure or details control that matches an existing control-plane disclosure pattern where possible.",
+        "Expanding the manager repo card disclosure reveals the same operational detail and wording currently surfaced for current work details, pull request summary or drift text, deployment detail, attention signals, and the long PRD detail or status string when those fields are present.",
+        "Freshness or updated-state information remains visible enough for scanning at the collapsed card level when needed, without duplicating the same timestamp or detail both outside and inside the expanded content.",
+        "Project-specific repo pages retain their current richer presentation and do not lose visible detail as a side effect of the manager-card change.",
+        "Manager-card tests are updated to assert the new collapsed structure and expanded disclosure content instead of assuming inline-expanded detail, including focused coverage in `tests/unit/control-plane-summary-ui.test.ts` and any related control-plane UI tests affected by the refactor.",
+        "Verification includes `npm run typecheck`, the manager UI unit tests covering repo summaries, and a manual manager-page check confirming collapsed cards are shorter by default and reveal the moved details when expanded."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-28T09:02:12.136Z",
+      "updatedAt": "2026-04-28T09:02:12.136Z"
     }
   ]
 }
