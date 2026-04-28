@@ -3589,18 +3589,6 @@ function summarizePullRequestState(pullRequestStatuses: PullRequestSummary[] = [
     .join(' | ');
 }
 
-function RepoAttentionPanel({ signals }: { signals: RepoAttentionSignal[] }) {
-  if (!signals.length) {
-    return null;
-  }
-  return (
-    <div className="repo-section" style={{ marginTop: '16px' }}>
-      <h4>Attention</h4>
-      <RepoAttentionList signals={signals} />
-    </div>
-  );
-}
-
 function RepoAttentionList({ signals }: { signals: RepoAttentionSignal[] }) {
   return (
     <div className="summary-chip-list">
