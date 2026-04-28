@@ -4888,11 +4888,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-28T00:30:13.729Z",
-      "updatedAt": "2026-04-28T00:40:40.864Z",
+      "updatedAt": "2026-04-28T00:40:40.937Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
       "startedAt": "2026-04-28T00:30:32.454Z",
       "completedAt": "2026-04-28T00:40:40.864Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "9c2bf77bde2aec2def9e793499a0fb7b8a59f91d"
     }
   ]
 }
