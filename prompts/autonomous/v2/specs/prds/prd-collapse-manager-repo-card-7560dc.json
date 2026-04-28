@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-collapse-manager-repo-card-7560dc",
+  "title": "Collapse manager repo card details into lazy-open dropdown",
+  "createdAt": "2026-04-28T09:01:13.750Z",
+  "specification": "# PRD: Collapse manager repo card details into lazy-open dropdown\n\nPriority: high\n\n## Problem\nManager repo cards are still too tall because verbose operational details are rendered inline by default, including current work details, attention signals, deploy detail, PR drift text, and long PRD summary strings.\n\n## Goal\nMake the manager page denser and easier to scan by showing only the repo identity and primary actions by default, with verbose repo status available behind a lazy-open dropdown.\n\n## Requirements\n- Update the manager-page repo card only; do not reduce information on the project-specific repo page unless explicitly intended.\n- Default visible manager-card content must include repo id, repo name/label, repo control panel button, and production site button when configured.\n- Move verbose status content into a collapsed disclosure/dropdown by default.\n- The dropdown must include current work details, pull request summary, deployment detail, attention signals, and the long PRD detail/status string when present.\n- Preserve existing signals and wording from repo status summaries; this is primarily a presentation change, not a status-model rewrite.\n- Keep freshness/updated state visible at card level if needed for scanning, but avoid repeating the same timestamp/detail both outside and inside the dropdown.\n- Use an existing disclosure/details pattern where possible to stay consistent with other control-plane UI sections.\n- Update manager-card tests to assert the new collapsed structure instead of inline-expanded content.\n\n## Acceptance Criteria\n- On the manager page, repo cards render in a smaller collapsed form by default.\n- A manager can identify the repo and click repo control page or production site without expanding the card.\n- Expanding the dropdown reveals the same operational detail that was previously always visible, including PRD detail text and attention items.\n- Project repo cards keep their current richer layout unless separately changed.\n- Unit tests covering manager repo card rendering pass with the new disclosure behavior.\n\n## Verification\n- Run `npm run typecheck`.\n- Run the manager UI unit tests covering repo summaries, especially `tests/unit/control-plane-summary-ui.test.ts` and any related control-plane UI tests.\n- Manually verify in the manager page that collapsed cards are shorter and that expanding a card reveals the moved details.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777365534802_0217c1b7480938\nManager message: msg_1777365534802_947e88f4e28e08\nAgent message: msg_1777365534802_bbe6845b1f0c1\nCreated: 2026-04-28T08:40:08.604Z",
+  "requirements": [
+    "Update the manager-page repo card only; do not reduce information on the project-specific repo page unless explicitly intended.",
+    "Default visible manager-card content must include repo id",
+    "repo name/label",
+    "repo control panel button",
+    "and production site button when configured.",
+    "Move verbose status content into a collapsed disclosure/dropdown by default.",
+    "The dropdown must include current work details",
+    "pull request summary",
+    "deployment detail",
+    "attention signals",
+    "and the long PRD detail/status string when present.",
+    "Preserve existing signals and wording from repo status summaries; this is primarily a presentation change",
+    "not a status-model rewrite.",
+    "Keep freshness/updated state visible at card level if needed for scanning",
+    "but avoid repeating the same timestamp/detail both outside and inside the dropdown.",
+    "Use an existing disclosure/details pattern where possible to stay consistent with other control-plane UI sections.",
+    "Update manager-card tests to assert the new collapsed structure instead of inline-expanded content."
+  ]
+}
