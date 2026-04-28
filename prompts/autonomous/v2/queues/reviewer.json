@@ -1063,13 +1063,13 @@
         "Changes requested. The implementation looks aligned with the Advanced disclosure behavior, and the provided deterministic blockers passed (`npm run typecheck`, `npm run lint`, `npm run test:control-plane-summary-ui`), but the PR is not merge-safe yet because the required control-plane verification for this high-risk UI change is still incomplete.\nBlocking: the new targeted unit coverage was added in `tests/unit/control-plane-advanced-ui.test.ts`, but the provided focused unit command does not execute it. `package.json:53` shows `npm run test:control-plane-summary-ui` only runs `dist/tests/unit/control-plane-summary-ui.test.js` and `dist/tests/unit/control-plane-restart-ui.test.js`, so there is still no passing execution evidence for the new Advanced disclosure test. Please wire the new test into the focused control-plane UI test script or provide an equivalent passing targeted run that includes `tests/unit/control-plane-advanced-ui.test.ts`.\nBlocking: acceptance for this project-page control-plane change explicitly requires smoke verification, but the provided deterministic results do not include a passing run for `tests/smoke/control-plane.test.ts`. Given the project context marks control-plane UI as high risk, please provide passing smoke execution for `tests/smoke/control-plane.test.ts` before merge."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-28T07:59:41.110Z",
       "updatedAt": "2026-04-28T08:02:36.093Z",
       "reviewedAt": "2026-04-28T08:01:35.512Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-28T07:59:47.505Z",
+      "dispatchedAt": "2026-04-28T08:02:38.034Z",
       "scopeViolations": []
     }
   ]
