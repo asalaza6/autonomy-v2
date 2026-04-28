@@ -1100,13 +1100,13 @@
         "Blocking issue: `npm run lint` fails on this branch, so the PR is not safe to merge into `dev` yet. `npm run typecheck` and `npm run test:control-plane-summary-ui` passed, and the manager-card/test changes otherwise look aligned with the task.\n`src/server/control-plane/control-plane-client.tsx:3592` leaves `RepoAttentionPanel` defined but unused after the manager-card refactor. This fails the repo merge blocker `npm run lint` (`@typescript-eslint/no-unused-vars`). Remove the dead helper or reuse it so lint passes before re-review.\nBlocking checks failed: npm run lint"
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-28T09:05:02.957Z",
       "updatedAt": "2026-04-28T09:06:37.726Z",
       "reviewedAt": "2026-04-28T09:05:58.941Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-28T09:05:07.450Z",
+      "dispatchedAt": "2026-04-28T09:06:39.622Z",
       "conversationReferences": {
         "agent:reviewer": {
           "conversationId": "019dd355-e1c7-7bf0-bc81-9637c878937d",
