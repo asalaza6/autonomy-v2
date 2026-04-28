@@ -138,6 +138,11 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     assert.match(projectHtml, /data-tab="chat"/);
     assert.match(projectHtml, /data-tab="history"/);
     assert.match(projectHtml, /data-tab="advanced"/);
+    assert.match(projectHtml, /Show raw debug payloads/);
+    assert.doesNotMatch(projectHtml, /id="raw-state"/);
+    assert.doesNotMatch(projectHtml, /id="raw-dashboard"/);
+    assert.doesNotMatch(projectHtml, /id="raw-jobs"/);
+    assert.doesNotMatch(projectHtml, /id="raw-repos"/);
     assert.doesNotMatch(projectHtml, /<select id="repo-id"/);
 
     const unknownProjectResponse = await fetch(`http://127.0.0.1:${port}/project/testadfasdf`);

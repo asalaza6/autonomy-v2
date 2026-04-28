@@ -1451,24 +1451,13 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                       <p className="muted">Debug and raw state view for queue records, repo snapshots, and the rendered dashboard model.</p>
                     </div>
                   </div>
-                  <div className="raw-grid">
-                    <div className="advanced-block">
-                      <h3>State JSON</h3>
-                      <pre id="raw-state" />
-                    </div>
-                    <div className="advanced-block">
-                      <h3>Dashboard JSON</h3>
-                      <pre id="raw-dashboard" />
-                    </div>
-                    <div className="advanced-block">
-                      <h3>Jobs JSON</h3>
-                      <pre id="raw-jobs" />
-                    </div>
-                    <div className="advanced-block">
-                      <h3>Repo status JSON</h3>
-                      <pre id="raw-repos" />
-                    </div>
-                  </div>
+                  <details id="advanced-debug-disclosure">
+                    <summary>Show raw debug payloads</summary>
+                    <p className="muted" style={{ marginTop: '10px' }}>
+                      Expand to render the current state, dashboard, jobs, and repo status JSON for this project view.
+                    </p>
+                    <div id="advanced-debug-content" />
+                  </details>
                 </article>
               </section>
             </>
