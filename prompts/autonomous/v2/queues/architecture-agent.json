@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5388,6 +5387,30 @@
       "completedAt": "2026-04-28T23:31:23.109Z",
       "completionMode": "code",
       "commitSha": "0ecdb582cac03de9b5054ba132985c7c419958a2"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement Provider-Agnostic Service Auth And Deploy Adapter Framework",
+      "description": "Blocking issues remain despite `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui` passing. The new provider-backed deploy path can expose resolved secrets in persisted deploy metadata/logging, and provider verify/preflight commands are executed from `process.cwd()` instead of the target repo root, which breaks config-driven adapter commands that rely on repo-local scripts or relative paths.\n`src/autonomy-v2/control-plane/service-auth.ts:185-189`, `src/autonomy-v2/commands/shared-github.ts:247-278, 332-342`, and `src/autonomy-v2/commands/deploy.ts:57-60` leak provider secrets through the recorded/displayed deploy command. `createProviderDeployExecution()` materializes templates with raw secret values, `normalizeDeployCommandConfig()` turns those args into `displayCommand`, and the deploy result/CLI output persists `deployCommand.command` without redaction. A provider that passes `{{apiToken}}` or similar via command/args will expose the secret in job results and status, violating the requirement that raw credentials never appear in status or chat-visible surfaces. Redaction currently only covers `deployCommand.output`, not the command string itself.\n`src/autonomy-v2/control-plane/service-auth.ts:303-321, 371-405` runs provider verify/preflight/post-deploy commands relative to `process.cwd()` instead of the selected repo root. Because `executeProviderCommand()` calls `normalizeCommandConfig(..., process.cwd())`, any string/array command or relative `cwd` resolves against the bridge/server launch directory, not the repository being validated or deployed. That breaks the config-driven adapter contract for providers implemented with repo-local scripts or relative paths, and there is no focused test covering repo-relative provider commands.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-provider-agnostic-service-auth-and-0cd09a",
+      "laneKey": "prd-provider-agnostic-service-auth-and-0cd09a:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issues remain despite `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui` passing. The new provider-backed deploy path can expose resolved secrets in persisted deploy metadata/logging, and provider verify/preflight commands are executed from `process.cwd()` instead of the target repo root, which breaks config-driven adapter commands that rely on repo-local scripts or relative paths.\n`src/autonomy-v2/control-plane/service-auth.ts:185-189`, `src/autonomy-v2/commands/shared-github.ts:247-278, 332-342`, and `src/autonomy-v2/commands/deploy.ts:57-60` leak provider secrets through the recorded/displayed deploy command. `createProviderDeployExecution()` materializes templates with raw secret values, `normalizeDeployCommandConfig()` turns those args into `displayCommand`, and the deploy result/CLI output persists `deployCommand.command` without redaction. A provider that passes `{{apiToken}}` or similar via command/args will expose the secret in job results and status, violating the requirement that raw credentials never appear in status or chat-visible surfaces. Redaction currently only covers `deployCommand.output`, not the command string itself.\n`src/autonomy-v2/control-plane/service-auth.ts:303-321, 371-405` runs provider verify/preflight/post-deploy commands relative to `process.cwd()` instead of the selected repo root. Because `executeProviderCommand()` calls `normalizeCommandConfig(..., process.cwd())`, any string/array command or relative `cwd` resolves against the bridge/server launch directory, not the repository being validated or deployed. That breaks the config-driven adapter contract for providers implemented with repo-local scripts or relative paths, and there is no focused test covering repo-relative provider commands."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent",
+      "createdAt": "2026-04-28T23:33:46.309Z",
+      "updatedAt": "2026-04-28T23:33:46.309Z",
+      "startedAt": "2026-04-28T23:33:46.309Z",
+      "prId": "pr-prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
