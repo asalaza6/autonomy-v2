@@ -1039,13 +1039,13 @@
         "Focused UI coverage is added or updated for compact manager cards and repo drill-down or expander behavior, and verification includes `npm run typecheck` plus relevant control-plane unit or smoke tests covering dashboard and repo-page rendering."
       ],
       "reviewRound": 5,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-28T00:40:44.129Z",
       "updatedAt": "2026-04-28T00:50:21.683Z",
       "reviewedAt": "2026-04-28T00:50:05.144Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-28T00:48:50.635Z"
+      "dispatchedAt": "2026-04-28T00:53:10.775Z"
     }
   ]
 }
