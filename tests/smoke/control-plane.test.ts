@@ -178,6 +178,140 @@ test('control plane queues a browser PRD and the bridge executes it on the local
   }
 });
 
+test('control plane preserves repo assistant conversations across server restart', async () => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-chat-restart-');
+  initAutonomyRepo(repoDir);
+
+  const port = await getFreePort();
+  const startServer = () => spawn(process.execPath, [
+    CONTROL_BIN,
+    'serve',
+    '--root',
+    repoDir,
+    '--port',
+    String(port),
+  ], {
+    cwd: path.join(repoDir, '.'),
+    env: {
+      ...process.env,
+      AUTONOMY_CONTROL_PLANE_PERSIST: '1',
+      PATH: process.env.PATH || '',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let server = startServer();
+  const stopServer = async () => {
+    if (server.exitCode !== null || server.signalCode !== null) {
+      return;
+    }
+    server.kill('SIGTERM');
+    await onceExit(server);
+  };
+
+  try {
+    await waitForHttp(`http://127.0.0.1:${port}/api/repos`);
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ], {
+      env: {
+        AUTONOMY_CONTROL_PLANE_CHAT_STUB: '1',
+      },
+    });
+
+    const createResponse = await fetch(`http://127.0.0.1:${port}/api/repos/default/conversations`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        repoId: 'default',
+        prompt: 'What is the current repo status?',
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+    const created = await createResponse.json() as any;
+    const conversationId = created.conversation.id;
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ], {
+      env: {
+        AUTONOMY_CONTROL_PLANE_CHAT_STUB: '1',
+      },
+    });
+
+    const beforeRestart = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/repos/default/conversations`);
+    assert.equal(beforeRestart.conversations.length, 1);
+    assert.equal(beforeRestart.conversations[0].id, conversationId);
+    assert.equal(beforeRestart.conversations[0].messages.length, 2);
+    assert.equal(beforeRestart.conversations[0].messages[1].status, 'complete');
+
+    await stopServer();
+    server = startServer();
+    await waitForHttp(`http://127.0.0.1:${port}/api/repos`);
+
+    const afterRestart = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/repos/default/conversations`);
+    assert.equal(afterRestart.conversations.length, 1);
+    assert.equal(afterRestart.conversations[0].id, conversationId);
+    assert.equal(afterRestart.conversations[0].messages.length, 2);
+
+    const continueResponse = await fetch(`http://127.0.0.1:${port}/api/repos/default/conversations`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        repoId: 'default',
+        conversationId,
+        prompt: 'What should I do next?',
+      }),
+    });
+    assert.equal(continueResponse.status, 201);
+    const continued = await continueResponse.json() as any;
+    assert.equal(continued.conversation.id, conversationId);
+
+    runNode(CONTROL_BIN, [
+      'bridge',
+      '--root',
+      repoDir,
+      '--server-url',
+      `http://127.0.0.1:${port}`,
+      '--repo-map',
+      repoDir,
+      '--once',
+    ], {
+      env: {
+        AUTONOMY_CONTROL_PLANE_CHAT_STUB: '1',
+      },
+    });
+
+    const finalState = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/repos/default/conversations`);
+    assert.equal(finalState.conversations.length, 1);
+    assert.equal(finalState.conversations[0].id, conversationId);
+    assert.equal(finalState.conversations[0].messages.length, 4);
+    assert.equal(finalState.conversations[0].messages[0].content, 'What is the current repo status?');
+    assert.equal(finalState.conversations[0].messages[2].content, 'What should I do next?');
+  } finally {
+    await stopServer();
+  }
+});
+
 test('local control plane can serve local UI while proxying API traffic to a hosted manager', async () => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-proxy-');
   initAutonomyRepo(repoDir);

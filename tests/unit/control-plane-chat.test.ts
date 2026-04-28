@@ -25,6 +25,7 @@ import {
   listDiscoveredRepos,
   loadControlPlaneState,
   queueAgentChatMessage,
+  resetControlPlaneStateCache,
   setRepoStatus,
 } from '../../src/server/control-plane/control-plane-store.js';
 import { validatePrdAddSubmission } from '../../src/server/control-plane/control-plane-validation.js';
@@ -165,7 +166,7 @@ test('control plane chat launches disabled GitHub sessions without inheriting ho
   process.env.UNRELATED_SECRET = 'host-only-secret';
 
   try {
-    const response = await answerControlPlaneAgentChat({
+    const response: any = await answerControlPlaneAgentChat({
       repoRoot: rootDir,
       repoId: 'alpha',
       payload: {
@@ -177,7 +178,7 @@ test('control plane chat launches disabled GitHub sessions without inheriting ho
         history: [],
       },
       snapshot: {},
-    });
+    }) as any;
 
     assert.equal(response.answer, 'ok');
 
@@ -191,6 +192,66 @@ test('control plane chat launches disabled GitHub sessions without inheriting ho
     restoreEnv('GITHUB_TOKEN', originalGithubToken);
     restoreEnv('GH_TOKEN', originalGhToken);
     restoreEnv('UNRELATED_SECRET', originalUnrelatedSecret);
+  }
+});
+
+test('control plane chat falls back to history continuity when a stored resume session is stale', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-chat-resume-fallback-'));
+  const capturePath = path.join(rootDir, 'capture.jsonl');
+  const fakeCodexPath = path.join(rootDir, 'fake-codex-resume.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    "import fs from 'fs';",
+    'const args = process.argv.slice(2);',
+    "const outputIndex = args.indexOf('--output-last-message');",
+    'const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : "";',
+    "const resumeIndex = args.indexOf('resume');",
+    'const resumeSessionId = resumeIndex >= 0 ? args[resumeIndex + 1] : "";',
+    `const capturePath = ${JSON.stringify(capturePath)};`,
+    'fs.appendFileSync(capturePath, JSON.stringify({ resumeSessionId, args }) + "\\n");',
+    'if (resumeSessionId) {',
+    "  console.error('unknown conversation');",
+    '  process.exit(1);',
+    '}',
+    'fs.writeFileSync(outputPath, JSON.stringify({ answer: "Recovered from history.", prdProposal: null }));',
+    'console.log(JSON.stringify({ conversation_id: "codex-history-002" }));',
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+
+  try {
+    const response: any = await answerControlPlaneAgentChat({
+      repoRoot: rootDir,
+      repoId: 'alpha',
+      payload: {
+        repoId: 'alpha',
+        conversationId: 'conversation-001',
+        messageId: 'message-001',
+        responseMessageId: 'message-002',
+        prompt: 'Continue the last thread.',
+        resumeSessionId: 'stale-session-001',
+        history: [
+          { role: 'manager', content: 'What is next?', createdAt: '2026-04-28T00:00:00.000Z' },
+          { role: 'agent', content: 'Open a PRD.', createdAt: '2026-04-28T00:00:01.000Z' },
+        ],
+      },
+      snapshot: {},
+    });
+
+    assert.equal(response.answer, 'Recovered from history.');
+    assert.equal(response.conversationId, 'codex-history-002');
+    assert.equal(response.continuityMode, 'history-only');
+    assert.match(String(response.continuityError || ''), /Codex CLI failed/);
+
+    const attempts = fs.readFileSync(capturePath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+    assert.equal(attempts.length, 2);
+    assert.equal(attempts[0].resumeSessionId, 'stale-session-001');
+    assert.equal(attempts[1].resumeSessionId, '');
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
   }
 });
 
@@ -362,6 +423,57 @@ test('control plane chat persists conversation messages and bridge replies', () 
   assert.equal(secondPayload.history.length, 2);
   assert.equal(secondPayload.history[0].content, 'What is the current repo status?');
   assert.equal(secondPayload.history[1].content, 'The repo is idle and ready for a PRD.');
+});
+
+test('control plane chat persistence survives hosted restart recovery and reuses stored Codex conversation ids', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-chat-persisted-'));
+  const originalPersist = process.env.AUTONOMY_CONTROL_PLANE_PERSIST;
+  const originalDyno = process.env.DYNO;
+
+  process.env.AUTONOMY_CONTROL_PLANE_PERSIST = '';
+  process.env.DYNO = 'web.1';
+
+  try {
+    const first = queueAgentChatMessage(rootDir, {
+      repoId: 'alpha',
+      prompt: 'Summarize the repo state.',
+    });
+
+    completeJob(rootDir, first.job.id, {
+      status: 'completed',
+      result: {
+        answer: 'The repo is idle.',
+        conversationId: 'codex-session-001',
+        continuityMode: 'codex-session',
+      },
+    });
+
+    resetControlPlaneStateCache(rootDir);
+    const reloaded = loadControlPlaneState(rootDir);
+    assert.equal(reloaded.conversations.alpha[0].id, first.conversation.id);
+    assert.equal(reloaded.conversations.alpha[0].codexConversationId, 'codex-session-001');
+    assert.equal(reloaded.conversations.alpha[0].continuityMode, 'codex-session');
+    assert.equal(reloaded.conversations.alpha[0].messages.length, 2);
+
+    const second = queueAgentChatMessage(rootDir, {
+      repoId: 'alpha',
+      conversationId: first.conversation.id,
+      prompt: 'Continue the same conversation.',
+    });
+
+    assert.equal(second.conversation.id, first.conversation.id);
+    assert.equal((second.job.payload as any).resumeSessionId, 'codex-session-001');
+    assert.equal(second.conversation.messages.length, 4);
+
+    resetControlPlaneStateCache(rootDir);
+    const persisted = JSON.parse(fs.readFileSync(path.join(rootDir, '.autonomy', 'control-plane', 'state.json'), 'utf8'));
+    assert.equal(persisted.conversations.alpha[0].id, first.conversation.id);
+    assert.equal(persisted.conversations.alpha[0].messages[3].status, 'queued');
+  } finally {
+    restoreEnv('AUTONOMY_CONTROL_PLANE_PERSIST', originalPersist);
+    restoreEnv('DYNO', originalDyno);
+    resetControlPlaneStateCache(rootDir);
+  }
 });
 
 test('control plane chat completion stores PRD proposals on the agent message', () => {

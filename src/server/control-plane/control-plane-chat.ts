@@ -90,22 +90,47 @@ async function answerControlPlaneAgentChat({
   const repoAssistantEnv = githubCapability.available === true
     ? buildRepoAssistantGithubEnv(runtimeGithubEnv)
     : {};
-  const output = await runCodexStructured({
+  const prompt = buildAgentChatPrompt(repoId, payload, snapshot, projectContext, githubCapability);
+  const configOverrides = githubCapability.available === true
+    ? buildRepoAssistantGithubCodexConfigOverrides()
+    : [];
+  const requestedResumeSessionId = String(payload.resumeSessionId || '').trim();
+  const runChat = (resumeSessionId = '') => runCodexStructured({
     cwd: repoRoot,
     readOnly: true,
     schema: CHAT_RESPONSE_SCHEMA,
-    prompt: buildAgentChatPrompt(repoId, payload, snapshot, projectContext, githubCapability),
+    prompt,
+    resumeSessionId,
+    captureConversationId: true,
     env: repoAssistantEnv,
     inheritHostEnv: false,
-    configOverrides: githubCapability.available === true
-      ? buildRepoAssistantGithubCodexConfigOverrides()
-      : [],
+    configOverrides,
   });
+
+  let output: AnyRecord;
+  let continuityMode: 'history-only' | 'codex-session' = requestedResumeSessionId ? 'codex-session' : 'history-only';
+  let continuityError = '';
+  try {
+    output = await runChat(requestedResumeSessionId);
+  } catch (error) {
+    if (!requestedResumeSessionId) {
+      throw error;
+    }
+    continuityMode = 'history-only';
+    continuityError = error instanceof Error ? error.message : String(error);
+    output = await runChat('');
+  }
 
   const answer = String(output && output.answer || '').trim();
   const prdProposal = normalizeChatPrdProposal(output, answer, repoId, payload);
+  const returnedConversationId = String(output && output.conversationId || '').trim();
   return {
     answer: answer || 'I could not produce a useful answer for that repo question.',
+    conversationId: returnedConversationId || undefined,
+    continuityMode: continuityError
+      ? 'history-only'
+      : (returnedConversationId ? 'codex-session' : continuityMode),
+    continuityError: continuityError || undefined,
     ...(prdProposal ? { prdProposal } : {}),
   };
 }
