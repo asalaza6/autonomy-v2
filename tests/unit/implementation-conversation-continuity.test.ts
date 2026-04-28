@@ -563,6 +563,7 @@ function buildReviewRunnerContext(
     prOverrides?: Record<string, unknown>;
     rootDir?: string;
     worktreePath?: string;
+    diffFiles?: string[];
     runCheckCommands?: (worktreePath: string, commands: string[]) => any[];
   } = {}
 ) {
@@ -630,7 +631,7 @@ function buildReviewRunnerContext(
         return [];
       },
       listReviewDiffFiles() {
-        return ['src/example.ts'];
+        return options.diffFiles || ['src/example.ts'];
       },
       ensureCheckEnvironment() {},
       runCheckCommands(checkPath: string, commands: string[]) {
@@ -842,4 +843,42 @@ test('reviewer runner includes repo merge-blocking lint and typecheck scripts in
   assert.deepEqual(seenCommands[0], ['npm run test', 'npm run typecheck', 'npm run lint']);
   assert.equal(recordedReviews[0].decision, 'changes-requested');
   assert.match(recordedReviews[0].summary, /Blocking checks failed: npm run lint/);
+});
+
+test('reviewer runner includes focused control-plane summary ui checks when the diff touches summary surfaces', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-review-summary-ui-checks-'));
+  const worktreePath = path.join(rootDir, '.autonomy', 'worktrees', 'reviewer', 'pr-prd-conversation-architecture-agent');
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, 'package.json'), `${JSON.stringify({
+    name: 'review-check-fixture',
+    scripts: {
+      lint: 'eslint src',
+      typecheck: 'tsc --noEmit',
+      'test:control-plane-summary-ui': 'node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+  }, null, 2)}\n`, 'utf8');
+
+  const seenCommands: string[][] = [];
+  const { context, recordedReviews } = buildReviewRunnerContext(async () => ({
+    decision: 'approved',
+    summary: 'Looks good.',
+    concerns: [],
+  }), {
+    rootDir,
+    worktreePath,
+    diffFiles: ['src/server/control-plane/control-plane-client.tsx'],
+    runCheckCommands(_checkPath, commands) {
+      seenCommands.push(commands);
+      return commands.map((command) => ({
+        command,
+        status: 'passed',
+        output: '',
+      }));
+    },
+  });
+
+  await runReview(context);
+
+  assert.deepEqual(seenCommands[0], ['npm run typecheck', 'npm run lint', 'npm run test:control-plane-summary-ui']);
+  assert.equal(recordedReviews[0].decision, 'approve');
 });

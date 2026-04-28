@@ -12,6 +12,13 @@ import { resolveGithubRepo, postIssueComment } from './net.js';
 import { normalizeNonEmptyString, uniqueStrings } from './runner-shared.js';
 
 const REVIEW_MERGE_BLOCKING_SCRIPTS = ['typecheck', 'lint'];
+const CONTROL_PLANE_SUMMARY_UI_SCRIPT = 'test:control-plane-summary-ui';
+const CONTROL_PLANE_SUMMARY_UI_FILES = new Set([
+  'src/server/control-plane/control-plane-client.tsx',
+  'src/server/control-plane/control-plane-page.tsx',
+  'tests/unit/control-plane-summary-ui.test.ts',
+  'tests/unit/control-plane-restart-ui.test.ts',
+]);
 
 function runCheckCommands(worktreePath, commands) {
   return uniqueStrings(commands).map((command) => {
@@ -72,13 +79,22 @@ function readPackageScripts(worktreePath) {
   }
 }
 
-function resolveReviewCheckCommands(worktreePath, configuredChecks) {
+function shouldIncludeControlPlaneSummaryUiCheck(diffFiles) {
+  return Array.isArray(diffFiles) && diffFiles.some((filePath) => CONTROL_PLANE_SUMMARY_UI_FILES.has(String(filePath || '').trim()));
+}
+
+function resolveReviewCheckCommands(worktreePath, configuredChecks, diffFiles = []) {
   const commands = uniqueStrings(configuredChecks || []);
   const scripts = readPackageScripts(worktreePath);
   const repoChecks = REVIEW_MERGE_BLOCKING_SCRIPTS
     .filter((scriptName) => typeof scripts[scriptName] === 'string' && scripts[scriptName].trim())
     .map((scriptName) => `npm run ${scriptName}`);
-  return uniqueStrings(commands.concat(repoChecks));
+  const focusedChecks = shouldIncludeControlPlaneSummaryUiCheck(diffFiles)
+    && typeof scripts[CONTROL_PLANE_SUMMARY_UI_SCRIPT] === 'string'
+    && scripts[CONTROL_PLANE_SUMMARY_UI_SCRIPT].trim()
+    ? [`npm run ${CONTROL_PLANE_SUMMARY_UI_SCRIPT}`]
+    : [];
+  return uniqueStrings(commands.concat(repoChecks, focusedChecks));
 }
 
 function isScopeOnlyReviewFeedback(codexReview) {

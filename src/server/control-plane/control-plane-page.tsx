@@ -438,6 +438,61 @@ const styles = `
   .body-note { margin-top: 12px; }
   .repo-section { display: grid; gap: 10px; }
   .repo-section + .repo-section { margin-top: 12px; }
+  .repo-compact .overview {
+    margin-bottom: 14px;
+  }
+  .snapshot-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .snapshot-item {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(31, 26, 21, 0.08);
+  }
+  .repo-disclosure {
+    border: 1px solid rgba(31, 26, 21, 0.08);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 12px 14px;
+  }
+  .repo-disclosure + .repo-disclosure {
+    margin-top: 12px;
+  }
+  .repo-disclosure-body {
+    margin-top: 12px;
+  }
+  .summary-chip-list {
+    display: grid;
+    gap: 10px;
+  }
+  .summary-chip {
+    padding: 12px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(31, 26, 21, 0.08);
+    background: rgba(255, 255, 255, 0.62);
+  }
+  .summary-chip-blocked {
+    border-color: rgba(141, 58, 67, 0.28);
+    background: rgba(141, 58, 67, 0.08);
+  }
+  .summary-chip-waiting {
+    border-color: rgba(176, 114, 35, 0.24);
+    background: rgba(176, 114, 35, 0.08);
+  }
+  .summary-chip-label {
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .summary-chip-detail {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 0.94rem;
+  }
   .repo-actions {
     display: flex;
     gap: 10px;

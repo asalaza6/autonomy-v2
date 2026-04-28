@@ -232,7 +232,7 @@ function resolveRepoAssistantGithubCapabilityStatus(
   if ('result' in resolved) {
     return resolved.result;
   }
-  const { githubEnv, pullNumber, base } = resolved;
+  const { githubEnv, base } = resolved;
   const cacheKey = buildRepoAssistantGithubCapabilityCacheKey(base, githubEnv.GITHUB_TOKEN);
   const cachedCapability = repoAssistantGithubCapabilityCache.get(cacheKey);
   if (cachedCapability) {
