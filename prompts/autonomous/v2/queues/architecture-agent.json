@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5414,6 +5413,30 @@
       "completedAt": "2026-04-28T23:37:45.252Z",
       "completionMode": "code",
       "commitSha": "b2aabf1174bbb91c1b16d2bb68ecf3c12bd81813"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement Provider-Agnostic Service Auth And Deploy Adapter Framework",
+      "description": "`npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui` passed, but two merge blockers remain in the provider-auth/deploy path.\n`src/autonomy-v2/commands/shared-github.ts:342-348` still leaks provider secrets on deploy failure. Successful deploy output is redacted, but the nonzero-exit path throws an error built from the raw `output`, and `src/autonomy-v2/commands/deploy.ts:34-35` forwards that message unchanged. The bridge/server then persist and log failed job errors, so a provider deploy that prints `{{apiToken}}` or another resolved secret on stderr/stdout will still expose it in job status and logs. Redact failure details before constructing the error, and add a focused test that exercises a failing provider-backed deploy command and asserts the failure payload/logs do not contain the secret.\n`src/autonomy-v2/control-plane/service-auth.ts:487-490` now prefers `process.env` for secret resolution, but bridge status processing loads repo env files into the shared process with `loadAutonomyEnv(repoRoot)` (`src/env/env-main.ts:11-19,35-47`; `src/server/control-plane/control-plane-bridge.ts:586-590`). Because `loadAutonomyEnv()` never overwrites existing keys, the first repo loaded can pin a value for later repos, and the `Promise.all` status refresh makes that cross-repo bleed nondeterministic. That breaks per-repo connection verification/status and can resolve the wrong secret for another repo. Resolve provider fields from repo-scoped env sources instead of shared process state, or isolate runtime env per repo, and add a focused multi-repo test covering conflicting alias keys.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-provider-agnostic-service-auth-and-0cd09a",
+      "laneKey": "prd-provider-agnostic-service-auth-and-0cd09a:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui` passed, but two merge blockers remain in the provider-auth/deploy path.\n`src/autonomy-v2/commands/shared-github.ts:342-348` still leaks provider secrets on deploy failure. Successful deploy output is redacted, but the nonzero-exit path throws an error built from the raw `output`, and `src/autonomy-v2/commands/deploy.ts:34-35` forwards that message unchanged. The bridge/server then persist and log failed job errors, so a provider deploy that prints `{{apiToken}}` or another resolved secret on stderr/stdout will still expose it in job status and logs. Redact failure details before constructing the error, and add a focused test that exercises a failing provider-backed deploy command and asserts the failure payload/logs do not contain the secret.\n`src/autonomy-v2/control-plane/service-auth.ts:487-490` now prefers `process.env` for secret resolution, but bridge status processing loads repo env files into the shared process with `loadAutonomyEnv(repoRoot)` (`src/env/env-main.ts:11-19,35-47`; `src/server/control-plane/control-plane-bridge.ts:586-590`). Because `loadAutonomyEnv()` never overwrites existing keys, the first repo loaded can pin a value for later repos, and the `Promise.all` status refresh makes that cross-repo bleed nondeterministic. That breaks per-repo connection verification/status and can resolve the wrong secret for another repo. Resolve provider fields from repo-scoped env sources instead of shared process state, or isolate runtime env per repo, and add a focused multi-repo test covering conflicting alias keys."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent",
+      "createdAt": "2026-04-28T23:40:14.213Z",
+      "updatedAt": "2026-04-28T23:40:14.213Z",
+      "startedAt": "2026-04-28T23:40:14.213Z",
+      "prId": "pr-prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
