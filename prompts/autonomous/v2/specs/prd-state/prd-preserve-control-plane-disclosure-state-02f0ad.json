@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-preserve-control-plane-disclosure-state-02f0ad",
+  "status": "planned",
+  "createdAt": "2026-04-28T19:47:37.854Z",
+  "updatedAt": "2026-04-28T19:47:37.854Z",
+  "plannedTaskIds": [
+    "prd-preserve-control-plane-disclosure-state-02f0ad-architecture-agent-1"
+  ]
+}

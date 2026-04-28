@@ -5274,6 +5274,33 @@
       },
       "implementationConversationId": "019dd356-9e58-70a3-a2e6-3e758fc7b1bf",
       "commitSha": "007493e476d9f10e144179c19340b7b8335a2c74"
+    },
+    {
+      "id": "prd-preserve-control-plane-disclosure-state-02f0ad-architecture-agent-1",
+      "title": "Persist repo disclosure open state across control-plane refresh re-renders",
+      "description": "Update the control-plane UI so `RepoDisclosure` open and closed state survives `refresh()`-driven re-renders in both manager and project views by restoring state from a stable disclosure identity. Scope includes the disclosure component and the manager/project repo-card rendering paths under `src/server/control-plane/`, plus any local state helpers needed to key persistence by repo, view, and disclosure identity without changing disclosure content rendering or backend sync behavior.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-preserve-control-plane-disclosure-state-02f0ad",
+      "laneKey": "prd-preserve-control-plane-disclosure-state-02f0ad:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Manager-view repo cards preserve the user's last open or closed state for the \"Repo status and details\" disclosure after a sync or `refresh()` causes the card to re-render.",
+        "Project-view repo cards preserve the user's last open or closed state for the \"Work coordination details\" and \"Operational diagnostics and controls\" disclosures after a sync or `refresh()` causes the card to re-render.",
+        "Disclosure persistence is keyed by stable repo, view, and disclosure identity so opening or closing a disclosure on one repo card does not affect the same disclosure on another repo card or in another view.",
+        "Closed disclosures remain closed across repeated refreshes, and the change does not globally force disclosures open or otherwise alter existing disclosure content rendering.",
+        "Focused unit coverage is added for a manager-view refresh case and a project-view refresh case that re-render updated repo data and assert disclosure state persistence, including at least one isolation assertion showing state does not leak between repo cards.",
+        "Verification includes `npm run typecheck` and the relevant control-plane unit tests covering repo-card or disclosure refresh behavior."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-28T19:47:37.750Z",
+      "updatedAt": "2026-04-28T19:47:37.750Z"
     }
   ]
 }
