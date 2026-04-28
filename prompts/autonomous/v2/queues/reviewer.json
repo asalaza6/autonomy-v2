@@ -1143,11 +1143,13 @@
         "Verification includes `npm run typecheck` and the relevant control-plane unit tests covering repo-card or disclosure refresh behavior."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "approved",
       "createdAt": "2026-04-28T19:52:26.598Z",
-      "updatedAt": "2026-04-28T19:52:39.674Z",
+      "updatedAt": "2026-04-28T19:53:44.186Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-28T19:52:31.104Z"
+      "dispatchedAt": "2026-04-28T19:52:31.104Z",
+      "reviewedAt": "2026-04-28T19:53:44.186Z",
+      "lastDecision": "approved"
     }
   ]
 }
