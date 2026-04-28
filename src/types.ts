@@ -154,6 +154,9 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   deploymentLabel?: string;
   exclusiveControl?: boolean;
   controlTakeover?: 'refuse' | 'takeover';
+  serviceProviders?: ControlPlaneServiceProviderRecord[];
+  serviceConnections?: ControlPlaneServiceConnectionRecord[];
+  providerDeploy?: ControlPlaneServiceDeploySelection;
 }
 
 export interface ControlPlaneConfig extends ControlPlaneRepoRecord {
@@ -172,6 +175,102 @@ export interface ControlPlanePrdAddPayload extends AnyRecord {
 
 export interface ControlPlaneDeployPayload extends AnyRecord {
   repoId: string;
+  providerId?: string;
+  connectionId?: string;
+}
+
+export interface ControlPlaneServiceDeploySelection extends AnyRecord {
+  providerId: string;
+  connectionId: string;
+}
+
+export interface ControlPlaneServiceFieldRecord extends AnyRecord {
+  field: string;
+  label?: string;
+  description?: string;
+  required?: boolean;
+  secret?: boolean;
+}
+
+export interface ControlPlaneServiceCommandRecord extends AnyRecord {
+  command: DeployCommandConfig;
+}
+
+export interface ControlPlaneServiceProviderRecord extends AnyRecord {
+  providerId: string;
+  label?: string;
+  authStrategies?: string[];
+  authFields?: ControlPlaneServiceFieldRecord[];
+  requiredScopes?: string[];
+  verifyCommand?: ControlPlaneServiceCommandRecord;
+  preflightCommand?: ControlPlaneServiceCommandRecord;
+  deployCommand?: ControlPlaneServiceCommandRecord;
+  postDeployMetadataCommand?: ControlPlaneServiceCommandRecord;
+  capabilityMetadata?: Record<string, string | number | boolean | null>;
+}
+
+export interface ControlPlaneServiceConnectionRecord extends AnyRecord {
+  providerId: string;
+  connectionId: string;
+  label?: string;
+  authStrategy: string;
+  envAliases?: Record<string, string>;
+  accountMetadata?: Record<string, string | number | boolean | null>;
+  capabilityMetadata?: Record<string, string | number | boolean | null>;
+}
+
+export type ControlPlaneServiceConnectionStatus =
+  | 'connected'
+  | 'verification-failed'
+  | 'expired'
+  | 'revoked'
+  | 'insufficient-scopes'
+  | 'needs-reconnect'
+  | 'pending';
+
+export type ControlPlaneServiceFailureClass =
+  | 'missing-env-alias'
+  | 'unresolved-secret-field'
+  | 'invalid-credential'
+  | 'insufficient-scopes'
+  | 'expired'
+  | 'revoked'
+  | 'verification-failed'
+  | 'provider-error'
+  | 'needs-reconnect';
+
+export interface ControlPlaneServiceConnectionFieldStatus extends AnyRecord {
+  field: string;
+  label?: string;
+  envKey?: string | null;
+  required?: boolean;
+  secret?: boolean;
+  resolved: boolean;
+  source?: 'runtime' | 'machine-local' | 'shared-file' | 'unresolved';
+}
+
+export interface ControlPlaneServiceConnectionSummary extends AnyRecord {
+  providerId: string;
+  providerLabel?: string;
+  connectionId: string;
+  label?: string;
+  authStrategy: string;
+  status: ControlPlaneServiceConnectionStatus;
+  statusLabel?: string;
+  lastVerifiedAt?: string | null;
+  failureClass?: ControlPlaneServiceFailureClass | null;
+  failureLabel?: string | null;
+  accountMetadata?: Record<string, string | number | boolean | null>;
+  capabilityMetadata?: Record<string, string | number | boolean | null>;
+  requiredScopes?: string[];
+  fieldStatuses?: ControlPlaneServiceConnectionFieldStatus[];
+}
+
+export interface ControlPlaneServiceAuthPayload extends AnyRecord {
+  repoId: string;
+  providerId: string;
+  connectionId: string;
+  authStrategy?: string;
 }
 
 export interface ControlPlanePrdResetPayload extends AnyRecord {
@@ -310,9 +409,25 @@ export interface ControlPlaneConversationRecord extends AnyRecord {
 
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add' | 'prd:reset' | 'deploy' | 'agent:chat' | 'package:update' | 'restart';
+  type:
+    | 'prd:add'
+    | 'prd:reset'
+    | 'deploy'
+    | 'agent:chat'
+    | 'package:update'
+    | 'restart'
+    | 'service:auth:start'
+    | 'service:auth:complete'
+    | 'service:auth:verify';
   repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload;
+  payload:
+    | ControlPlanePrdAddPayload
+    | ControlPlanePrdResetPayload
+    | ControlPlaneDeployPayload
+    | ControlPlaneAgentChatMessagePayload
+    | ControlPlanePackageUpdatePayload
+    | ControlPlaneRestartPayload
+    | ControlPlaneServiceAuthPayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
@@ -332,6 +447,7 @@ export interface ControlPlaneRepoStatusRecord extends AnyRecord {
   deploymentLabel?: string;
   exclusiveControl?: boolean;
   controlTakeover?: 'refuse' | 'takeover';
+  serviceConnections?: ControlPlaneServiceConnectionSummary[];
   snapshot: AnyRecord;
 }
 

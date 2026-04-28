@@ -38,6 +38,27 @@ test('control plane dashboard summarizes discovered repos, jobs, and metadata in
         deploymentUrl: 'https://deploy.example.com',
         deploymentLabel: 'Production site',
         updatedAt: new Date(Date.now() - 20000).toISOString(),
+        serviceConnections: [
+          {
+            providerId: 'netlify-like',
+            providerLabel: 'Netlify-like',
+            connectionId: 'primary',
+            label: 'Primary site',
+            authStrategy: 'manual-token',
+            status: 'connected',
+            statusLabel: 'Connected',
+          },
+          {
+            providerId: 'heroku-like',
+            providerLabel: 'Heroku-like',
+            connectionId: 'prod-app',
+            label: 'Production app',
+            authStrategy: 'manual-token',
+            status: 'needs-reconnect',
+            statusLabel: 'Needs reconnect',
+            failureLabel: 'Missing env alias',
+          },
+        ],
         snapshot: {
           prds: {
             prds: [
@@ -214,6 +235,7 @@ Created: 2026-04-01T11:59:00.000Z`,
   assert.match(dashboard.repos[0].overview, /queued PRD/i);
   assert.match(dashboard.repos[0].overview, /Auto-promoted Active PRD/);
   assert.match(dashboard.repos[0].overview, /GitHub: GitHub repo access denied/);
+  assert.match(dashboard.repos[0].overview, /1\/2 service connections connected/);
   assert.equal(dashboard.repos[0].activePrd.title, 'Active PRD');
   assert.equal(dashboard.repos[0].lastPrdPromotion.id, 'prd-active-001');
   assert.equal(dashboard.repos[0].lastPrdPromotion.title, 'Active PRD');
@@ -268,6 +290,7 @@ Created: 2026-04-01T11:59:00.000Z`,
   assert.equal(dashboard.repos[0].packageStatus.packageManager, 'npm');
   assert.equal(dashboard.repos[0].repoAssistant.github.status, 'unauthorized-repo');
   assert.equal(dashboard.repos[0].deploymentUrl, 'https://deploy.example.com');
+  assert.equal(dashboard.repos[0].serviceConnections.length, 2);
   assert.equal(dashboard.repos[0].deployJob.title, 'Deploy dev to main');
   assert.equal(dashboard.jobs[0].statusLabel, 'Waiting to be claimed');
   assert.match(dashboard.jobs[0].detail, /created/);

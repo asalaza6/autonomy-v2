@@ -1,9 +1,10 @@
 import fs from 'fs';
 import { loadAutonomyEnv } from '../../env/env-main.js';
-import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord, ControlPlanePrdResetPayload } from '../../types.js';
+import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord, ControlPlanePrdResetPayload, ControlPlaneServiceAuthPayload } from '../../types.js';
 import { executePrdAdd, buildPrdAddCliOptions, executePrdReset } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
+import { beginServiceAuth, completeServiceAuth, verifyServiceConnection } from '../../autonomy-v2/control-plane/service-auth.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
@@ -355,7 +356,14 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           root: repoRoot,
         });
-        const execution = runDeploy(repoRoot, {});
+        const deployPayload = job.payload as Record<string, unknown>;
+        const execution = runDeploy(repoRoot, {
+          providerId: String(deployPayload.providerId || '').trim() || undefined,
+          connectionId: String(deployPayload.connectionId || '').trim() || undefined,
+        }) as ReturnType<typeof runDeploy> & {
+          providerConnection?: unknown;
+          providerMetadata?: unknown;
+        };
         logBridgeEvent('bridge:deploy:done', {
           jobId: job.id,
           repoId: job.repoId,
@@ -373,6 +381,41 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           pushMessage: execution.pushMessage || null,
           version: execution.version || null,
           deployCommand: execution.deployCommand || null,
+          providerConnection: execution.providerConnection || null,
+          providerMetadata: execution.providerMetadata || null,
+        };
+      } else if (job.type === 'service:auth:start') {
+        const authPayload = job.payload as ControlPlaneServiceAuthPayload;
+        logBridgeEvent('bridge:service-auth:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          providerId: authPayload.providerId,
+          connectionId: authPayload.connectionId,
+        });
+        result = {
+          connection: beginServiceAuth(repoRoot, authPayload),
+        };
+      } else if (job.type === 'service:auth:complete') {
+        const authPayload = job.payload as ControlPlaneServiceAuthPayload;
+        logBridgeEvent('bridge:service-auth:complete', {
+          jobId: job.id,
+          repoId: job.repoId,
+          providerId: authPayload.providerId,
+          connectionId: authPayload.connectionId,
+        });
+        result = {
+          connection: completeServiceAuth(repoRoot, authPayload),
+        };
+      } else if (job.type === 'service:auth:verify') {
+        const authPayload = job.payload as ControlPlaneServiceAuthPayload;
+        logBridgeEvent('bridge:service-auth:verify', {
+          jobId: job.id,
+          repoId: job.repoId,
+          providerId: authPayload.providerId,
+          connectionId: authPayload.connectionId,
+        });
+        result = {
+          connection: verifyServiceConnection(repoRoot, authPayload),
         };
       } else if (job.type === 'package:update') {
         logBridgeEvent('bridge:package:update:start', {

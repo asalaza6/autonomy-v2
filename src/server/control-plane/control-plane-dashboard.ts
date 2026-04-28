@@ -126,6 +126,11 @@ function buildRepoDashboard(
     && repoStatus.snapshot.controlPlane.managedProcesses
       ? repoStatus.snapshot.controlPlane.managedProcesses
       : {};
+  const serviceConnections = Array.isArray(repoStatus && repoStatus.serviceConnections)
+    ? repoStatus.serviceConnections
+    : Array.isArray(repoStatus && repoStatus.snapshot && repoStatus.snapshot.serviceConnections)
+      ? repoStatus.snapshot.serviceConnections
+      : [];
 
   return {
     ...summary,
@@ -139,6 +144,7 @@ function buildRepoDashboard(
     prdResetJob: prdResetJob ? summarizeControlPlaneJob(prdResetJob, label) : null,
     packageUpdateJob: packageUpdateJob ? summarizeControlPlaneJob(packageUpdateJob, label) : null,
     restartJob: restartJob ? summarizeControlPlaneJob(restartJob, label) : null,
+    serviceConnections,
     managedProcesses,
     controlAccess,
     controlOwner: controlAccess && controlAccess.owner ? controlAccess.owner : null,

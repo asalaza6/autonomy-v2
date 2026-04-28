@@ -600,6 +600,24 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
       failed: 'Reset failed',
     };
   }
+  if (jobType === 'service:auth:start' || jobType === 'service:auth:complete') {
+    return {
+      queued: 'Waiting to start auth flow',
+      claimed: 'Bridge claimed auth flow',
+      running: 'Preparing service auth',
+      completed: 'Auth flow recorded',
+      failed: 'Auth flow failed',
+    };
+  }
+  if (jobType === 'service:auth:verify') {
+    return {
+      queued: 'Waiting to verify connection',
+      claimed: 'Bridge claimed verification',
+      running: 'Verifying service connection',
+      completed: 'Verification completed',
+      failed: 'Verification failed',
+    };
+  }
   return {
     queued: 'Waiting to be claimed',
     claimed: 'Claimed by the bridge',
@@ -746,6 +764,14 @@ function formatControlPlaneJobTitle(job: any, jobType: string) {
   if (jobType === 'agent:chat') {
     return `Repo chat: ${summarizeText(job && job.payload && job.payload.prompt || job && job.id || 'message')}`;
   }
+  if (jobType === 'service:auth:start' || jobType === 'service:auth:complete' || jobType === 'service:auth:verify') {
+    const providerId = String(job && job.payload && job.payload.providerId || 'provider');
+    const connectionId = String(job && job.payload && job.payload.connectionId || 'connection');
+    if (jobType === 'service:auth:verify') {
+      return `Verify ${providerId} connection ${connectionId}`;
+    }
+    return `Prepare ${providerId} connection ${connectionId}`;
+  }
   return String(job && job.payload && job.payload.title || job && job.id || 'Untitled job');
 }
 
@@ -834,6 +860,11 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const freshness = buildHeartbeatSummary(repoStatus && repoStatus.updatedAt, repoLabel || 'Repository');
   const deployment = snapshot.deployment || null;
   const repoAssistant = snapshot.repoAssistant || null;
+  const serviceConnections = Array.isArray(repoStatus && repoStatus.serviceConnections)
+    ? repoStatus.serviceConnections
+    : Array.isArray(snapshot.serviceConnections)
+      ? snapshot.serviceConnections
+      : [];
   const githubAccess = repoAssistant && typeof repoAssistant === 'object' ? repoAssistant.github || null : null;
 
   const overviewParts = [];
@@ -867,6 +898,14 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   if (githubAccess && githubAccess.statusLabel) {
     overviewParts.push(`GitHub: ${githubAccess.statusLabel}`);
   }
+  if (serviceConnections.length > 0) {
+    const connectedCount = serviceConnections.filter((connection) => String(connection && connection.status || '') === 'connected').length;
+    const issueCount = serviceConnections.filter((connection) => String(connection && connection.status || '') !== 'connected').length;
+    overviewParts.push(`${connectedCount}/${serviceConnections.length} service connection${serviceConnections.length === 1 ? '' : 's'} connected`);
+    if (issueCount > 0) {
+      overviewParts.push(`${issueCount} service connection${issueCount === 1 ? '' : 's'} need attention`);
+    }
+  }
 
   return {
     repoId: String(repoStatus && repoStatus.repoId || ''),
@@ -883,6 +922,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     pullRequestStatuses,
     deployment,
     repoAssistant,
+    serviceConnections,
     branchLockCount: Number(snapshot.branchLockCount || 0),
     freshnessStatus: freshness.status,
     freshnessStatusLabel: freshness.statusLabel,

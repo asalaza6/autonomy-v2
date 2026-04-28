@@ -151,7 +151,9 @@ function performLocalMerge(rootDir, config, pr, actor) {
   }
 }
 
-function performLocalDeploy(rootDir, config) {
+function performLocalDeploy(rootDir, config, options: {
+  redactions?: string[];
+} = {}) {
   const sourceBranch = String(config.integrationBranch || 'dev').trim() || 'dev';
   const targetBranch = String(config.productionBranch || 'main').trim() || 'main';
   if (sourceBranch === targetBranch) {
@@ -206,7 +208,7 @@ function performLocalDeploy(rootDir, config) {
         sourceBranch,
         targetBranch,
         sha,
-      })
+      }, options)
       : null;
     return {
       ok: true,
@@ -305,7 +307,9 @@ function runDeployCommand(commandConfig: ReturnType<typeof normalizeDeployComman
   sourceBranch: string;
   targetBranch: string;
   sha: string;
-}) {
+}, options: {
+  redactions?: string[];
+} = {}) {
   if (!commandConfig) {
     return null;
   }
@@ -335,7 +339,7 @@ function runDeployCommand(commandConfig: ReturnType<typeof normalizeDeployComman
     command: commandConfig.displayCommand,
     cwd: path.relative(context.rootDir, commandConfig.cwd) || '.',
     exitCode: result.status,
-    output: output || null,
+    output: redactDeployCommandOutput(output || null, Array.isArray(options.redactions) ? options.redactions : []),
   };
 }
 
@@ -351,6 +355,18 @@ function truncateDeployCommandOutput(value: string) {
     return value;
   }
   return `${value.slice(0, MAX_DEPLOY_COMMAND_OUTPUT_LENGTH)}\n[deploy command output truncated]`;
+}
+
+function redactDeployCommandOutput(value: string | null, redactions: string[]) {
+  if (!value) {
+    return value;
+  }
+  return redactions.reduce((output, secret) => {
+    if (!secret) {
+      return output;
+    }
+    return output.split(secret).join('[REDACTED]');
+  }, value);
 }
 
 function formatDeployCommand(command: string, args: string[]) {

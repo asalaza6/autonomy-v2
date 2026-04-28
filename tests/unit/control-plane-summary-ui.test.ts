@@ -38,6 +38,26 @@ test('manager repo card renders a compact summary with attention signals and con
       },
       deploymentUrl: 'https://alpha.example.com',
       deploymentLabel: 'Production site',
+      serviceConnections: [
+        {
+          providerId: 'netlify-like',
+          providerLabel: 'Netlify-like',
+          connectionId: 'primary',
+          label: 'Primary site',
+          authStrategy: 'manual-token',
+          status: 'needs-reconnect',
+          statusLabel: 'Needs reconnect',
+          failureLabel: 'Missing env alias',
+          fieldStatuses: [
+            { field: 'apiToken', label: 'API token', envKey: 'NETLIFY_TOKEN', resolved: false },
+            { field: 'siteId', label: 'Site ID', envKey: 'NETLIFY_SITE_ID', resolved: true },
+          ],
+          accountMetadata: {
+            team: 'Core',
+            site: 'Marketing',
+          },
+        },
+      ],
       repoAssistant: {
         github: {
           available: false,
@@ -67,6 +87,9 @@ test('manager repo card renders a compact summary with attention signals and con
   assert.match(html, /dev is 2 commits ahead of main/);
   assert.match(html, /GitHub validation failed/);
   assert.match(html, /PR drift/);
+  assert.match(html, /Service Connections/);
+  assert.match(html, /Netlify-like \/ Primary site/);
+  assert.match(html, /API token \(NETLIFY_TOKEN\): missing/);
 });
 
 test('project repo card hides operational diagnostics behind labeled disclosures', async () => {
@@ -105,6 +128,26 @@ test('project repo card hides operational diagnostics behind labeled disclosures
         sourceBranch: 'dev',
         targetBranch: 'main',
       },
+      serviceConnections: [
+        {
+          providerId: 'heroku-like',
+          providerLabel: 'Heroku-like',
+          connectionId: 'prod-app',
+          label: 'Production app',
+          authStrategy: 'manual-token',
+          status: 'connected',
+          statusLabel: 'Connected',
+          lastVerifiedAt: '2026-04-26T10:09:00.000Z',
+          fieldStatuses: [
+            { field: 'apiToken', label: 'API token', envKey: 'HEROKU_TOKEN', resolved: true },
+            { field: 'appName', label: 'App name', envKey: 'HEROKU_APP', resolved: true },
+          ],
+          accountMetadata: {
+            app: 'alpha-prod',
+            team: 'Platform',
+          },
+        },
+      ],
       repoAssistant: {
         github: {
           available: false,
@@ -167,6 +210,8 @@ test('project repo card hides operational diagnostics behind labeled disclosures
   assert.match(html, /GitHub repo access denied/);
   assert.match(html, /Update package/);
   assert.match(html, /Restart failed/);
+  assert.match(html, /Heroku-like \/ Production app/);
+  assert.match(html, /app: alpha-prod/);
 });
 
 test('manager repo disclosure state persists across refresh re-renders and stays isolated per repo', async () => {
