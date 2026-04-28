@@ -340,18 +340,19 @@ function runDeployCommand(commandConfig: ReturnType<typeof normalizeDeployComman
     timeout: DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS,
   });
   const output = truncateDeployCommandOutput(collectDeployCommandOutput(result.stdout, result.stderr));
+  const redactedOutput = redactDeployCommandOutput(output || null, Array.isArray(options.redactions) ? options.redactions : []);
   if (result.error) {
     throw new Error(`Deploy command "${commandConfig.displayCommand}" failed: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    const detail = output || result.signal || 'no output';
+    const detail = redactedOutput || result.signal || 'no output';
     throw new Error(`Deploy command "${commandConfig.displayCommand}" failed with exit code ${result.status}: ${detail}`);
   }
   return {
     command: commandConfig.displayCommand,
     cwd: path.relative(context.rootDir, commandConfig.cwd) || '.',
     exitCode: result.status,
-    output: redactDeployCommandOutput(output || null, Array.isArray(options.redactions) ? options.redactions : []),
+    output: redactedOutput,
   };
 }
 

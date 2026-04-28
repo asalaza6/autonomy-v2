@@ -70,7 +70,11 @@ type ProviderDeployExecution = {
   postDeployMetadata: ((context: { rootDir: string; deployResult: AnyRecord }) => Record<string, unknown> | null) | null;
 };
 
-function buildServiceConnectionSummaries(rootDir: string) {
+type ServiceAuthResolutionOptions = {
+  runtimeEnv?: NodeJS.ProcessEnv;
+};
+
+function buildServiceConnectionSummaries(rootDir: string, options: ServiceAuthResolutionOptions = {}) {
   const config = readControlPlaneConfig(rootDir);
   if (!config) {
     return [];
@@ -78,7 +82,7 @@ function buildServiceConnectionSummaries(rootDir: string) {
   const providers = listServiceProviders(config);
   const connections = listServiceConnections(config);
   const persistedState = loadPersistedServiceAuthState(rootDir);
-  return connections.map((connection) => buildServiceConnectionSummary(rootDir, providers, connection, persistedState));
+  return connections.map((connection) => buildServiceConnectionSummary(rootDir, providers, connection, persistedState, options));
 }
 
 function beginServiceAuth(rootDir: string, selection: ControlPlaneServiceDeploySelection) {
@@ -103,12 +107,16 @@ function completeServiceAuth(rootDir: string, selection: ControlPlaneServiceDepl
   return beginServiceAuth(rootDir, selection);
 }
 
-function verifyServiceConnection(rootDir: string, selection: ControlPlaneServiceDeploySelection) {
+function verifyServiceConnection(
+  rootDir: string,
+  selection: ControlPlaneServiceDeploySelection,
+  options: ServiceAuthResolutionOptions = {},
+) {
   const config = requireControlPlaneConfig(rootDir);
   const providers = listServiceProviders(config);
   const provider = getServiceProvider(providers, selection.providerId);
   const connection = getServiceConnection(config, selection);
-  const resolution = resolveConnectionSecrets(rootDir, provider, connection);
+  const resolution = resolveConnectionSecrets(rootDir, provider, connection, options);
   const unresolved = resolution.fields.filter((field) => field.required && !field.value);
   const missingAlias = resolution.fields.filter((field) => field.required && !field.envKey);
   if (missingAlias.length > 0 || unresolved.length > 0) {
@@ -123,7 +131,7 @@ function verifyServiceConnection(rootDir: string, selection: ControlPlaneService
       capabilityMetadata: sanitizeMetadata(connection.capabilityMetadata),
     };
     writePersistedConnectionState(rootDir, persisted);
-    return buildServiceConnectionSummary(rootDir, providers, connection, loadPersistedServiceAuthState(rootDir));
+    return buildServiceConnectionSummary(rootDir, providers, connection, loadPersistedServiceAuthState(rootDir), options);
   }
 
   const providerContext = buildProviderCommandContext(provider, connection, resolution.fields);
@@ -145,12 +153,13 @@ function verifyServiceConnection(rootDir: string, selection: ControlPlaneService
     }),
   };
   writePersistedConnectionState(rootDir, nextState);
-  return buildServiceConnectionSummary(rootDir, providers, connection, loadPersistedServiceAuthState(rootDir));
+  return buildServiceConnectionSummary(rootDir, providers, connection, loadPersistedServiceAuthState(rootDir), options);
 }
 
 function createProviderDeployExecution(
   rootDir: string,
   selection: ControlPlaneServiceDeploySelection | null | undefined,
+  options: ServiceAuthResolutionOptions = {},
 ): ProviderDeployExecution | null {
   const config = readControlPlaneConfig(rootDir);
   if (!config) {
@@ -163,7 +172,7 @@ function createProviderDeployExecution(
   const providers = listServiceProviders(config);
   const provider = getServiceProvider(providers, effectiveSelection.providerId);
   const connection = getServiceConnection(config, effectiveSelection);
-  const resolution = resolveConnectionSecrets(rootDir, provider, connection);
+  const resolution = resolveConnectionSecrets(rootDir, provider, connection, options);
   const missingAlias = resolution.fields.find((field) => field.required && !field.envKey);
   if (missingAlias) {
     throw new Error(`Service connection ${connection.connectionId} is missing an env alias for ${missingAlias.field}.`);
@@ -214,9 +223,10 @@ function buildServiceConnectionSummary(
   providers: Map<string, ControlPlaneServiceProviderRecord>,
   connection: ControlPlaneServiceConnectionRecord,
   persistedState: PersistedServiceAuthState,
+  options: ServiceAuthResolutionOptions = {},
 ): ControlPlaneServiceConnectionSummary {
   const provider = getServiceProvider(providers, connection.providerId);
-  const resolution = resolveConnectionSecrets(rootDir, provider, connection);
+  const resolution = resolveConnectionSecrets(rootDir, provider, connection, options);
   const persisted = persistedState.connections[buildPersistedConnectionKey(connection.providerId, connection.connectionId)] || null;
   const missingAlias = resolution.fields.some((field) => field.required && !field.envKey);
   const unresolved = resolution.fields.some((field) => field.required && !field.value);
@@ -444,6 +454,7 @@ function resolveConnectionSecrets(
   rootDir: string,
   provider: ControlPlaneServiceProviderRecord,
   connection: ControlPlaneServiceConnectionRecord,
+  options: ServiceAuthResolutionOptions = {},
 ) {
   const descriptors = new Map<string, { label: string; required: boolean; secret: boolean }>();
   (provider.authFields || []).forEach((field) => {
@@ -465,7 +476,7 @@ function resolveConnectionSecrets(
 
   const fields = Array.from(descriptors.entries()).map(([field, descriptor]) => {
     const envKey = String(connection.envAliases?.[field] || '').trim() || null;
-    const resolved = envKey ? resolveEnvValue(rootDir, envKey) : null;
+    const resolved = envKey ? resolveEnvValue(rootDir, envKey, options.runtimeEnv) : null;
     return {
       field,
       envKey,
@@ -479,14 +490,14 @@ function resolveConnectionSecrets(
   return { fields };
 }
 
-function resolveEnvValue(rootDir: string, envKey: string) {
+function resolveEnvValue(rootDir: string, envKey: string, runtimeEnv: NodeJS.ProcessEnv = process.env) {
   const normalizedKey = String(envKey || '').trim();
   if (!normalizedKey) {
     return null;
   }
-  if (Object.prototype.hasOwnProperty.call(process.env, normalizedKey) && typeof process.env[normalizedKey] !== 'undefined') {
+  if (Object.prototype.hasOwnProperty.call(runtimeEnv, normalizedKey) && typeof runtimeEnv[normalizedKey] !== 'undefined') {
     return {
-      value: String(process.env[normalizedKey] || ''),
+      value: String(runtimeEnv[normalizedKey] || ''),
       source: 'runtime' as const,
     };
   }

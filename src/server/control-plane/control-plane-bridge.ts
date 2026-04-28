@@ -273,6 +273,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
   repoRoots: Record<string, string>;
 }) {
   loadAutonomyEnv(rootDir);
+  const runtimeEnvSnapshot = { ...process.env };
   const registeredRepoRoots = resolveRegisteredRepoRoots(options.repoRoots);
   const registeredRepoIds = Object.keys(registeredRepoRoots);
   const processed = [];
@@ -322,7 +323,9 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
 
     try {
       loadAutonomyEnv(repoRoot);
-      const snapshot = buildStatusSnapshot(repoRoot);
+      const snapshot = buildStatusSnapshot(repoRoot, {
+        runtimeEnv: runtimeEnvSnapshot,
+      });
       await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
         method: 'POST',
         body: {
@@ -360,6 +363,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         const execution = runDeploy(repoRoot, {
           providerId: String(deployPayload.providerId || '').trim() || undefined,
           connectionId: String(deployPayload.connectionId || '').trim() || undefined,
+          runtimeEnv: runtimeEnvSnapshot,
         }) as ReturnType<typeof runDeploy> & {
           providerConnection?: unknown;
           providerMetadata?: unknown;
@@ -415,7 +419,9 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           connectionId: authPayload.connectionId,
         });
         result = {
-          connection: verifyServiceConnection(repoRoot, authPayload),
+          connection: verifyServiceConnection(repoRoot, authPayload, {
+            runtimeEnv: runtimeEnvSnapshot,
+          }),
         };
       } else if (job.type === 'package:update') {
         logBridgeEvent('bridge:package:update:start', {
@@ -554,7 +560,9 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         });
       } else if (job.type === 'restart') {
         reconcileManagedRestartProcesses(repoRoot, job.repoId, job, result);
-        const updatedSnapshot = buildStatusSnapshot(repoRoot);
+        const updatedSnapshot = buildStatusSnapshot(repoRoot, {
+          runtimeEnv: runtimeEnvSnapshot,
+        });
         await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
           method: 'POST',
           body: {
@@ -587,7 +595,9 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     try {
       const repoRoot = registration.rootDir;
       loadAutonomyEnv(repoRoot);
-      const snapshot = buildStatusSnapshot(repoRoot);
+      const snapshot = buildStatusSnapshot(repoRoot, {
+        runtimeEnv: runtimeEnvSnapshot,
+      });
       await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(repoId)}/status`, {
         method: 'POST',
         body: {
@@ -648,7 +658,9 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
       payload: restart.payload,
     } as Pick<ControlPlaneJobRecord, 'id' | 'payload'>;
     reconcileManagedRestartProcesses(restart.repoRoot, restart.repoId, localJob, finalResult);
-    const refreshedSnapshot = buildStatusSnapshot(restart.repoRoot);
+    const refreshedSnapshot = buildStatusSnapshot(restart.repoRoot, {
+      runtimeEnv: runtimeEnvSnapshot,
+    });
     await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(restart.repoId)}/status`, {
       method: 'POST',
       body: {

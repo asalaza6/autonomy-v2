@@ -9,6 +9,7 @@ import {
   createProviderDeployExecution,
   verifyServiceConnection,
 } from '../../src/autonomy-v2/control-plane/service-auth.js';
+import { loadAutonomyEnv } from '../../src/env/env-main.js';
 
 test('service auth verifies a connection from dynamic env aliases without exposing raw secrets', () => {
   const repoDir = createServiceAuthRepo({
@@ -288,6 +289,101 @@ test('service auth executes repo-relative provider commands from the selected re
   });
 });
 
+test('service auth resolves conflicting env aliases per repo instead of shared process state', () => {
+  const repoA = createServiceAuthRepo({
+    repoId: 'repo-a',
+    serviceProviders: [
+      {
+        providerId: 'shared-alias',
+        authFields: [
+          { field: 'apiToken', required: true, secret: true },
+        ],
+        verifyCommand: {
+          command: {
+            command: process.execPath,
+            args: [
+              '-e',
+              'if (process.env.PROVIDER_TOKEN === "token-a") { console.log(JSON.stringify({ ok: true, accountMetadata: { repo: "A" } })); process.exit(0); } process.exit(1);',
+            ],
+            env: {
+              PROVIDER_TOKEN: '{{apiToken}}',
+            },
+          },
+        },
+      },
+    ],
+    serviceConnections: [
+      {
+        providerId: 'shared-alias',
+        connectionId: 'primary',
+        authStrategy: 'manual-token',
+        envAliases: {
+          apiToken: 'SHARED_PROVIDER_TOKEN',
+        },
+      },
+    ],
+  });
+  const repoB = createServiceAuthRepo({
+    repoId: 'repo-b',
+    serviceProviders: [
+      {
+        providerId: 'shared-alias',
+        authFields: [
+          { field: 'apiToken', required: true, secret: true },
+        ],
+        verifyCommand: {
+          command: {
+            command: process.execPath,
+            args: [
+              '-e',
+              'if (process.env.PROVIDER_TOKEN === "token-b") { console.log(JSON.stringify({ ok: true, accountMetadata: { repo: "B" } })); process.exit(0); } process.exit(1);',
+            ],
+            env: {
+              PROVIDER_TOKEN: '{{apiToken}}',
+            },
+          },
+        },
+      },
+    ],
+    serviceConnections: [
+      {
+        providerId: 'shared-alias',
+        connectionId: 'primary',
+        authStrategy: 'manual-token',
+        envAliases: {
+          apiToken: 'SHARED_PROVIDER_TOKEN',
+        },
+      },
+    ],
+  });
+  fs.writeFileSync(path.join(repoA, '.env.autonomy.local'), 'SHARED_PROVIDER_TOKEN=token-a\n', 'utf8');
+  fs.writeFileSync(path.join(repoB, '.env.autonomy.local'), 'SHARED_PROVIDER_TOKEN=token-b\n', 'utf8');
+
+  const originalSharedToken = process.env.SHARED_PROVIDER_TOKEN;
+  delete process.env.SHARED_PROVIDER_TOKEN;
+  try {
+    loadAutonomyEnv(repoA);
+    loadAutonomyEnv(repoB);
+
+    const runtimeEnv = {};
+    const summaryA = verifyServiceConnection(repoA, {
+      providerId: 'shared-alias',
+      connectionId: 'primary',
+    }, { runtimeEnv });
+    const summaryB = verifyServiceConnection(repoB, {
+      providerId: 'shared-alias',
+      connectionId: 'primary',
+    }, { runtimeEnv });
+
+    assert.equal(summaryA.status, 'connected');
+    assert.equal(summaryA.accountMetadata?.repo, 'A');
+    assert.equal(summaryB.status, 'connected');
+    assert.equal(summaryB.accountMetadata?.repo, 'B');
+  } finally {
+    restoreEnv('SHARED_PROVIDER_TOKEN', originalSharedToken);
+  }
+});
+
 function createServiceAuthRepo(controlPlaneConfig: Record<string, unknown>) {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-service-auth-'));
   const configDir = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config');
@@ -315,4 +411,12 @@ function createServiceAuthRepo(controlPlaneConfig: Record<string, unknown>) {
     'utf8',
   );
   return repoDir;
+}
+
+function restoreEnv(key: string, value: string | undefined) {
+  if (typeof value === 'undefined') {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
 }

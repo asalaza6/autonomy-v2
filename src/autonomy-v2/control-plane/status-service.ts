@@ -14,7 +14,7 @@ import { loadControlPlaneConfig, readControlPlaneConfig } from '../../server/con
 import { getManagedProcesses } from '../../server/control-plane/control-plane-store.js';
 import { buildServiceConnectionSummaries } from './service-auth.js';
 
-function buildStatusSnapshot(rootDir) {
+function buildStatusSnapshot(rootDir, options: { runtimeEnv?: NodeJS.ProcessEnv } = {}) {
   ensureInitialized(rootDir);
   const paths = getAutonomyPaths(rootDir);
   const runtime = fs.existsSync(paths.runtimeState)
@@ -66,7 +66,9 @@ function buildStatusSnapshot(rootDir) {
     }),
   };
   const managedProcesses = buildManagedProcessSnapshot(rootDir);
-  const serviceConnections = buildServiceConnectionSummaries(rootDir);
+  const serviceConnections = buildServiceConnectionSummaries(rootDir, {
+    runtimeEnv: options.runtimeEnv,
+  });
 
   return {
     configPath: pathRelative(rootDir, paths.agentsConfig),

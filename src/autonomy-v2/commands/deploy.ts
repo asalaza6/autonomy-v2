@@ -22,6 +22,8 @@ function run(rootDir, options) {
   const providerDeploy = createProviderDeployExecution(rootDir, {
     providerId: String(options.providerId || '').trim() || undefined,
     connectionId: String(options.connectionId || '').trim() || undefined,
+  }, {
+    runtimeEnv: options.runtimeEnv,
   });
   const deployCommand = providerDeploy?.deployCommand || resolveDeployCommand(rootDir, paths, config, controlPlaneConfig);
   const result = performLocalDeploy(rootDir, {
