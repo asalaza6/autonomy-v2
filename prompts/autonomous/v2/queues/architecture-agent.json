@@ -5467,11 +5467,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-28T23:49:34.560Z",
-      "updatedAt": "2026-04-28T23:56:11.490Z",
+      "updatedAt": "2026-04-28T23:56:11.566Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
       "startedAt": "2026-04-28T23:49:53.425Z",
       "completedAt": "2026-04-28T23:56:11.490Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "640eff3bc71e928d3da66e8e6db0f418ab3c8d2c"
     }
   ]
 }
