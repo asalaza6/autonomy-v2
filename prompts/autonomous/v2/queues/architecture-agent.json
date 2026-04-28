@@ -5408,11 +5408,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent",
       "createdAt": "2026-04-28T23:33:46.309Z",
-      "updatedAt": "2026-04-28T23:37:45.252Z",
+      "updatedAt": "2026-04-28T23:37:45.328Z",
       "startedAt": "2026-04-28T23:33:46.309Z",
       "prId": "pr-prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent",
       "completedAt": "2026-04-28T23:37:45.252Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "b2aabf1174bbb91c1b16d2bb68ecf3c12bd81813"
     }
   ]
 }
