@@ -5382,11 +5382,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-28T23:14:59.462Z",
-      "updatedAt": "2026-04-28T23:31:23.109Z",
+      "updatedAt": "2026-04-28T23:31:23.201Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-provider-agnostic-service-auth-and-0cd09a-architecture-agent",
       "startedAt": "2026-04-28T23:15:19.816Z",
       "completedAt": "2026-04-28T23:31:23.109Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "0ecdb582cac03de9b5054ba132985c7c419958a2"
     }
   ]
 }
