@@ -50,7 +50,7 @@
     "test": "npm run build && node --test dist/tests/**/*.test.js",
     "smoke": "npm run build && node --test dist/tests/smoke/*.test.js",
     "test:control-plane-history": "npm run build && node --test dist/tests/unit/control-plane-status.test.js dist/tests/unit/control-plane-dashboard.test.js dist/tests/unit/control-plane-chat-prd-draft-ui.test.js",
-    "test:control-plane-summary-ui": "npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js",
+    "test:control-plane-summary-ui": "npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js dist/tests/unit/control-plane-advanced-ui.test.js",
     "lint": "eslint src bin tests",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",

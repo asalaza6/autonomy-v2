@@ -370,10 +370,8 @@ const dashboardReposEl = document.getElementById('dashboard-repos');
 const dashboardJobsEl = document.getElementById('dashboard-jobs');
 const dashboardSummaryNoteEl = document.getElementById('dashboard-summary-note');
 const controlPlaneHeartbeatsEl = document.getElementById('control-plane-heartbeats');
-const rawStateEl = document.getElementById('raw-state');
-const rawDashboardEl = document.getElementById('raw-dashboard');
-const rawJobsEl = document.getElementById('raw-jobs');
-const rawReposEl = document.getElementById('raw-repos');
+const advancedDebugDisclosureEl = document.getElementById('advanced-debug-disclosure') as HTMLDetailsElement | null;
+const advancedDebugContentEl = document.getElementById('advanced-debug-content');
 const fixedRepoIdEl = document.getElementById('fixed-repo-id');
 const mainHeroActionLabelEl = document.getElementById('main-hero-action-label');
 const mainProgressTitleEl = document.getElementById('main-progress-title');
@@ -445,6 +443,8 @@ let lastRenderedChatFingerprint = '';
 let latestProcessOutputByKey: Record<string, ProcessOutputSummary> = {};
 let activeProcessTargetsByRepo: Record<string, 'server' | 'controlBridge'> = {};
 let pendingProcessPanelFocus: { repoId: string; target: 'server' | 'controlBridge' } | null = null;
+let latestStateSnapshot: StateSnapshot | null = null;
+let advancedDebugDisclosureOpen = Boolean(advancedDebugDisclosureEl?.open);
 
 function mountControlPlane() {
   if (
@@ -528,6 +528,9 @@ function mountControlPlane() {
         messageEl.textContent = getErrorMessage(error);
       }
     }));
+  }
+  if (advancedDebugDisclosureEl) {
+    advancedDebugDisclosureEl.addEventListener('toggle', handleAdvancedDebugDisclosureToggle);
   }
   document.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null;
@@ -2083,23 +2086,36 @@ function extractRepoConversations(state: StateSnapshot) {
 }
 
 function renderAdvanced(state: StateSnapshot) {
-  if (!rawStateEl || !rawDashboardEl || !rawJobsEl || !rawReposEl) {
+  latestStateSnapshot = state;
+  if (!advancedDebugContentEl) {
     return;
   }
 
-  rawStateEl.textContent = JSON.stringify(state, null, 2);
-  rawDashboardEl.textContent = JSON.stringify(state.dashboard || {}, null, 2);
-  rawJobsEl.textContent = JSON.stringify(state.jobs || [], null, 2);
-  rawReposEl.textContent = JSON.stringify(
-    latestRepos.map((repo) => ({
-      repoId: repo.repoId,
-      label: repo.label,
-      description: repo.description || '',
-      default: Boolean(repo.default),
-    })),
-    null,
-    2
+  if (!advancedDebugDisclosureOpen) {
+    clearAdvancedDebugContent();
+    return;
+  }
+
+  advancedDebugContentEl.innerHTML = renderToHtml(
+    <ProjectAdvancedRawDebug state={state} repos={latestRepos} />
   );
+}
+
+function handleAdvancedDebugDisclosureToggle() {
+  advancedDebugDisclosureOpen = Boolean(advancedDebugDisclosureEl?.open);
+  if (!advancedDebugDisclosureOpen) {
+    clearAdvancedDebugContent();
+    return;
+  }
+  if (latestStateSnapshot) {
+    renderAdvanced(latestStateSnapshot);
+  }
+}
+
+function clearAdvancedDebugContent() {
+  if (advancedDebugContentEl) {
+    advancedDebugContentEl.innerHTML = '';
+  }
 }
 
 function setActiveTab(tabName: string) {
@@ -4264,6 +4280,36 @@ function formatTimestamp(value: string | null | undefined) {
   });
 }
 
+function ProjectAdvancedRawDebug({ state, repos }: { state: StateSnapshot; repos: RepoRecord[] }) {
+  const repoSnapshot = repos.map((repo) => ({
+    repoId: repo.repoId,
+    label: repo.label,
+    description: repo.description || '',
+    default: Boolean(repo.default),
+  }));
+
+  return (
+    <div className="raw-grid">
+      <div className="advanced-block">
+        <h3>State JSON</h3>
+        <pre id="raw-state">{JSON.stringify(state, null, 2)}</pre>
+      </div>
+      <div className="advanced-block">
+        <h3>Dashboard JSON</h3>
+        <pre id="raw-dashboard">{JSON.stringify(state.dashboard || {}, null, 2)}</pre>
+      </div>
+      <div className="advanced-block">
+        <h3>Jobs JSON</h3>
+        <pre id="raw-jobs">{JSON.stringify(state.jobs || [], null, 2)}</pre>
+      </div>
+      <div className="advanced-block">
+        <h3>Repo status JSON</h3>
+        <pre id="raw-repos">{JSON.stringify(repoSnapshot, null, 2)}</pre>
+      </div>
+    </div>
+  );
+}
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -4305,6 +4351,7 @@ export {
   isChatNearBottom,
   mountControlPlane,
   openChatPrdReviewModal,
+  renderAdvanced,
   resolveProjectProgress,
   resolveSelectedQueuedPrdState,
   resolveSelectedHistoryState,
