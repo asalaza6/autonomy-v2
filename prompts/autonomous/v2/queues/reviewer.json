@@ -1055,7 +1055,7 @@
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-hide-advanced-raw-state-465930-architecture-agent",
-      "sourceTaskId": "architecture-agent-followup-pr-prd-hide-advanced-raw-state-465930-architecture-agent-2",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-hide-advanced-raw-state-465930-architecture-agent-3",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-hide-advanced-raw-state-465930-architecture-agent",
       "baseBranch": "dev",
@@ -1070,7 +1070,7 @@
       "reviewRound": 4,
       "status": "queued",
       "createdAt": "2026-04-28T07:59:41.110Z",
-      "updatedAt": "2026-04-28T08:05:49.505Z",
+      "updatedAt": "2026-04-28T08:06:20.249Z",
       "reviewedAt": "2026-04-28T08:05:42.923Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
@@ -1080,7 +1080,7 @@
           "conversationId": "019dd31e-5f01-7ab2-b774-66e759c0f77d",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-28T08:05:49.505Z"
+          "updatedAt": "2026-04-28T08:06:20.249Z"
         }
       }
     }
