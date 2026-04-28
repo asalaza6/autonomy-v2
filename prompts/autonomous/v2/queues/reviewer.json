@@ -1068,7 +1068,7 @@
         "Focused control-plane UI coverage is added or updated for collapsed-by-default Advanced debug content and open-to-render behavior, smoke coverage confirms the project page still exposes the `Advanced` tab while raw debug content stays hidden by default, and verification includes `npm run typecheck`, `tests/smoke/control-plane.test.ts`, and relevant targeted control-plane unit coverage for Advanced rendering behavior."
       ],
       "reviewRound": 6,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-28T07:59:41.110Z",
       "updatedAt": "2026-04-28T08:07:54.413Z",
       "reviewedAt": "2026-04-28T08:07:48.124Z",
@@ -1076,7 +1076,7 @@
       "lastMergeFailureCode": "pending_checks",
       "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-28T08:07:32.116Z",
+      "dispatchedAt": "2026-04-28T08:07:56.557Z",
       "conversationReferences": {
         "agent:reviewer": {
           "conversationId": "019dd31e-5f01-7ab2-b774-66e759c0f77d",
