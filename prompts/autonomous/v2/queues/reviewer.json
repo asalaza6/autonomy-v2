@@ -1231,6 +1231,32 @@
       "lastDecision": "approved",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-28T23:46:06.525Z"
+    },
+    {
+      "id": "review-pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
+      "title": "Review [architecture-agent] Implement Persist Control-Plane Repo Assistant Chats Across Redeploys",
+      "description": "Review pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent for Implement Persist Control-Plane Repo Assistant Chats Across Redeploys",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
+      "sourceTaskId": "prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-28T23:56:12.652Z",
+      "updatedAt": "2026-04-28T23:56:12.652Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Persist control-plane conversation state outside process memory for hosted DYNO deployments.",
+        "Ensure repo assistant conversation lists and message history reload correctly after server restart or redeploy.",
+        "Preserve stable control-plane conversation IDs across restarts.",
+        "Evaluate and implement durable storage of underlying Codex conversation/session IDs when available",
+        "or explicitly document that only message history is resumed.",
+        "Keep current read-only repo assistant behavior and existing conversation-history prompt continuity.",
+        "Handle missing or stale persisted conversation/session references safely without breaking chat UX."
+      ],
+      "scopeViolations": []
     }
   ]
 }
