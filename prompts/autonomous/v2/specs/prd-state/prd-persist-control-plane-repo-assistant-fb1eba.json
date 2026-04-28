@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-persist-control-plane-repo-assistant-fb1eba",
+  "status": "planned",
+  "createdAt": "2026-04-28T23:49:34.664Z",
+  "updatedAt": "2026-04-28T23:49:34.664Z",
+  "plannedTaskIds": [
+    "prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent-1"
+  ]
+}

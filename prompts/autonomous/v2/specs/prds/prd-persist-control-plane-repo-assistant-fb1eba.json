@@ -12,5 +12,23 @@
     "or explicitly document that only message history is resumed.",
     "Keep current read-only repo assistant behavior and existing conversation-history prompt continuity.",
     "Handle missing or stale persisted conversation/session references safely without breaking chat UX."
+  ],
+  "tasks": [
+    {
+      "id": "prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent-1",
+      "title": "Implement Persist Control-Plane Repo Assistant Chats Across Redeploys",
+      "agentId": "architecture-agent",
+      "description": "# PRD: Persist Control-Plane Repo Assistant Chats Across Redeploys\n\nPriority: high\n\n## Problem\nRepo assistant conversations and chat IDs are lost whenever the hosted control-plane is redeployed because the control-plane state store runs in memory on DYNO hosts and repo-assistant chat executions do not persist or resume Codex conversation IDs.\n\n## Goal\nMake repo-assistant conversations survive control-plane restarts and redeploys, with stable chat IDs and recoverable history for each repo.\n\n## Requirements\n- Persist control-plane conversation state outside process memory for hosted DYNO deployments.\n- Ensure repo assistant conversation lists and message history reload correctly after server restart or redeploy.\n- Preserve stable control-plane conversation IDs across restarts.\n- Evaluate and implement durable storage of underlying Codex conversation/session IDs when available, or explicitly document that only message history is resumed.\n- Keep current read-only repo assistant behavior and existing conversation-history prompt continuity.\n- Handle missing or stale persisted conversation/session references safely without breaking chat UX.\n\n## Acceptance Criteria\n- After a redeploy, previously visible repo-assistant conversations for a repo still appear in the control-plane UI.\n- Managers can open an existing conversation after redeploy and continue it without creating a new chat unless they choose to.\n- Conversation message order, timestamps, and PRD proposal attachments remain intact after restart.\n- If underlying Codex session resume is supported, follow-up messages reuse the stored conversation/session ID; if not supported, the system clearly falls back to history-based continuity.\n- Automated tests cover hosted persistence and restart recovery behavior.\n\n## Verification\n- Add unit tests for control-plane store persistence and reload of conversations.\n- Add smoke coverage that simulates server restart/redeploy and verifies conversations remain available.\n- Verify follow-up chat requests after restart continue the same conversation record and do not lose prior history.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777417994028_90062d8ea78c68\nManager message: msg_1777417994029_59f3f9d22ab578\nAgent message: msg_1777417994029_4cd8ff0a5a9f7\nCreated: 2026-04-28T23:14:33.088Z",
+      "acceptance": [
+        "Persist control-plane conversation state outside process memory for hosted DYNO deployments.",
+        "Ensure repo assistant conversation lists and message history reload correctly after server restart or redeploy.",
+        "Preserve stable control-plane conversation IDs across restarts.",
+        "Evaluate and implement durable storage of underlying Codex conversation/session IDs when available",
+        "or explicitly document that only message history is resumed.",
+        "Keep current read-only repo assistant behavior and existing conversation-history prompt continuity.",
+        "Handle missing or stale persisted conversation/session references safely without breaking chat UX."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
