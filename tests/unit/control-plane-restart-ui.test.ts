@@ -169,8 +169,8 @@ test('manager and project restart views render successful, skipped, and failed e
     },
   }));
 
-  assert.match(failedManagerHtml, /Restart/);
-  assert.match(failedManagerHtml, /0\/2 targets relaunched/);
+  assert.match(failedManagerHtml, /Attention/);
+  assert.match(failedManagerHtml, /Restart failed/);
   assert.match(failedManagerHtml, /server failed \(stale pid\) \| pid 222/);
 });
 

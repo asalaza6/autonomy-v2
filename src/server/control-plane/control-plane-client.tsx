@@ -3113,17 +3113,35 @@ function RepoStack({ repos, emptyMessage }: { repos: RepoSummary[]; emptyMessage
   );
 }
 
+type RepoAttentionSignal = {
+  tone: string;
+  label: string;
+  detail?: string;
+};
+
+type RepoSnapshotItem = {
+  label: string;
+  value: string;
+};
+
+type RepoCurrentWorkSummary = {
+  title: string;
+  status: string;
+  detail: string;
+  progress?: string;
+};
+
 function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
   const updated = repo.updatedAt ? `Updated ${formatTimestamp(repo.updatedAt)}` : 'No status snapshot yet';
   const freshnessStatus = String(repo.freshnessStatus || 'offline');
   const freshnessLabel = repo.freshnessStatusLabel || 'Offline';
-  const deployment = repo.deployment || null;
   const projectUrl = repo.repoId ? `/project/${encodeURIComponent(repo.repoId)}` : '';
-  const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
-  const latestHistoryPrd = Array.isArray(repo.prdHistory) && repo.prdHistory.length > 0 ? repo.prdHistory[0] : null;
+  const attentionSignals = buildRepoAttentionSignals(repo);
+  const snapshotItems = buildManagerSnapshotItems(repo);
+  const currentWork = buildRepoCurrentWorkSummary(repo);
 
   return (
-    <article className="repo">
+    <article className="repo repo-compact">
       <div className="repo-head">
         <div>
           <h3>{repo.label || repo.repoId || 'Repository'}</h3>
@@ -3137,93 +3155,61 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
           <span className="pill">{updated}</span>
         </div>
       </div>
-      <p className="overview">{repo.freshnessDetail || repo.overview || 'No status snapshot yet'}</p>
-      <div className="section-row">
-        <RepoSection title="Repo">
-          <div className="list-note">ID: {repo.repoId || 'unknown'}</div>
-          {projectUrl ? (
-            <a className="action-link" href={projectUrl}>
-              Open repo control page
-            </a>
-          ) : null}
-        </RepoSection>
-        <RepoSection title="Version">
-          <VersionStatus versionStatus={repo.versionStatus || null} />
-        </RepoSection>
-        <RepoSection title="Package">
-          <PackageStatus packageStatus={repo.packageStatus || null} />
-          <PackageUpdateButton repo={repo} />
-        </RepoSection>
-        <RepoSection title="GitHub Access">
-          <RepoGithubAccess repo={repo} />
-        </RepoSection>
-        <RepoSection title="PRD">
+      <p className="overview">{currentWork.detail}</p>
+      <div className="snapshot-grid">
+        {snapshotItems.map((item) => (
+          <div className="snapshot-item">
+            <div className="pill">{item.label}</div>
+            <div className="queue-detail">{item.value}</div>
+          </div>
+        ))}
+      </div>
+      <div className="repo-section" style={{ marginTop: '16px' }}>
+        <h4>Current work</h4>
+        <div className="queued-prd">
+          <div className="item-head">
+            <div>
+              <div className={`status-chip ${statusClass(repo.activePrd ? repo.activePrd.status : repo.prdRun ? repo.prdRun.currentStepId : 'offline')}`}>
+                <span className="status-dot" />
+                <span>{currentWork.status}</span>
+              </div>
+              <div className="queue-title">{currentWork.title}</div>
+            </div>
+            {currentWork.progress ? <span className="pill">{currentWork.progress}</span> : null}
+          </div>
+          <div className="queue-detail">{currentWork.detail}</div>
           {repo.activePrd ? (
-            <div className="queued-prd">
-              <div className="item-head">
-                <div>
-                  <div className="pill">{repo.activePrd.stateLabel || repo.activePrd.status || 'Active PRD'}</div>
-                  <div className="queue-title" style={{ marginTop: '8px' }}>
-                    {repo.activePrd.title || repo.activePrd.id || 'Active PRD'}
-                  </div>
-                </div>
-              </div>
-              <div className="queue-detail">
-                {repo.activePrd.id || 'unknown PRD'}
-                {repo.activePrd.detail ? ` | ${repo.activePrd.detail}` : ''}
-              </div>
-              {repo.prdResetJob ? (
-                <div className="queue-detail" style={{ marginTop: '8px' }}>
-                  Latest reset job: {repo.prdResetJob.statusLabel || repo.prdResetJob.status || 'queued'}
-                  {repo.prdResetJob.detail ? ` | ${repo.prdResetJob.detail}` : ''}
-                </div>
-              ) : null}
-              <PrdResetButton repo={repo} />
+            <div className="queue-detail" style={{ marginTop: '8px' }}>
+              {repo.activePrd.id || 'unknown PRD'}
+              {repo.activePrd.detail ? ` | ${repo.activePrd.detail}` : ''}
             </div>
-          ) : latestHistoryPrd ? (
-            <div className="queued-prd">
-              <div className="item-head">
-                <div>
-                  <div className="pill">{latestHistoryPrd.stateLabel || latestHistoryPrd.status || 'Finished PRD'}</div>
-                  <div className="queue-title" style={{ marginTop: '8px' }}>
-                    {latestHistoryPrd.title || latestHistoryPrd.id || 'Latest history item'}
-                  </div>
-                </div>
-              </div>
-              <div className="queue-detail">
-                {latestHistoryPrd.id || 'unknown PRD'}
-                {latestHistoryPrd.detail ? ` | ${latestHistoryPrd.detail}` : ''}
-              </div>
-            </div>
-          ) : (
-            <div className="list-note">No active or finished PRDs recorded yet.</div>
-          )}
-        </RepoSection>
-        <RepoSection title="Restart">
-          <ManagerRestartSummary repo={repo} restartEvidence={restartEvidence} />
-        </RepoSection>
-        <RepoSection title="Live Process">
-          <LiveProcessPanel repo={repo} context="manager" />
-        </RepoSection>
-        <RepoSection title="Deployment">
-          <div className={`status-chip ${statusClass(deployment && deployment.status)}`}>
-            <span className="status-dot" />
-            <span>{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deployment status unavailable'}</span>
-          </div>
-          <div className="list-note" style={{ marginTop: '8px' }}>
-            {deployment && deployment.detail ? deployment.detail : 'No deployment status snapshot yet.'}
-          </div>
-          {repo.deploymentUrl ? (
-            <a
-              className="action-link"
-              href={repo.deploymentUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {repo.deploymentLabel || 'Deployment site'}
-            </a>
           ) : null}
-        </RepoSection>
+          {repo.prdResetJob ? (
+            <div className="queue-detail" style={{ marginTop: '8px' }}>
+              Latest reset job: {repo.prdResetJob.statusLabel || repo.prdResetJob.status || 'queued'}
+              {repo.prdResetJob.detail ? ` | ${repo.prdResetJob.detail}` : ''}
+            </div>
+          ) : null}
+          <PrdResetButton repo={repo} />
+        </div>
+      </div>
+      <RepoAttentionPanel signals={attentionSignals} />
+      <div className="repo-actions" style={{ marginTop: '16px' }}>
+        {projectUrl ? (
+          <a className="action-link" href={projectUrl}>
+            Open repo control page
+          </a>
+        ) : null}
+        {repo.deploymentUrl ? (
+          <a
+            className="action-link"
+            href={repo.deploymentUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {repo.deploymentLabel || 'Deployment site'}
+          </a>
+        ) : null}
       </div>
     </article>
   );
@@ -3234,8 +3220,10 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
   const deployment = repo.deployment || null;
   const deployButtonState = buildDeployButtonState(repo);
   const showDeployButton = Boolean(repo.repoId && (deployButtonState.active || deployment && deployment.hasChanges));
-  const deploymentStatus = deployment ? deployment.status : null;
   const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
+  const progress = resolveProjectProgress(repo);
+  const attentionSignals = buildRepoAttentionSignals(repo);
+  const projectUrl = repo.repoId ? `/project/${encodeURIComponent(repo.repoId)}` : '';
 
   return (
     <article className="repo">
@@ -3249,92 +3237,355 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
           <span className="pill">{updated}</span>
         </div>
       </div>
-      <p className="overview">{repo.overview || 'No status snapshot yet'}</p>
+      <p className="overview">{progress.detail}</p>
       <div className="section-row">
-        <RepoSection title="Active PRD">
-          {repo.activePrd ? <PrdCard prd={repo.activePrd} label="Active PRD" /> : <div className="list-note">No active PRD yet.</div>}
+        <RepoSection title="Current Work">
+          <ProjectCurrentWorkPanel repo={repo} progress={progress} />
+        </RepoSection>
+        <RepoSection title="Attention">
+          {attentionSignals.length > 0 ? <RepoAttentionList signals={attentionSignals} /> : <div className="list-note">No immediate deployment, restart, PR, or GitHub attention signals.</div>}
         </RepoSection>
         <RepoSection title="Queued PRDs">
           {repo.queuedPrds && repo.queuedPrds.length > 0
             ? repo.queuedPrds.map((prd) => <PrdCard prd={prd} label="Queued PRD" />)
             : <div className="list-note">No queued PRDs.</div>}
         </RepoSection>
-        <RepoSection title="Agents">
-          {repo.agentStatuses && repo.agentStatuses.length > 0
-            ? repo.agentStatuses.map((agent) => <AgentCard agent={agent} />)
-            : <div className="list-note">No agent status yet.</div>}
-        </RepoSection>
-        <RepoSection title="Pull Requests">
-          {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
-            ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
-            : <div className="list-note">No pull requests awaiting action.</div>}
-        </RepoSection>
-        <RepoSection title="GitHub Access">
-          <RepoGithubAccess repo={repo} />
-        </RepoSection>
-        <RepoSection title="Autonomy v2">
-          <PackageStatus packageStatus={repo.packageStatus || null} />
-          <PackageUpdateButton repo={repo} />
-        </RepoSection>
-        <RepoSection title="Restart">
-          <ProjectRestartPanel repo={repo} restartEvidence={restartEvidence} />
-        </RepoSection>
-        <RepoSection title="Live Process">
-          <LiveProcessPanel repo={repo} context="project" />
-        </RepoSection>
         <RepoSection title="Deployment">
-          <div className="queued-prd">
-            <div className="item-head">
-              <div>
-                <div className={`status-chip ${statusClass(deploymentStatus)}`}>
-                  <span className="status-dot" />
-                  <span>{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deploy status unavailable'}</span>
-                </div>
-                <div className="queue-title">
-                  {deployment
-                    ? `${deployment.sourceBranch || 'dev'} -> ${deployment.targetBranch || 'main'}`
-                    : 'Deployment status'}
-                </div>
-              </div>
-            </div>
-            <div className="queue-detail">
-              {deployment && deployment.detail ? deployment.detail : 'No deployment status snapshot yet.'}
-            </div>
-            {repo.deployJob ? (
-              <div className="queue-detail" style={{ marginTop: '8px' }}>
-                Latest deploy job: {repo.deployJob.statusLabel || repo.deployJob.status || 'queued'}
-                {repo.deployJob.detail ? ` | ${repo.deployJob.detail}` : ''}
-              </div>
-            ) : null}
-            <div className="repo-actions" style={{ marginTop: '12px' }}>
-              {showDeployButton ? (
-                <button
-                  type="button"
-                  className={`primary deploy-button${deployButtonState.busy ? ' is-loading' : ''}`}
-                  data-action="deploy"
-                  data-repo-id={repo.repoId || ''}
-                  disabled={deployButtonState.disabled}
-                  aria-busy={deployButtonState.busy}
-                >
-                  {deployButtonState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
-                  <span>{deployButtonState.label}</span>
-                </button>
-              ) : null}
-              {repo.deploymentUrl ? (
-                <a
-                  className="action-link"
-                  href={repo.deploymentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {repo.deploymentLabel || 'Deployment site'}
-                </a>
-              ) : null}
-            </div>
-          </div>
+          <CompactDeploymentPanel repo={repo} showDeployButton={showDeployButton} deployButtonState={deployButtonState} />
         </RepoSection>
       </div>
+      <div className="repo-actions" style={{ marginTop: '16px' }}>
+        {projectUrl ? (
+          <a className="action-link" href={projectUrl}>
+            Open repo control page
+          </a>
+        ) : null}
+        {repo.deploymentUrl ? (
+          <a
+            className="action-link"
+            href={repo.deploymentUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {repo.deploymentLabel || 'Deployment site'}
+          </a>
+        ) : null}
+      </div>
+      <div className="repo-section" style={{ marginTop: '16px' }}>
+        <RepoDisclosure title="Work coordination details">
+          <RepoSection title="Pull Requests">
+            {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
+              ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
+              : <div className="list-note">No pull requests awaiting action.</div>}
+          </RepoSection>
+          <RepoSection title="Agents">
+            {repo.agentStatuses && repo.agentStatuses.length > 0
+              ? repo.agentStatuses.map((agent) => <AgentCard agent={agent} />)
+              : <div className="list-note">No agent status yet.</div>}
+          </RepoSection>
+        </RepoDisclosure>
+        <RepoDisclosure title="Operational diagnostics and controls">
+          <RepoSection title="Autonomy v2">
+            <VersionStatus versionStatus={repo.versionStatus || null} />
+            <PackageStatus packageStatus={repo.packageStatus || null} />
+            <PackageUpdateButton repo={repo} />
+          </RepoSection>
+          <RepoSection title="GitHub Access">
+            <RepoGithubAccess repo={repo} />
+          </RepoSection>
+          <RepoSection title="Restart">
+            <ProjectRestartPanel repo={repo} restartEvidence={restartEvidence} />
+          </RepoSection>
+          <RepoSection title="Live Process">
+            <LiveProcessPanel repo={repo} context="project" />
+          </RepoSection>
+        </RepoDisclosure>
+      </div>
     </article>
+  );
+}
+
+function RepoDisclosure({ title, children }: { title: string; children: JSX.Element | JSX.Element[] }) {
+  return (
+    <details className="repo-disclosure">
+      <summary>{title}</summary>
+      <div className="repo-disclosure-body">{children}</div>
+    </details>
+  );
+}
+
+function ProjectCurrentWorkPanel({
+  repo,
+  progress,
+}: {
+  repo: RepoSummary;
+  progress: ReturnType<typeof resolveProjectProgress>;
+}) {
+  return (
+    <div className="queued-prd">
+      <div className="item-head">
+        <div>
+          <div className={`status-chip ${statusClass(repo.prdRun ? repo.prdRun.currentStepId : repo.activePrd ? repo.activePrd.status : 'offline')}`}>
+            <span className="status-dot" />
+            <span>{repo.prdRun && repo.prdRun.currentStepLabel ? repo.prdRun.currentStepLabel : repo.activePrd && repo.activePrd.stateLabel ? repo.activePrd.stateLabel : 'Idle'}</span>
+          </div>
+          <div className="queue-title">{progress.title}</div>
+        </div>
+        <span className="pill">{progress.stats}</span>
+      </div>
+      <div className="queue-detail">{progress.detail}</div>
+      {repo.activePrd ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          {repo.activePrd.id || 'unknown PRD'}
+          {repo.activePrd.detail ? ` | ${repo.activePrd.detail}` : ''}
+        </div>
+      ) : null}
+      {progress.pullRequestAction ? (
+        <div className="repo-actions" style={{ marginTop: '12px' }}>
+          <a
+            className="action-link"
+            href={progress.pullRequestAction.href}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {progress.pullRequestAction.label}
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CompactDeploymentPanel({
+  repo,
+  showDeployButton,
+  deployButtonState,
+}: {
+  repo: RepoSummary;
+  showDeployButton: boolean;
+  deployButtonState: ReturnType<typeof buildDeployButtonState>;
+}) {
+  const deployment = repo.deployment || null;
+  const deploymentStatus = deployment ? deployment.status : null;
+  return (
+    <div className="queued-prd">
+      <div className="item-head">
+        <div>
+          <div className={`status-chip ${statusClass(deploymentStatus)}`}>
+            <span className="status-dot" />
+            <span>{deployment && deployment.statusLabel ? deployment.statusLabel : 'Deploy status unavailable'}</span>
+          </div>
+          <div className="queue-title">
+            {deployment
+              ? `${deployment.sourceBranch || 'dev'} -> ${deployment.targetBranch || 'main'}`
+              : 'Deployment status'}
+          </div>
+        </div>
+      </div>
+      <div className="queue-detail">
+        {deployment && deployment.detail ? deployment.detail : 'No deployment status snapshot yet.'}
+      </div>
+      {repo.deployJob ? (
+        <div className="queue-detail" style={{ marginTop: '8px' }}>
+          Latest deploy job: {repo.deployJob.statusLabel || repo.deployJob.status || 'queued'}
+          {repo.deployJob.detail ? ` | ${repo.deployJob.detail}` : ''}
+        </div>
+      ) : null}
+      <div className="repo-actions" style={{ marginTop: '12px' }}>
+        {showDeployButton ? (
+          <button
+            type="button"
+            className={`primary deploy-button${deployButtonState.busy ? ' is-loading' : ''}`}
+            data-action="deploy"
+            data-repo-id={repo.repoId || ''}
+            disabled={deployButtonState.disabled}
+            aria-busy={deployButtonState.busy}
+          >
+            {deployButtonState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+            <span>{deployButtonState.label}</span>
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function buildManagerSnapshotItems(repo: RepoSummary): RepoSnapshotItem[] {
+  const items: RepoSnapshotItem[] = [
+    {
+      label: 'Repo',
+      value: repo.repoId || 'unknown',
+    },
+  ];
+  if (repo.activePrd && typeof repo.activePrd.completedTaskCount === 'number' && typeof repo.activePrd.remainingTaskCount === 'number') {
+    items.push({
+      label: 'Progress',
+      value: `${repo.activePrd.completedTaskCount} complete · ${repo.activePrd.remainingTaskCount} remaining`,
+    });
+  } else if (repo.queuedPrds && repo.queuedPrds.length > 0) {
+    items.push({
+      label: 'Queue',
+      value: `${repo.queuedPrds.length} queued PRD${repo.queuedPrds.length === 1 ? '' : 's'}`,
+    });
+  }
+  const pullRequestSummary = summarizePullRequestState(repo.pullRequestStatuses || []);
+  if (pullRequestSummary) {
+    items.push({
+      label: 'Pull requests',
+      value: pullRequestSummary,
+    });
+  }
+  if (repo.deployment && repo.deployment.statusLabel) {
+    items.push({
+      label: 'Deploy',
+      value: repo.deployment.statusLabel,
+    });
+  }
+  return items;
+}
+
+function buildRepoCurrentWorkSummary(repo: RepoSummary): RepoCurrentWorkSummary {
+  if (repo.activePrd) {
+    return {
+      title: repo.activePrd.title || repo.activePrd.id || 'Active PRD',
+      status: repo.activePrd.stateLabel || repo.prdRun && repo.prdRun.currentStepLabel || repo.activePrd.status || 'Active PRD',
+      detail: repo.prdRun && repo.prdRun.detail
+        ? repo.prdRun.detail
+        : repo.activePrd.detail || 'Work is in progress.',
+      progress: typeof repo.activePrd.progressPercent === 'number'
+        ? `${repo.activePrd.progressPercent}% complete`
+        : '',
+    };
+  }
+  if (repo.queuedPrds && repo.queuedPrds.length > 0) {
+    return {
+      title: repo.queuedPrds[0].title || repo.queuedPrds[0].id || 'Queued PRD',
+      status: 'Queued',
+      detail: `${repo.queuedPrds.length} PRD${repo.queuedPrds.length === 1 ? '' : 's'} waiting to start.`,
+    };
+  }
+  if (repo.prdHistory && repo.prdHistory.length > 0) {
+    const latestHistoryPrd = repo.prdHistory[0];
+    return {
+      title: latestHistoryPrd.title || latestHistoryPrd.id || 'Latest finished PRD',
+      status: latestHistoryPrd.stateLabel || latestHistoryPrd.status || 'Finished',
+      detail: latestHistoryPrd.detail || 'Latest completed work is available in history.',
+    };
+  }
+  return {
+    title: 'Ready for a new run',
+    status: 'Idle',
+    detail: 'No active or finished PRDs recorded yet.',
+  };
+}
+
+function buildRepoAttentionSignals(repo: RepoSummary): RepoAttentionSignal[] {
+  const signals: RepoAttentionSignal[] = [];
+  const github = repo.repoAssistant && repo.repoAssistant.github ? repo.repoAssistant.github : null;
+  const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
+  const prDriftDetail = findPullRequestDriftDetail(repo.pullRequestStatuses || []);
+
+  if (github && github.available !== true) {
+    signals.push({
+      tone: 'blocked',
+      label: 'GitHub validation failed',
+      detail: github.statusLabel || github.detail || 'Repo assistant access is unavailable.',
+    });
+  }
+  if (restartEvidence && restartEvidence.status && restartEvidence.status !== 'restarted' && restartEvidence.status !== 'skipped') {
+    signals.push({
+      tone: 'blocked',
+      label: 'Restart failed',
+      detail: restartEvidence.compactSummary || repo.restartJob && repo.restartJob.detail || 'Restart evidence needs attention.',
+    });
+  }
+  if (repo.deployment && (repo.deployment.hasChanges || repo.deployment.deployable)) {
+    signals.push({
+      tone: 'waiting',
+      label: 'Deploy available',
+      detail: repo.deployment.detail || repo.deployment.statusLabel || 'Deployment work is waiting.',
+    });
+  }
+  if (prDriftDetail) {
+    signals.push({
+      tone: 'waiting',
+      label: 'PR drift',
+      detail: prDriftDetail,
+    });
+  }
+  return signals;
+}
+
+function findPullRequestDriftDetail(pullRequestStatuses: PullRequestSummary[] = []) {
+  for (const pullRequest of pullRequestStatuses) {
+    const detail = [
+      pullRequest.mergeBlockedReason,
+      pullRequest.action,
+      pullRequest.statusLabel,
+    ].find((value) => /drift/i.test(String(value || '')));
+    if (detail) {
+      return String(detail);
+    }
+  }
+  return '';
+}
+
+function summarizePullRequestState(pullRequestStatuses: PullRequestSummary[] = []) {
+  if (!pullRequestStatuses.length) {
+    return '';
+  }
+  const reviewActive = pullRequestStatuses.filter((pullRequest) => pullRequestStatusClass(pullRequest) === 'online').length;
+  const waiting = pullRequestStatuses.filter((pullRequest) => pullRequestStatusClass(pullRequest) === 'waiting').length;
+  const blocked = pullRequestStatuses.filter((pullRequest) => pullRequestStatusClass(pullRequest) === 'blocked').length;
+  return [reviewActive ? `${reviewActive} active review` : '', waiting ? `${waiting} waiting` : '', blocked ? `${blocked} blocked` : '']
+    .filter(Boolean)
+    .join(' | ');
+}
+
+function RepoAttentionPanel({ signals }: { signals: RepoAttentionSignal[] }) {
+  if (!signals.length) {
+    return null;
+  }
+  return (
+    <div className="repo-section" style={{ marginTop: '16px' }}>
+      <h4>Attention</h4>
+      <RepoAttentionList signals={signals} />
+    </div>
+  );
+}
+
+function RepoAttentionList({ signals }: { signals: RepoAttentionSignal[] }) {
+  return (
+    <div className="summary-chip-list">
+      {signals.map((signal) => (
+        <div className={`summary-chip summary-chip-${signal.tone}`}>
+          <div className="summary-chip-label">{signal.label}</div>
+          {signal.detail ? <div className="summary-chip-detail">{signal.detail}</div> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderPrdResetButtonInline(repo: RepoSummary) {
+  const resetState = buildPrdResetButtonState(repo);
+  if (!repo.repoId || !repo.activePrd) {
+    return null;
+  }
+  return (
+    <div className="repo-actions" style={{ marginTop: '12px' }}>
+      <button
+        type="button"
+        className={`secondary deploy-button${resetState.busy ? ' is-loading' : ''}`}
+        data-action="reset-prds"
+        data-repo-id={repo.repoId || ''}
+        disabled={resetState.disabled}
+        aria-busy={resetState.busy}
+      >
+        {resetState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+        <span>{resetState.label}</span>
+      </button>
+    </div>
   );
 }
 
@@ -3396,40 +3647,6 @@ function RepoGithubAccess({ repo }: { repo: RepoSummary }) {
         <div className="queue-detail" style={{ marginTop: '8px' }}>
           Approved secret source: {authFiles.join(', ')}
         </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ManagerRestartSummary({
-  repo,
-  restartEvidence,
-}: {
-  repo: RepoSummary;
-  restartEvidence: RestartEvidenceSummary | null;
-}) {
-  if (!repo.restartJob) {
-    return <div className="list-note">No restart job recorded yet.</div>;
-  }
-  if (!restartEvidence) {
-    return <div className="list-note">{repo.restartJob.detail || 'Restart state unavailable.'}</div>;
-  }
-  const summary = buildManagerRestartSummary(restartEvidence);
-  return (
-    <div className="queued-prd">
-      <div className="item-head">
-        <div>
-          <div className={`status-chip ${statusClass(restartEvidence.status)}`}>
-            <span className="status-dot" />
-            <span>{restartEvidence.statusLabel || 'Restart status unavailable'}</span>
-          </div>
-          <div className="queue-title">{summary.headline}</div>
-        </div>
-        {restartEvidence.completedAt ? <span className="pill">{formatTimestamp(restartEvidence.completedAt)}</span> : null}
-      </div>
-      <div className="queue-detail">{summary.detail}</div>
-      {restartEvidence.compactSummary ? (
-        <div className="queue-detail" style={{ marginTop: '8px' }}>{restartEvidence.compactSummary}</div>
       ) : null}
     </div>
   );
@@ -3823,25 +4040,7 @@ function PackageUpdateButton({ repo }: { repo: RepoSummary }) {
 }
 
 function PrdResetButton({ repo }: { repo: RepoSummary }) {
-  const resetState = buildPrdResetButtonState(repo);
-  if (!repo.repoId || !repo.activePrd) {
-    return null;
-  }
-  return (
-    <div className="repo-actions" style={{ marginTop: '12px' }}>
-      <button
-        type="button"
-        className={`secondary deploy-button${resetState.busy ? ' is-loading' : ''}`}
-        data-action="reset-prds"
-        data-repo-id={repo.repoId || ''}
-        disabled={resetState.disabled}
-        aria-busy={resetState.busy}
-      >
-        {resetState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
-        <span>{resetState.label}</span>
-      </button>
-    </div>
-  );
+  return renderPrdResetButtonInline(repo);
 }
 
 function JobStack({ jobs }: { jobs: JobSummary[] }) {
@@ -4030,21 +4229,6 @@ function buildRestartButtonState(repo: RepoSummary | null) {
     disabled: false,
     busy: false,
   };
-}
-
-function buildManagerRestartSummary(restartEvidence: RestartEvidenceSummary) {
-  const targets = Array.isArray(restartEvidence.targets) ? restartEvidence.targets : [];
-  const relaunched = targets.filter((target) => target.status === 'restarted').length;
-  const changed = targets.filter((target) => target.pidChanged === true).length;
-  const headline = restartEvidence.allTargetsChangedPid
-    ? 'Both targets relaunched with new PIDs'
-    : restartEvidence.allTargetsRelaunched
-      ? 'Both targets relaunched'
-      : `${relaunched}/${targets.length || 0} targets relaunched`;
-  const detail = targets.length > 0
-    ? `${changed}/${targets.length} targets changed PID`
-    : 'No target evidence recorded';
-  return { headline, detail };
 }
 
 function buildTargetLifecycleLabel(target: RestartEvidenceTargetSummary) {

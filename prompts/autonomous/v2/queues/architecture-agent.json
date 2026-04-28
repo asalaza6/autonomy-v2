@@ -4885,10 +4885,14 @@
         "Existing control-plane actions continue to work without backend contract changes or changes to the `dev`-targeted deploy/restart/package/PRD workflows.",
         "Focused UI coverage is added or updated for compact manager cards and repo drill-down or expander behavior, and verification includes `npm run typecheck` plus relevant control-plane unit or smoke tests covering dashboard and repo-page rendering."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-28T00:30:13.729Z",
-      "updatedAt": "2026-04-28T00:30:13.729Z"
+      "updatedAt": "2026-04-28T00:40:40.864Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
+      "startedAt": "2026-04-28T00:30:32.454Z",
+      "completedAt": "2026-04-28T00:40:40.864Z",
+      "completionMode": "code"
     }
   ]
 }
