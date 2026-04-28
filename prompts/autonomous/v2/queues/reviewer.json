@@ -1222,11 +1222,11 @@
         "Do not require live GitHub PR inspection for this PRD; current GitHub validation is unavailable in repo status and should not be treated as a dependency for the service-auth framework."
       ],
       "reviewRound": 3,
-      "status": "merged",
+      "status": "approved",
       "createdAt": "2026-04-28T23:31:24.348Z",
-      "updatedAt": "2026-04-28T23:47:02.015Z",
-      "reviewedAt": "2026-04-28T23:40:14.213Z",
-      "lastDecision": "changes_requested",
+      "updatedAt": "2026-04-28T23:47:58.823Z",
+      "reviewedAt": "2026-04-28T23:47:58.823Z",
+      "lastDecision": "approved",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-28T23:46:06.525Z"
     }
