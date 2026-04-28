@@ -1132,10 +1132,6 @@
       "prId": "pr-prd-preserve-control-plane-disclosure-state-02f0ad-architecture-agent",
       "sourceTaskId": "prd-preserve-control-plane-disclosure-state-02f0ad-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-28T19:52:26.598Z",
-      "updatedAt": "2026-04-28T19:52:26.598Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-preserve-control-plane-disclosure-state-02f0ad-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1146,9 +1142,12 @@
         "Focused unit coverage is added for a manager-view refresh case and a project-view refresh case that re-render updated repo data and assert disclosure state persistence, including at least one isolation assertion showing state does not leak between repo cards.",
         "Verification includes `npm run typecheck` and the relevant control-plane unit tests covering repo-card or disclosure refresh behavior."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-28T19:52:31.104Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-28T19:52:26.598Z",
+      "updatedAt": "2026-04-28T19:52:39.674Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-28T19:52:31.104Z"
     }
   ]
 }
