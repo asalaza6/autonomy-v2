@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5066,6 +5065,30 @@
       "completedAt": "2026-04-28T07:59:39.457Z",
       "completionMode": "code",
       "commitSha": "e505194542b7f6f7808828ad22b8e05b42cacfdf"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-hide-advanced-raw-state-465930-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Hide project Advanced raw debug payloads behind a lazy-open disclosure",
+      "description": "Changes requested. The implementation looks aligned with the Advanced disclosure behavior, and the provided deterministic blockers passed (`npm run typecheck`, `npm run lint`, `npm run test:control-plane-summary-ui`), but the PR is not merge-safe yet because the required control-plane verification for this high-risk UI change is still incomplete.\nBlocking: the new targeted unit coverage was added in `tests/unit/control-plane-advanced-ui.test.ts`, but the provided focused unit command does not execute it. `package.json:53` shows `npm run test:control-plane-summary-ui` only runs `dist/tests/unit/control-plane-summary-ui.test.js` and `dist/tests/unit/control-plane-restart-ui.test.js`, so there is still no passing execution evidence for the new Advanced disclosure test. Please wire the new test into the focused control-plane UI test script or provide an equivalent passing targeted run that includes `tests/unit/control-plane-advanced-ui.test.ts`.\nBlocking: acceptance for this project-page control-plane change explicitly requires smoke verification, but the provided deterministic results do not include a passing run for `tests/smoke/control-plane.test.ts`. Given the project context marks control-plane UI as high risk, please provide passing smoke execution for `tests/smoke/control-plane.test.ts` before merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-hide-advanced-raw-state-465930",
+      "laneKey": "prd-hide-advanced-raw-state-465930:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Changes requested. The implementation looks aligned with the Advanced disclosure behavior, and the provided deterministic blockers passed (`npm run typecheck`, `npm run lint`, `npm run test:control-plane-summary-ui`), but the PR is not merge-safe yet because the required control-plane verification for this high-risk UI change is still incomplete.\nBlocking: the new targeted unit coverage was added in `tests/unit/control-plane-advanced-ui.test.ts`, but the provided focused unit command does not execute it. `package.json:53` shows `npm run test:control-plane-summary-ui` only runs `dist/tests/unit/control-plane-summary-ui.test.js` and `dist/tests/unit/control-plane-restart-ui.test.js`, so there is still no passing execution evidence for the new Advanced disclosure test. Please wire the new test into the focused control-plane UI test script or provide an equivalent passing targeted run that includes `tests/unit/control-plane-advanced-ui.test.ts`.\nBlocking: acceptance for this project-page control-plane change explicitly requires smoke verification, but the provided deterministic results do not include a passing run for `tests/smoke/control-plane.test.ts`. Given the project context marks control-plane UI as high risk, please provide passing smoke execution for `tests/smoke/control-plane.test.ts` before merge."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-hide-advanced-raw-state-465930-architecture-agent",
+      "createdAt": "2026-04-28T08:01:35.512Z",
+      "updatedAt": "2026-04-28T08:01:35.512Z",
+      "startedAt": "2026-04-28T08:01:35.512Z",
+      "prId": "pr-prd-hide-advanced-raw-state-465930-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
