@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5014,11 +5015,11 @@
       "acceptance": [
         "Blocking: the branch still is not merge-safe because the high-risk control-plane UI refactor lacks passing focused test execution evidence. The deterministic blockers passed (`npm run typecheck`, `npm run lint`), and the diff adds targeted coverage plus a `test:control-plane-summary-ui` script, but there is still no provided passing run for `tests/unit/control-plane-summary-ui.test.ts` and `tests/unit/control-plane-restart-ui.test.ts` or equivalent focused control-plane smoke/unit coverage covering the changed dashboard and repo-page rendering paths in `src/server/control-plane/control-plane-client.tsx` and `src/server/control-plane/control-plane-page.tsx`.\nFocused verification is still missing for a high-risk control-plane UI change. This PR materially refactors manager and repo summary rendering in `src/server/control-plane/control-plane-client.tsx` and related styling in `src/server/control-plane/control-plane-page.tsx`, but the only deterministic results provided are `npm run typecheck` and `npm run lint`. Please supply a passing focused test run from a writable environment for `npm run test:control-plane-summary-ui` or an equivalent execution of `tests/unit/control-plane-summary-ui.test.ts` and `tests/unit/control-plane-restart-ui.test.ts` before merge."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
       "createdAt": "2026-04-28T00:50:05.144Z",
-      "updatedAt": "2026-04-28T00:50:05.144Z",
+      "updatedAt": "2026-04-28T00:53:06.543Z",
       "startedAt": "2026-04-28T00:50:05.144Z",
       "prId": "pr-prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
       "conversationReferences": {
@@ -5026,11 +5027,12 @@
           "conversationId": "019dd189-fe05-7603-b6d7-576c93d64623",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-28T00:50:05.144Z"
+          "updatedAt": "2026-04-28T00:53:06.543Z"
         }
       },
-      "implementationConversationId": "019dd189-fe05-7603-b6d7-576c93d64623"
+      "implementationConversationId": "019dd189-fe05-7603-b6d7-576c93d64623",
+      "completedAt": "2026-04-28T00:53:06.543Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
