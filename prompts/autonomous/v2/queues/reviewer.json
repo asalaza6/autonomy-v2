@@ -1055,7 +1055,7 @@
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-hide-advanced-raw-state-465930-architecture-agent",
-      "sourceTaskId": "architecture-agent-followup-pr-prd-hide-advanced-raw-state-465930-architecture-agent-3",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-hide-advanced-raw-state-465930-architecture-agent-4",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-hide-advanced-raw-state-465930-architecture-agent",
       "baseBranch": "dev",
@@ -1067,12 +1067,14 @@
         "Manager-vs-project visibility rules remain unchanged, and this behavior change applies only to the project control-plane Advanced view.",
         "Focused control-plane UI coverage is added or updated for collapsed-by-default Advanced debug content and open-to-render behavior, smoke coverage confirms the project page still exposes the `Advanced` tab while raw debug content stays hidden by default, and verification includes `npm run typecheck`, `tests/smoke/control-plane.test.ts`, and relevant targeted control-plane unit coverage for Advanced rendering behavior."
       ],
-      "reviewRound": 5,
-      "status": "approved",
+      "reviewRound": 6,
+      "status": "queued",
       "createdAt": "2026-04-28T07:59:41.110Z",
-      "updatedAt": "2026-04-28T08:07:51.993Z",
+      "updatedAt": "2026-04-28T08:07:54.413Z",
       "reviewedAt": "2026-04-28T08:07:48.124Z",
       "lastDecision": "approved",
+      "lastMergeFailureCode": "pending_checks",
+      "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-28T08:07:32.116Z",
       "conversationReferences": {
@@ -1080,11 +1082,9 @@
           "conversationId": "019dd31e-5f01-7ab2-b774-66e759c0f77d",
           "agentId": "reviewer",
           "role": "review",
-          "updatedAt": "2026-04-28T08:07:48.124Z"
+          "updatedAt": "2026-04-28T08:07:54.413Z"
         }
-      },
-      "lastMergeFailureCode": "pending_checks",
-      "lastMergeFailureMessage": "Merge blocked. - pending lane tasks must be completed before merge"
+      }
     }
   ]
 }
