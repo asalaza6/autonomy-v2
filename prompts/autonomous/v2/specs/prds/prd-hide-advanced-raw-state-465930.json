@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-hide-advanced-raw-state-465930",
+  "title": "Hide Advanced raw state behind lazy-open debug dropdown",
+  "createdAt": "2026-04-28T07:53:07.492Z",
+  "specification": "# PRD: Hide Advanced raw state behind lazy-open debug dropdown\n\nPriority: medium\n\n## Problem\nThe project control-plane currently renders raw debug payloads for state, dashboard, jobs, and repo status directly inside the `Advanced` tab. Managers want these internals hidden by default so the page stays cleaner and the raw payloads are not rendered unless explicitly requested.\n\n## Goal\nMake the raw queue-record, repo-snapshot, and rendered-dashboard debug view available only through an explicit dropdown/disclosure in `Advanced`, and defer rendering of the raw JSON until the user opens it.\n\n## Requirements\n- Replace the always-visible raw JSON blocks in the project `Advanced` tab with a collapsed dropdown or disclosure control.\n- Keep the `Advanced` tab itself visible, but hide the raw debug content until the disclosure is opened by the user.\n- Do not populate or render the raw JSON payloads while the disclosure is closed.\n- When the disclosure is opened, render the current state JSON, dashboard JSON, jobs JSON, and repo status JSON.\n- If the disclosure is closed again, preserve reasonable UX behavior without forcing unnecessary rerenders while hidden.\n- Maintain existing non-debug Advanced content and existing tab navigation behavior.\n- Keep manager-vs-project visibility rules unchanged; this request applies to the project control-plane Advanced view.\n\n## Acceptance Criteria\n- Opening a project page shows the `Advanced` tab without immediately showing the raw JSON sections.\n- Inside `Advanced`, the raw debug area is collapsed by default behind a visible dropdown/disclosure control.\n- Before the disclosure is opened, the raw JSON content is not rendered/populated.\n- Opening the disclosure renders the current raw payloads for state, dashboard, jobs, and repo status.\n- Refreshing state while the disclosure remains closed does not eagerly repopulate the hidden raw payloads.\n- Existing project-page navigation and non-debug Advanced content continue to work.\n\n## Verification\n- Add or update focused control-plane UI tests for collapsed-by-default Advanced debug content and open-to-render behavior.\n- Add smoke coverage for the project page confirming the Advanced tab still exists while raw debug content is hidden by default.\n- Run `npm run typecheck`.\n- Run the relevant control-plane tests, especially `tests/smoke/control-plane.test.ts` and focused unit coverage for client-side Advanced rendering behavior.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777354215566_b6be376d0e4a58\nManager message: msg_1777354215567_8b9f6368172838\nAgent message: msg_1777354215567_23363a3c2ee11\nCreated: 2026-04-28T05:32:17.112Z",
+  "requirements": [
+    "Replace the always-visible raw JSON blocks in the project `Advanced` tab with a collapsed dropdown or disclosure control.",
+    "Keep the `Advanced` tab itself visible",
+    "but hide the raw debug content until the disclosure is opened by the user.",
+    "Do not populate or render the raw JSON payloads while the disclosure is closed.",
+    "When the disclosure is opened",
+    "render the current state JSON",
+    "dashboard JSON",
+    "jobs JSON",
+    "and repo status JSON.",
+    "If the disclosure is closed again",
+    "preserve reasonable UX behavior without forcing unnecessary rerenders while hidden.",
+    "Maintain existing non-debug Advanced content and existing tab navigation behavior.",
+    "Keep manager-vs-project visibility rules unchanged; this request applies to the project control-plane Advanced view."
+  ]
+}
