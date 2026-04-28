@@ -5019,7 +5019,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
       "createdAt": "2026-04-28T00:50:05.144Z",
-      "updatedAt": "2026-04-28T00:53:06.543Z",
+      "updatedAt": "2026-04-28T00:53:06.613Z",
       "startedAt": "2026-04-28T00:50:05.144Z",
       "prId": "pr-prd-simplify-repo-summary-surfaces-2d485f-architecture-agent",
       "conversationReferences": {
@@ -5032,7 +5032,8 @@
       },
       "implementationConversationId": "019dd189-fe05-7603-b6d7-576c93d64623",
       "completedAt": "2026-04-28T00:53:06.543Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "b817d6e26877c7c1895a46ffc7b8924e94f4d172"
     }
   ]
 }
