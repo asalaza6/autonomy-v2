@@ -5060,11 +5060,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-28T07:53:48.195Z",
-      "updatedAt": "2026-04-28T07:59:39.457Z",
+      "updatedAt": "2026-04-28T07:59:39.535Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-hide-advanced-raw-state-465930-architecture-agent",
       "startedAt": "2026-04-28T07:54:08.176Z",
       "completedAt": "2026-04-28T07:59:39.457Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "e505194542b7f6f7808828ad22b8e05b42cacfdf"
     }
   ]
 }
