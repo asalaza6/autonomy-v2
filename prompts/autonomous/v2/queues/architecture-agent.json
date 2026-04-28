@@ -5233,11 +5233,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-28T09:02:12.136Z",
-      "updatedAt": "2026-04-28T09:05:01.760Z",
+      "updatedAt": "2026-04-28T09:05:01.833Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-collapse-manager-repo-card-7560dc-architecture-agent",
       "startedAt": "2026-04-28T09:02:30.509Z",
       "completedAt": "2026-04-28T09:05:01.760Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "5f1ff2bad6f948d13b0df3933f15e66986edcd9e"
     }
   ]
 }
