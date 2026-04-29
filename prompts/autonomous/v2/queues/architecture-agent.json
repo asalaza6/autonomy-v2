@@ -5830,11 +5830,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-29T07:45:30.149Z",
-      "updatedAt": "2026-04-29T07:48:55.113Z",
+      "updatedAt": "2026-04-29T07:48:55.208Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-show-current-server-and-ca4867-architecture-agent",
       "startedAt": "2026-04-29T07:45:48.605Z",
       "completedAt": "2026-04-29T07:48:55.113Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "7e329c88b174635b18d28fbae37d67bd7e20af65"
     }
   ]
 }
