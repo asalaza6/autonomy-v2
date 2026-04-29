@@ -1253,10 +1253,10 @@
         "Handle missing or stale persisted conversation/session references safely without breaking chat UX."
       ],
       "reviewRound": 2,
-      "status": "merged",
+      "status": "changes_requested",
       "createdAt": "2026-04-28T23:56:12.652Z",
-      "updatedAt": "2026-04-29T00:00:36.588Z",
-      "reviewedAt": "2026-04-28T23:59:09.768Z",
+      "updatedAt": "2026-04-29T00:01:55.015Z",
+      "reviewedAt": "2026-04-29T00:01:55.015Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-29T00:00:34.006Z"
