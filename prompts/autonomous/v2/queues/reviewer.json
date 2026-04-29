@@ -1342,10 +1342,6 @@
       "prId": "pr-prd-show-current-server-and-ca4867-architecture-agent",
       "sourceTaskId": "prd-show-current-server-and-ca4867-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-29T07:48:56.442Z",
-      "updatedAt": "2026-04-29T07:48:56.442Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-show-current-server-and-ca4867-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1356,9 +1352,12 @@
         "Restart evidence or restart history remains visible in the panel but is visually and textually labeled as historical or restart evidence so it is not presented as the current PID for either target.",
         "Add or update focused unit coverage for the live process panel rendering to assert simultaneous display of both current PID fields, stopped or missing PID cases, and mixed states where one target is running and the other is stopped; verification also includes `npm run typecheck` and manual manager-view validation against a repo state that includes both managed targets plus restart-history evidence."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-29T07:49:00.820Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-29T07:48:56.442Z",
+      "updatedAt": "2026-04-29T07:49:25.368Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-29T07:49:00.820Z"
     }
   ]
 }
