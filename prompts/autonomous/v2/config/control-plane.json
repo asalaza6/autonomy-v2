@@ -3,6 +3,7 @@
   "repoId": "autonomy-v2",
   "label": "Autonomy-V2",
   "description": "Control-plane display metadata for Autonomy-V2.",
+  "repoAssistantValidationPullRequest": 27,
   "deployCommand": [
     "git",
     "push",
