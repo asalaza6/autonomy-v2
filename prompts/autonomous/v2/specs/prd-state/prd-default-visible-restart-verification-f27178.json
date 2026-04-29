@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-default-visible-restart-verification-f27178",
+  "status": "planned",
+  "createdAt": "2026-04-29T03:59:22.612Z",
+  "updatedAt": "2026-04-29T03:59:22.612Z",
+  "plannedTaskIds": [
+    "prd-default-visible-restart-verification-f27178-architecture-agent-1"
+  ]
+}
