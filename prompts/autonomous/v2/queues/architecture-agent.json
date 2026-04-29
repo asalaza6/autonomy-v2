@@ -5804,6 +5804,33 @@
       "completedAt": "2026-04-29T07:20:56.638Z",
       "completionMode": "noop",
       "commitSha": "1f5b1b7c0c87af198175904db9a0217f8d44541f"
+    },
+    {
+      "id": "prd-show-current-server-and-ca4867-architecture-agent-1",
+      "title": "Update the live process panel to show explicit current Server and Bridge PID/state summaries",
+      "description": "Adjust the manager live process panel so it renders simultaneous current-status rows for both managed targets, using the existing managed process source of truth for current PID and state while keeping per-target output/log focus behavior unchanged. Likely touch points include the control-plane manager UI rendering under `src/server/control-plane/` and any status shaping in `src/autonomy-v2/control-plane/` that feeds the live process panel. Restart evidence/history should remain visible but be clearly separated and labeled as historical so it cannot be mistaken for live PID state.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-show-current-server-and-ca4867",
+      "laneKey": "prd-show-current-server-and-ca4867:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "The live process panel shows separate, stable current-status summary rows for both managed targets at the same time, with manager-facing labels that clearly distinguish Server from Bridge, such as `Current Server PID` and `Current Bridge PID` or equivalent agreed terminology.",
+        "Each target summary row displays the current state next to the current PID, and when no current PID exists the row shows explicit empty-state copy that makes the stopped or missing condition unambiguous without hiding the other target's live PID/state.",
+        "Current PID/state values come from the same managed process source of truth already used in repo summaries and are not inferred from restart evidence or historical PID transitions.",
+        "Existing per-target output or log focus behavior remains intact so managers can still switch between Server and Bridge output independently of the simultaneous current-status summaries.",
+        "Restart evidence or restart history remains visible in the panel but is visually and textually labeled as historical or restart evidence so it is not presented as the current PID for either target.",
+        "Add or update focused unit coverage for the live process panel rendering to assert simultaneous display of both current PID fields, stopped or missing PID cases, and mixed states where one target is running and the other is stopped; verification also includes `npm run typecheck` and manual manager-view validation against a repo state that includes both managed targets plus restart-history evidence."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-29T07:45:30.149Z",
+      "updatedAt": "2026-04-29T07:45:30.149Z"
     }
   ]
 }
