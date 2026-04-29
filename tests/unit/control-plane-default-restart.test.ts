@@ -85,16 +85,16 @@ test('restart planner creates default helper plan from valid lifecycle metadata'
   assert.equal(plan.deferredCommands.length, 1);
   assert.equal(plan.deferredCommands[0].mode, 'default');
   assert.equal(plan.deferredCommands[0].target, 'default');
-  assert.equal(plan.deferredCommands[0].launchMode, process.platform === 'darwin' ? 'visible-terminal' : 'detached');
+  assert.equal(plan.deferredCommands[0].launchMode, 'visible-terminal');
   assert.deepEqual(
     plan.deferredCommands[0].helperPlan.targets.map((target) => target.target),
     ['server', 'controlBridge']
   );
 });
 
-test('restart launch settings default to visible terminals on macOS and detached elsewhere', () => {
+test('restart launch settings default to visible-terminal for unconfigured repos', () => {
   const settings = resolveRestartLaunchSettings({ repoId: 'alpha' } as any);
-  assert.equal(settings.mode, process.platform === 'darwin' ? 'visible-terminal' : 'detached');
+  assert.equal(settings.mode, 'visible-terminal');
   assert.equal(settings.fallbackToDetached, false);
 });
 
@@ -106,6 +106,15 @@ test('restart launch settings preserve explicit detached fallback configuration'
   } as any);
   assert.equal(settings.mode, 'visible-terminal');
   assert.equal(settings.fallbackToDetached, true);
+});
+
+test('restart launch settings preserve explicit detached mode configuration', () => {
+  const settings = resolveRestartLaunchSettings({
+    repoId: 'alpha',
+    restartLaunchMode: 'detached',
+  } as any);
+  assert.equal(settings.mode, 'detached');
+  assert.equal(settings.fallbackToDetached, false);
 });
 
 test('restart planner reports missing lifecycle metadata without guessing PIDs', () => {

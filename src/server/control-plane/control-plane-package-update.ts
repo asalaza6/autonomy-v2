@@ -25,7 +25,6 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_COMMAND_OUTPUT_LENGTH = 4000;
 const PACKAGE_UPDATE_COMMIT_MESSAGE = 'autonomy(update): refresh autonomy-v2 package';
 const MANAGED_RESTART_READY_TIMEOUT_MS = 750;
-const DEFAULT_VISIBLE_RESTART_PLATFORM = 'darwin';
 
 interface NormalizedControlPlaneCommandConfig {
   command: string;
@@ -402,15 +401,16 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
   };
 }
 
-function resolveRestartLaunchSettings(config: ControlPlaneConfig) {
+function resolveRestartLaunchSettings(config: ControlPlaneConfig): {
+  mode: RestartLaunchMode;
+  fallbackToDetached: boolean;
+} {
   const configuredMode = config.restartLaunchMode === 'detached'
     ? 'detached'
     : config.restartLaunchMode === 'visible-terminal'
       ? 'visible-terminal'
       : null;
-  const defaultMode: RestartLaunchMode = process.platform === DEFAULT_VISIBLE_RESTART_PLATFORM
-    ? 'visible-terminal'
-    : 'detached';
+  const defaultMode: RestartLaunchMode = 'visible-terminal';
   return {
     mode: configuredMode || defaultMode,
     fallbackToDetached: config.restartLaunchFallbackToDetached === true,
