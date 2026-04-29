@@ -89,13 +89,17 @@ test('remote merged PR is canonical merged', () => {
   assert.equal(reconciled.reconciliation.canonicalSource, 'remote');
 });
 
-test('missing remote state falls back to inferred local terminal state', () => {
+test('missing canonical remote state for a known GitHub PR surfaces validation error instead of inferred merged', () => {
   const pr = {
     id: 'pr-inferred',
     status: 'changes_requested',
     taskIds: ['task-1'],
     completedTaskIds: ['task-1'],
     pendingTaskIds: [],
+    remote: {
+      number: 41,
+      url: 'https://github.com/example/repo/pull/41',
+    },
   };
   const implementationTasks = [
     {
@@ -110,8 +114,9 @@ test('missing remote state falls back to inferred local terminal state', () => {
   const reconciliation = getPullRequestStateReconciliation(pr, implementationTasks);
   const reconciled = reconcilePullRequestRecord(pr, implementationTasks, '2026-04-26T10:05:00.000Z');
 
-  assert.equal(reconciliation.canonicalState, 'merged');
-  assert.equal(reconciliation.canonicalSource, 'inferred');
-  assert.equal(reconciliation.reconciliationStatus, 'inferred');
-  assert.equal(reconciled.status, 'merged');
+  assert.equal(reconciliation.canonicalState, 'validation-error');
+  assert.equal(reconciliation.canonicalSource, 'validation');
+  assert.equal(reconciliation.reconciliationStatus, 'validation-error');
+  assert.equal(reconciliation.inferredState, 'merged');
+  assert.equal(reconciled.status, 'validation_error');
 });

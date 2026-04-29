@@ -698,6 +698,71 @@ test('status snapshots preserve remote provenance for remotely resolved PRDs', (
   assert.equal(snapshot.pullRequestStatuses.length, 0);
 });
 
+test('status snapshots surface degraded validation state instead of inferred terminal PR state', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-pr-validation-error-');
+  initAutonomyRepo(repoDir);
+
+  const task = {
+    id: 'prd-validation-error-001-architecture-agent-1',
+    title: 'Build ambiguous remote slice',
+    agentId: 'architecture-agent',
+    description: 'Local work is complete but GitHub PR truth is unavailable.',
+    acceptance: ['Control-plane status does not silently mark the PR merged.'],
+    sprintId: 'multi-agent-mvp',
+  };
+  addPrdWithTasks(repoDir, 'prd-validation-error-001', 'Validation error PRD', [task]);
+
+  const paths = getAutonomyPathsForTest(repoDir);
+  fs.writeFileSync(paths.prsState, `${JSON.stringify({
+    pullRequests: [
+      {
+        id: 'pr-prd-validation-error-001-architecture-agent',
+        taskId: task.id,
+        agentId: 'architecture-agent',
+        laneKey: 'prd-validation-error-001:architecture-agent',
+        prdId: 'prd-validation-error-001',
+        sprintId: 'multi-agent-mvp',
+        taskIds: [task.id],
+        completedTaskIds: [task.id],
+        pendingTaskIds: [],
+        headBranch: 'agent/multi-agent-mvp/architecture-agent/prd-validation-error-001-architecture-agent',
+        baseBranch: 'dev',
+        status: 'changes_requested',
+        title: '[architecture-agent] Validation error PRD',
+        createdAt: '2026-04-21T07:50:00.000Z',
+        updatedAt: '2026-04-21T08:00:00.000Z',
+        remote: {
+          number: 14,
+          url: 'https://github.com/asalaza6/autonomy-v2/pull/14',
+        },
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  const prd = snapshot.prds.prds.find((candidate) => candidate.id === 'prd-validation-error-001');
+
+  assert.ok(prd);
+  assert.equal(snapshot.pullRequestStatuses.length, 1);
+  assert.equal(snapshot.pullRequestStatuses[0].status, 'validation_error');
+  assert.equal(snapshot.pullRequestStatuses[0].statusLabel, 'GitHub validation failed');
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalState, 'validation-error');
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalSource, 'validation');
+  assert.equal(snapshot.pullRequestStatuses[0].inferredState, 'merged');
+  assert.equal(snapshot.pullRequestStatuses[0].reconciliationStatus, 'validation-error');
+  assert.match(snapshot.pullRequestStatuses[0].action, /GitHub validation failed/i);
+  assert.equal(prd.status, 'planned');
+  assert.equal(prd.statusSource, 'validation');
+  assert.equal(prd.reconciliationStatus, 'validation-error');
+  assert.equal(prd.statusReason, 'GitHub pull request state could not be validated');
+  assert.deepEqual(prd.linkedPullRequestSummary, {
+    total: 1,
+    open: 1,
+    resolved: 0,
+    stale: 0,
+  });
+});
+
 test('status snapshots include deployment branch comparison details', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-deploy-');
   initAutonomyRepo(repoDir);

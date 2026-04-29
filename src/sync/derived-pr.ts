@@ -4,7 +4,11 @@ import {
   normalizeConversationReferences,
 } from '../agents/conversation-references.js';
 import type { PullRequestRecord, TaskRecord } from './sync-types.js';
-import { isPullRequestResolved, pullRequestChangesAlreadyApplied } from './review-reconciliation.js';
+import {
+  getPullRequestStateReconciliation,
+  isPullRequestResolved,
+  pullRequestChangesAlreadyApplied,
+} from './review-reconciliation.js';
 
 function buildStablePullRequestId(laneKey) {
   return `pr-${String(laneKey || 'lane').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
@@ -148,12 +152,20 @@ function approvedPrNeedsReviewerRecovery(pr, existingTask) {
     .test(String(existingTask.lastError || ''));
 }
 
-function resolveDerivedPullRequestStatus(existingStatus, laneState, pendingTasks, pendingExtraTaskIds, existingPr, existingReviewerTask, completedTasks = []) {
-  if (laneState && laneState.merged) {
+function resolveDerivedPullRequestStatus(existingStatus, remote, pendingTasks, pendingExtraTaskIds, existingPr, existingReviewerTask, completedTasks = []) {
+  const reconciliation = getPullRequestStateReconciliation({
+    ...(existingPr || {}),
+    status: existingStatus,
+    remote,
+  }, completedTasks);
+  if (reconciliation.canonicalState === 'merged') {
     return 'merged';
   }
-  if (existingPr && (existingPr.mergedAt || (existingPr.remote && existingPr.remote.mergedAt))) {
-    return 'merged';
+  if (reconciliation.canonicalState === 'closed') {
+    return 'closed';
+  }
+  if (reconciliation.canonicalState === 'validation-error') {
+    return 'validation_error';
   }
   const hasPendingWork = (pendingTasks || []).length > 0 || (pendingExtraTaskIds || []).length > 0;
   const hasChangesRequestedSignal = existingStatus === 'changes_requested'
@@ -344,6 +356,13 @@ function buildDerivedPullRequestRecord({
   const reviews = Array.isArray(existingPr && existingPr.reviews)
     ? existingPr.reviews.map((decisionRecord) => ({ ...decisionRecord }))
     : [];
+  const remote = laneState.remote ? {
+    number: laneState.remote.number,
+    url: laneState.remote.url,
+    state: laneState.remote.state,
+    mergedAt: laneState.remote.mergedAt,
+    commitCount: Number(laneState.commitCount || 0),
+  } : (existingPr && existingPr.remote) ? { ...existingPr.remote } : null;
 
   const record: PullRequestRecord = {
     id: prId,
@@ -364,7 +383,7 @@ function buildDerivedPullRequestRecord({
     baseBranch: integrationBranch,
     status: resolveDerivedPullRequestStatus(
       existingPr && existingPr.status,
-      laneState,
+      remote,
       pendingTasks,
       extraPendingTaskIds,
       existingPr,
@@ -374,13 +393,7 @@ function buildDerivedPullRequestRecord({
     reviews,
     createdAt: existingPr && existingPr.createdAt ? existingPr.createdAt : now,
     updatedAt: now,
-    remote: laneState.remote ? {
-      number: laneState.remote.number,
-      url: laneState.remote.url,
-      state: laneState.remote.state,
-      mergedAt: laneState.remote.mergedAt,
-      commitCount: Number(laneState.commitCount || 0),
-    } : (existingPr && existingPr.remote) ? { ...existingPr.remote } : null,
+    remote,
     title: existingPr && existingPr.title ? existingPr.title : `[${laneTasks[0].agentId}] ${String(source.title || '').trim()}`,
     body: existingPr && existingPr.body ? existingPr.body : source.body,
   };

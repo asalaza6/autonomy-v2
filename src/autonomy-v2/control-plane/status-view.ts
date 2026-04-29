@@ -992,7 +992,7 @@ function pullRequestStatusKind(pullRequestStatus: any) {
   const statusLabel = String(pullRequestStatus && pullRequestStatus.statusLabel || '').toLowerCase();
   const mergeState = String(pullRequestStatus && pullRequestStatus.mergeState || '').toLowerCase();
   const status = String(pullRequestStatus && pullRequestStatus.status || '').toLowerCase();
-  if (statusLabel === 'blocked from merge' || mergeState === 'blocked') {
+  if (statusLabel === 'blocked from merge' || statusLabel === 'github validation failed' || status === 'validation_error' || mergeState === 'blocked') {
     return 'merge-blocked';
   }
   if (statusLabel === 'approved waiting merge' || status === 'approved' || mergeState === 'waiting') {
