@@ -10,6 +10,7 @@ import { gitAuthArgs, gitIsAncestor, gitRemoteExists, gitWorkingTreeClean } from
 
 const DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_DEPLOY_COMMAND_OUTPUT_LENGTH = 4000;
+const AUTO_STASH_MESSAGE_PREFIX = 'autonomy-v2 deploy auto-stash';
 
 function resolveGithubRepo(rootDir) {
   const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
@@ -153,22 +154,103 @@ function performLocalMerge(rootDir, config, pr, actor) {
 
 function performLocalDeploy(rootDir, config, options: {
   redactions?: string[];
-} = {}) {
+} = {}): AnyRecord {
   const sourceBranch = String(config.integrationBranch || 'dev').trim() || 'dev';
   const targetBranch = String(config.productionBranch || 'main').trim() || 'main';
+  const deployAutoStash = config.deployAutoStash === true;
   if (sourceBranch === targetBranch) {
     return {
       ok: false,
+      sourceBranch,
+      targetBranch,
+      deploySucceeded: false,
       message: `Deploy source branch and target branch must differ. Received ${sourceBranch}.`,
     };
   }
 
-  if (!gitWorkingTreeClean(rootDir)) {
+  const workingTreeClean = gitWorkingTreeClean(rootDir);
+  if (!workingTreeClean && !deployAutoStash) {
     return {
       ok: false,
+      sourceBranch,
+      targetBranch,
+      deploySucceeded: false,
       message: 'Working tree must be clean before deploy.',
     };
   }
+
+  let autoStash = {
+    enabled: deployAutoStash,
+    used: false,
+    stashRef: null as string | null,
+    message: null as string | null,
+    restore: null as null | {
+      ok: boolean;
+      conflict: boolean;
+      message: string;
+      recovery?: string;
+    },
+  };
+
+  try {
+    if (!workingTreeClean && deployAutoStash) {
+      autoStash = createDeployAutoStash(rootDir, sourceBranch, targetBranch);
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      sourceBranch,
+      targetBranch,
+      deploySucceeded: false,
+      autoStash,
+      message: extractExecError(error),
+    };
+  }
+
+  const deployResult = performCleanLocalDeploy(rootDir, config, options, {
+    sourceBranch,
+    targetBranch,
+  });
+  const restoreResult = autoStash.used && autoStash.stashRef
+    ? restoreDeployAutoStash(rootDir, autoStash.stashRef)
+    : null;
+
+  if (restoreResult) {
+    autoStash.restore = restoreResult;
+  }
+  if (!deployResult.ok) {
+    return {
+      ...deployResult,
+      autoStash,
+      message: restoreResult && !restoreResult.ok
+        ? `${deployResult.message} Auto-stash restore also failed: ${restoreResult.message}`
+        : deployResult.message,
+    };
+  }
+  if (restoreResult && !restoreResult.ok) {
+    return {
+      ...deployResult,
+      ok: false,
+      autoStash,
+      message: restoreResult.conflict
+        ? `Deploy reached ${targetBranch}, but auto-stash restore conflicted. ${restoreResult.message}`
+        : `Deploy reached ${targetBranch}, but auto-stash restore failed. ${restoreResult.message}`,
+    };
+  }
+
+  return {
+    ...deployResult,
+    autoStash,
+  };
+}
+
+function performCleanLocalDeploy(rootDir, config, options: {
+  redactions?: string[];
+} = {}, branches: {
+  sourceBranch: string;
+  targetBranch: string;
+}) {
+  const { sourceBranch, targetBranch } = branches;
   const rootBranch = getCheckedOutBranch(rootDir);
   const syncRootWorktree = rootBranch === targetBranch && isTrackedWorktreeClean(rootDir);
 
@@ -183,6 +265,9 @@ function performLocalDeploy(rootDir, config, options: {
     if (!gitIsAncestor(rootDir, targetRef, sourceRef)) {
       return {
         ok: false,
+        sourceBranch,
+        targetBranch,
+        deploySucceeded: false,
         message: `Cannot fast-forward deploy ${sourceBranch} to ${targetBranch}: ${targetBranch} has commits that are not in ${sourceBranch}.`,
       };
     }
@@ -216,6 +301,7 @@ function performLocalDeploy(rootDir, config, options: {
       : null;
     return {
       ok: true,
+      deploySucceeded: true,
       sha,
       sourceBranch,
       targetBranch,
@@ -225,7 +311,67 @@ function performLocalDeploy(rootDir, config, options: {
       deployCommand,
     };
   } catch (error) {
-    return { ok: false, message: extractExecError(error) };
+    return {
+      ok: false,
+      sourceBranch,
+      targetBranch,
+      deploySucceeded: false,
+      message: extractExecError(error),
+    };
+  }
+}
+
+function createDeployAutoStash(rootDir: string, sourceBranch: string, targetBranch: string) {
+  const stashMessage = `${AUTO_STASH_MESSAGE_PREFIX}: ${sourceBranch}->${targetBranch}`;
+  runGitQuiet(rootDir, ['stash', 'push', '--include-untracked', '--message', stashMessage]);
+  const stashRef = runGitRead(rootDir, ['stash', 'list', '--format=%gd', '-n', '1']).trim();
+  if (!stashRef) {
+    throw new Error('Failed to create deploy auto-stash before deploy.');
+  }
+  return {
+    enabled: true,
+    used: true,
+    stashRef,
+    message: stashMessage,
+    restore: null,
+  };
+}
+
+function restoreDeployAutoStash(rootDir: string, stashRef: string) {
+  try {
+    runGitQuiet(rootDir, ['stash', 'apply', '--index', stashRef]);
+    runGitQuiet(rootDir, ['stash', 'drop', stashRef]);
+    return {
+      ok: true,
+      conflict: false,
+      message: `Restored ${stashRef}.`,
+    };
+  } catch (error) {
+    const message = extractExecError(error);
+    const conflict = isAutoStashRestoreConflict(rootDir, message);
+    return {
+      ok: false,
+      conflict,
+      message,
+      recovery: conflict
+        ? `Inspect the current conflicts with "git status". The stash entry is still preserved as ${stashRef}; resolve or clean the conflicted state, then drop it with "git stash drop ${stashRef}" when recovery is complete.`
+        : `The stash entry is still preserved as ${stashRef}. Clean the working tree, then recover manually with "git stash apply --index ${stashRef}".`,
+    };
+  }
+}
+
+function isAutoStashRestoreConflict(rootDir: string, message: string) {
+  if (/conflict|merge conflict|could not restore untracked files/i.test(message)) {
+    return true;
+  }
+  try {
+    return execFileSync('git', ['diff', '--name-only', '--diff-filter=U'], {
+      cwd: rootDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim().length > 0;
+  } catch (_) {
+    return false;
   }
 }
 

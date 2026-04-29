@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 
 import {
   CLI_BIN,
@@ -11,6 +12,35 @@ import {
   git,
   runNode,
 } from './package-smoke.helpers.js';
+
+function runDeploy(args) {
+  try {
+    const stdout = execFileSync(process.execPath, [CLI_BIN, ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    return {
+      ok: true,
+      stdout,
+      stderr: '',
+    };
+  } catch (error) {
+    const execError = error as { stdout?: string; stderr?: string };
+    return {
+      ok: false,
+      stdout: String(execError.stdout || '').trim(),
+      stderr: String(execError.stderr || '').trim(),
+    };
+  }
+}
+
+function readControlPlaneConfig(repoDir) {
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  return {
+    controlPlaneConfigPath,
+    controlPlaneConfig: JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8')),
+  };
+}
 
 test('deploy command fast-forwards main to dev without creating a merge commit', () => {
   const repoDir = createFixtureRepo('autonomy-v2-deploy-');
@@ -55,13 +85,37 @@ test('deploy command fast-forwards main to dev without creating a merge commit',
   assert.equal(git(repoDir, ['status', '--short']), '');
 });
 
+test('deploy command still rejects dirty working trees when auto-stash is unset', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-deploy-dirty-default-');
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize autonomy']);
+  git(repoDir, ['checkout', 'dev']);
+  git(repoDir, ['merge', '--ff-only', 'main']);
+  fs.appendFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'index.js'), '\nexport const dirtyDefault = true;\n', 'utf8');
+  git(repoDir, ['add', 'src/apps/fixture/index.js']);
+  git(repoDir, ['commit', '-m', 'dev deploy change']);
+  git(repoDir, ['switch', 'main']);
+
+  const mainBefore = git(repoDir, ['rev-parse', 'main']);
+  fs.appendFileSync(path.join(repoDir, 'README.md'), 'dirty working tree\n', 'utf8');
+
+  const result = runDeploy(['deploy', '--root', repoDir]);
+
+  assert.equal(result.ok, false);
+  assert.match(result.stdout, /Starting deploy dev -> main/);
+  assert.match(result.stdout, /Deploy failed: Working tree must be clean before deploy\./);
+  assert.match(result.stderr, /ERROR: Working tree must be clean before deploy\./);
+  assert.equal(git(repoDir, ['rev-parse', 'main']), mainBefore);
+  assert.match(git(repoDir, ['status', '--short']), /README\.md/);
+});
+
 test('deploy command runs configured deploy hook after main is updated', () => {
   const repoDir = createFixtureRepo('autonomy-v2-deploy-command-');
   initAutonomyRepo(repoDir);
 
   const markerPath = path.join(os.tmpdir(), `autonomy-v2-deploy-command-${Date.now()}.json`);
-  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
-  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  const { controlPlaneConfigPath, controlPlaneConfig } = readControlPlaneConfig(repoDir);
   controlPlaneConfig.deployCommand = {
     command: process.execPath,
     args: [
@@ -125,8 +179,7 @@ test('deploy command reads deploy hook from source branch when current main lack
   git(repoDir, ['merge', '--ff-only', 'main']);
 
   const markerPath = path.join(os.tmpdir(), `autonomy-v2-deploy-command-source-${Date.now()}.json`);
-  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
-  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  const { controlPlaneConfigPath, controlPlaneConfig } = readControlPlaneConfig(repoDir);
   controlPlaneConfig.deployCommand = {
     command: process.execPath,
     args: [
@@ -168,4 +221,122 @@ test('deploy command reads deploy hook from source branch when current main lack
   assert.match(output, /Ran deploy command:/);
   assert.match(output, /source branch deploy hook ran/);
   assert.equal(git(repoDir, ['status', '--short']), '');
+});
+
+test('deploy command auto-stashes tracked and untracked changes and restores them after deploy', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-deploy-auto-stash-');
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize autonomy']);
+  fs.writeFileSync(path.join(repoDir, 'tracked-local.txt'), 'baseline\n', 'utf8');
+  git(repoDir, ['add', 'tracked-local.txt']);
+  git(repoDir, ['commit', '-m', 'add tracked local file']);
+  git(repoDir, ['checkout', 'dev']);
+  git(repoDir, ['merge', '--ff-only', 'main']);
+  fs.appendFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'index.js'), '\nexport const autoStashDeploy = true;\n', 'utf8');
+  git(repoDir, ['add', 'src/apps/fixture/index.js']);
+  git(repoDir, ['commit', '-m', 'deployable change']);
+  const devBefore = git(repoDir, ['rev-parse', 'dev']);
+  git(repoDir, ['switch', 'main']);
+
+  const trackedPath = path.join(repoDir, 'tracked-local.txt');
+  const trackedContentBefore = fs.readFileSync(trackedPath, 'utf8');
+  const trackedChange = `${trackedContentBefore}local dirty change\n`;
+  fs.writeFileSync(trackedPath, trackedChange, 'utf8');
+  const untrackedPath = path.join(repoDir, 'tmp-untracked.txt');
+  fs.writeFileSync(untrackedPath, 'preserve me\n', 'utf8');
+
+  const output = runNode(CLI_BIN, [
+    'deploy',
+    '--root',
+    repoDir,
+    '--auto-stash',
+  ]);
+
+  assert.equal(git(repoDir, ['rev-parse', 'main']), devBefore);
+  assert.equal(fs.readFileSync(trackedPath, 'utf8'), trackedChange);
+  assert.equal(fs.readFileSync(untrackedPath, 'utf8'), 'preserve me\n');
+  assert.equal(git(repoDir, ['stash', 'list']), '');
+  assert.match(output, /Starting deploy dev -> main/);
+  assert.match(output, /Created auto-stash before deploy: stash@\{/);
+  assert.match(output, /Deployed dev to main/);
+  assert.match(output, /Restored auto-stash: stash@\{/);
+});
+
+test('deploy command restores auto-stashed changes after a deploy hook failure', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-deploy-auto-stash-fail-');
+  initAutonomyRepo(repoDir);
+  const { controlPlaneConfigPath, controlPlaneConfig } = readControlPlaneConfig(repoDir);
+  controlPlaneConfig.deployCommand = {
+    command: process.execPath,
+    args: ['-e', "console.error('deploy hook failed'); process.exit(2);"],
+  };
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize autonomy']);
+  fs.writeFileSync(path.join(repoDir, 'tracked-local.txt'), 'baseline\n', 'utf8');
+  git(repoDir, ['add', 'tracked-local.txt']);
+  git(repoDir, ['commit', '-m', 'add tracked local file']);
+  git(repoDir, ['checkout', 'dev']);
+  git(repoDir, ['merge', '--ff-only', 'main']);
+  fs.appendFileSync(path.join(repoDir, 'src', 'apps', 'fixture', 'index.js'), '\nexport const autoStashFailure = true;\n', 'utf8');
+  git(repoDir, ['add', 'src/apps/fixture/index.js']);
+  git(repoDir, ['commit', '-m', 'deployable change']);
+  const devBefore = git(repoDir, ['rev-parse', 'dev']);
+  git(repoDir, ['switch', 'main']);
+
+  const trackedPath = path.join(repoDir, 'tracked-local.txt');
+  const trackedContentBefore = fs.readFileSync(trackedPath, 'utf8');
+  const trackedChange = `${trackedContentBefore}recover after failure\n`;
+  fs.writeFileSync(trackedPath, trackedChange, 'utf8');
+  const untrackedPath = path.join(repoDir, 'recover-after-failure.txt');
+  fs.writeFileSync(untrackedPath, 'still here\n', 'utf8');
+
+  const result = runDeploy([
+    'deploy',
+    '--root',
+    repoDir,
+    '--auto-stash',
+  ]);
+
+  assert.equal(result.ok, false);
+  assert.equal(git(repoDir, ['rev-parse', 'main']), devBefore);
+  assert.equal(fs.readFileSync(trackedPath, 'utf8'), trackedChange);
+  assert.equal(fs.readFileSync(untrackedPath, 'utf8'), 'still here\n');
+  assert.equal(git(repoDir, ['stash', 'list']), '');
+  assert.match(result.stdout, /Created auto-stash before deploy: stash@\{/);
+  assert.match(result.stdout, /Deploy failed: Deploy command .* failed with exit code 2/);
+  assert.match(result.stdout, /deploy hook failed/);
+  assert.match(result.stdout, /Restored auto-stash: stash@\{/);
+});
+
+test('deploy command reports auto-stash restore conflicts with recovery instructions', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-deploy-auto-stash-conflict-');
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'initialize autonomy']);
+  git(repoDir, ['checkout', 'dev']);
+  git(repoDir, ['merge', '--ff-only', 'main']);
+
+  const trackedPath = path.join(repoDir, 'src', 'apps', 'fixture', 'index.js');
+  fs.writeFileSync(trackedPath, 'export const value = 2;\n', 'utf8');
+  git(repoDir, ['add', 'src/apps/fixture/index.js']);
+  git(repoDir, ['commit', '-m', 'dev changes tracked file']);
+  git(repoDir, ['switch', 'main']);
+  fs.writeFileSync(trackedPath, 'export const value = 99;\n', 'utf8');
+
+  const result = runDeploy([
+    'deploy',
+    '--root',
+    repoDir,
+    '--auto-stash',
+  ]);
+
+  assert.equal(result.ok, false);
+  assert.match(result.stdout, /Created auto-stash before deploy: stash@\{/);
+  assert.match(result.stdout, /Deploy completed, but auto-stash restore did not finish cleanly:/);
+  assert.match(result.stdout, /WARNING: Auto-stash restore conflicted:/);
+  assert.match(result.stdout, /Inspect the current conflicts with "git status"\./);
+  assert.match(result.stderr, /ERROR: Deploy reached main, but auto-stash restore conflicted\./);
+  assert.match(git(repoDir, ['stash', 'list']), /autonomy-v2 deploy auto-stash/);
 });

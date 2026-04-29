@@ -32,8 +32,10 @@ export interface AutonomyConfig extends AnyRecord {
   schemaVersion?: number;
   agents: AgentConfig[];
   deployCommand?: DeployCommandConfig;
+  deployAutoStash?: boolean;
   mergeActors?: string[];
   integrationBranch?: string;
+  productionBranch?: string;
   mergeStrategy?: string;
   worktreesRoot?: string;
   branchPrefixes?: {
@@ -147,6 +149,7 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   default?: boolean;
   repoAssistantValidationPullRequest?: number;
   deployCommand?: DeployCommandConfig;
+  deployAutoStash?: boolean;
   packageUpdateCommand?: DeployCommandConfig;
   controlBridgeRestartCommand?: DeployCommandConfig;
   serverRestartCommand?: DeployCommandConfig;

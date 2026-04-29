@@ -5859,10 +5859,14 @@
         "Automated coverage verifies current clean-tree deploy behavior, dirty-tree deploy with auto-stash enabled, untracked-file preservation, deploy failure followed by restore attempt, and stash restore conflict reporting, with targeted updates centered on `tests/smoke/deploy.test.ts` and any related unit tests.",
         "Verification for the completed task includes `npm run typecheck` and the relevant targeted deploy test suite, plus a disposable manual check of one clean-tree deploy and one dirty-tree deploy with auto-stash enabled."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-29T07:50:58.902Z",
-      "updatedAt": "2026-04-29T07:50:58.902Z"
+      "updatedAt": "2026-04-29T07:58:14.512Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "startedAt": "2026-04-29T07:51:17.302Z",
+      "completedAt": "2026-04-29T07:58:14.512Z",
+      "completionMode": "code"
     }
   ]
 }
