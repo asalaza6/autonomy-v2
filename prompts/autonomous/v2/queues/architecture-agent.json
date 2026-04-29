@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -6112,11 +6113,11 @@
       "acceptance": [
         "Changes in the review/blocker contract touch high-risk queue, review, and sync paths, and the required minimum checks (`npm run typecheck`, `npm run lint`) passed. I’m still blocking approval because there is no recorded focused test execution for the new blocker lifecycle coverage added in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts` that exercises the behavior introduced in `src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, and `src/sync/derived-pr.ts`. Run and pass focused verification for those new paths before merge.\nMissing focused verification is blocking. This PR changes merge-gating and task-completion behavior in high-risk workflow code (`src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, `src/sync/derived-pr.ts`), but the provided check results only cover `npm run typecheck` and `npm run lint`. The branch adds the intended focused coverage in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts`; please run and record those tests (for example, `npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js dist/tests/smoke/package-smoke.test.js`) before approval."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "createdAt": "2026-04-29T11:26:11.262Z",
-      "updatedAt": "2026-04-29T11:26:11.262Z",
+      "updatedAt": "2026-04-29T11:30:04.698Z",
       "startedAt": "2026-04-29T11:26:11.262Z",
       "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "conversationReferences": {
@@ -6124,11 +6125,12 @@
           "conversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-29T11:26:11.262Z"
+          "updatedAt": "2026-04-29T11:30:04.698Z"
         }
       },
-      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006"
+      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+      "completedAt": "2026-04-29T11:30:04.698Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
