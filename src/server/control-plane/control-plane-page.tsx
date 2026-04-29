@@ -394,6 +394,22 @@ const styles = `
     background: white;
     color: var(--accent);
     border: 1px solid rgba(36, 91, 117, 0.3);
+    cursor: pointer;
+    transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
+  }
+
+  button.secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(36, 91, 117, 0.55);
+    box-shadow: 0 8px 18px rgba(36, 91, 117, 0.12);
+    transform: translateY(-1px);
+  }
+
+  button.secondary:disabled {
+    cursor: default;
+    opacity: 0.7;
+    box-shadow: none;
+    transform: none;
   }
 
   .row { display: flex; gap: 12px; flex-wrap: wrap; }
