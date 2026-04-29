@@ -1316,9 +1316,9 @@
         "If the scheduler or worker attach flow is touched, verification also includes `tests/smoke/control-plane.test.ts` alongside `npm run typecheck` and the focused unit tests."
       ],
       "reviewRound": 3,
-      "status": "queued",
+      "status": "merged",
       "createdAt": "2026-04-29T07:10:46.106Z",
-      "updatedAt": "2026-04-29T07:16:48.462Z",
+      "updatedAt": "2026-04-29T07:17:19.393Z",
       "reviewedAt": "2026-04-29T07:15:43.343Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
