@@ -5599,11 +5599,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-visible-restart-verification-f27178-architecture-agent",
       "createdAt": "2026-04-29T04:14:09.072Z",
-      "updatedAt": "2026-04-29T04:16:27.110Z",
+      "updatedAt": "2026-04-29T04:16:27.189Z",
       "startedAt": "2026-04-29T04:14:09.072Z",
       "prId": "pr-prd-default-visible-restart-verification-f27178-architecture-agent",
       "completedAt": "2026-04-29T04:16:27.110Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "2661d4efa9cf2b6df67ce8dbd9357d0657f18ac1"
     }
   ]
 }
