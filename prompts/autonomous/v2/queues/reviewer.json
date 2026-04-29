@@ -1305,7 +1305,7 @@
       "sourceTaskId": "prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent-2",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-29T07:10:46.106Z",
       "updatedAt": "2026-04-29T07:10:46.106Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
@@ -1316,7 +1316,9 @@
         "Targeted tests are added or updated for queued-task pickup and idle-vs-queued status rendering, including relevant sync or queue unit tests and `tests/unit/control-plane-*.test.ts` coverage.",
         "If the scheduler or worker attach flow is touched, verification also includes `tests/smoke/control-plane.test.ts` alongside `npm run typecheck` and the focused unit tests."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-29T07:10:50.287Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
