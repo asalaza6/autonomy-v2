@@ -230,6 +230,13 @@ test('live process panel renders focused output, restart evidence, singleton mes
           postRestartPid: 456,
           completedAt: '2026-04-22T01:06:20.000Z',
         },
+        controlBridge: {
+          target: 'controlBridge',
+          pid: null,
+          running: false,
+          singletonOutcome: 'failed',
+          exitReason: 'bridge is stopped',
+        },
       },
       controlAccess: {
         exclusiveControl: true,
@@ -268,8 +275,11 @@ test('live process panel renders focused output, restart evidence, singleton mes
 
   assert.match(html, /Live server process/);
   assert.match(html, /process-focus-pending/);
-  assert.match(html, /PID 456 \| state running \| replaced existing process 123/);
-  assert.match(html, /Restart evidence: server pid 123 -&gt; 456 \| pid changed/);
+  assert.match(html, /Current managed process status/);
+  assert.match(html, /Current Server PID 456 \| state running \| replaced existing process 123/);
+  assert.match(html, /Current Bridge PID not running \| state stopped \| managed start failed/);
+  assert.match(html, /Historical restart evidence/);
+  assert.match(html, /Restart evidence only: server pid 123 -&gt; 456 \| pid changed/);
   assert.match(html, /command npm run dev \| cwd \/tmp\/alpha/);
   assert.match(html, /This session is read-only until it takes over repo controls\./);
   assert.match(html, /owner Owner Session/);
@@ -317,10 +327,92 @@ test('live process panel shows refusal messaging without takeover affordance', a
   }));
 
   assert.match(html, /Live bridge process/);
-  assert.match(html, /PID 789 \| state stopped \| refused because another managed process already owned this target/);
+  assert.match(html, /Current Server PID not reported \| state not observed/);
+  assert.match(html, /Current Bridge PID 789 \| state stopped \| refused because another managed process already owned this target/);
   assert.match(html, /existing process kept ownership/);
   assert.match(html, /This session is read-only\. Repo ownership does not allow takeover\./);
   assert.doesNotMatch(html, /Take over controls/);
+});
+
+test('live process panel shows simultaneous current server and bridge rows for mixed live states', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?mixed=${Date.now()}`);
+
+  client.setLiveProcessPanelTestState({
+    outputs: {
+      'alpha:controlBridge': {
+        repoId: 'alpha',
+        target: 'controlBridge',
+        outputSessionId: 'output-bridge-1',
+        pid: 654,
+        running: true,
+        available: true,
+        truncated: false,
+        updatedAt: '2026-04-22T01:07:15.000Z',
+        content: 'bridge connected',
+      },
+    },
+    activeTargets: {
+      alpha: 'controlBridge',
+    },
+  });
+
+  const html = renderToHtml(h(client.LiveProcessPanel as any, {
+    context: 'manager',
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      managedProcesses: {
+        server: {
+          target: 'server',
+          pid: null,
+          running: false,
+        },
+        controlBridge: {
+          target: 'controlBridge',
+          pid: 654,
+          running: true,
+          singletonOutcome: 'reused',
+        },
+      },
+      restartJob: {
+        status: 'completed',
+        statusLabel: 'Restart recorded',
+        restartEvidence: {
+          status: 'restarted',
+          statusLabel: 'Restarted',
+          completedAt: '2026-04-22T01:07:20.000Z',
+          targets: [
+            {
+              target: 'server',
+              label: 'server',
+              status: 'restarted',
+              statusLabel: 'Restarted',
+              preRestartPid: 321,
+              postRestartPid: null,
+              pidChanged: false,
+            },
+            {
+              target: 'controlBridge',
+              label: 'bridge',
+              status: 'restarted',
+              statusLabel: 'Restarted',
+              preRestartPid: 600,
+              postRestartPid: 654,
+              pidChanged: true,
+            },
+          ],
+        },
+      },
+    },
+  }));
+
+  assert.match(html, /Live bridge process/);
+  assert.match(html, /Current Server PID not running \| state stopped/);
+  assert.match(html, /Current Bridge PID 654 \| state running \| reused the existing managed process/);
+  assert.match(html, /Historical restart evidence/);
+  assert.match(html, /Restart evidence only: bridge pid 600 -&gt; 654 \| pid changed/);
+  assert.match(html, /bridge connected/);
 });
 
 test('manager repo card renders reset controls and reset job state for active PRDs', async () => {

@@ -1775,6 +1775,14 @@ function listManagedProcessTargets(repo: RepoSummary | null) {
   return (['server', 'controlBridge'] as const).filter((target) => managedTargets.includes(target));
 }
 
+function resolveCurrentProcessStatusTargets(repo: RepoSummary | null): Array<'server' | 'controlBridge'> {
+  const targets = listManagedProcessTargets(repo);
+  if (targets.length > 1) {
+    return targets;
+  }
+  return ['server', 'controlBridge'];
+}
+
 function resolvePreferredProcessTarget(repo: RepoSummary | null): 'server' | 'controlBridge' {
   const repoId = String(repo && repo.repoId || '').trim();
   const selected = repoId ? activeProcessTargetsByRepo[repoId] : undefined;
@@ -3973,13 +3981,13 @@ function LiveProcessPanel({
   const process = repo.managedProcesses && repo.managedProcesses[selectedTarget]
     ? repo.managedProcesses[selectedTarget]
     : null;
+  const currentStatusTargets = resolveCurrentProcessStatusTargets(repo);
   const output = getManagedProcessOutput(repoId, selectedTarget);
   const restartEvidence = repo.restartJob && repo.restartJob.restartEvidence ? repo.restartJob.restartEvidence : null;
   const targetEvidence = findRestartEvidenceTarget(restartEvidence, selectedTarget);
   const access = repo.controlAccess || null;
   const ownerLabel = formatControlOwnerLabel(access && access.owner ? access.owner : null);
   const accessMessage = describeControlAccessMessage(access);
-  const singletonMessage = describeSingletonOutcome(process);
 
   if (targets.length === 0) {
     return (
@@ -4018,18 +4026,28 @@ function LiveProcessPanel({
           ))}
         </div>
       ) : null}
-      <div className="queue-detail">
-        PID {formatPidValue(process && process.pid)} | state {process && process.running === false ? 'stopped' : 'running'}
-        {singletonMessage ? ` | ${singletonMessage}` : ''}
+      <div className="history-block" style={{ marginTop: '12px' }}>
+        <h4>Current managed process status</h4>
+        {currentStatusTargets.map((target) => (
+          <div className="queue-detail" style={{ marginTop: '8px' }}>
+            {buildCurrentProcessStatusLabel(target, repo)}
+          </div>
+        ))}
       </div>
       {targetEvidence ? (
-        <div className="queue-detail" style={{ marginTop: '8px' }}>
-          Restart evidence: {buildTargetLifecycleLabel(targetEvidence)}
-          {targetEvidence.pidChanged === true ? ' | pid changed' : targetEvidence.pidChanged === false ? ' | pid unchanged' : ''}
+        <div className="history-block" style={{ marginTop: '12px' }}>
+          <h4>Historical restart evidence</h4>
+          <div className="queue-detail" style={{ marginTop: '8px' }}>
+            Restart evidence only: {buildTargetLifecycleLabel(targetEvidence)}
+            {targetEvidence.pidChanged === true ? ' | pid changed' : targetEvidence.pidChanged === false ? ' | pid unchanged' : ''}
+          </div>
         </div>
       ) : process && (process.preRestartPid || process.postRestartPid) ? (
-        <div className="queue-detail" style={{ marginTop: '8px' }}>
-          Restart evidence: {selectedTarget} pid {formatPidValue(process.preRestartPid)} -&gt; {formatPidValue(process.postRestartPid ?? process.pid)}
+        <div className="history-block" style={{ marginTop: '12px' }}>
+          <h4>Historical restart evidence</h4>
+          <div className="queue-detail" style={{ marginTop: '8px' }}>
+            Restart evidence only: {selectedTarget} pid {formatPidValue(process.preRestartPid)} -&gt; {formatPidValue(process.postRestartPid ?? process.pid)}
+          </div>
         </div>
       ) : null}
       {process && (process.command || process.cwd) ? (
@@ -4504,6 +4522,29 @@ function buildTargetLifecycleLabel(target: RestartEvidenceTargetSummary) {
   const pre = target.preRestartPid == null ? 'missing' : String(target.preRestartPid);
   const post = target.postRestartPid == null ? 'missing' : String(target.postRestartPid);
   return `${target.label || target.target || 'target'} pid ${pre} -> ${post}`;
+}
+
+function buildCurrentProcessStatusLabel(target: 'server' | 'controlBridge', repo: RepoSummary | null) {
+  const process = repo && repo.managedProcesses && repo.managedProcesses[target]
+    ? repo.managedProcesses[target]
+    : null;
+  const targetLabel = target === 'controlBridge' ? 'Bridge' : 'Server';
+  const stateLabel = !process
+    ? 'not observed'
+    : process.running === false
+      ? 'stopped'
+      : 'running';
+  const pidLabel = process && process.pid != null
+    ? String(process.pid)
+    : process && process.running === false
+      ? 'not running'
+      : 'not reported';
+  const parts = [`Current ${targetLabel} PID ${pidLabel}`, `state ${stateLabel}`];
+  const singletonMessage = describeSingletonOutcome(process);
+  if (singletonMessage) {
+    parts.push(singletonMessage);
+  }
+  return parts.join(' | ');
 }
 
 function formatPidValue(pid: number | null | undefined) {
