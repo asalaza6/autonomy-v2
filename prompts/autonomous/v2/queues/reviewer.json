@@ -1382,10 +1382,10 @@
         "Verification for the completed task includes `npm run typecheck` and the relevant targeted deploy test suite, plus a disposable manual check of one clean-tree deploy and one dirty-tree deploy with auto-stash enabled."
       ],
       "reviewRound": 2,
-      "status": "merged",
+      "status": "changes_requested",
       "createdAt": "2026-04-29T07:58:15.718Z",
-      "updatedAt": "2026-04-29T08:02:28.783Z",
-      "reviewedAt": "2026-04-29T08:00:19.737Z",
+      "updatedAt": "2026-04-29T08:03:19.395Z",
+      "reviewedAt": "2026-04-29T08:03:19.395Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-29T08:02:04.335Z"
