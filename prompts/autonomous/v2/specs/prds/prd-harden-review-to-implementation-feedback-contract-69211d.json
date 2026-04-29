@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-harden-review-to-implementation-feedback-contract-69211d",
+  "title": "Harden Review-to-Implementation Feedback Contract And Block No-Op Followups",
+  "createdAt": "2026-04-29T11:02:00.245Z",
+  "specification": "# PRD: Harden Review-to-Implementation Feedback Contract And Block No-Op Followups\n\nPriority: high\n\n## Problem\nReviewer feedback is preserved as conversation continuity and prose summaries, but it is not converted into machine-enforced follow-up requirements. Implementation follow-ups can complete as `noop` with no new evidence, and reviewer auto-approval can merge PRs after repeated rounds even when the original blocker was not substantively satisfied.\n\n## Goal\nMake reviewer feedback actionable and enforceable so implementation follow-ups must either produce the requested proof or remain blocked, while preserving conversation continuity for both implementation and review agents.\n\n## Requirements\n- Convert review change requests into structured follow-up requirements, including explicit required checks, expected evidence, and blocker categories.\n- Persist those structured requirements onto implementation follow-up tasks instead of only copying summary prose into description/acceptance.\n- Prevent implementation follow-up completion as `noop` when unresolved structured review blockers remain open.\n- Allow reviewer to approve only when structured blockers are satisfied or explicitly dismissed by policy.\n- Scope auto-approval so it cannot override unresolved verification blockers.\n- Preserve and display implementation and review conversation references, but treat them as continuity aids rather than proof of requirement satisfaction.\n- Surface in queue/state data whether a follow-up closed each reviewer blocker and what evidence was recorded.\n\n## Acceptance Criteria\n- A review requesting a focused test run creates a follow-up task that records that test command as a required check or required evidence item.\n- An implementation follow-up with no code changes and no new required evidence cannot transition to done/merged while blockers remain open.\n- Reviewer approval is blocked when unresolved structured blockers exist, even after repeated rounds.\n- A PR history view shows which reviewer blockers were opened, which follow-up addressed them, and whether they were satisfied.\n- Existing conversation resume behavior for implementation and review remains intact.\n\n## Verification\n- Unit tests for follow-up task creation proving review feedback becomes structured requirements.\n- Unit tests for implementation completion logic proving unresolved blockers prevent `noop` completion.\n- Unit tests for reviewer decision logic proving auto-approval does not bypass unresolved verification blockers.\n- Smoke test covering a review-requested focused verification flow from review -> follow-up -> approval.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777459613653_83e9901fdbebe\nManager message: msg_1777460359779_306b4dc28b1058\nAgent message: msg_1777460359779_7db1dcf45c70f8\nCreated: 2026-04-29T11:00:49.196Z",
+  "requirements": [
+    "Convert review change requests into structured follow-up requirements",
+    "including explicit required checks",
+    "expected evidence",
+    "and blocker categories.",
+    "Persist those structured requirements onto implementation follow-up tasks instead of only copying summary prose into description/acceptance.",
+    "Prevent implementation follow-up completion as `noop` when unresolved structured review blockers remain open.",
+    "Allow reviewer to approve only when structured blockers are satisfied or explicitly dismissed by policy.",
+    "Scope auto-approval so it cannot override unresolved verification blockers.",
+    "Preserve and display implementation and review conversation references",
+    "but treat them as continuity aids rather than proof of requirement satisfaction.",
+    "Surface in queue/state data whether a follow-up closed each reviewer blocker and what evidence was recorded."
+  ]
+}
