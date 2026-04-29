@@ -5888,11 +5888,12 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
       "createdAt": "2026-04-29T08:00:19.737Z",
-      "updatedAt": "2026-04-29T08:02:01.107Z",
+      "updatedAt": "2026-04-29T08:02:01.179Z",
       "startedAt": "2026-04-29T08:00:19.737Z",
       "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
       "completedAt": "2026-04-29T08:02:01.107Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "ba3eba2fe17a1ebcdc696f48ea0470cc037b0c4e"
     }
   ]
 }
