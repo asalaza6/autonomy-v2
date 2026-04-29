@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-show-current-server-and-ca4867",
+  "title": "Show current server and bridge PIDs explicitly in live process panel",
+  "createdAt": "2026-04-29T07:44:49.482Z",
+  "specification": "# PRD: Show current server and bridge PIDs explicitly in live process panel\n\nPriority: medium\n\n## Problem\nThe live process panel is target-focused and only shows one PID/state line for the selected target. When a process is stopped or missing, managers cannot quickly tell the current server PID and current bridge PID at the same time, and restart evidence can be mistaken for current state.\n\n## Goal\nMake managed process status unambiguous by displaying current PID/state for both managed targets together, while preserving per-target output focus.\n\n## Requirements\n- Add explicit summary fields for both managed targets in the live process panel, using stable labels such as `Current Server PID` and `Current Bridge PID` or equivalent agreed terminology.\n- Show current state for each target next to its PID, including clear empty-state text when no PID is present.\n- Keep the existing per-target focus behavior for output/log viewing so managers can still switch between Server and Bridge output.\n- Visually distinguish current status from restart evidence/history so historical PID transitions are not confused with live PID values.\n- Use the same managed process source of truth already exposed in repo summaries; do not infer current PID from restart evidence.\n\n## Acceptance Criteria\n- When both managed targets exist, the panel shows two current PID rows at the same time without requiring target switching.\n- When one target is stopped, its row clearly shows no current PID while the other target still shows its live PID if present.\n- Restart evidence remains visible but is labeled as historical/restart evidence and is not presented as the current PID.\n- Manager-facing copy makes it clear that Server and Bridge are separate managed targets.\n\n## Verification\n- Add or update unit tests around the live process panel rendering to assert simultaneous display of both current PID fields.\n- Cover stopped/missing PID cases and mixed states where one target is running and the other is stopped.\n- Manually verify the manager view against a repo with both managed targets present and a restart-history entry.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777448521718_f6324d04456578\nManager message: msg_1777448521718_3c1d25b3c62f78\nAgent message: msg_1777448521718_27c967dbccd4e8\nCreated: 2026-04-29T07:42:50.058Z",
+  "requirements": [
+    "Add explicit summary fields for both managed targets in the live process panel",
+    "using stable labels such as `Current Server PID` and `Current Bridge PID` or equivalent agreed terminology.",
+    "Show current state for each target next to its PID",
+    "including clear empty-state text when no PID is present.",
+    "Keep the existing per-target focus behavior for output/log viewing so managers can still switch between Server and Bridge output.",
+    "Visually distinguish current status from restart evidence/history so historical PID transitions are not confused with live PID values.",
+    "Use the same managed process source of truth already exposed in repo summaries; do not infer current PID from restart evidence."
+  ]
+}
