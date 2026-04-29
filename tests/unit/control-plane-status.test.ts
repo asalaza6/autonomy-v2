@@ -50,6 +50,55 @@ test('status snapshots include the current runtime and PRD state', () => {
   assert.match(output, /Active PRD:/);
 });
 
+test('status snapshots surface a reconciliation error instead of idle no-work messaging when tracked implementation work cannot be attached', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-queue-reconciliation-');
+  initAutonomyRepo(repoDir);
+
+  addPrdWithTasks(repoDir, 'prd-queue-reconcile-001', 'Queued reconciliation PRD', [{
+    id: 'prd-queue-reconcile-001-architecture-agent-1',
+    title: 'Reconcile queued implementation work',
+    agentId: 'architecture-agent',
+    description: 'Seed a queued implementation task for reconciliation.',
+    acceptance: ['Queued task reconciliation is visible in status output.'],
+    sprintId: 'multi-agent-mvp',
+  }]);
+
+  const branch = 'agent/multi-agent-mvp/architecture-agent/prd-queue-reconcile-001-architecture-agent';
+  const worktreePath = path.join(
+    repoDir,
+    '.autonomy',
+    'worktrees',
+    'architecture-agent',
+    'multi-agent-mvp-prd-queue-reconcile-001-architecture-agent'
+  );
+  const queueRelativePath = path.join('prompts', 'autonomous', 'v2', 'queues', 'architecture-agent.json');
+  const worktreeQueuePath = path.join(worktreePath, queueRelativePath);
+
+  git(repoDir, ['branch', branch, 'dev']);
+  git(repoDir, ['worktree', 'add', worktreePath, branch]);
+
+  const worktreeQueue = JSON.parse(fs.readFileSync(worktreeQueuePath, 'utf8'));
+  worktreeQueue.tasks = worktreeQueue.tasks.map((task: any) => task.prdId === 'prd-queue-reconcile-001'
+    ? {
+        ...task,
+        status: 'done',
+        state: 'done',
+        completedAt: '2026-04-29T08:00:00.000Z',
+        updatedAt: '2026-04-29T08:00:00.000Z',
+      }
+    : task);
+  fs.writeFileSync(worktreeQueuePath, `${JSON.stringify(worktreeQueue, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  const architectureStatus = snapshot.agentStatuses.find((agent) => agent.agentId === 'architecture-agent');
+
+  assert.ok(architectureStatus);
+  assert.equal(architectureStatus.workerStatus, 'idle');
+  assert.equal(architectureStatus.queueIssueCode, 'queue_reconciliation_error');
+  assert.match(String(architectureStatus.detail), /^\[queue_reconciliation_error\]/);
+  assert.doesNotMatch(String(architectureStatus.detail), /no queued tasks/i);
+});
+
 test('status snapshots do not perform live GitHub validation during repeated refreshes', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-github-lightweight-');
   const originalGithubToken = process.env.GITHUB_TOKEN;

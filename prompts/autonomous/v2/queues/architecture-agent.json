@@ -5655,12 +5655,14 @@
         "Targeted tests are added or updated for queued-task pickup and idle-vs-queued status rendering, including relevant sync or queue unit tests and `tests/unit/control-plane-*.test.ts` coverage.",
         "If the scheduler or worker attach flow is touched, verification also includes `tests/smoke/control-plane.test.ts` alongside `npm run typecheck` and the focused unit tests."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-29T06:58:13.629Z",
-      "updatedAt": "2026-04-29T07:04:34.470Z",
+      "updatedAt": "2026-04-29T07:10:44.647Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
-      "startedAt": "2026-04-29T07:04:34.470Z"
+      "startedAt": "2026-04-29T07:04:34.470Z",
+      "completedAt": "2026-04-29T07:10:44.647Z",
+      "completionMode": "code"
     }
   ]
 }

@@ -1,11 +1,9 @@
-import fs from 'fs';
 import { AGENT_ROLES, getRoleAgentLabel, getRoleLabel, isPmRole, isReviewRole } from '../../agents/role-catalog.js';
 import type { AnyRecord } from '../autonomy-types.js';
-import { getTaskQueue, readImplementationQueueSnapshot, filterCompletedImplementationQueueTasks, getImplementationTaskState, isTerminalTaskStatus, listTasks as listQueueTasks } from './shared-queues.js';
-import { resolveImplementationBranchRef } from './shared-lanes.js';
-import { buildTaskLaneKey, buildWorktreePath } from './shared-repo.js';
+import { getTaskQueue, filterCompletedImplementationQueueTasks, getImplementationTaskState, isTerminalTaskStatus, listTasks as listQueueTasks } from './shared-queues.js';
 import { normalizeLaneKey } from './shared-core.js';
 import { reviewTaskHasActionableImplementationWork } from '../../sync/review-reconciliation.js';
+import { resolveImplementationQueueContext } from '../../server/orchestrator/queues.js';
 
 function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, branchLocks, runtime, prds }) {
   const prById = new Map((prs.pullRequests || []).map((pr) => [pr.id, pr]));
@@ -54,13 +52,18 @@ function buildPmAgentStatus(agent, worker, prds) {
 }
 
 function buildImplementationAgentStatus(rootDir, config, branchLocksState, agent, queue, worker, prById, branchLockByLane) {
-  const resolvedQueueState = resolveImplementationStatusQueue(rootDir, config, branchLocksState, agent, queue);
+  const resolvedQueueState = resolveImplementationQueueContext(rootDir, config, branchLocksState, agent, queue);
+  const trackedQueue = filterCompletedImplementationQueueTasks(queue, branchLocksState, agent.id);
   const tasks = (resolvedQueueState.queue && resolvedQueueState.queue.tasks) || [];
+  const trackedTasks = (trackedQueue && trackedQueue.tasks) || [];
   const activeTask = selectImplementationTaskForStatus(tasks);
   const extraCount = countAdditionalPendingTasks(tasks, activeTask && activeTask.id);
   const branch = resolvedQueueState.branch || (activeTask ? resolveTaskBranch(activeTask, prById, branchLockByLane) : null);
+  const queueIssue = buildImplementationQueueIssue(trackedTasks, tasks, worker);
 
-  let detail = 'no queued tasks';
+  let detail = queueIssue
+    ? `[${queueIssue.code}] ${queueIssue.message}`
+    : 'no queued tasks';
   if (activeTask) {
     const taskState = getImplementationTaskState(activeTask);
     const prefix = worker.status === 'running'
@@ -90,86 +93,38 @@ function buildImplementationAgentStatus(rootDir, config, branchLocksState, agent
     detail,
     activeTaskId: activeTask ? activeTask.id : null,
     branch,
+    queueIssueCode: queueIssue ? queueIssue.code : null,
   };
 }
 
-function resolveImplementationStatusQueue(rootDir, config, branchLocksState, agent, fallbackQueue) {
-  const branchQueueState = readLatestImplementationBranchQueue(rootDir, config, branchLocksState, agent, fallbackQueue);
-  if (branchQueueState) {
-    return branchQueueState;
+function buildImplementationQueueIssue(trackedTasks, resolvedTasks, worker) {
+  const pendingTrackedTasks = (trackedTasks || []).filter((task) => !isTerminalTaskStatus(getImplementationTaskState(task)));
+  if (pendingTrackedTasks.length === 0) {
+    return null;
+  }
+  const pendingResolvedTasks = (resolvedTasks || []).filter((task) => !isTerminalTaskStatus(getImplementationTaskState(task)));
+  if (pendingResolvedTasks.length > 0) {
+    return null;
+  }
+
+  const noopReason = String(worker && worker.lastResult && worker.lastResult.reason || '').trim();
+  const lastError = String(worker && worker.lastError || '').trim();
+  if (noopReason === 'no_queued_task') {
+    return {
+      code: 'pickup_error',
+      message: `tracked queue still contains ${pendingTrackedTasks.length} queued task${pendingTrackedTasks.length === 1 ? '' : 's'}, but worker pickup reported no queued task`,
+    };
+  }
+  if (/worker process exited before reporting result/i.test(lastError)) {
+    return {
+      code: 'stale_worker',
+      message: `tracked queue still contains ${pendingTrackedTasks.length} queued task${pendingTrackedTasks.length === 1 ? '' : 's'}, but the last worker exited before pickup completed`,
+    };
   }
   return {
-    queue: filterCompletedImplementationQueueTasks(fallbackQueue, branchLocksState, agent.id),
-    branch: null,
-    worktreePath: null,
+    code: 'queue_reconciliation_error',
+    message: `tracked queue still contains ${pendingTrackedTasks.length} queued task${pendingTrackedTasks.length === 1 ? '' : 's'}, but runtime queue reconstruction found no runnable work`,
   };
-}
-
-function readLatestImplementationBranchQueue(rootDir, config, branchLocksState, agent, fallbackQueue) {
-  const agentId = agent.id;
-  const locks = ((branchLocksState && branchLocksState.locks) || [])
-    .filter((lock) => lock && lock.agentId === agentId)
-    .slice()
-    .sort((left, right) => {
-      return (Date.parse(right && right.updatedAt || '') || 0) - (Date.parse(left && left.updatedAt || '') || 0);
-    });
-
-  for (const lock of locks) {
-    const queueState = readImplementationQueueSnapshot(rootDir, config, agentId, {
-      branch: lock.branch || null,
-      worktreePath: lock.worktreePath || null,
-    });
-    if (!queueState) {
-      continue;
-    }
-    const pendingTasks = (queueState.tasks || []).filter((task) => !isTerminalTaskStatus(getImplementationTaskState(task)));
-    if (pendingTasks.length > 0) {
-      return {
-        queue: queueState,
-        branch: lock.branch || null,
-        worktreePath: lock.worktreePath,
-      };
-    }
-  }
-
-  const branchTasks = (fallbackQueue && Array.isArray(fallbackQueue.tasks) ? fallbackQueue.tasks : [])
-    .filter((task) => !isTerminalTaskStatus(getImplementationTaskState(task)))
-    .slice()
-    .sort((left, right) => {
-      const rankDiff = rankImplementationTaskForStatus(left) - rankImplementationTaskForStatus(right);
-      if (rankDiff !== 0) {
-        return rankDiff;
-      }
-      return String(left.createdAt || '').localeCompare(String(right.createdAt || ''));
-    });
-
-  for (const task of branchTasks) {
-    const branch = resolveImplementationBranchRef(rootDir, config, branchLocksState, task.agentId, buildTaskLaneKey(task), {
-      task,
-    });
-    if (!branch) {
-      continue;
-    }
-    const queueState = readImplementationQueueSnapshot(rootDir, config, agentId, {
-      branch,
-      worktreePath: buildWorktreePath(rootDir, config, task),
-    });
-    if (!queueState) {
-      continue;
-    }
-    const pendingTasks = (queueState.tasks || []).filter((candidate) => !isTerminalTaskStatus(getImplementationTaskState(candidate)));
-    if (pendingTasks.length > 0) {
-      return {
-        queue: queueState,
-        branch,
-        worktreePath: fs.existsSync(buildWorktreePath(rootDir, config, task))
-          ? buildWorktreePath(rootDir, config, task)
-          : null,
-      };
-    }
-  }
-
-  return null;
 }
 
 function buildReviewAgentStatus(agent, queue, worker, prById, allTasks) {
