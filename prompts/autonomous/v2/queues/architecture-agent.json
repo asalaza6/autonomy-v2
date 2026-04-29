@@ -5836,6 +5836,33 @@
       "completedAt": "2026-04-29T07:48:55.113Z",
       "completionMode": "code",
       "commitSha": "7e329c88b174635b18d28fbae37d67bd7e20af65"
+    },
+    {
+      "id": "prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent-1",
+      "title": "Add optional deploy auto-stash flow with restore status and deploy coverage",
+      "description": "Update the deploy command and supporting git/deploy helpers so deploy can optionally proceed from a dirty working tree by stashing tracked and untracked changes before the existing `dev` to `main` promotion flow, then attempting to restore the stash afterward on both success and failure paths. Add an operator-visible control surface for the behavior through an explicit deploy option and/or existing repo config plumbing, preserve the current dirty-tree failure when auto-stash is disabled or unset, and surface clear status and recovery messaging for stash creation, deploy start/result, stash restore result, and restore conflicts. Likely touch points include `src/autonomy-v2/commands/` deploy and git operation paths plus targeted coverage in `tests/smoke/deploy.test.ts` and any supporting unit tests around deploy or git helpers.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-optional-auto-stash-behavior-e1e4bc",
+      "laneKey": "prd-add-optional-auto-stash-behavior-e1e4bc:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Deploy exposes an explicit operator-visible auto-stash control through the CLI and/or existing config path, and dirty-tree deploy behavior remains unchanged when that control is disabled or unset.",
+        "When auto-stash is enabled and the working tree is dirty, deploy stashes both tracked and untracked changes before the normal clean-tree deploy flow runs, then attempts to restore the stash after deploy completion regardless of whether deploy succeeds or fails.",
+        "Deploy status output clearly reports stash creation, deploy start, deploy success or failure, stash restore success or failure, and any restore-conflict condition without claiming a clean success when restoration is incomplete or conflicted.",
+        "Restore-conflict handling leaves the operator with explicit warning and actionable recovery instructions that identify the stash restoration problem and the next manual recovery step.",
+        "Automated coverage verifies current clean-tree deploy behavior, dirty-tree deploy with auto-stash enabled, untracked-file preservation, deploy failure followed by restore attempt, and stash restore conflict reporting, with targeted updates centered on `tests/smoke/deploy.test.ts` and any related unit tests.",
+        "Verification for the completed task includes `npm run typecheck` and the relevant targeted deploy test suite, plus a disposable manual check of one clean-tree deploy and one dirty-tree deploy with auto-stash enabled."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-29T07:50:58.902Z",
+      "updatedAt": "2026-04-29T07:50:58.902Z"
     }
   ]
 }
