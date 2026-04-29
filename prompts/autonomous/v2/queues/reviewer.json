@@ -1406,13 +1406,13 @@
         "`npm run lint` is failing, so this branch is not mergeable yet.\nMerge-blocking verification failed: `npm run lint` reports an unused `buildRepoAssistantGithubSessionEnv` symbol in `tests/unit/control-plane-github.test.ts:12`. Fix that lint error and rerun the required checks before approval.\nBlocking checks failed: npm run lint"
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-29T11:21:25.947Z",
       "updatedAt": "2026-04-29T11:23:45.502Z",
       "reviewedAt": "2026-04-29T11:23:01.784Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-29T11:21:30.284Z",
+      "dispatchedAt": "2026-04-29T11:23:47.704Z",
       "scopeViolations": []
     }
   ]
