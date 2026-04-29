@@ -349,6 +349,7 @@ export interface ControlPlaneAgentChatMessagePayload extends AnyRecord {
   messageId: string;
   responseMessageId: string;
   prompt: string;
+  resumeSessionId?: string;
   history?: Array<Pick<ControlPlaneChatMessageRecord, 'role' | 'content' | 'createdAt'>>;
 }
 
@@ -404,6 +405,9 @@ export interface ControlPlaneConversationRecord extends AnyRecord {
   title: string;
   createdAt: string;
   updatedAt: string;
+  codexConversationId?: string;
+  continuityMode?: 'history-only' | 'codex-session';
+  continuityError?: string;
   messages: ControlPlaneChatMessageRecord[];
 }
 

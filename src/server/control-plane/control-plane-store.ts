@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 import type {
+  AnyRecord,
   ControlPlaneManagedProcessRecord,
   ControlPlaneRepoRecord,
   ControlPlaneRepoControlAccess,
@@ -41,7 +42,10 @@ const CONTROL_OWNER_ACTIVE_MS = 30_000;
 const MEMORY_CONTROL_PLANE_STATES = new Map<string, ControlPlaneState>();
 
 function getControlPlanePaths(rootDir: string) {
-  const controlPlaneDir = path.join(rootDir, '.autonomy', 'control-plane');
+  const configuredStateDir = String(process.env.AUTONOMY_CONTROL_PLANE_STATE_DIR || '').trim();
+  const controlPlaneDir = configuredStateDir
+    ? path.resolve(configuredStateDir)
+    : path.join(rootDir, '.autonomy', 'control-plane');
   return {
     controlPlaneDir,
     statePath: path.join(controlPlaneDir, 'state.json'),
@@ -163,10 +167,21 @@ function normalizeConversationRecord(
     title: String(conversation.title || 'Repo conversation').trim() || 'Repo conversation',
     createdAt,
     updatedAt: String(conversation.updatedAt || createdAt),
+    codexConversationId: normalizeOptionalString(conversation.codexConversationId),
+    continuityMode: normalizeConversationContinuityMode(conversation.continuityMode, conversation.codexConversationId),
+    continuityError: normalizeOptionalString(conversation.continuityError),
     messages: Array.isArray(conversation.messages)
       ? conversation.messages.map(normalizeChatMessageRecord).filter((message): message is ControlPlaneChatMessageRecord => Boolean(message))
       : [],
   } as ControlPlaneConversationRecord;
+}
+
+function normalizeConversationContinuityMode(value: unknown, codexConversationId?: unknown) {
+  const normalized = String(value || '').trim();
+  if (normalized === 'history-only' || normalized === 'codex-session') {
+    return normalized as ControlPlaneConversationRecord['continuityMode'];
+  }
+  return normalizeOptionalString(codexConversationId) ? 'codex-session' as const : 'history-only' as const;
 }
 
 function normalizeChatMessageRecord(message: ControlPlaneChatMessageRecord | null | undefined) {
@@ -364,6 +379,7 @@ function normalizeJobPayload(
       messageId,
       responseMessageId,
       prompt,
+      resumeSessionId: normalizeOptionalString(chatPayload.resumeSessionId),
       history: normalizeChatHistory(chatPayload.history),
     } as ControlPlaneAgentChatMessagePayload;
   }
@@ -560,6 +576,7 @@ function queueAgentChatMessage(rootDir: string, input: {
       title: buildConversationTitle(prompt),
       createdAt: now,
       updatedAt: now,
+      continuityMode: 'history-only',
       messages: [],
     };
     conversations.push(conversation);
@@ -588,6 +605,7 @@ function queueAgentChatMessage(rootDir: string, input: {
     messageId: managerMessage.id,
     responseMessageId: responseMessage.id,
     prompt,
+    resumeSessionId: conversation.codexConversationId,
     history,
   });
   responseMessage.jobId = job.id;
@@ -1133,6 +1151,7 @@ function createControlPlaneAgentChatJob(payload: ControlPlaneAgentChatMessagePay
       messageId: payload.messageId,
       responseMessageId: payload.responseMessageId,
       prompt: payload.prompt,
+      resumeSessionId: normalizeOptionalString(payload.resumeSessionId),
       history: normalizeChatHistory(payload.history),
     },
     status: 'queued' as const,
@@ -1144,9 +1163,10 @@ function createControlPlaneAgentChatJob(payload: ControlPlaneAgentChatMessagePay
 
 function applyAgentChatJobCompletion(state: ControlPlaneState, job: ControlPlaneJobRecord) {
   const now = job.updatedAt || new Date().toISOString();
+  const payload = job.payload as ControlPlaneAgentChatMessagePayload;
+  const conversation = getConversationRecord(state, job.repoId || payload.repoId, payload.conversationId);
   if (job.status === 'completed') {
     const answer = String(job.result && (job.result.answer || job.result.message) || '').trim();
-    const payload = job.payload as ControlPlaneAgentChatMessagePayload;
     const prdProposal = normalizePrdProposal(job.result && job.result.prdProposal, {
       repoId: job.repoId || payload.repoId,
       conversationId: payload.conversationId,
@@ -1166,6 +1186,7 @@ function applyAgentChatJobCompletion(state: ControlPlaneState, job: ControlPlane
       ...(prdProposal ? { prdProposal } : {}),
       updatedAt: now,
     });
+    updateConversationContinuity(conversation, job.result, payload, now);
     return;
   }
 
@@ -1177,7 +1198,49 @@ function applyAgentChatJobCompletion(state: ControlPlaneState, job: ControlPlane
       error,
       updatedAt: now,
     });
+    updateConversationContinuity(conversation, job.result, payload, now);
   }
+}
+
+function getConversationRecord(state: ControlPlaneState, repoId: string, conversationId: string) {
+  const normalizedRepoId = String(repoId || '').trim();
+  const normalizedConversationId = String(conversationId || '').trim();
+  if (!normalizedRepoId || !normalizedConversationId) {
+    return null;
+  }
+  return (state.conversations[normalizedRepoId] || []).find((entry) => entry.id === normalizedConversationId) || null;
+}
+
+function updateConversationContinuity(
+  conversation: ControlPlaneConversationRecord | null,
+  result: AnyRecord,
+  payload: ControlPlaneAgentChatMessagePayload,
+  updatedAt: string,
+) {
+  if (!conversation) {
+    return;
+  }
+
+  const returnedConversationId = normalizeOptionalString(result && result.conversationId);
+  const continuityMode = normalizeConversationContinuityMode(
+    result && result.continuityMode,
+    returnedConversationId || conversation.codexConversationId,
+  );
+  const continuityError = normalizeOptionalString(result && result.continuityError);
+
+  if (returnedConversationId) {
+    conversation.codexConversationId = returnedConversationId;
+  } else if (continuityMode === 'history-only' && normalizeOptionalString(payload.resumeSessionId)) {
+    delete conversation.codexConversationId;
+  }
+
+  conversation.continuityMode = continuityMode;
+  if (continuityError) {
+    conversation.continuityError = continuityError;
+  } else {
+    delete conversation.continuityError;
+  }
+  conversation.updatedAt = updatedAt;
 }
 
 function updateAgentChatResponseMessage(
@@ -1270,7 +1333,15 @@ function shouldPersistControlPlaneState(rootDir: string) {
   if (['1', 'true', 'yes', 'on', 'disk', 'file'].includes(explicitSetting)) {
     return true;
   }
-  return !process.env.DYNO && Boolean(rootDir);
+  return Boolean(rootDir);
+}
+
+function resetControlPlaneStateCache(rootDir?: string) {
+  if (rootDir) {
+    MEMORY_CONTROL_PLANE_STATES.delete(getControlPlaneStateKey(rootDir));
+    return;
+  }
+  MEMORY_CONTROL_PLANE_STATES.clear();
 }
 
 export {
@@ -1296,6 +1367,7 @@ export {
   listJobs,
   loadControlPlaneState,
   queueAgentChatMessage,
+  resetControlPlaneStateCache,
   saveControlPlaneState,
   setManagedProcess,
   setRepoStatus,
