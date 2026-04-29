@@ -495,6 +495,87 @@ test('implementation task completion records verification evidence and satisfies
   assert.equal(queue.tasks[0].reviewerBlockers[0].status.evidence[0].command, 'npm run test:unit -- review-followup');
 });
 
+test('implementation task completion does not satisfy a code-change blocker with unrelated file edits', () => {
+  const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-code-change-unrelated-'));
+  const queuePath = path.join(worktreePath, queueRelativePath);
+  const blockerTask = buildTask({
+    type: 'review_followup',
+  });
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Fix the reviewer blocker in `src/autonomy-v2/commands/gate.ts` before approval.',
+  });
+  blockerTask.reviewerBlockers = reviewerBlockers;
+  writeJson(queuePath, buildQueue([blockerTask]));
+
+  assert.throws(() => {
+    markImplementationTaskComplete(
+      worktreePath,
+      buildConfig(),
+      blockerTask,
+      'agent/shared/architecture-agent/prd-conversation-architecture-agent',
+      'code',
+      {
+        changedFiles: ['src/autonomy-v2/runner/workspace.ts'],
+        checkResults: [],
+      }
+    );
+  }, /reviewer blockers remain unresolved/i);
+
+  const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+  assert.equal(queue.tasks[0].status, 'active');
+  assert.equal(queue.tasks[0].reviewerBlockers[0].status.state, 'open');
+  assert.equal(queue.tasks[0].reviewerBlockers[0].status.evidence[0].kind, 'code_change');
+  assert.equal(
+    queue.tasks[0].reviewerBlockers[0].status.evidence[0].detail,
+    'Matched requested files:'
+  );
+});
+
+test('implementation task completion satisfies a code-change blocker when it updates the requested file', () => {
+  const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-code-change-matched-'));
+  const queuePath = path.join(worktreePath, queueRelativePath);
+  const blockerTask = buildTask({
+    type: 'review_followup',
+  });
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Fix the reviewer blocker in `src/autonomy-v2/commands/gate.ts` before approval.',
+  });
+  blockerTask.reviewerBlockers = reviewerBlockers;
+  writeJson(queuePath, buildQueue([blockerTask]));
+
+  markImplementationTaskComplete(
+    worktreePath,
+    buildConfig(),
+    blockerTask,
+    'agent/shared/architecture-agent/prd-conversation-architecture-agent',
+    'code',
+    {
+      changedFiles: ['src/autonomy-v2/commands/gate.ts', 'src/autonomy-v2/runner/workspace.ts'],
+      checkResults: [],
+    }
+  );
+
+  const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+  assert.equal(queue.tasks[0].status, 'done');
+  assert.equal(queue.tasks[0].reviewerBlockers[0].status.state, 'satisfied');
+  assert.equal(
+    queue.tasks[0].reviewerBlockers[0].status.evidence[0].detail,
+    'Matched requested files: src/autonomy-v2/commands/gate.ts'
+  );
+});
+
 function buildRunnerContext(executeTask: (input: any) => Promise<any>, taskOverrides: Record<string, unknown> = {}) {
   const task = buildTask({
     implementationConversationId: 'session-original',

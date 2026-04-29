@@ -268,13 +268,56 @@ function buildCommandEvidence(command: string, result: AnyRecord | null | undefi
 }
 
 function buildCodeChangeEvidence(blocker: ReviewerBlockerRecord, changedFiles: string[]): ReviewerBlockerEvidenceRecord {
+  const blockerReferenceText = String(
+    blocker.summary
+    || (blocker.requiredEvidence && blocker.requiredEvidence[0] && blocker.requiredEvidence[0].detail)
+    || ''
+  );
+  const referencedFiles = extractReferencedFiles(blockerReferenceText);
+  const matchedFiles = referencedFiles.length > 0
+    ? changedFiles.filter((file) => referencedFiles.includes(normalizePathLikeToken(file)))
+    : [];
   return {
     kind: 'code_change',
     label: blocker.category === 'documentation'
       ? 'Update the requested documentation or comments'
       : 'Implement the requested code change',
-    detail: `Changed files: ${changedFiles.join(', ')}`,
+    detail: referencedFiles.length > 0
+      ? ['Matched requested files:', matchedFiles.join(', ')].filter(Boolean).join(' ')
+      : `Changed files: ${changedFiles.join(', ')}`,
   };
+}
+
+function normalizePathLikeToken(value: string): string {
+  return String(value || '')
+    .trim()
+    .replace(/^[`'"]+|[`'",.;:!?]+$/g, '')
+    .replace(/\\/g, '/');
+}
+
+function extractReferencedFiles(text: string): string[] {
+  const normalized = String(text || '');
+  const matches = normalized.match(/(?:^|[\s`'"])([A-Za-z0-9._/-]+\.[A-Za-z0-9_-]+)(?=$|[\s`'",.;:!?])/g) || [];
+  return uniqueStrings(matches.map((entry) => normalizePathLikeToken(entry)));
+}
+
+function extractChangedFilesFromEvidenceDetail(detail: string): string[] {
+  const normalized = String(detail || '').trim();
+  const prefix = normalized.startsWith('Matched requested files:')
+    ? 'Matched requested files:'
+    : normalized.startsWith('Changed files:')
+      ? 'Changed files:'
+      : '';
+  if (!prefix) {
+    return [];
+  }
+  return uniqueStrings(
+    normalized
+      .slice(prefix.length)
+      .split(',')
+      .map((entry) => normalizePathLikeToken(entry))
+      .filter(Boolean)
+  );
 }
 
 function blockerEvidenceRequirementSatisfied(
@@ -289,7 +332,12 @@ function blockerEvidenceRequirementSatisfied(
       return String(entry.command || '').trim() === String(requirement.command || '').trim();
     }
     if (requirement.kind === 'code_change') {
-      return true;
+      const requiredFiles = extractReferencedFiles(requirement.detail || '');
+      if (requiredFiles.length === 0) {
+        return false;
+      }
+      const changedFiles = extractChangedFilesFromEvidenceDetail(entry.detail || '');
+      return requiredFiles.every((file) => changedFiles.includes(file));
     }
     const requiredDetail = String(requirement.detail || '').trim();
     return !requiredDetail || String(entry.detail || '').trim() === requiredDetail;
