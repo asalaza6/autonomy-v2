@@ -1390,6 +1390,31 @@
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-29T08:08:14.583Z",
       "mergedAt": "2026-04-29T08:09:33.009Z"
+    },
+    {
+      "id": "review-pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "title": "Review [architecture-agent] architecture lane work for prd-harden-review-to-implementation-feedback-contract-69211d",
+      "description": "Review pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent for Enforce blocker satisfaction before noop completion or reviewer approval",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "sourceTaskId": "prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-2",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-29T11:21:25.947Z",
+      "updatedAt": "2026-04-29T11:21:25.947Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "An implementation follow-up that makes no code changes and records no new required evidence cannot transition to done, merged, or equivalent successful completion while one or more structured reviewer blockers remain unresolved.",
+        "Reviewer approval and any reviewer auto-approval path are blocked when unresolved structured blockers remain open, including unresolved verification blockers carried across repeated implementation/review rounds.",
+        "When policy explicitly dismisses a blocker, the decision is represented in structured state so reviewer approval can proceed only for blockers marked satisfied or dismissed by policy.",
+        "Queue/state or PR-history-facing data shows which reviewer blockers were opened, which follow-up addressed each blocker, whether the blocker is satisfied, and what evidence or check result was recorded.",
+        "Existing implementation and review conversation resume behavior remains intact after the enforcement changes.",
+        "Unit tests cover noop-blocking completion behavior and reviewer approval gating, and a smoke test covers a focused verification request flowing from review to follow-up to eventual approval once the structured blocker is satisfied."
+      ],
+      "scopeViolations": []
     }
   ]
 }
