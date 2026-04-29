@@ -76,6 +76,7 @@ test('manager repo card renders a compact summary with attention signals and con
   assert.match(html, /Alpha/);
   assert.match(html, /alpha · Primary customer repo/);
   assert.match(html, /Open repo control page/);
+  assert.match(html, /data-action="validate-github"/);
   assert.match(html, /Production site/);
   assert.match(html, /<details class=\"repo-disclosure\" data-repo-disclosure-key=\"manager:alpha:repo-status-details\">/);
   assert.match(html, /Repo status and details/);
@@ -90,6 +91,39 @@ test('manager repo card renders a compact summary with attention signals and con
   assert.match(html, /Service Connections/);
   assert.match(html, /Netlify-like \/ Primary site/);
   assert.match(html, /API token \(NETLIFY_TOKEN\): missing/);
+});
+
+test('manager repo card shows pending GitHub validation as pending instead of failed', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?manager-github-pending=${Date.now()}`);
+
+  const html = renderToHtml(h(client.ManagerRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      description: 'Primary customer repo',
+      freshnessStatus: 'current',
+      freshnessStatusLabel: 'Current',
+      updatedAt: '2026-04-26T10:10:00.000Z',
+      activePrd: null,
+      prdRun: null,
+      deployment: null,
+      serviceConnections: [],
+      repoAssistant: {
+        github: {
+          available: false,
+          status: 'validation-pending',
+          statusLabel: 'GitHub validation pending',
+          detail: 'GitHub access will be validated when a repo assistant session starts.',
+        },
+      },
+      pullRequestStatuses: [],
+    },
+  }));
+
+  assert.match(html, /GitHub validation pending/);
+  assert.match(html, /data-action="validate-github"/);
+  assert.doesNotMatch(html, /GitHub validation failed/);
 });
 
 test('project repo card hides operational diagnostics behind labeled disclosures', async () => {
@@ -208,6 +242,8 @@ test('project repo card hides operational diagnostics behind labeled disclosures
   assert.match(html, /Work coordination details/);
   assert.match(html, /Live server process/);
   assert.match(html, /GitHub repo access denied/);
+  assert.match(html, /data-action="validate-github"/);
+  assert.match(html, /Run GitHub validation/);
   assert.match(html, /Update package/);
   assert.match(html, /Restart failed/);
   assert.match(html, /Heroku-like \/ Production app/);

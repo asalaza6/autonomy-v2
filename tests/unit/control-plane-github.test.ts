@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { execFileSync } from 'child_process';
 
 import {
   REPO_ASSISTANT_GITHUB_SECRET_FILES,
   buildRepoAssistantGithubCodexConfigOverrides,
   buildRepoAssistantGithubEnv,
+  buildRepoAssistantGithubSessionEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
   resolveRepoAssistantGithubEnv,
@@ -485,6 +487,71 @@ test('repo assistant GitHub capability loads approved runtime secrets from .env.
       delete process.env.GH_TOKEN;
     }
   }
+});
+
+test('repo assistant GitHub capability falls back to approved file auth when runtime env token fails', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-repo-assistant-github-fallback-'));
+  fs.writeFileSync(path.join(rootDir, '.env.autonomy'), 'GITHUB_TOKEN=approved-secret-token\n', 'utf8');
+  const fallbackRepo = {
+    owner: 'asalaza6',
+    repo: 'autonomy-v2-fallback-test',
+  };
+  const raw = execFileSync('node', ['--input-type=module', '-e', `
+    import { resolveRepoAssistantGithubCapability, buildRepoAssistantGithubSessionEnv } from './dist/src/server/control-plane/control-plane-github.js';
+    const rootDir = ${JSON.stringify(rootDir)};
+    const fallbackRepo = ${JSON.stringify(fallbackRepo)};
+    const calls = [];
+    process.env.GITHUB_TOKEN = 'bad-runtime-token';
+    delete process.env.GH_TOKEN;
+    const capability = resolveRepoAssistantGithubCapability(rootDir, {
+      repository: fallbackRepo,
+      validationPullNumber: 27,
+      githubApiRunner(args, options) {
+        calls.push(\`\${options.token}:\${args[0]}\`);
+        if (options.token === 'bad-runtime-token') {
+          const error = new Error('gh failed');
+          error.stderr = 'HTTP 401 Bad credentials';
+          error.status = 1;
+          throw error;
+        }
+        if (args[0] === \`repos/\${fallbackRepo.owner}/\${fallbackRepo.repo}\`) {
+          return JSON.stringify({ private: false, visibility: 'public', default_branch: 'dev' });
+        }
+        if (args[0] === \`repos/\${fallbackRepo.owner}/\${fallbackRepo.repo}/pulls/27\`) {
+          return JSON.stringify({
+            number: 27,
+            title: 'Approved runtime secret fallback',
+            state: 'open',
+            html_url: \`https://github.com/\${fallbackRepo.owner}/\${fallbackRepo.repo}/pull/27\`,
+            user: { login: 'asalaza6' },
+            base: { ref: 'dev' },
+            head: { ref: 'feature/repo-assistant' },
+          });
+        }
+        if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+          return '[]';
+        }
+        if (args[0] === 'graphql') {
+          return JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { nodes: [] } } } } });
+        }
+        throw new Error(\`Unexpected route: \${args[0]}\`);
+      },
+    });
+    console.log(JSON.stringify({ capability, calls, sessionEnv: buildRepoAssistantGithubSessionEnv(rootDir, capability) }));
+  `], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+  const parsed = JSON.parse(raw);
+  assert.equal(parsed.capability.available, true);
+  assert.equal(parsed.capability.authSource, 'approved-runtime-secret');
+  assert.deepEqual(parsed.capability.authFiles, ['.env.autonomy']);
+  assert.equal(parsed.calls.some((entry: string) => entry.startsWith(`bad-runtime-token:repos/${fallbackRepo.owner}/${fallbackRepo.repo}`)), true);
+  assert.equal(parsed.calls.some((entry: string) => entry.startsWith(`approved-secret-token:repos/${fallbackRepo.owner}/${fallbackRepo.repo}`)), true);
+  assert.deepEqual(parsed.sessionEnv, {
+    GITHUB_TOKEN: 'approved-secret-token',
+    GH_TOKEN: 'approved-secret-token',
+  });
 });
 
 test('repo assistant GitHub capability prefers .env.autonomy.local over .env.autonomy during validation', () => {

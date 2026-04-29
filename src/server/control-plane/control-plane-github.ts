@@ -35,6 +35,18 @@ function buildRepoAssistantGithubEnv(env: NodeJS.ProcessEnv = process.env) {
   };
 }
 
+function buildRepoAssistantGithubSessionEnv(
+  rootDir: string,
+  capability: Record<string, any> | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const authSource = String(capability && capability.authSource || '').trim();
+  if (authSource === 'approved-runtime-secret') {
+    return buildRepoAssistantGithubEnv(readRepoAssistantGithubEnvFromApprovedFiles(rootDir).env as NodeJS.ProcessEnv);
+  }
+  return buildRepoAssistantGithubEnv(selectRepoAssistantGithubEnv(env) as NodeJS.ProcessEnv);
+}
+
 function buildRepoAssistantGithubCodexConfigOverrides() {
   return [
     `experimental_network.allowed_domains=${JSON.stringify([...REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS])}`,
@@ -177,46 +189,104 @@ function resolveRepoAssistantGithubCapability(
     return refreshCachedCapabilityValidation(cachedCapability, base.validation);
   }
 
-  const token = githubEnv.GITHUB_TOKEN;
   const runner = options.githubApiRunner || defaultGithubApiRunner;
   try {
-    const repositoryMetadata = readGithubJson(
+    const capability = buildValidatedGithubCapability(
       runner,
-      [`repos/${repo.owner}/${repo.repo}`],
-      { token, baseEnv: env, operation: 'repository' },
-    );
-    const pullRequestBundle = readPullRequestBundle(
-      runner,
+      env,
+      githubEnv,
       repo,
       pullNumber,
-      token,
-      env,
+      base,
       options.includePullRequestData === true,
     );
-    const capability = {
-      ...base,
-      available: true,
-      status: 'enabled',
-      statusLabel: 'GitHub access ready',
-      detail: `Validated GitHub read access for ${repo.owner}/${repo.repo}#${pullNumber}.`,
-      repositoryMetadata: {
-        private: repositoryMetadata.private === true,
-        visibility: String(repositoryMetadata.visibility || '').trim() || null,
-        defaultBranch: String(repositoryMetadata.default_branch || '').trim() || null,
-      },
-      validation: {
-        ...base.validation,
-        validatedAt: new Date().toISOString(),
-      },
-      ...(pullRequestBundle ? { pullRequest: pullRequestBundle } : {}),
-    };
     repoAssistantGithubCapabilityCache.set(cacheKey, capability);
     return capability;
   } catch (error) {
+    const approvedRuntimeSecrets = !options.env && base.authSource === 'runtime-env'
+      ? readRepoAssistantGithubEnvFromApprovedFiles(rootDir)
+      : { env: {}, loadedFrom: [] as string[] };
+    const fallbackGithubEnv = approvedRuntimeSecrets.env;
+    const fallbackToken = String(fallbackGithubEnv.GITHUB_TOKEN || '').trim();
+    if (
+      !options.env
+      && fallbackToken
+      && fallbackToken !== githubEnv.GITHUB_TOKEN
+      && approvedRuntimeSecrets.loadedFrom.length > 0
+    ) {
+      const fallbackBase = {
+        ...base,
+        authSource: 'approved-runtime-secret',
+        authEnvKeys: Object.keys(fallbackGithubEnv),
+        authFiles: approvedRuntimeSecrets.loadedFrom,
+      };
+      const fallbackCacheKey = buildRepoAssistantGithubCapabilityCacheKey(fallbackBase, fallbackToken);
+      const cachedFallbackCapability = repoAssistantGithubCapabilityCache.get(fallbackCacheKey);
+      if (cachedFallbackCapability) {
+        return refreshCachedCapabilityValidation(cachedFallbackCapability, fallbackBase.validation);
+      }
+      try {
+        const fallbackCapability = buildValidatedGithubCapability(
+          runner,
+          env,
+          fallbackGithubEnv,
+          repo,
+          pullNumber,
+          fallbackBase,
+          options.includePullRequestData === true,
+        );
+        repoAssistantGithubCapabilityCache.set(fallbackCacheKey, fallbackCapability);
+        return fallbackCapability;
+      } catch {
+        // Keep the original failure if the approved file token also cannot validate.
+      }
+    }
     const capability = buildGithubCapabilityFailure(base, error, pullNumber);
     repoAssistantGithubCapabilityCache.set(cacheKey, capability);
     return capability;
   }
+}
+
+function buildValidatedGithubCapability(
+  runner: GithubApiRunner,
+  env: NodeJS.ProcessEnv,
+  githubEnv: Record<string, string>,
+  repo: { owner: string; repo: string },
+  pullNumber: number,
+  base: Record<string, any>,
+  includePullRequestData: boolean,
+) {
+  const token = githubEnv.GITHUB_TOKEN;
+  const repositoryMetadata = readGithubJson(
+    runner,
+    [`repos/${repo.owner}/${repo.repo}`],
+    { token, baseEnv: env, operation: 'repository' },
+  );
+  const pullRequestBundle = readPullRequestBundle(
+    runner,
+    repo,
+    pullNumber,
+    token,
+    env,
+    includePullRequestData,
+  );
+  return {
+    ...base,
+    available: true,
+    status: 'enabled',
+    statusLabel: 'GitHub access ready',
+    detail: `Validated GitHub read access for ${repo.owner}/${repo.repo}#${pullNumber}.`,
+    repositoryMetadata: {
+      private: repositoryMetadata.private === true,
+      visibility: String(repositoryMetadata.visibility || '').trim() || null,
+      defaultBranch: String(repositoryMetadata.default_branch || '').trim() || null,
+    },
+    validation: {
+      ...base.validation,
+      validatedAt: new Date().toISOString(),
+    },
+    ...(pullRequestBundle ? { pullRequest: pullRequestBundle } : {}),
+  };
 }
 
 function resolveRepoAssistantGithubCapabilityStatus(
@@ -711,6 +781,7 @@ export {
   REPO_ASSISTANT_GITHUB_ENV_KEYS,
   REPO_ASSISTANT_GITHUB_SECRET_FILES,
   buildRepoAssistantGithubEnv,
+  buildRepoAssistantGithubSessionEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
   resolveRepoAssistantGithubCapabilityStatus,

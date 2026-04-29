@@ -11,7 +11,8 @@ import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './control-plane-browser.js';
-import { loadControlPlaneConfig } from './control-plane-config.js';
+import { loadControlPlaneConfig, readControlPlaneConfig } from './control-plane-config.js';
+import { resolveRepoAssistantGithubCapability } from './control-plane-github.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import { readManagedProcessOutput } from './control-plane-process-output.js';
 import {
@@ -46,6 +47,7 @@ import {
   validateRestartSubmission,
   validateServiceAuthSubmission,
 } from './control-plane-validation.js';
+import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
 const controlPlaneAssetCache = new Map<string, string>();
@@ -578,6 +580,17 @@ async function handleRequest(
     return;
   }
 
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/github/validate') && req.method === 'POST') {
+    const repoId = decodeURIComponent(url.pathname.split('/')[3] || '');
+    try {
+      const record = runRepoAssistantGithubValidation(rootDir, repoId);
+      sendJson(res, 200, record);
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
   if (url.pathname.startsWith('/api/repos/') && url.pathname.includes('/processes/') && url.pathname.endsWith('/output') && req.method === 'GET') {
     const segments = url.pathname.split('/');
     const repoId = decodeURIComponent(segments[3] || '');
@@ -975,6 +988,33 @@ async function requestRemoteRepoRegistry(url: string) {
   }
 }
 
+function runRepoAssistantGithubValidation(rootDir: string, repoId: string) {
+  const normalizedRepoId = String(repoId || '').trim();
+  if (!normalizedRepoId) {
+    throw new Error('Missing repoId.');
+  }
+  const repo = listDiscoveredRepos(rootDir).find((entry) => String(entry.repoId || '').trim() === normalizedRepoId)
+    || (() => {
+      const config = readControlPlaneConfig(rootDir);
+      return config && String(config.repoId || '').trim() === normalizedRepoId ? config : null;
+    })();
+  if (!repo) {
+    throw new Error(`Unknown repo "${normalizedRepoId}".`);
+  }
+
+  const snapshot = buildStatusSnapshot(rootDir);
+  const controlPlaneConfig = readControlPlaneConfig(rootDir);
+  snapshot.repoAssistant = {
+    ...(snapshot.repoAssistant && typeof snapshot.repoAssistant === 'object' ? snapshot.repoAssistant : {}),
+    github: resolveRepoAssistantGithubCapability(rootDir, {
+      configuredValidationPullNumber: controlPlaneConfig && typeof controlPlaneConfig.repoAssistantValidationPullRequest === 'number'
+        ? controlPlaneConfig.repoAssistantValidationPullRequest
+        : null,
+    }),
+  };
+  return setRepoStatus(rootDir, normalizedRepoId, snapshot, repo);
+}
+
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
     console.error(`ERROR: ${error.message}`);
@@ -986,4 +1026,5 @@ export {
   formatControlPlaneEventLine,
   main,
   parseRepoRoots,
+  runRepoAssistantGithubValidation,
 };

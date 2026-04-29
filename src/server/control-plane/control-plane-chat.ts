@@ -9,9 +9,8 @@ import {
 } from './control-plane-prd-proposal.js';
 import {
   buildRepoAssistantGithubCodexConfigOverrides,
-  buildRepoAssistantGithubEnv,
+  buildRepoAssistantGithubSessionEnv,
   buildRepoAssistantGithubPromptContext,
-  resolveRepoAssistantGithubEnv,
   resolveRepoAssistantGithubCapability,
 } from './control-plane-github.js';
 import { readControlPlaneConfig } from './control-plane-config.js';
@@ -86,9 +85,8 @@ async function answerControlPlaneAgentChat({
       ? controlPlaneConfig.repoAssistantValidationPullRequest
       : null,
   });
-  const runtimeGithubEnv = resolveRepoAssistantGithubEnv(repoRoot).env;
   const repoAssistantEnv = githubCapability.available === true
-    ? buildRepoAssistantGithubEnv(runtimeGithubEnv)
+    ? buildRepoAssistantGithubSessionEnv(repoRoot, githubCapability)
     : {};
   const prompt = buildAgentChatPrompt(repoId, payload, snapshot, projectContext, githubCapability);
   const configOverrides = githubCapability.available === true

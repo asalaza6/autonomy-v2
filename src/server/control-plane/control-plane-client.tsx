@@ -462,6 +462,7 @@ let deployingRepoIds = new Set<string>();
 let resettingPrdRepoIds = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
 let restartingRepoIds = new Set<string>();
+let validatingGithubRepoIds = new Set<string>();
 const CONTROL_SESSION_STORAGE_KEY = 'autonomy.control.session';
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedQueuedPrdId = '';
@@ -650,6 +651,20 @@ function mountControlPlane() {
         return;
       }
       handlePrdReset(repoId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
+    const validateGithubButton = target ? target.closest<HTMLButtonElement>('[data-action="validate-github"]') : null;
+    if (validateGithubButton) {
+      const repoId = String(validateGithubButton.dataset.repoId || '').trim();
+      if (!repoId) {
+        return;
+      }
+      handleGithubValidation(repoId).catch((error: unknown) => {
         if (messageEl) {
           messageEl.textContent = getErrorMessage(error);
         }
@@ -1478,6 +1493,32 @@ async function handlePrdReset(repoId: string) {
     const next = new Set(resettingPrdRepoIds);
     next.delete(repoId);
     resettingPrdRepoIds = next;
+  }
+}
+
+async function handleGithubValidation(repoId: string) {
+  if (!repoId || validatingGithubRepoIds.has(repoId)) {
+    return;
+  }
+
+  validatingGithubRepoIds = new Set(validatingGithubRepoIds).add(repoId);
+  if (messageEl) {
+    messageEl.textContent = `Running GitHub validation for ${repoId}...`;
+  }
+
+  try {
+    await requestJson(`/api/repos/${encodeURIComponent(repoId)}/github/validate`, {
+      method: 'POST',
+      body: JSON.stringify({ repoId }),
+    });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `GitHub validation finished for ${repoId}.`;
+    }
+  } finally {
+    const next = new Set(validatingGithubRepoIds);
+    next.delete(repoId);
+    validatingGithubRepoIds = next;
   }
 }
 
@@ -3233,6 +3274,7 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
             Open repo control page
           </a>
         ) : null}
+        {repo.repoId ? <GithubValidationButton repo={repo} compact /> : null}
         {repo.deploymentUrl ? (
           <a
             className="action-link"
@@ -3707,9 +3749,11 @@ function buildRepoAttentionSignals(repo: RepoSummary): RepoAttentionSignal[] {
   const prDriftDetail = findPullRequestDriftDetail(repo.pullRequestStatuses || []);
 
   if (github && github.available !== true) {
+    const githubStatus = String(github.status || '').trim().toLowerCase();
+    const isPending = githubStatus === 'validation-pending';
     signals.push({
-      tone: 'blocked',
-      label: 'GitHub validation failed',
+      tone: isPending ? 'waiting' : 'blocked',
+      label: isPending ? 'GitHub validation pending' : 'GitHub validation failed',
       detail: github.statusLabel || github.detail || 'Repo assistant access is unavailable.',
     });
   }
@@ -3865,7 +3909,36 @@ function RepoGithubAccess({ repo }: { repo: RepoSummary }) {
           Approved secret source: {authFiles.join(', ')}
         </div>
       ) : null}
+      <div className="repo-actions" style={{ marginTop: '12px' }}>
+        <GithubValidationButton repo={repo} />
+      </div>
     </div>
+  );
+}
+
+function GithubValidationButton({
+  repo,
+  compact = false,
+}: {
+  repo: RepoSummary;
+  compact?: boolean;
+}) {
+  const state = buildGithubValidationButtonState(repo);
+  if (!repo.repoId) {
+    return null;
+  }
+  return (
+    <button
+      type="button"
+      className={`${compact ? 'secondary' : 'secondary'} deploy-button${state.busy ? ' is-loading' : ''}`}
+      data-action="validate-github"
+      data-repo-id={repo.repoId || ''}
+      disabled={state.disabled}
+      aria-busy={state.busy}
+    >
+      {state.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+      <span>{state.label}</span>
+    </button>
   );
 }
 
@@ -4518,6 +4591,17 @@ function buildRestartButtonState(repo: RepoSummary | null) {
   };
 }
 
+function buildGithubValidationButtonState(repo: RepoSummary | null) {
+  const repoId = String(repo && repo.repoId || '').trim();
+  const queueing = Boolean(repoId && validatingGithubRepoIds.has(repoId));
+  return {
+    active: Boolean(repoId),
+    busy: queueing,
+    disabled: !repoId || queueing,
+    label: queueing ? 'Validating GitHub...' : 'Run GitHub validation',
+  };
+}
+
 function buildTargetLifecycleLabel(target: RestartEvidenceTargetSummary) {
   const pre = target.preRestartPid == null ? 'missing' : String(target.preRestartPid);
   const post = target.postRestartPid == null ? 'missing' : String(target.postRestartPid);
@@ -4633,6 +4717,7 @@ export {
   ManagerRepoCard,
   ChatPrdProposalCard,
   PackageUpdateButton,
+  RepoGithubAccess,
   ProjectMainProgressActions,
   PrdHistoryDetail,
   QueuedPrdDetail,

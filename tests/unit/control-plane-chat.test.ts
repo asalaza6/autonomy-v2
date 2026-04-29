@@ -311,6 +311,7 @@ test('control plane chat injects approved GitHub auth into enabled repo assistan
   }
 });
 
+
 test('control plane chat falls back to history continuity when a stored resume session is stale', async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-chat-resume-fallback-'));
   const capturePath = path.join(rootDir, 'capture.jsonl');
