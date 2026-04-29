@@ -35,6 +35,7 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     label: repo.label,
     description: repo.description,
     default: repo.default,
+    githubRepository: repo.githubRepository,
     repoAssistantValidationPullRequest: repo.repoAssistantValidationPullRequest,
     deployCommand: repo.deployCommand,
     packageUpdateCommand: repo.packageUpdateCommand,
@@ -72,6 +73,7 @@ function normalizeRepoRecord(
     label: String((repo as Record<string, unknown>).label || repoId).trim(),
     description: String((repo as Record<string, unknown>).description || '').trim() || undefined,
     default: (repo as Record<string, unknown>).default === true,
+    githubRepository: String((repo as Record<string, unknown>).githubRepository || '').trim() || undefined,
     repoAssistantValidationPullRequest: Number.isInteger(parsedValidationPullRequest) && parsedValidationPullRequest > 0
       ? parsedValidationPullRequest
       : undefined,

@@ -3,6 +3,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 
 import { resolveGithubRepo } from '../../github/github-main.js';
+import { readControlPlaneConfig } from './control-plane-config.js';
 
 const REPO_ASSISTANT_GITHUB_ENV_KEYS = ['GITHUB_TOKEN', 'GH_TOKEN'] as const;
 const REPO_ASSISTANT_GITHUB_ALLOWED_HOSTS = ['api.github.com'] as const;
@@ -127,6 +128,19 @@ function parseEnvFile(filePath: string) {
 function resolvePositiveInteger(value: unknown) {
   const parsed = Number(String(value || '').trim());
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveConfiguredGithubRepo(rootDir: string) {
+  const config = readControlPlaneConfig(rootDir);
+  const raw = String(config && config.githubRepository || '').trim();
+  if (!raw) {
+    return null;
+  }
+  const [owner, repo] = raw.split('/');
+  if (!owner || !repo) {
+    return null;
+  }
+  return { owner, repo };
 }
 
 function resolveValidationPullNumber(
@@ -342,15 +356,21 @@ function resolveRepoAssistantGithubCapabilityBase(
     try {
       repo = resolveGithubRepo(rootDir);
     } catch {
+      repo = resolveConfiguredGithubRepo(rootDir);
+      if (!repo) {
+        return {
+          result: buildRepoAssistantGithubRepoUnavailable(authSource, authEnvKeys, approvedRuntimeSecrets.loadedFrom),
+        };
+      }
+    }
+  }
+  if (!repo) {
+    repo = resolveConfiguredGithubRepo(rootDir);
+    if (!repo) {
       return {
         result: buildRepoAssistantGithubRepoUnavailable(authSource, authEnvKeys, approvedRuntimeSecrets.loadedFrom),
       };
     }
-  }
-  if (!repo) {
-    return {
-      result: buildRepoAssistantGithubRepoUnavailable(authSource, authEnvKeys, approvedRuntimeSecrets.loadedFrom),
-    };
   }
   const validationPull = resolveValidationPullNumber(
     repo,

@@ -489,6 +489,88 @@ test('repo assistant GitHub capability loads approved runtime secrets from .env.
   }
 });
 
+test('repo assistant GitHub capability falls back to configured githubRepository when git origin is unavailable', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-repo-assistant-github-configured-repo-'));
+  fs.mkdirSync(path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config'), { recursive: true });
+  fs.writeFileSync(path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    repoId: 'autonomy-v2',
+    label: 'Autonomy-V2',
+    description: 'Control-plane display metadata for Autonomy-V2.',
+    githubRepository: 'asalaza6/autonomy-v2',
+    repoAssistantValidationPullRequest: 27,
+  }, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(path.join(rootDir, '.env.autonomy'), 'GITHUB_TOKEN=approved-secret-token\n', 'utf8');
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GH_TOKEN;
+
+  try {
+    const capability: any = resolveRepoAssistantGithubCapability(rootDir, {
+      githubApiRunner(args, options) {
+        assert.equal(options.token, 'approved-secret-token');
+        if (args[0] === 'repos/asalaza6/autonomy-v2') {
+          return JSON.stringify({
+            private: false,
+            visibility: 'public',
+            default_branch: 'dev',
+          });
+        }
+        if (args[0] === 'repos/asalaza6/autonomy-v2/pulls/27') {
+          return JSON.stringify({
+            number: 27,
+            title: 'Configured repo fallback validation',
+            state: 'open',
+            html_url: 'https://github.com/asalaza6/autonomy-v2/pull/27',
+            user: { login: 'asalaza6' },
+            base: { ref: 'dev' },
+            head: { ref: 'feature/repo-assistant' },
+          });
+        }
+        if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+          return '[]';
+        }
+        if (args[0] === 'graphql') {
+          return JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  reviewThreads: {
+                    nodes: [],
+                  },
+                },
+              },
+            },
+          });
+        }
+        throw new Error(`Unexpected route: ${args[0]}`);
+      },
+    });
+
+    assert.equal(capability.available, true);
+    assert.deepEqual(capability.repository, {
+      owner: 'asalaza6',
+      repo: 'autonomy-v2',
+    });
+    assert.equal(capability.authSource, 'approved-runtime-secret');
+    assert.deepEqual(capability.authFiles, ['.env.autonomy']);
+    assert.equal(capability.validation.pullRequestNumber, 27);
+  } finally {
+    if (typeof originalGithubToken === 'string') {
+      process.env.GITHUB_TOKEN = originalGithubToken;
+    } else {
+      delete process.env.GITHUB_TOKEN;
+    }
+    if (typeof originalGhToken === 'string') {
+      process.env.GH_TOKEN = originalGhToken;
+    } else {
+      delete process.env.GH_TOKEN;
+    }
+  }
+});
+
 test('repo assistant GitHub capability falls back to approved file auth when runtime env token fails', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-repo-assistant-github-fallback-'));
   fs.writeFileSync(path.join(rootDir, '.env.autonomy'), 'GITHUB_TOKEN=approved-secret-token\n', 'utf8');
