@@ -1332,6 +1332,31 @@
         }
       },
       "mergedAt": "2026-04-29T07:21:44.925Z"
+    },
+    {
+      "id": "review-pr-prd-show-current-server-and-ca4867-architecture-agent",
+      "title": "Review [architecture-agent] Update the live process panel to show explicit current Server and Bridge PID/state summaries",
+      "description": "Review pr-prd-show-current-server-and-ca4867-architecture-agent for Update the live process panel to show explicit current Server and Bridge PID/state summaries",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-show-current-server-and-ca4867-architecture-agent",
+      "sourceTaskId": "prd-show-current-server-and-ca4867-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-29T07:48:56.442Z",
+      "updatedAt": "2026-04-29T07:48:56.442Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-show-current-server-and-ca4867-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "The live process panel shows separate, stable current-status summary rows for both managed targets at the same time, with manager-facing labels that clearly distinguish Server from Bridge, such as `Current Server PID` and `Current Bridge PID` or equivalent agreed terminology.",
+        "Each target summary row displays the current state next to the current PID, and when no current PID exists the row shows explicit empty-state copy that makes the stopped or missing condition unambiguous without hiding the other target's live PID/state.",
+        "Current PID/state values come from the same managed process source of truth already used in repo summaries and are not inferred from restart evidence or historical PID transitions.",
+        "Existing per-target output or log focus behavior remains intact so managers can still switch between Server and Bridge output independently of the simultaneous current-status summaries.",
+        "Restart evidence or restart history remains visible in the panel but is visually and textually labeled as historical or restart evidence so it is not presented as the current PID for either target.",
+        "Add or update focused unit coverage for the live process panel rendering to assert simultaneous display of both current PID fields, stopped or missing PID cases, and mixed states where one target is running and the other is stopped; verification also includes `npm run typecheck` and manual manager-view validation against a repo state that includes both managed targets plus restart-history evidence."
+      ],
+      "scopeViolations": []
     }
   ]
 }
