@@ -1315,10 +1315,10 @@
         "Targeted tests are added or updated for queued-task pickup and idle-vs-queued status rendering, including relevant sync or queue unit tests and `tests/unit/control-plane-*.test.ts` coverage.",
         "If the scheduler or worker attach flow is touched, verification also includes `tests/smoke/control-plane.test.ts` alongside `npm run typecheck` and the focused unit tests."
       ],
-      "reviewRound": 4,
-      "status": "changes_requested",
+      "reviewRound": 5,
+      "status": "queued",
       "createdAt": "2026-04-29T07:10:46.106Z",
-      "updatedAt": "2026-04-29T07:20:10.368Z",
+      "updatedAt": "2026-04-29T07:20:22.910Z",
       "reviewedAt": "2026-04-29T07:20:10.368Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
