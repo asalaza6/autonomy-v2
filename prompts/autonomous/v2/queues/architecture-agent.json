@@ -6056,11 +6056,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-29T11:02:54.433Z",
-      "updatedAt": "2026-04-29T11:21:24.687Z",
+      "updatedAt": "2026-04-29T11:21:24.773Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "startedAt": "2026-04-29T11:09:15.400Z",
       "completedAt": "2026-04-29T11:21:24.687Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "49cce3bdc2aeea2f16da3c02b27eaedb6bacd52e"
     }
   ]
 }
