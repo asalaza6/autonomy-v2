@@ -5827,10 +5827,14 @@
         "Restart evidence or restart history remains visible in the panel but is visually and textually labeled as historical or restart evidence so it is not presented as the current PID for either target.",
         "Add or update focused unit coverage for the live process panel rendering to assert simultaneous display of both current PID fields, stopped or missing PID cases, and mixed states where one target is running and the other is stopped; verification also includes `npm run typecheck` and manual manager-view validation against a repo state that includes both managed targets plus restart-history evidence."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-29T07:45:30.149Z",
-      "updatedAt": "2026-04-29T07:45:30.149Z"
+      "updatedAt": "2026-04-29T07:48:55.113Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-show-current-server-and-ca4867-architecture-agent",
+      "startedAt": "2026-04-29T07:45:48.605Z",
+      "completedAt": "2026-04-29T07:48:55.113Z",
+      "completionMode": "code"
     }
   ]
 }
