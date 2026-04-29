@@ -1310,13 +1310,13 @@
         "Blocking on missing focused verification. The diff is scoped and appears textually mergeable with current `origin/dev`, but this branch changes high-risk control-plane/sync behavior around PR reconciliation and queued-task pickup/status rendering without recorded runs of the focused unit tests added for those paths.\nMissing merge-blocking verification for the new high-risk behavior. This branch changes PR reconciliation and status derivation in `src/sync/review-reconciliation.ts`, `src/sync/derived-pr.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, `src/autonomy-v2/commands/shared-prds.ts`, and queued-task status rendering in `src/autonomy-v2/commands/shared-agent-status.ts`, but the recorded checks only show `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. Please run and report the focused tests that were added/updated for this work: `tests/unit/control-plane-status.test.ts`, `tests/unit/implementation-queue-resolution.test.ts`, and `tests/unit/review-reconciliation.test.ts`. If the queue-pickup change path is considered part of scheduler/worker attach behavior, also include `tests/smoke/control-plane.test.ts` per the task acceptance."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-29T07:10:46.106Z",
       "updatedAt": "2026-04-29T07:14:28.470Z",
       "reviewedAt": "2026-04-29T07:13:20.073Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-29T07:10:50.287Z",
+      "dispatchedAt": "2026-04-29T07:14:30.319Z",
       "scopeViolations": []
     }
   ]
