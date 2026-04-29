@@ -1416,10 +1416,10 @@
         "Unit tests cover noop-blocking completion behavior and reviewer approval gating, and a smoke test covers a focused verification request flowing from review to follow-up to eventual approval once the structured blocker is satisfied."
       ],
       "reviewRound": 4,
-      "status": "queued",
+      "status": "changes_requested",
       "createdAt": "2026-04-29T11:21:25.947Z",
-      "updatedAt": "2026-04-29T11:37:18.522Z",
-      "reviewedAt": "2026-04-29T11:32:49.763Z",
+      "updatedAt": "2026-04-29T11:40:18.373Z",
+      "reviewedAt": "2026-04-29T11:40:18.373Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-29T11:36:52.199Z"
