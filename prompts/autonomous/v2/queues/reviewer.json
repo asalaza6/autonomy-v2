@@ -1377,13 +1377,13 @@
         "`npm run typecheck` and `npm run lint` passed, but this is not ready to merge. The diff changes the high-risk deploy path and adds new deploy semantics, yet there is no evidence the targeted deploy suite was actually run, and the newly documented CLI syntax is not supported by the parser.\nBlocking: the change touches the deploy flow, which the project context calls out as high risk, and the acceptance criteria require targeted deploy coverage. The branch adds/changes tests in `tests/smoke/deploy.test.ts`, but the only recorded check results are `npm run typecheck` and `npm run lint`; there is no passing run for the deploy smoke suite. Expected correction: run the relevant targeted deploy tests for this change and include the passing verification result before merge.\nBlocking: `src/autonomy-v2/cli/help.ts:24` advertises `deploy [--auto-stash[=<true|false>]]`, but `src/autonomy-v2/cli/parse.ts:11` treats the entire token after `--` as the option key and does not parse `--key=value` syntax. As shipped, `autonomy-v2 deploy --auto-stash=false` is not interpreted as the documented option. Expected correction: either add `--key=value` parsing support or change the help/output/tests to document only the supported forms (`--auto-stash` and `--auto-stash false`)."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-29T07:58:15.718Z",
       "updatedAt": "2026-04-29T08:02:02.370Z",
       "reviewedAt": "2026-04-29T08:00:19.737Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-29T07:58:22.048Z",
+      "dispatchedAt": "2026-04-29T08:02:04.335Z",
       "scopeViolations": []
     }
   ]
