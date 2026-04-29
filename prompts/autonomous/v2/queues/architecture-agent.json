@@ -5573,11 +5573,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-29T03:59:22.488Z",
-      "updatedAt": "2026-04-29T04:12:14.104Z",
+      "updatedAt": "2026-04-29T04:12:14.195Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-visible-restart-verification-f27178-architecture-agent",
       "startedAt": "2026-04-29T03:59:41.707Z",
       "completedAt": "2026-04-29T04:12:14.104Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "590fcecb178ed4056cf6c1c520d1c17705e05622"
     }
   ]
 }
