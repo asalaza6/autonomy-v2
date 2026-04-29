@@ -9,6 +9,11 @@ function parseCli(argv: string[]): { command: string; options: CliOptions } {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token.startsWith('--')) {
+      const equalsIndex = token.indexOf('=');
+      if (equalsIndex >= 0) {
+        addOption(options, token.slice(2, equalsIndex), token.slice(equalsIndex + 1));
+        continue;
+      }
       const key = token.slice(2);
       const next = argv[index + 1];
       if (typeof next === 'undefined' || next.startsWith('--')) {
