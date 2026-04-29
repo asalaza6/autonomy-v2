@@ -1372,7 +1372,7 @@
       "sourceTaskId": "prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 1,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-04-29T07:58:15.718Z",
       "updatedAt": "2026-04-29T07:58:15.718Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
@@ -1385,7 +1385,9 @@
         "Automated coverage verifies current clean-tree deploy behavior, dirty-tree deploy with auto-stash enabled, untracked-file preservation, deploy failure followed by restore attempt, and stash restore conflict reporting, with targeted updates centered on `tests/smoke/deploy.test.ts` and any related unit tests.",
         "Verification for the completed task includes `npm run typecheck` and the relevant targeted deploy test suite, plus a disposable manual check of one clean-tree deploy and one dirty-tree deploy with auto-stash enabled."
       ],
-      "scopeViolations": []
+      "scopeViolations": [],
+      "dispatchedAt": "2026-04-29T07:58:22.048Z",
+      "dispatcher": "scheduler"
     }
   ]
 }
