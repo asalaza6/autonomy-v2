@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5508,6 +5507,39 @@
       },
       "implementationConversationId": "019dd688-5842-7741-9b02-8e95427098ce",
       "commitSha": "a858e9a3d88d4c37384b75cbcdfc6e4eccb0211d"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Implement Persist Control-Plane Repo Assistant Chats Across Redeploys",
+      "description": "Blocking: the required wrapper checks (`npm run typecheck`, `npm run lint`) passed, but this PR still lacks passing focused verification for the high-risk control-plane chat persistence/restart path. The branch adds persistence and resume logic in `src/server/control-plane/control-plane-chat.ts` and `src/server/control-plane/control-plane-store.ts`, plus targeted coverage in `tests/unit/control-plane-chat.test.ts` and `tests/smoke/control-plane.test.ts`, but the review evidence provided with this round still only shows the wrapper checks. I do not see any new committed verification artifact or reported passing result for the added control-plane restart/recovery tests, so this is not merge-safe for `dev` yet.\nMissing merge-blocking focused verification for the hosted restart/redeploy behavior introduced in `src/server/control-plane/control-plane-chat.ts` and `src/server/control-plane/control-plane-store.ts`. Please run the added targeted suites in `tests/unit/control-plane-chat.test.ts` and `tests/smoke/control-plane.test.ts` (or an equivalent focused control-plane chat persistence/restart suite) and include passing results. This change touches a project-context high-risk area, so wrapper-only results are not sufficient for approval.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-persist-control-plane-repo-assistant-fb1eba",
+      "laneKey": "prd-persist-control-plane-repo-assistant-fb1eba:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking: the required wrapper checks (`npm run typecheck`, `npm run lint`) passed, but this PR still lacks passing focused verification for the high-risk control-plane chat persistence/restart path. The branch adds persistence and resume logic in `src/server/control-plane/control-plane-chat.ts` and `src/server/control-plane/control-plane-store.ts`, plus targeted coverage in `tests/unit/control-plane-chat.test.ts` and `tests/smoke/control-plane.test.ts`, but the review evidence provided with this round still only shows the wrapper checks. I do not see any new committed verification artifact or reported passing result for the added control-plane restart/recovery tests, so this is not merge-safe for `dev` yet.\nMissing merge-blocking focused verification for the hosted restart/redeploy behavior introduced in `src/server/control-plane/control-plane-chat.ts` and `src/server/control-plane/control-plane-store.ts`. Please run the added targeted suites in `tests/unit/control-plane-chat.test.ts` and `tests/smoke/control-plane.test.ts` (or an equivalent focused control-plane chat persistence/restart suite) and include passing results. This change touches a project-context high-risk area, so wrapper-only results are not sufficient for approval."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
+      "createdAt": "2026-04-29T00:01:55.015Z",
+      "updatedAt": "2026-04-29T00:01:55.015Z",
+      "startedAt": "2026-04-29T00:01:55.015Z",
+      "prId": "pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd688-5842-7741-9b02-8e95427098ce",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T00:01:55.015Z"
+        }
+      },
+      "implementationConversationId": "019dd688-5842-7741-9b02-8e95427098ce"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
