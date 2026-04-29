@@ -15,7 +15,12 @@ import { appendTrackedBranchFollowupTask, ensureReviewerTask, enqueueLaneFollowu
 import { findTask } from './shared-queues.js';
 import { normalizeReviewDecision } from './shared-repo.js';
 import { uniqueStrings } from './shared-repo.js';
-import { buildReviewerBlockersFromReview, collectReviewerBlockerChecks } from './shared-review-blockers.js';
+import {
+  buildReviewerBlockersFromReview,
+  collectCurrentReviewerBlockers,
+  collectReviewerBlockerChecks,
+  listUnresolvedReviewerBlockers,
+} from './shared-review-blockers.js';
 import {
   getAgentConversationId,
   setAgentConversationReference,
@@ -52,9 +57,17 @@ async function run(rootDir, options) {
   if (decision === 'changes_requested') {
     decisionRecord.reviewerBlockers = buildReviewerBlockersFromReview(pr, decisionRecord);
   }
+  const preDecisionBlockers = collectCurrentReviewerBlockers(pr);
+  const unresolvedBlockers = listUnresolvedReviewerBlockers(preDecisionBlockers);
+  if (decision === 'approved' && unresolvedBlockers.length > 0) {
+    throw new Error(`Cannot approve ${pr.id} while structured reviewer blockers remain unresolved: ${unresolvedBlockers.map((blocker) => blocker.id).join(', ')}`);
+  }
   pr.reviews.push(decisionRecord);
   pr.updatedAt = decisionRecord.reviewedAt;
   pr.status = decision === 'approved' ? 'approved' : 'changes_requested';
+  pr.reviewerBlockers = decision === 'changes_requested'
+    ? (decisionRecord.reviewerBlockers || [])
+    : preDecisionBlockers;
   delete pr.mergeState;
   delete pr.mergeBlockedCode;
   delete pr.mergeBlockedReason;

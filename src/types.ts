@@ -563,6 +563,7 @@ export interface PullRequestRecord extends AnyRecord {
   pendingTaskIds?: string[];
   acceptance?: string[];
   checks?: string[];
+  reviewerBlockers?: ReviewerBlockerRecord[];
   commitCount?: number;
   headBranch?: string | null;
   baseBranch?: string | null;

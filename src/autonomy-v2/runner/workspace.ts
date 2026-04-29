@@ -5,6 +5,7 @@ import { resolveGithubAuthToken } from '../../github/github-main.js';
 import { AGENT_ROLES } from '../../agents/role-catalog.js';
 import { getAgentConversationId, setAgentConversationReference } from '../../agents/conversation-references.js';
 import { classifyMergeFailureMessage } from '../commands/merge-watchdog.js';
+import { applyTaskCompletionToReviewerBlockers } from '../commands/shared-review-blockers.js';
 import { CLI_PATH, RUNTIME_SEGMENTS } from './runner-constants.js';
 import {
   buildTaskQueueState,
@@ -73,7 +74,7 @@ function finalizeTaskRun({ rootDir, task, branch, completedTaskIds, publish, sho
   });
 }
 
-function markImplementationTaskComplete(worktreePath, config, task, branch, completionMode) {
+function markImplementationTaskComplete(worktreePath, config, task, branch, completionMode, options = /** @type {any} */ ({}) ) {
   const agent = getAgentConfig(config, task.agentId);
   const relativePath = agent.taskQueue;
   if (path.isAbsolute(relativePath)) {
@@ -89,6 +90,24 @@ function markImplementationTaskComplete(worktreePath, config, task, branch, comp
     throw new Error(`Implementation queue in ${relativePath} does not contain task "${task.id}".`);
   }
   const now = new Date().toISOString();
+  const completionChangedFiles = Array.isArray(options && options['changedFiles']) ? options['changedFiles'] : [];
+  const completionCheckResults = Array.isArray(options && options['checkResults']) ? options['checkResults'] : [];
+  const blockerUpdate = applyTaskCompletionToReviewerBlockers(currentTask.reviewerBlockers || task.reviewerBlockers || [], {
+    taskId: currentTask.id || task.id,
+    changedFiles: completionChangedFiles,
+    checkResults: completionCheckResults,
+    completedAt: now,
+  });
+  currentTask.reviewerBlockers = blockerUpdate.blockers;
+  if (blockerUpdate.unresolvedBlockers.length > 0) {
+    currentTask.updatedAt = now;
+    currentTask.lastError = [
+      `Structured reviewer blockers remain unresolved for ${currentTask.id}.`,
+      blockerUpdate.unresolvedBlockers.map((blocker) => blocker.summary).join(' | '),
+    ].filter(Boolean).join(' ');
+    writeJson(queuePath, buildTaskQueueState(agent, tasks));
+    throw new Error(`Cannot complete task "${currentTask.id}" while reviewer blockers remain unresolved: ${blockerUpdate.unresolvedBlockers.map((blocker) => blocker.id).join(', ')}`);
+  }
   currentTask.state = 'done';
   currentTask.status = 'done';
   currentTask.branch = branch;

@@ -89,7 +89,14 @@ type QueueStoreCapability = {
   claimQueuedReviewTask?: (agentId: string, options?: AnyRecord) => TaskRecord | null;
   markReviewDispatchFailure?: (agentId: string, taskId: string, message: string) => void;
   claimImplementationTaskInWorktree?: (agent: AgentConfig, task: TaskRecord, branch: string, worktreePath: string) => { task: TaskRecord; branch: string; };
-  markImplementationTaskComplete?: (worktreePath: string, config: AutonomyConfig, task: TaskRecord, branch: string, completionMode: string) => { queuePath: string; relativePath: string; };
+  markImplementationTaskComplete?: (
+    worktreePath: string,
+    config: AutonomyConfig,
+    task: TaskRecord,
+    branch: string,
+    completionMode: string,
+    options?: AnyRecord
+  ) => { queuePath: string; relativePath: string; };
   recordImplementationTaskCommitSha?: (worktreePath: string, config: AutonomyConfig, task: TaskRecord, commitSha: string) => { queuePath: string; relativePath: string; changed: boolean; };
   recordLaneTaskCompletion?: (task: TaskRecord, branch: string, worktreePath: string, scopeResult?: AnyRecord) => TaskRecord[];
   persistReviewerTaskState?: (reviewTaskId: string, patch: AnyRecord) => void;

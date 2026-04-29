@@ -4,6 +4,7 @@ import { execFileSync } from 'child_process';
 import { AGENT_ROLES, getRoleLabel } from '../../agents/role-catalog.js';
 import type { AnyRecord } from '../autonomy-types.js';
 import { slugify } from './shared-core.js';
+import { listUnresolvedReviewerBlockers } from './shared-review-blockers.js';
 
 function buildReviewFollowupAcceptance(pr, description, existingAcceptance = []) {
   const explicitAcceptance = uniqueStrings(existingAcceptance || []);
@@ -289,6 +290,7 @@ function normalizeReviewDecision(decision) {
 
 function evaluateMerge({ config, pr, actor, reviewerTask = null }) {
   const reasons = [];
+  const unresolvedReviewerBlockers = listUnresolvedReviewerBlockers(pr.reviewerBlockers || []);
   const mergeActors = config.mergeActors || [];
   if (mergeActors.length > 0) {
     if (!mergeActors.includes(actor.id)) {
@@ -317,6 +319,9 @@ function evaluateMerge({ config, pr, actor, reviewerTask = null }) {
   const unreviewedHeadReason = getUnreviewedHeadMergeBlocker(pr, reviewerTask);
   if (unreviewedHeadReason) {
     reasons.push(unreviewedHeadReason);
+  }
+  if (unresolvedReviewerBlockers.length > 0) {
+    reasons.push(`structured reviewer blockers remain unresolved: ${unresolvedReviewerBlockers.map((blocker) => blocker.id).join(', ')}`);
   }
 
   return {

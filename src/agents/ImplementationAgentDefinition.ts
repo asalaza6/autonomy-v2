@@ -347,7 +347,10 @@ class ImplementationAgentDefinition extends AgentDefinition {
 
     const completionMode = changedFiles.length > 0 ? 'code' : 'noop';
     const queueUpdate = context.queueStore.markImplementationTaskComplete
-      ? context.queueStore.markImplementationTaskComplete(worktreePath, runnerState.config, task, branch, completionMode)
+      ? context.queueStore.markImplementationTaskComplete(worktreePath, runnerState.config, task, branch, completionMode, {
+          changedFiles,
+          checkResults,
+        })
       : null;
     const filesToCommit = this.uniqueStrings(changedFiles.concat(queueUpdate ? [queueUpdate.relativePath] : []));
     const commitMessage = context.scm.buildCommitMessage
@@ -539,7 +542,10 @@ class ImplementationAgentDefinition extends AgentDefinition {
         ].filter(Boolean).join('\n');
     context.scm.writeFile?.(targetFile, content);
     const queueUpdate = context.queueStore.markImplementationTaskComplete
-      ? context.queueStore.markImplementationTaskComplete(worktreePath, context.config, task, branch, 'code')
+      ? context.queueStore.markImplementationTaskComplete(worktreePath, context.config, task, branch, 'code', {
+          changedFiles: [context.scm.relativePath ? context.scm.relativePath(worktreePath, targetFile) : targetFile],
+          checkResults: [],
+        })
       : null;
     const stagedFiles = this.uniqueStrings([context.scm.relativePath ? context.scm.relativePath(worktreePath, targetFile) : targetFile].concat(queueUpdate ? [queueUpdate.relativePath] : []));
     context.scm.runGit?.(worktreePath, ['add', '--', ...stagedFiles]);

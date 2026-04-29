@@ -9,6 +9,7 @@ import {
   isPullRequestResolved,
   pullRequestChangesAlreadyApplied,
 } from './review-reconciliation.js';
+import { collectCurrentReviewerBlockers, listUnresolvedReviewerBlockers } from '../autonomy-v2/commands/shared-review-blockers.js';
 
 function buildStablePullRequestId(laneKey) {
   return `pr-${String(laneKey || 'lane').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
@@ -152,7 +153,7 @@ function approvedPrNeedsReviewerRecovery(pr, existingTask) {
     .test(String(existingTask.lastError || ''));
 }
 
-function resolveDerivedPullRequestStatus(existingStatus, remote, pendingTasks, pendingExtraTaskIds, existingPr, existingReviewerTask, completedTasks = []) {
+function resolveDerivedPullRequestStatus(existingStatus, remote, pendingTasks, pendingExtraTaskIds, existingPr, existingReviewerTask, completedTasks = [], reviewerBlockers = []) {
   const reconciliation = getPullRequestStateReconciliation({
     ...(existingPr || {}),
     status: existingStatus,
@@ -168,11 +169,13 @@ function resolveDerivedPullRequestStatus(existingStatus, remote, pendingTasks, p
     return 'validation_error';
   }
   const hasPendingWork = (pendingTasks || []).length > 0 || (pendingExtraTaskIds || []).length > 0;
+  const hasUnresolvedReviewerBlockers = listUnresolvedReviewerBlockers(reviewerBlockers).length > 0;
   const hasChangesRequestedSignal = existingStatus === 'changes_requested'
     || reviewDecisionIsChangesRequested(findLatestReview(existingPr))
     || reviewerTaskIndicatesChangesRequested(existingReviewerTask);
   if (!hasPendingWork
     && hasChangesRequestedSignal
+    && !hasUnresolvedReviewerBlockers
     && (isPullRequestResolved(existingPr) || pullRequestChangesAlreadyApplied(existingPr, completedTasks))) {
     return 'merged';
   }
@@ -182,15 +185,20 @@ function resolveDerivedPullRequestStatus(existingStatus, remote, pendingTasks, p
   if ((pendingExtraTaskIds || []).length > 0) {
     return 'changes_requested';
   }
+  if (hasUnresolvedReviewerBlockers) {
+    return 'changes_requested';
+  }
   if (existingStatus === 'conflicted') {
     return 'conflicted';
   }
   if (hasChangesRequestedSignal) {
     return 'changes_requested';
   }
-  if (existingStatus === 'approved'
+  if (!hasUnresolvedReviewerBlockers && (
+    existingStatus === 'approved'
     || reviewDecisionIsApproved(findLatestReview(existingPr))
-    || reviewerTaskIndicatesApproved(existingReviewerTask)) {
+    || reviewerTaskIndicatesApproved(existingReviewerTask)
+  )) {
     return 'approved';
   }
   if (['changes_requested', 'approved', 'conflicted', 'building', 'open'].includes(existingStatus)) {
@@ -356,6 +364,7 @@ function buildDerivedPullRequestRecord({
   const reviews = Array.isArray(existingPr && existingPr.reviews)
     ? existingPr.reviews.map((decisionRecord) => ({ ...decisionRecord }))
     : [];
+  const reviewerBlockers = collectCurrentReviewerBlockers(existingPr, linkedWorkTasks);
   const remote = laneState.remote ? {
     number: laneState.remote.number,
     url: laneState.remote.url,
@@ -388,9 +397,11 @@ function buildDerivedPullRequestRecord({
       extraPendingTaskIds,
       existingPr,
       existingReviewerTask,
-      completedTasks
+      completedTasks,
+      reviewerBlockers
     ),
     reviews,
+    reviewerBlockers,
     createdAt: existingPr && existingPr.createdAt ? existingPr.createdAt : now,
     updatedAt: now,
     remote,
