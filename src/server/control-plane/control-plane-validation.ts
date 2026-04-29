@@ -40,6 +40,8 @@ function normalizeControlPlaneConfig(config: Partial<ControlPlaneConfig> = {}): 
     packageUpdateCommand: repo.packageUpdateCommand,
     controlBridgeRestartCommand: repo.controlBridgeRestartCommand,
     serverRestartCommand: repo.serverRestartCommand,
+    restartLaunchMode: repo.restartLaunchMode,
+    restartLaunchFallbackToDetached: repo.restartLaunchFallbackToDetached,
     deploymentUrl: repo.deploymentUrl,
     deploymentLabel: repo.deploymentLabel,
     exclusiveControl: repo.exclusiveControl,
@@ -77,6 +79,10 @@ function normalizeRepoRecord(
     packageUpdateCommand: (repo as ControlPlaneRepoRecord).packageUpdateCommand,
     controlBridgeRestartCommand: (repo as ControlPlaneRepoRecord).controlBridgeRestartCommand,
     serverRestartCommand: (repo as ControlPlaneRepoRecord).serverRestartCommand,
+    restartLaunchMode: String((repo as Record<string, unknown>).restartLaunchMode || '').trim() === 'detached'
+      ? 'detached'
+      : 'visible-terminal',
+    restartLaunchFallbackToDetached: (repo as Record<string, unknown>).restartLaunchFallbackToDetached === true,
     deploymentUrl: String((repo as Record<string, unknown>).deploymentUrl || '').trim() || undefined,
     deploymentLabel: String((repo as Record<string, unknown>).deploymentLabel || '').trim() || undefined,
     exclusiveControl: (repo as Record<string, unknown>).exclusiveControl === true,

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { execFileSync, spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import type { ControlPlaneServiceKind, ControlPlaneServiceLifecycleRecord } from './control-plane-lifecycle.js';
 import { validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
@@ -8,6 +10,7 @@ import { prepareManagedProcessOutput } from './control-plane-process-output.js';
 import { loadControlPlaneState, saveControlPlaneState } from './control-plane-store.js';
 
 type RestartOutcomeStatus = 'restarted' | 'skipped' | 'missing-metadata' | 'stale-pid' | 'relaunch-failed' | 'failed';
+type RestartLaunchMode = 'visible-terminal' | 'detached';
 
 interface DefaultRestartTarget {
   target: ControlPlaneServiceKind;
@@ -22,12 +25,19 @@ interface DefaultRestartHelperPlan {
   startDelayMs?: number;
   stopTimeoutMs?: number;
   relaunchReadyTimeoutMs?: number;
+  launchMode?: RestartLaunchMode;
+  fallbackToDetached?: boolean;
   targets: DefaultRestartTarget[];
 }
 
 interface DefaultRestartTargetOutcome {
   target: ControlPlaneServiceKind;
   status: RestartOutcomeStatus;
+  requestedLaunchMode?: RestartLaunchMode;
+  launchMode?: RestartLaunchMode;
+  terminalOpened?: boolean;
+  terminalApp?: string;
+  fallbackReason?: string;
   pid?: number;
   preRestartPid?: number;
   postRestartPid?: number;
@@ -52,6 +62,8 @@ const PROCESS_POLL_MS = 50;
 const MIN_RELAUNCH_OBSERVATION_MS = PROCESS_POLL_MS * 2;
 const CONTROL_BRIDGE_START_DELAY_ENV = 'AUTONOMY_CONTROL_PLANE_BRIDGE_START_DELAY_MS';
 const CONTROL_BRIDGE_START_DELAY_BUFFER_MS = PROCESS_POLL_MS * 4;
+const RESTART_RUNTIME_SEGMENTS = ['.autonomy', 'control-plane', 'restart-runtime'];
+const TERMINAL_APP = 'Terminal';
 
 async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Promise<DefaultRestartOutcome> {
   const normalizedPlan = normalizeDefaultRestartPlan(plan);
@@ -108,7 +120,9 @@ async function runDefaultControlPlaneRestart(plan: DefaultRestartHelperPlan): Pr
       normalizedPlan.rootDir,
       normalizedPlan.repoId,
       target,
-      relaunchReadyTimeoutMs
+      relaunchReadyTimeoutMs,
+      normalizedPlan.launchMode,
+      normalizedPlan.fallbackToDetached === true
     ));
     outcome = buildDefaultRestartOutcome([
       ...validationOutcomes,
@@ -236,7 +250,22 @@ function relaunchService(
   rootDir: string,
   repoId: string | undefined,
   target: DefaultRestartTarget,
-  readyTimeoutMs: number
+  readyTimeoutMs: number,
+  launchMode: RestartLaunchMode,
+  fallbackToDetached: boolean
+): Promise<DefaultRestartTargetOutcome> {
+  if (launchMode === 'visible-terminal') {
+    return relaunchInVisibleTerminal(rootDir, target, readyTimeoutMs, fallbackToDetached);
+  }
+  return relaunchDetachedService(rootDir, repoId, target, readyTimeoutMs);
+}
+
+function relaunchDetachedService(
+  rootDir: string,
+  repoId: string | undefined,
+  target: DefaultRestartTarget,
+  readyTimeoutMs: number,
+  fallbackReason?: string
 ): Promise<DefaultRestartTargetOutcome> {
   const metadata = target.metadata;
   const launch = metadata.launch;
@@ -269,6 +298,10 @@ function relaunchService(
       settle({
         target: target.target,
         status: 'relaunch-failed',
+        requestedLaunchMode: fallbackReason ? 'visible-terminal' : 'detached',
+        launchMode: 'detached',
+        terminalOpened: false,
+        ...(fallbackReason ? { fallbackReason } : {}),
         command: metadata.launchCommand,
         cwd: launch.cwd,
         reason: 'spawn-threw',
@@ -286,7 +319,13 @@ function relaunchService(
         if (outcome.status === 'restarted') {
           child.unref();
         }
-        settle(outcome);
+        settle({
+          ...outcome,
+          requestedLaunchMode: fallbackReason ? 'visible-terminal' : 'detached',
+          launchMode: 'detached',
+          terminalOpened: false,
+          ...(fallbackReason ? { fallbackReason } : {}),
+        });
       });
     });
     child.once('error', (error) => {
@@ -294,6 +333,10 @@ function relaunchService(
       settle({
         target: target.target,
         status: 'relaunch-failed',
+        requestedLaunchMode: fallbackReason ? 'visible-terminal' : 'detached',
+        launchMode: 'detached',
+        terminalOpened: false,
+        ...(fallbackReason ? { fallbackReason } : {}),
         command: metadata.launchCommand,
         cwd: launch.cwd,
         reason: 'spawn-error',
@@ -304,6 +347,67 @@ function relaunchService(
       });
     });
   });
+}
+
+async function relaunchInVisibleTerminal(
+  rootDir: string,
+  target: DefaultRestartTarget,
+  readyTimeoutMs: number,
+  fallbackToDetached: boolean
+): Promise<DefaultRestartTargetOutcome> {
+  const metadata = target.metadata;
+  const launch = metadata.launch;
+  if (process.platform !== 'darwin') {
+    if (fallbackToDetached) {
+      return relaunchDetachedService(rootDir, undefined, target, readyTimeoutMs, 'unsupported-platform');
+    }
+    return {
+      target: target.target,
+      status: 'failed',
+      requestedLaunchMode: 'visible-terminal',
+      launchMode: 'visible-terminal',
+      terminalOpened: false,
+      terminalApp: TERMINAL_APP,
+      command: metadata.launchCommand,
+      cwd: launch.cwd,
+      reason: 'unsupported-platform',
+      error: `Visible terminal restart is only supported on macOS. Current platform: ${process.platform}.`,
+      preRestartPid: metadata.pid,
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
+  const pidFilePath = getVisibleLaunchPidFilePath(rootDir, target.target);
+  const scriptPath = getVisibleLaunchScriptPath(rootDir, target.target);
+  fs.mkdirSync(path.dirname(pidFilePath), { recursive: true });
+  fs.rmSync(pidFilePath, { force: true });
+  writeVisibleLaunchScript(scriptPath, launch.cwd, buildRelaunchEnv(target.target, launch.env || {}, readyTimeoutMs), metadata.launchCommand, launch.command, launch.args, pidFilePath);
+
+  try {
+    openTerminalWindow(buildVisibleTerminalCommand(target.target, scriptPath, pidFilePath, metadata.launchCommand));
+  } catch (error) {
+    if (fallbackToDetached) {
+      return relaunchDetachedService(rootDir, undefined, target, readyTimeoutMs, 'terminal-open-failed');
+    }
+    return {
+      target: target.target,
+      status: 'relaunch-failed',
+      requestedLaunchMode: 'visible-terminal',
+      launchMode: 'visible-terminal',
+      terminalOpened: false,
+      terminalApp: TERMINAL_APP,
+      command: metadata.launchCommand,
+      cwd: launch.cwd,
+      reason: 'terminal-open-failed',
+      error: formatErrorMessage(error),
+      preRestartPid: metadata.pid,
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
+  return waitForVisibleTerminalRelaunchReadiness(target, pidFilePath, readyTimeoutMs);
 }
 
 function waitForRelaunchReadiness(
@@ -378,6 +482,83 @@ function waitForRelaunchReadiness(
   });
 }
 
+async function waitForVisibleTerminalRelaunchReadiness(
+  target: DefaultRestartTarget,
+  pidFilePath: string,
+  readyTimeoutMs: number
+): Promise<DefaultRestartTargetOutcome> {
+  const metadata = target.metadata;
+  const launch = metadata.launch;
+  const observedReadyTimeoutMs = normalizeRelaunchReadyTimeoutMs(readyTimeoutMs);
+  const deadline = Date.now() + observedReadyTimeoutMs;
+  let observedPid: number | null = null;
+
+  while (Date.now() <= deadline) {
+    observedPid = readObservedPidFile(pidFilePath);
+    if (observedPid && isProcessAlive(observedPid)) {
+      break;
+    }
+    await delay(PROCESS_POLL_MS);
+  }
+
+  if (!observedPid) {
+    return {
+      target: target.target,
+      status: 'relaunch-failed',
+      requestedLaunchMode: 'visible-terminal',
+      launchMode: 'visible-terminal',
+      terminalOpened: true,
+      terminalApp: TERMINAL_APP,
+      command: metadata.launchCommand,
+      cwd: launch.cwd,
+      reason: 'pid-observation-timeout',
+      error: `${formatTargetLabel(target.target)} visible terminal opened but no relaunched PID was observed before readiness timeout.`,
+      preRestartPid: metadata.pid,
+      recordedAt: metadata.recordedAt,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
+  while (Date.now() <= deadline) {
+    if (!isProcessAlive(observedPid)) {
+      return {
+        target: target.target,
+        status: 'relaunch-failed',
+        requestedLaunchMode: 'visible-terminal',
+        launchMode: 'visible-terminal',
+        terminalOpened: true,
+        terminalApp: TERMINAL_APP,
+        pid: observedPid,
+        preRestartPid: metadata.pid,
+        postRestartPid: observedPid,
+        command: metadata.launchCommand,
+        cwd: launch.cwd,
+        reason: 'early-exit',
+        error: `${formatTargetLabel(target.target)} relaunched as PID ${observedPid} but exited before readiness.`,
+        recordedAt: metadata.recordedAt,
+        completedAt: new Date().toISOString(),
+      };
+    }
+    await delay(PROCESS_POLL_MS);
+  }
+
+  return {
+    target: target.target,
+    status: 'restarted',
+    requestedLaunchMode: 'visible-terminal',
+    launchMode: 'visible-terminal',
+    terminalOpened: true,
+    terminalApp: TERMINAL_APP,
+    pid: observedPid,
+    preRestartPid: metadata.pid,
+    postRestartPid: observedPid,
+    command: metadata.launchCommand,
+    cwd: launch.cwd,
+    recordedAt: metadata.recordedAt,
+    completedAt: new Date().toISOString(),
+  };
+}
+
 function buildDefaultRestartOutcome(outcomes: DefaultRestartTargetOutcome[]): DefaultRestartOutcome {
   return {
     status: aggregateRestartOutcome(outcomes),
@@ -409,6 +590,85 @@ function normalizeRelaunchReadyTimeoutMs(readyTimeoutMs: number) {
     : DEFAULT_RELAUNCH_READY_TIMEOUT_MS;
 }
 
+function getVisibleLaunchPidFilePath(rootDir: string, target: ControlPlaneServiceKind) {
+  return path.join(rootDir, ...RESTART_RUNTIME_SEGMENTS, `${target}.pid`);
+}
+
+function getVisibleLaunchScriptPath(rootDir: string, target: ControlPlaneServiceKind) {
+  return path.join(rootDir, ...RESTART_RUNTIME_SEGMENTS, `${target}.sh`);
+}
+
+function writeVisibleLaunchScript(
+  scriptPath: string,
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  displayCommand: string,
+  command: string,
+  args: string[],
+  pidFilePath: string
+) {
+  const envLines = Object.entries(env)
+    .filter(([key, value]) => key && typeof value !== 'undefined')
+    .map(([key, value]) => `export ${key}=${shellQuote(String(value))}`);
+  const lines = [
+    '#!/bin/sh',
+    'set -eu',
+    `cd ${shellQuote(cwd)}`,
+    ...envLines,
+    `mkdir -p ${shellQuote(path.dirname(pidFilePath))}`,
+    `echo $$ > ${shellQuote(pidFilePath)}`,
+    `echo ${shellQuote(`Launching: ${displayCommand}`)}`,
+    `exec ${formatExecCommand(command, args)}`,
+    '',
+  ];
+  fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
+  fs.writeFileSync(scriptPath, lines.join('\n'), 'utf8');
+  fs.chmodSync(scriptPath, 0o755);
+}
+
+function buildVisibleTerminalCommand(target: ControlPlaneServiceKind, scriptPath: string, pidFilePath: string, displayCommand: string) {
+  const label = target === 'controlBridge' ? 'Control bridge' : 'Control plane server';
+  return [
+    `printf '\\033]0;%s\\007' ${shellQuote(`Autonomy restart: ${label}`)}`,
+    'clear',
+    `echo ${shellQuote(`Autonomy v2 visible restart: ${label}`)}`,
+    `echo ${shellQuote(`PID file: ${pidFilePath}`)}`,
+    `echo ${shellQuote(`Command: ${displayCommand}`)}`,
+    `exec /bin/sh ${shellQuote(scriptPath)}`,
+  ].join('; ');
+}
+
+function openTerminalWindow(command: string) {
+  execFileSync('osascript', ['-e', buildTerminalOpenScript(command)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+function buildTerminalOpenScript(command: string) {
+  return [
+    'tell application "Terminal"',
+    'activate',
+    `do script ${toAppleScriptString(command)}`,
+    'end tell',
+  ].join('\n');
+}
+
+function toAppleScriptString(value: string) {
+  return `"${String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')}"`;
+}
+
+function readObservedPidFile(filePath: string) {
+  try {
+    const pid = Number(String(fs.readFileSync(filePath, 'utf8') || '').trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeNonNegativeNumber(value: unknown) {
   const numberValue = Number(value);
   return Number.isFinite(numberValue) ? Math.max(0, numberValue) : 0;
@@ -433,6 +693,7 @@ function recordRestartOutcome(rootDir: string, jobId: string | undefined, outcom
       updates[target.target] = {
         ...(restartStatus[target.target] || {}),
         ...target,
+        ...(target.launchMode ? { restartLaunchMode: target.launchMode } : {}),
       };
       return updates;
     }, {} as Record<string, DefaultRestartTargetOutcome>);
@@ -466,6 +727,8 @@ function normalizeDefaultRestartPlan(plan: DefaultRestartHelperPlan): DefaultRes
     startDelayMs: Number.isFinite(Number(plan.startDelayMs)) ? Math.max(0, Number(plan.startDelayMs)) : DEFAULT_START_DELAY_MS,
     stopTimeoutMs: Number.isFinite(Number(plan.stopTimeoutMs)) ? Math.max(0, Number(plan.stopTimeoutMs)) : DEFAULT_STOP_TIMEOUT_MS,
     relaunchReadyTimeoutMs: Number.isFinite(Number(plan.relaunchReadyTimeoutMs)) ? Math.max(0, Number(plan.relaunchReadyTimeoutMs)) : DEFAULT_RELAUNCH_READY_TIMEOUT_MS,
+    launchMode: plan.launchMode === 'detached' ? 'detached' : 'visible-terminal',
+    fallbackToDetached: plan.fallbackToDetached === true,
     targets: Array.isArray(plan.targets) ? plan.targets : [],
   };
 }
@@ -556,6 +819,14 @@ function formatExitStatus(code: number | null, signal: NodeJS.Signals | null) {
     return `signal ${signal}`;
   }
   return 'an unknown status';
+}
+
+function formatExecCommand(command: string, args: string[]) {
+  return [command, ...args].map((entry) => shellQuote(entry)).join(' ');
+}
+
+function shellQuote(value: string) {
+  return `'${String(value || '').replace(/'/g, `'\"'\"'`)}'`;
 }
 
 function parseHelperPlanArg(argv: string[]) {

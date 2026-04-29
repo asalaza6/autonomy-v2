@@ -5570,10 +5570,14 @@
         "support macOS first and report unsupported platforms clearly.",
         "Keep the bridge restart flow safe so the bridge can still complete or terminally record the job before replacing itself."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-29T03:59:22.488Z",
-      "updatedAt": "2026-04-29T03:59:22.488Z"
+      "updatedAt": "2026-04-29T04:12:14.104Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-default-visible-restart-verification-f27178-architecture-agent",
+      "startedAt": "2026-04-29T03:59:41.707Z",
+      "completedAt": "2026-04-29T04:12:14.104Z",
+      "completionMode": "code"
     }
   ]
 }

@@ -132,6 +132,14 @@ type RestartEvidenceTargetSummary = {
   reasonLabel?: string | null;
   mode?: string | null;
   modeLabel?: string | null;
+  restartLaunchMode?: string | null;
+  restartLaunchModeLabel?: string | null;
+  requestedLaunchMode?: string | null;
+  requestedLaunchModeLabel?: string | null;
+  terminalOpened?: boolean;
+  terminalApp?: string | null;
+  fallbackReason?: string | null;
+  fallbackReasonLabel?: string | null;
   command?: string | null;
   cwd?: string | null;
   preRestartPid?: number | null;
@@ -148,6 +156,7 @@ type RestartEvidenceSummary = {
   statusLabel?: string;
   completedAt?: string | null;
   helperStatus?: string | null;
+  visibleTerminalOpened?: boolean;
   compactSummary?: string;
   allTargetsRelaunched?: boolean;
   allTargetsChangedPid?: boolean;
@@ -3936,6 +3945,9 @@ function ProjectRestartPanel({
         {repo.restartJob.statusLabel || repo.restartJob.status || 'Restart recorded'}
         {repo.restartJob.detail ? ` | ${repo.restartJob.detail}` : ''}
       </div>
+      <div className="queue-detail" style={{ marginTop: '6px' }}>
+        {restartEvidence.visibleTerminalOpened ? 'Visible terminal verification opened' : 'Detached/background verification path'}
+      </div>
       {targets.length > 0 ? (
         targets.map((target) => <RestartTargetRow target={target} />)
       ) : (
@@ -4175,6 +4187,8 @@ function RestartTargetRow({ target }: { target: RestartEvidenceTargetSummary }) 
   const heartbeat = resolveTargetHeartbeat(target.target);
   const detailParts = [
     target.modeLabel ? `mode ${target.modeLabel.toLowerCase()}` : '',
+    target.restartLaunchModeLabel ? `launch ${target.restartLaunchModeLabel.toLowerCase()}` : '',
+    typeof target.terminalOpened === 'boolean' ? (target.terminalOpened ? `opened ${String(target.terminalApp || 'terminal').toLowerCase()}` : 'terminal not opened') : '',
     target.recordedAt ? `recorded ${formatTimestamp(target.recordedAt)}` : 'recorded time missing',
     target.completedAt ? `completed ${formatTimestamp(target.completedAt)}` : 'completion time missing',
     heartbeat ? `${heartbeat.label || 'Heartbeat'} ${heartbeat.statusLabel || 'Offline'}` : '',
@@ -4182,6 +4196,7 @@ function RestartTargetRow({ target }: { target: RestartEvidenceTargetSummary }) 
   const secondaryParts = [
     buildTargetLifecycleLabel(target),
     target.reasonLabel ? `reason ${target.reasonLabel}` : '',
+    target.fallbackReasonLabel ? `fallback ${target.fallbackReasonLabel}` : '',
     target.pidChanged === true ? 'pid changed' : target.pidChanged === false ? 'pid unchanged' : 'pid change unknown',
     target.error || '',
   ].filter(Boolean);

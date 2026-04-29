@@ -42,6 +42,7 @@ test('manager and project restart views render successful, skipped, and failed e
           status: 'restarted',
           statusLabel: 'Restarted',
           completedAt: '2026-04-22T01:06:30.000Z',
+          visibleTerminalOpened: true,
           targets: [
             {
               target: 'server',
@@ -49,6 +50,9 @@ test('manager and project restart views render successful, skipped, and failed e
               status: 'restarted',
               statusLabel: 'Restarted',
               modeLabel: 'default',
+              restartLaunchModeLabel: 'Visible terminal',
+              terminalOpened: true,
+              terminalApp: 'Terminal',
               preRestartPid: 123,
               postRestartPid: 456,
               recordedAt: '2026-04-22T01:00:00.000Z',
@@ -62,6 +66,9 @@ test('manager and project restart views render successful, skipped, and failed e
               status: 'restarted',
               statusLabel: 'Restarted',
               modeLabel: 'default',
+              restartLaunchModeLabel: 'Visible terminal',
+              terminalOpened: true,
+              terminalApp: 'Terminal',
               preRestartPid: 789,
               postRestartPid: 812,
               recordedAt: '2026-04-22T01:00:01.000Z',
@@ -76,7 +83,10 @@ test('manager and project restart views render successful, skipped, and failed e
   }));
 
   assert.match(successHtml, /Live server process/);
+  assert.match(successHtml, /Visible terminal verification opened/);
   assert.match(successHtml, /server pid 123 -&gt; 456/);
+  assert.match(successHtml, /launch visible terminal/);
+  assert.match(successHtml, /opened terminal/);
   assert.match(successHtml, /replaced existing process 123/);
   assert.match(successHtml, /pid changed/);
 
@@ -100,6 +110,7 @@ test('manager and project restart views render successful, skipped, and failed e
           status: 'skipped',
           statusLabel: 'Skipped',
           completedAt: '2026-04-22T01:07:00.000Z',
+          visibleTerminalOpened: false,
           targets: [
             {
               target: 'server',
@@ -109,6 +120,8 @@ test('manager and project restart views render successful, skipped, and failed e
               reason: 'missing-metadata',
               reasonLabel: 'missing metadata',
               modeLabel: 'default',
+              restartLaunchModeLabel: 'Detached',
+              terminalOpened: false,
               recordedAt: null,
               completedAt: '2026-04-22T01:07:00.000Z',
               pidChanged: null,
@@ -121,6 +134,7 @@ test('manager and project restart views render successful, skipped, and failed e
   }));
 
   assert.match(skippedHtml, /managed start failed/);
+  assert.match(skippedHtml, /Detached\/background verification path/);
   assert.match(skippedHtml, /server pid missing -&gt; missing/);
 
   const failedManagerHtml = renderToHtml(h(client.ManagerRepoCard as any, {

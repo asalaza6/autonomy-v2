@@ -789,6 +789,10 @@ test('bridge persists default restart helper evidence back into the hosted resta
   const managerRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-manager-default-state-'));
   const job = enqueueJob(managerRoot, createControlPlaneRestartJob({ repoId: 'default' }));
   initAutonomyRepo(repoDir);
+  const controlPlaneConfigPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlaneConfigPath, 'utf8'));
+  controlPlaneConfig.restartLaunchMode = 'detached';
+  fs.writeFileSync(controlPlaneConfigPath, `${JSON.stringify(controlPlaneConfig, null, 2)}\n`, 'utf8');
 
   const probeScriptPath = writeRestartProbeScript(repoDir);
   const eventsPath = path.join(repoDir, 'restart-events.log');
@@ -884,10 +888,13 @@ test('bridge persists default restart helper evidence back into the hosted resta
   assert.equal(completedJobs[1].result.restartStatus.status, 'restarted');
   assert.equal(completedJobs[1].result.restartStatus.helperStatus, 'restarted');
   assert.equal(completedJobs[1].result.restartStatus.server.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.server.restartLaunchMode, 'detached');
+  assert.equal(completedJobs[1].result.restartStatus.server.requestedLaunchMode, 'detached');
   assert.equal(completedJobs[1].result.restartStatus.server.preRestartPid, originalServerPid);
   assert.equal(completedJobs[1].result.restartStatus.server.postRestartPid, relaunchedServerPid);
   assert.equal(typeof completedJobs[1].result.restartStatus.server.completedAt, 'string');
   assert.equal(completedJobs[1].result.restartStatus.controlBridge.status, 'restarted');
+  assert.equal(completedJobs[1].result.restartStatus.controlBridge.restartLaunchMode, 'detached');
   assert.equal(completedJobs[1].result.restartStatus.controlBridge.preRestartPid, originalBridgePid);
   assert.equal(completedJobs[1].result.restartStatus.controlBridge.postRestartPid, relaunchedBridgePid);
   assert.equal(typeof completedJobs[1].result.restartStatus.controlBridge.completedAt, 'string');

@@ -447,12 +447,15 @@ test('restart job summaries preserve target PID evidence for the dashboard model
           restartStatus: {
             status: 'restarted',
             completedAt: '2026-04-22T01:06:30.000Z',
-            server: {
-              target: 'server',
-              status: 'restarted',
-              mode: 'default',
-              preRestartPid: 123,
-              postRestartPid: 456,
+              server: {
+                target: 'server',
+                status: 'restarted',
+                mode: 'default',
+                restartLaunchMode: 'visible-terminal',
+                terminalOpened: true,
+                terminalApp: 'Terminal',
+                preRestartPid: 123,
+                postRestartPid: 456,
               recordedAt: '2026-04-22T01:00:00.000Z',
               completedAt: '2026-04-22T01:06:10.000Z',
             },
@@ -487,8 +490,10 @@ test('restart job summaries preserve target PID evidence for the dashboard model
   assert.match(restartJob.detail, /server pid 123 -> 456/);
   assert.match(restartJob.detail, /bridge skipped \(missing metadata\) \| pid missing/);
   assert.equal(restartJob.restartEvidence.status, 'restarted');
+  assert.equal(restartJob.restartEvidence.visibleTerminalOpened, true);
   assert.equal(restartJob.restartEvidence.targets[0].preRestartPid, 123);
   assert.equal(restartJob.restartEvidence.targets[0].postRestartPid, 456);
+  assert.equal(restartJob.restartEvidence.targets[0].restartLaunchMode, 'visible-terminal');
   assert.equal(restartJob.restartEvidence.targets[0].pidChanged, true);
   assert.equal(restartJob.restartEvidence.targets[1].reason, 'missing-metadata');
   assert.equal(restartJob.restartEvidence.targets[1].postRestartPid, null);

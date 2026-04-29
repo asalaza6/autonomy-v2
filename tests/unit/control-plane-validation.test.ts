@@ -32,6 +32,8 @@ test('control plane config normalizes a repo-local identity record', () => {
   const config = normalizeControlPlaneConfig();
   assert.equal(config.repoId, 'default');
   assert.equal(config.label, 'Current workspace');
+  assert.equal(config.restartLaunchMode, 'visible-terminal');
+  assert.equal(config.restartLaunchFallbackToDetached, false);
   assert.equal(config.deploymentUrl, undefined);
 });
 
@@ -43,6 +45,8 @@ test('control plane config preserves optional deployment metadata', () => {
     packageUpdateCommand: 'npm run release:patch',
     controlBridgeRestartCommand: ['pm2', 'restart', 'autonomy-v2-control-bridge'],
     serverRestartCommand: 'systemctl restart autonomy-v2-server',
+    restartLaunchMode: 'detached',
+    restartLaunchFallbackToDetached: true,
     deploymentUrl: ' https://deploy.example.com/app ',
     deploymentLabel: ' Live app ',
     exclusiveControl: true,
@@ -77,6 +81,8 @@ test('control plane config preserves optional deployment metadata', () => {
   assert.equal(config.packageUpdateCommand, 'npm run release:patch');
   assert.deepEqual(config.controlBridgeRestartCommand, ['pm2', 'restart', 'autonomy-v2-control-bridge']);
   assert.equal(config.serverRestartCommand, 'systemctl restart autonomy-v2-server');
+  assert.equal(config.restartLaunchMode, 'detached');
+  assert.equal(config.restartLaunchFallbackToDetached, true);
   assert.equal(config.deploymentUrl, 'https://deploy.example.com/app');
   assert.equal(config.deploymentLabel, 'Live app');
   assert.equal(config.exclusiveControl, true);

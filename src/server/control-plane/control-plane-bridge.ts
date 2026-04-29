@@ -99,6 +99,11 @@ function mergeDeferredRestartLaunchResults(
           restartStatus[target] = {
             ...previousTarget,
             status: 'failed',
+            ...(launchResult.requestedLaunchMode ? { requestedLaunchMode: launchResult.requestedLaunchMode } : {}),
+            ...(launchResult.launchMode ? { restartLaunchMode: launchResult.launchMode } : {}),
+            ...(typeof launchResult.terminalOpened === 'boolean' ? { terminalOpened: launchResult.terminalOpened } : {}),
+            ...(launchResult.terminalApp ? { terminalApp: launchResult.terminalApp } : {}),
+            ...(launchResult.fallbackReason ? { fallbackReason: launchResult.fallbackReason } : {}),
             postRestartPid: null,
             completedAt,
             reason: 'restart-helper-launch-failed',
@@ -121,6 +126,11 @@ function mergeDeferredRestartLaunchResults(
     const nextTarget: Record<string, unknown> = {
       ...previousTarget,
       status: launchResult.status === 'launched' ? 'restarted' : 'failed',
+      ...(launchResult.requestedLaunchMode ? { requestedLaunchMode: launchResult.requestedLaunchMode } : {}),
+      ...(launchResult.launchMode ? { restartLaunchMode: launchResult.launchMode } : {}),
+      ...(typeof launchResult.terminalOpened === 'boolean' ? { terminalOpened: launchResult.terminalOpened } : {}),
+      ...(launchResult.terminalApp ? { terminalApp: launchResult.terminalApp } : {}),
+      ...(launchResult.fallbackReason ? { fallbackReason: launchResult.fallbackReason } : {}),
       postRestartPid,
       completedAt: launchResult.completedAt,
     };
@@ -179,6 +189,11 @@ type DeferredLaunchResult = {
     target: 'server' | 'controlBridge' | 'default';
     mode: 'configured' | 'default';
     status: 'launched' | 'failed';
+    launchMode?: 'visible-terminal' | 'detached';
+    requestedLaunchMode?: 'visible-terminal' | 'detached';
+    terminalOpened?: boolean;
+    terminalApp?: string;
+    fallbackReason?: string;
     completedAt: string;
     postRestartPid?: number | null;
     outputSessionId?: string;
@@ -231,6 +246,7 @@ function reconcileManagedRestartProcesses(
       pid: pid ?? undefined,
       running: status === 'restarted' && Boolean(pid),
       launchMode: String(entry.mode || '').trim() === 'default' ? 'default' : 'configured',
+      restartLaunchMode: String(entry.restartLaunchMode || entry.launchMode || '').trim() === 'detached' ? 'detached' : String(entry.restartLaunchMode || entry.launchMode || '').trim() === 'visible-terminal' ? 'visible-terminal' : undefined,
       singletonOutcome,
       command: String(entry.command || '').trim() || null,
       cwd: String(entry.cwd || '').trim() || null,
@@ -645,6 +661,10 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     const finalResult = mergeDeferredRestartLaunchResults(restart.result, results, {
       persistedResult,
       unresolvedDefaultTargets,
+    });
+    completeJob(restart.repoRoot, restart.jobId, {
+      status: 'completed',
+      result: finalResult,
     });
     const updated = await requestJson(`${options.serverUrl}/api/jobs/${encodeURIComponent(restart.jobId)}/complete`, {
       method: 'POST',

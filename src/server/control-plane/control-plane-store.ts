@@ -432,6 +432,11 @@ function normalizeManagedProcessRecord(
     pid,
     running: value?.running === true,
     launchMode: value?.launchMode === 'default' ? 'default' : 'configured',
+    restartLaunchMode: value?.restartLaunchMode === 'visible-terminal'
+      ? 'visible-terminal'
+      : value?.restartLaunchMode === 'detached'
+        ? 'detached'
+        : undefined,
     lifecycleAction: 'restart',
     singletonPolicy: 'replace',
     singletonOutcome: normalizeSingletonOutcome(value?.singletonOutcome),
