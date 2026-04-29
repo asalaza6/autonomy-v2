@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -6077,14 +6078,24 @@
       "acceptance": [
         "`npm run lint` is failing, so this branch is not mergeable yet.\nMerge-blocking verification failed: `npm run lint` reports an unused `buildRepoAssistantGithubSessionEnv` symbol in `tests/unit/control-plane-github.test.ts:12`. Fix that lint error and rerun the required checks before approval.\nBlocking checks failed: npm run lint"
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "createdAt": "2026-04-29T11:23:01.784Z",
-      "updatedAt": "2026-04-29T11:23:01.784Z",
+      "updatedAt": "2026-04-29T11:23:43.931Z",
       "startedAt": "2026-04-29T11:23:01.784Z",
-      "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent"
+      "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "completedAt": "2026-04-29T11:23:43.931Z",
+      "completionMode": "code",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T11:23:43.931Z"
+        }
+      },
+      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
