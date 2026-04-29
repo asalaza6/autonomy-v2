@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-harden-review-to-implementation-feedback-contract-69211d",
+  "status": "planned",
+  "createdAt": "2026-04-29T11:02:54.543Z",
+  "updatedAt": "2026-04-29T11:02:54.543Z",
+  "plannedTaskIds": [
+    "prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-1",
+    "prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-2"
+  ]
+}
