@@ -63,6 +63,38 @@ export interface ReviewDecisionRecord extends AnyRecord {
   reviewedAt?: string;
   conversationId?: string;
   remotePublishFallback?: string;
+  reviewerBlockers?: ReviewerBlockerRecord[];
+}
+
+export interface ReviewerBlockerEvidenceRecord extends AnyRecord {
+  kind: 'command_output' | 'code_change' | 'note';
+  label: string;
+  command?: string;
+  detail?: string;
+}
+
+export interface ReviewerBlockerStatusRecord extends AnyRecord {
+  state: 'open' | 'satisfied' | 'dismissed';
+  satisfiedAt?: string | null;
+  satisfiedByTaskId?: string | null;
+  dismissedAt?: string | null;
+  dismissalReason?: string | null;
+  evidence?: ReviewerBlockerEvidenceRecord[];
+}
+
+export interface ReviewerBlockerRecord extends AnyRecord {
+  id: string;
+  category: 'verification' | 'correctness' | 'scope' | 'documentation' | 'other';
+  summary: string;
+  requiredChecks?: string[];
+  requiredEvidence?: ReviewerBlockerEvidenceRecord[];
+  status: ReviewerBlockerStatusRecord;
+  sourceReview?: {
+    reviewerId?: string;
+    reviewRound?: number;
+    reviewedAt?: string;
+    conversationId?: string;
+  };
 }
 
 export interface TaskRecord extends AnyRecord {
@@ -87,6 +119,7 @@ export interface TaskRecord extends AnyRecord {
   completedAt?: string;
   implementationConversationId?: string;
   conversationReferences?: Record<string, AnyRecord>;
+  reviewerBlockers?: ReviewerBlockerRecord[];
   prId?: string;
   sourceTaskId?: string;
   sourceAgentId?: string;

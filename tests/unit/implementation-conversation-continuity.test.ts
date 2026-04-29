@@ -9,6 +9,7 @@ import { getAgentDefinition } from '../../src/agents/AgentDefinitionRegistry.js'
 import { AGENT_ROLES } from '../../src/agents/role-catalog.js';
 import { buildAgentConversationKey, getAgentConversationId } from '../../src/agents/conversation-references.js';
 import { appendTrackedBranchFollowupTask, enqueueLaneFollowupTask } from '../../src/autonomy-v2/commands/shared-worktrees.js';
+import { buildReviewerBlockersFromReview } from '../../src/autonomy-v2/commands/shared-review-blockers.js';
 import { markImplementationTaskComplete } from '../../src/autonomy-v2/runner/workspace.js';
 
 const queueRelativePath = 'prompts/autonomous/v2/queues/architecture-agent.json';
@@ -279,6 +280,137 @@ test('review follow-up task falls back to the PR implementation conversation ref
 
   assert.equal(followupTask.implementationConversationId, 'session-from-pr');
   assert.equal(followupTask.conversationReferences[implementationConversationKey].conversationId, 'session-from-pr');
+});
+
+test('review follow-up task stores structured reviewer blockers and required checks', () => {
+  const taskQueues = {
+    'architecture-agent': buildQueue([]),
+  };
+  const pr = {
+    id: 'pr-prd-conversation-architecture-agent',
+    title: 'Conversation continuity',
+    taskId: 'prd-conversation-architecture-agent-1',
+    laneKey: 'prd-conversation:architecture-agent',
+    prdId: 'prd-conversation',
+    sprintId: 'shared',
+    agentId: 'architecture-agent',
+    baseBranch: 'dev',
+    reviews: [{ decision: 'changes_requested' }],
+    acceptance: ['done'],
+  };
+  const reviewDecision = {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Run `npm run test:unit -- review-followup` before approval.',
+  };
+  const reviewerBlockers = buildReviewerBlockersFromReview(pr, reviewDecision);
+
+  const followupTask = enqueueLaneFollowupTask(taskQueues, buildConfig(), pr, {
+    id: 'architecture-agent-followup-pr-prd-conversation-architecture-agent-structured-1',
+    title: 'Address review for Conversation continuity',
+    description: reviewDecision.summary,
+    type: 'review_followup',
+    source: 'review_followup',
+    createdAt: '2026-04-21T00:20:00.000Z',
+    updatedAt: '2026-04-21T00:20:00.000Z',
+    reviewerBlockers,
+  });
+
+  assert.deepEqual(followupTask.checks, ['npm run test:unit -- review-followup']);
+  assert.equal(followupTask.reviewerBlockers.length, 1);
+  assert.equal(followupTask.reviewerBlockers[0].category, 'verification');
+  assert.deepEqual(followupTask.reviewerBlockers[0].requiredChecks, ['npm run test:unit -- review-followup']);
+  assert.equal(followupTask.reviewerBlockers[0].requiredEvidence[0].kind, 'command_output');
+  assert.equal(followupTask.reviewerBlockers[0].status.state, 'open');
+});
+
+test('tracked review follow-up persistence keeps structured blocker details after reload', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-followup-blockers-'));
+  const config = buildConfig();
+  const queuePath = path.join(rootDir, queueRelativePath);
+  const branch = 'agent/shared/architecture-agent/prd-conversation-architecture-agent';
+  const worktreePath = path.join(rootDir, '.autonomy', 'worktrees', 'architecture-agent', 'shared-prd-conversation-architecture-agent');
+  const originalTask = buildTask({
+    branch,
+    state: 'done',
+    status: 'done',
+    implementationConversationId: 'session-original',
+    completedAt: '2026-04-21T00:10:00.000Z',
+  });
+
+  git(rootDir, ['init', '-b', 'dev']);
+  git(rootDir, ['config', 'user.email', 'autonomy-test@example.com']);
+  git(rootDir, ['config', 'user.name', 'Autonomy Test']);
+  writeJson(queuePath, buildQueue([buildTask({ state: 'queued', status: 'queued' })]));
+  git(rootDir, ['add', '.']);
+  git(rootDir, ['commit', '-m', 'seed queue']);
+  git(rootDir, ['checkout', '-b', branch]);
+  writeJson(queuePath, buildQueue([originalTask]));
+  git(rootDir, ['add', queueRelativePath]);
+  git(rootDir, ['commit', '-m', 'complete original task']);
+  git(rootDir, ['checkout', 'dev']);
+  git(rootDir, ['worktree', 'add', worktreePath, branch]);
+
+  const pr = {
+    id: 'pr-prd-conversation-architecture-agent',
+    title: 'Conversation continuity',
+    taskId: originalTask.id,
+    laneKey: originalTask.laneKey,
+    prdId: originalTask.prdId,
+    sprintId: originalTask.sprintId,
+    agentId: originalTask.agentId,
+    baseBranch: 'dev',
+    headBranch: branch,
+    reviews: [{ decision: 'changes_requested' }],
+    completedTaskIds: [originalTask.id],
+  };
+  const reviewDecision = {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please add a focused verification step with `npm run test:unit -- review-followup`.',
+  };
+  const reviewerBlockers = buildReviewerBlockersFromReview(pr, reviewDecision);
+  const state = {
+    config,
+    taskQueues: {
+      'architecture-agent': buildQueue([buildTask({ state: 'queued', status: 'queued' })]),
+    },
+    branchLocks: {
+      locks: [
+        {
+          taskId: originalTask.id,
+          laneKey: originalTask.laneKey,
+          agentId: originalTask.agentId,
+          branch,
+          worktreePath,
+          completedTasks: [originalTask],
+          updatedAt: '2026-04-21T00:10:00.000Z',
+        },
+      ],
+    },
+  };
+
+  const followupTask = appendTrackedBranchFollowupTask(rootDir, state, pr, {
+    id: 'architecture-agent-followup-pr-prd-conversation-architecture-agent-2',
+    title: 'Address review for Conversation continuity',
+    description: reviewDecision.summary,
+    type: 'review_followup',
+    source: 'review_followup',
+    createdAt: '2026-04-21T00:20:00.000Z',
+    updatedAt: '2026-04-21T00:20:00.000Z',
+    reviewerBlockers,
+  });
+
+  const worktreeQueue = JSON.parse(fs.readFileSync(path.join(worktreePath, queueRelativePath), 'utf8'));
+  const reloadedFollowup = worktreeQueue.tasks.find((task) => task.id === followupTask.id);
+  assert.deepEqual(reloadedFollowup.checks, ['npm run test:unit -- review-followup']);
+  assert.equal(reloadedFollowup.reviewerBlockers.length, 1);
+  assert.equal(reloadedFollowup.reviewerBlockers[0].category, 'verification');
+  assert.deepEqual(reloadedFollowup.reviewerBlockers[0].requiredChecks, ['npm run test:unit -- review-followup']);
+  assert.equal(reloadedFollowup.reviewerBlockers[0].status.state, 'open');
+  assert.equal(reloadedFollowup.reviewerBlockers[0].sourceReview.reviewRound, 1);
 });
 
 function buildRunnerContext(executeTask: (input: any) => Promise<any>, taskOverrides: Record<string, unknown> = {}) {

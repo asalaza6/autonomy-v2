@@ -15,6 +15,7 @@ import { appendTrackedBranchFollowupTask, ensureReviewerTask, enqueueLaneFollowu
 import { findTask } from './shared-queues.js';
 import { normalizeReviewDecision } from './shared-repo.js';
 import { uniqueStrings } from './shared-repo.js';
+import { buildReviewerBlockersFromReview, collectReviewerBlockerChecks } from './shared-review-blockers.js';
 import {
   getAgentConversationId,
   setAgentConversationReference,
@@ -36,15 +37,20 @@ async function run(rootDir, options) {
   const decision = normalizeReviewDecision(requireOption(options, 'decision'));
   const rawSummary = getStringOption(options, 'summary', '');
   const reviewConversationId = String(getStringOption(options, 'conversation-id', '')).trim();
+  const reviewRound = (pr.reviews || []).length + 1;
   const decisionRecord: any = {
     reviewerId,
     decision,
     summary: rawSummary,
     publishedSummary: buildSignedReviewSummary(reviewer, rawSummary),
     reviewedAt: new Date().toISOString(),
+    reviewRound,
   };
   if (reviewConversationId) {
     decisionRecord.conversationId = reviewConversationId;
+  }
+  if (decision === 'changes_requested') {
+    decisionRecord.reviewerBlockers = buildReviewerBlockersFromReview(pr, decisionRecord);
   }
   pr.reviews.push(decisionRecord);
   pr.updatedAt = decisionRecord.reviewedAt;
@@ -74,6 +80,8 @@ async function run(rootDir, options) {
         source: 'review_followup',
         createdAt: decisionRecord.reviewedAt,
         updatedAt: decisionRecord.reviewedAt,
+        checks: collectReviewerBlockerChecks(decisionRecord.reviewerBlockers || []),
+        reviewerBlockers: decisionRecord.reviewerBlockers || [],
         implementationConversationId: implementationConversationId || undefined,
         conversationReferences: task && task.conversationReferences || undefined,
       }
@@ -88,7 +96,9 @@ async function run(rootDir, options) {
       task.title = `Address ${getRoleLabel(AGENT_ROLES.REVIEW)} for ${pr.title}`;
       task.description = rawSummary || `Address ${getRoleLabel(AGENT_ROLES.REVIEW)}er feedback for ${pr.title}`;
       task.acceptance = [task.description];
+      task.checks = uniqueStrings([...(task.checks || []), ...collectReviewerBlockerChecks(decisionRecord.reviewerBlockers || [])]);
       task.type = task.type || 'review_followup';
+      task.reviewerBlockers = decisionRecord.reviewerBlockers || [];
       task.prId = pr.id;
       pr.pendingTaskIds = uniqueStrings([...(pr.pendingTaskIds || []), task.id]);
     }
