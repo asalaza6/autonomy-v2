@@ -1422,12 +1422,11 @@
       "reviewRound": 5,
       "status": "merged",
       "createdAt": "2026-04-29T11:21:25.947Z",
-      "updatedAt": "2026-04-29T11:57:43.933Z",
+      "updatedAt": "2026-04-29T11:57:55.181Z",
       "reviewedAt": "2026-04-29T11:57:12.987Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-29T11:55:41.959Z",
-      "mergedAt": "2026-04-29T11:57:17Z"
+      "dispatchedAt": "2026-04-29T11:55:41.959Z"
     }
   ]
 }
