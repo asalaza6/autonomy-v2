@@ -1235,31 +1235,26 @@
     {
       "id": "review-pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
       "title": "Review [architecture-agent] Implement Persist Control-Plane Repo Assistant Chats Across Redeploys",
-      "description": "Review pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent for Implement Persist Control-Plane Repo Assistant Chats Across Redeploys",
+      "description": "Review pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent for Address review for [architecture-agent] Implement Persist Control-Plane Repo Assistant Chats Across Redeploys",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
-      "sourceTaskId": "prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "Persist control-plane conversation state outside process memory for hosted DYNO deployments.",
-        "Ensure repo assistant conversation lists and message history reload correctly after server restart or redeploy.",
-        "Preserve stable control-plane conversation IDs across restarts.",
-        "Evaluate and implement durable storage of underlying Codex conversation/session IDs when available",
-        "or explicitly document that only message history is resumed.",
-        "Keep current read-only repo assistant behavior and existing conversation-history prompt continuity.",
-        "Handle missing or stale persisted conversation/session references safely without breaking chat UX."
+        "The persistence/session-resume implementation looks aligned with the task, and the required wrapper checks (`npm run typecheck`, `npm run lint`) passed. I’m still blocking merge because this change is in the high-risk control-plane path and the review does not include passing focused verification for the new restart/recovery behavior.\nMissing merge-blocking focused verification for the control-plane chat persistence changes in `src/server/control-plane/control-plane-chat.ts` and `src/server/control-plane/control-plane-store.ts`. This task changes hosted restart/redeploy behavior and adds coverage in `tests/unit/control-plane-chat.test.ts` and `tests/smoke/control-plane.test.ts`, but the provided check results only show `npm run typecheck` and `npm run lint`. Please run the added focused tests (or an equivalent targeted control-plane chat persistence/restart suite) and include passing results before merge. I attempted local execution, but this review workspace is read-only and cannot build `dist/`, so I could not independently confirm those tests here."
       ],
       "reviewRound": 2,
       "status": "queued",
       "createdAt": "2026-04-28T23:56:12.652Z",
-      "updatedAt": "2026-04-28T23:59:35.932Z",
+      "updatedAt": "2026-04-29T00:00:31.296Z",
       "reviewedAt": "2026-04-28T23:59:09.768Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-28T23:56:16.727Z"
+      "dispatchedAt": "2026-04-28T23:56:16.727Z",
+      "scopeViolations": []
     }
   ]
 }
