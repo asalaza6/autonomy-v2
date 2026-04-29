@@ -1294,6 +1294,29 @@
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-29T04:12:19.255Z"
+    },
+    {
+      "id": "review-pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
+      "title": "Review [architecture-agent] architecture lane work for prd-stabilize-control-plane-reconciliation-for-5c2e43",
+      "description": "Review pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent for Reconcile queued implementation work with runtime worker status and pickup flow",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
+      "sourceTaskId": "prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent-2",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-29T07:10:46.106Z",
+      "updatedAt": "2026-04-29T07:10:46.106Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "If tracked queue state for `architecture-agent` contains queued work, status snapshots and rendered control-plane details do not report `idle` with `detail: no queued tasks` unless they also include an explicit reconciliation or stale-worker error code explaining the mismatch.",
+        "When a new implementation task or PRD is queued for the responsible lane, the scheduler or worker attach path picks it up within the expected polling window, or the control plane surfaces a clear pickup error instead of idle or no-work messaging.",
+        "Targeted tests are added or updated for queued-task pickup and idle-vs-queued status rendering, including relevant sync or queue unit tests and `tests/unit/control-plane-*.test.ts` coverage.",
+        "If the scheduler or worker attach flow is touched, verification also includes `tests/smoke/control-plane.test.ts` alongside `npm run typecheck` and the focused unit tests."
+      ],
+      "scopeViolations": []
     }
   ]
 }
