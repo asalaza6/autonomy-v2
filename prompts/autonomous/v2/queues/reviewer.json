@@ -1271,10 +1271,6 @@
       "prId": "pr-prd-default-visible-restart-verification-f27178-architecture-agent",
       "sourceTaskId": "prd-default-visible-restart-verification-f27178-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-29T04:12:15.294Z",
-      "updatedAt": "2026-04-29T04:12:15.294Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-default-visible-restart-verification-f27178-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1289,9 +1285,12 @@
         "support macOS first and report unsupported platforms clearly.",
         "Keep the bridge restart flow safe so the bridge can still complete or terminally record the job before replacing itself."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-29T04:12:19.255Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-29T04:12:15.294Z",
+      "updatedAt": "2026-04-29T04:12:27.773Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-29T04:12:19.255Z"
     }
   ]
 }
