@@ -5628,11 +5628,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-29T06:58:13.629Z",
-      "updatedAt": "2026-04-29T07:04:34.470Z",
+      "updatedAt": "2026-04-29T07:04:34.558Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
       "startedAt": "2026-04-29T06:58:33.887Z",
       "completedAt": "2026-04-29T07:04:34.470Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "f476c4717ad2eb3b24f4da2e331a6c3dcfcc5e16"
     },
     {
       "id": "prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent-2",
