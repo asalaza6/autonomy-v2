@@ -88,6 +88,11 @@ function comparePullRequestStatuses(left, right) {
 }
 
 function describePullRequestAction(pr, reviewTask, implementationTask, workerByAgentId) {
+  if (pr && pr.reconciliation && pr.reconciliation.reconciliationStatus === 'validation-error') {
+    return pr.reconciliation.canonicalReason
+      ? `GitHub validation failed: ${pr.reconciliation.canonicalReason}`
+      : 'GitHub validation failed for this pull request';
+  }
   if (pr && pr.reconciliation && pr.reconciliation.drifted) {
     return pr.reconciliation.driftReason
       ? `state drift: ${pr.reconciliation.driftReason}`
@@ -172,6 +177,10 @@ function formatPullRequestStatusLine(prStatus) {
 
 function describePullRequestStatusLabel(pr, reviewTask) {
   const status = String(pr && pr.status || 'open');
+  if (status === 'validation_error'
+    || String(pr && pr.reconciliation && pr.reconciliation.reconciliationStatus || '') === 'validation-error') {
+    return 'GitHub validation failed';
+  }
   if (status === 'approved') {
     const mergeState = resolvePullRequestMergeState(pr, reviewTask);
     if (mergeState === 'blocked') {

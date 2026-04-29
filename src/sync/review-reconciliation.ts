@@ -7,6 +7,20 @@ function normalizeString(value) {
   return String(value || '').trim();
 }
 
+function hasKnownRemotePullRequest(pr: AnyRecord | null | undefined) {
+  if (!pr || !pr.remote || typeof pr.remote !== 'object') {
+    return false;
+  }
+  return Boolean(
+    Number(pr.remote.number) > 0
+      || normalizeString(pr.remote.url)
+      || normalizeString(pr.remote.html_url)
+      || normalizeString(pr.remote.state)
+      || normalizeString(pr.remote.mergedAt)
+      || normalizeString(pr.remote.merged_at)
+  );
+}
+
 function normalizeStringList(value) {
   if (!Array.isArray(value)) {
     return [];
@@ -104,6 +118,19 @@ function getPullRequestStateReconciliation(pr: AnyRecord | null | undefined, imp
     };
   }
 
+  if (hasKnownRemotePullRequest(pr)) {
+    return {
+      canonicalState: 'validation-error',
+      canonicalSource: 'validation',
+      canonicalReason: 'remote state unavailable for known GitHub pull request',
+      inferredState: inferred && inferred.state ? inferred.state : null,
+      inferredReason: inferred && inferred.reason ? inferred.reason : null,
+      reconciliationStatus: 'validation-error',
+      drifted: false,
+      driftReason: null,
+    };
+  }
+
   const canonical = inferred || {
     state: 'open',
     source: 'inferred',
@@ -132,7 +159,8 @@ function isPullRequestResolved(pr: AnyRecord | null | undefined, implementationT
 }
 
 function isPullRequestActive(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
-  return getPullRequestStateReconciliation(pr, implementationTasks).canonicalState === 'open';
+  const canonicalState = getPullRequestStateReconciliation(pr, implementationTasks).canonicalState;
+  return canonicalState === 'open' || canonicalState === 'validation-error';
 }
 
 function taskMatchesPullRequest(task: AnyRecord | null | undefined, pr: AnyRecord | null | undefined) {
@@ -305,6 +333,14 @@ function reconcilePullRequestRecord(pr: AnyRecord, implementationTasks: AnyRecor
   if (reconciliation.canonicalState === 'closed') {
     nextRecord.status = 'closed';
     nextRecord.updatedAt = now;
+    delete nextRecord.mergedAt;
+    return nextRecord;
+  }
+  if (reconciliation.canonicalState === 'validation-error') {
+    nextRecord.status = 'validation_error';
+    if (normalizeString(nextRecord.status) !== normalizeString(pr.status)) {
+      nextRecord.updatedAt = now;
+    }
     delete nextRecord.mergedAt;
     return nextRecord;
   }
