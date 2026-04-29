@@ -1261,6 +1261,35 @@
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-29T00:03:04.739Z",
       "mergedAt": "2026-04-29T00:04:32.894Z"
+    },
+    {
+      "id": "review-pr-prd-default-visible-restart-verification-f27178-architecture-agent",
+      "title": "Review [architecture-agent] Implement Default Visible Restart Verification For Control Plane Services",
+      "description": "Review pr-prd-default-visible-restart-verification-f27178-architecture-agent for Implement Default Visible Restart Verification For Control Plane Services",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-default-visible-restart-verification-f27178-architecture-agent",
+      "sourceTaskId": "prd-default-visible-restart-verification-f27178-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-04-29T04:12:15.294Z",
+      "updatedAt": "2026-04-29T04:12:15.294Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-default-visible-restart-verification-f27178-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Add a restart launch mode for control-plane services that can open a visible terminal session on the local machine during restart.",
+        "Make the visible mode the default for this repo's local control-plane restart flow unless explicitly configured otherwise.",
+        "Preserve the existing detached/background mode as a supported fallback or configuration option for later subprocess-based operation.",
+        "Record enough lifecycle metadata to distinguish visible-terminal launches from detached launches.",
+        "Capture clear restart result data so the dashboard can report whether a visible terminal was opened",
+        "which target was launched",
+        "and whether launch succeeded or failed.",
+        "Define the supported platform scope explicitly; if cross-platform is not implemented",
+        "support macOS first and report unsupported platforms clearly.",
+        "Keep the bridge restart flow safe so the bridge can still complete or terminally record the job before replacing itself."
+      ],
+      "scopeViolations": []
     }
   ]
 }
