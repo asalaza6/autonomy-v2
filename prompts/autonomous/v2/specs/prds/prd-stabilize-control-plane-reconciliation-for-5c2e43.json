@@ -11,5 +11,32 @@
     "Ensure agent status snapshots cannot report `idle/no queued tasks` while tracked queue state for that same agent still contains queued work unless an explicit error state is shown.",
     "Expose a clear degraded/error state when GitHub validation fails or when scheduler/worker reconciliation is stale.",
     "Preserve existing branch/deploy contract and tracked queue/PRD file formats."
+  ],
+  "tasks": [
+    {
+      "id": "prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent-1",
+      "title": "Make remote GitHub PR state authoritative in control-plane reconciliation",
+      "agentId": "architecture-agent",
+      "description": "Update the control-plane and sync reconciliation paths so pull request status shown in snapshots and UI prefers canonical remote GitHub state when validation succeeds, even when linked local task or branch inference suggests a terminal state. Keep inferred local terminal conclusions available only as secondary diagnostic context, and surface an explicit degraded or validation-error state when GitHub truth cannot be confirmed. Likely touch points include PR reconstruction and status shaping under `src/sync/`, `src/autonomy-v2/control-plane/`, and any control-plane server rendering or API code under `src/server/control-plane/` that currently promotes inferred merged state ahead of remote PR truth.",
+      "acceptance": [
+        "When GitHub validation fails, the control plane does not silently fall back to a misleading terminal PR state; it instead exposes a clear degraded or validation-error status while preserving existing tracked PRD and queue file formats.",
+        "Targeted tests are added or updated for stale PR reconciliation and degraded GitHub validation behavior, including relevant `tests/unit/control-plane-*.test.ts` coverage and any sync-focused unit tests that reconstruct PR status.",
+        "Verification for this task includes `npm run typecheck` and the focused unit tests covering PR reconciliation and status rendering."
+      ],
+      "sprintId": "multi-agent-mvp"
+    },
+    {
+      "id": "prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent-2",
+      "title": "Reconcile queued implementation work with runtime worker status and pickup flow",
+      "agentId": "architecture-agent",
+      "description": "Update queue reconstruction, scheduler or worker-attach reconciliation, and control-plane status rendering so tracked queued implementation work is discoverable by the responsible lane and cannot be presented simultaneously with `idle` or `detail: no queued tasks` unless an explicit reconciliation error or stale-worker condition is shown. Preserve the existing tracked queue and PRD file formats while making new queued implementation work either start within the expected polling window or surface an actionable pickup error in the control plane. Likely touch points include queue or lane state reconstruction under `src/sync/`, runtime snapshot generation under `src/autonomy-v2/control-plane/`, scheduler or runner behavior under `src/autonomy-v2/commands/` or `src/autonomy-v2/runner/`, and control-plane server or UI paths under `src/server/control-plane/` that render agent status details.",
+      "acceptance": [
+        "If tracked queue state for `architecture-agent` contains queued work, status snapshots and rendered control-plane details do not report `idle` with `detail: no queued tasks` unless they also include an explicit reconciliation or stale-worker error code explaining the mismatch.",
+        "When a new implementation task or PRD is queued for the responsible lane, the scheduler or worker attach path picks it up within the expected polling window, or the control plane surfaces a clear pickup error instead of idle or no-work messaging.",
+        "Targeted tests are added or updated for queued-task pickup and idle-vs-queued status rendering, including relevant sync or queue unit tests and `tests/unit/control-plane-*.test.ts` coverage.",
+        "If the scheduler or worker attach flow is touched, verification also includes `tests/smoke/control-plane.test.ts` alongside `npm run typecheck` and the focused unit tests."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
