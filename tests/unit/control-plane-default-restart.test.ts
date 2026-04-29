@@ -17,7 +17,9 @@ import {
   loadControlPlaneState,
 } from '../../src/server/control-plane/control-plane-store.js';
 import {
+  buildDefaultRestartHelperCommand,
   prepareControlPlaneRestartCommands,
+  resolveRestartLaunchSettings,
   runDeferredControlPlaneRestartCommands,
 } from '../../src/server/control-plane/control-plane-package-update.js';
 import { runDefaultControlPlaneRestart } from '../../src/server/control-plane/control-plane-restart-helper.js';
@@ -83,10 +85,36 @@ test('restart planner creates default helper plan from valid lifecycle metadata'
   assert.equal(plan.deferredCommands.length, 1);
   assert.equal(plan.deferredCommands[0].mode, 'default');
   assert.equal(plan.deferredCommands[0].target, 'default');
+  assert.equal(plan.deferredCommands[0].launchMode, 'visible-terminal');
   assert.deepEqual(
     plan.deferredCommands[0].helperPlan.targets.map((target) => target.target),
     ['server', 'controlBridge']
   );
+});
+
+test('restart launch settings default to visible-terminal for unconfigured repos', () => {
+  const settings = resolveRestartLaunchSettings({ repoId: 'alpha' } as any);
+  assert.equal(settings.mode, 'visible-terminal');
+  assert.equal(settings.fallbackToDetached, false);
+});
+
+test('restart launch settings preserve explicit detached fallback configuration', () => {
+  const settings = resolveRestartLaunchSettings({
+    repoId: 'alpha',
+    restartLaunchMode: 'visible-terminal',
+    restartLaunchFallbackToDetached: true,
+  } as any);
+  assert.equal(settings.mode, 'visible-terminal');
+  assert.equal(settings.fallbackToDetached, true);
+});
+
+test('restart launch settings preserve explicit detached mode configuration', () => {
+  const settings = resolveRestartLaunchSettings({
+    repoId: 'alpha',
+    restartLaunchMode: 'detached',
+  } as any);
+  assert.equal(settings.mode, 'detached');
+  assert.equal(settings.fallbackToDetached, false);
 });
 
 test('restart planner reports missing lifecycle metadata without guessing PIDs', () => {
@@ -169,6 +197,10 @@ test('detached default restart helper stops registered PIDs and relaunches servi
     jobId: 'job-detached-default',
     repoId: 'alpha',
   });
+  if (plan.deferredCommands[0]?.mode === 'default') {
+    plan.deferredCommands[0].helperPlan.launchMode = 'detached';
+    plan.deferredCommands[0].launchMode = 'detached';
+  }
 
   const results = await runDeferredControlPlaneRestartCommands(plan.deferredCommands);
   assert.equal(results.length, 1);
@@ -223,6 +255,7 @@ test('default restart helper reports relaunch failures after stopping a verified
     jobId: job.id,
     startDelayMs: 0,
     stopTimeoutMs: 500,
+    launchMode: 'detached',
     targets: [
       {
         target: 'server',
@@ -278,6 +311,7 @@ test('default restart helper reports failure when node restart command exits aft
     startDelayMs: 0,
     stopTimeoutMs: 500,
     relaunchReadyTimeoutMs: 500,
+    launchMode: 'detached',
     targets: [
       {
         target: 'server',
@@ -299,6 +333,115 @@ test('default restart helper reports failure when node restart command exits aft
   assert.equal(storedJob?.result?.restartStatus.server.status, 'relaunch-failed');
   assert.equal(storedJob?.result?.restartStatus.server.reason, 'early-exit');
   assert.equal(storedJob?.result?.restartStatus.helperResults[0].status, 'relaunch-failed');
+});
+
+test('default restart helper command reuses the current Node runtime and embeds the helper payload', () => {
+  const helperCommand = buildDefaultRestartHelperCommand({
+    rootDir: '/tmp/autonomy-restart-helper',
+    jobId: 'job-visible-restart',
+    launchMode: 'visible-terminal',
+    fallbackToDetached: true,
+    targets: [],
+  });
+
+  assert.equal(helperCommand.command, process.execPath);
+  assert.ok(helperCommand.args.includes('--payload'));
+  assert.equal(helperCommand.cwd, '/tmp/autonomy-restart-helper');
+
+  const payloadIndex = helperCommand.args.indexOf('--payload');
+  const payload = JSON.parse(Buffer.from(helperCommand.args[payloadIndex + 1], 'base64url').toString('utf8'));
+  assert.equal(payload.launchMode, 'visible-terminal');
+  assert.equal(payload.fallbackToDetached, true);
+  assert.equal(payload.jobId, 'job-visible-restart');
+});
+
+test('visible restart falls back to detached relaunch when configured on unsupported platforms', async (t) => {
+  if (process.platform === 'darwin') {
+    t.skip('Fallback path is only exercised on non-macOS platforms.');
+    return;
+  }
+
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-visible-restart-fallback-'));
+  const probeScriptPath = writeRestartProbeScript(rootDir);
+  const eventsPath = path.join(rootDir, 'restart-events.log');
+  const pidPath = path.join(rootDir, 'server.pid');
+  const server = startRestartProbe(rootDir, probeScriptPath, 'server', pidPath, eventsPath);
+  t.after(async () => {
+    await stopPid(readPidFile(pidPath));
+    await stopChild(server);
+  });
+
+  const originalPid = await waitForPidFile(pidPath);
+  const metadata = buildProbeLifecycle('server', rootDir, probeScriptPath, pidPath, eventsPath, originalPid);
+  writeControlPlaneServiceLifecycle(rootDir, metadata);
+
+  const outcome = await runDefaultControlPlaneRestart({
+    rootDir,
+    startDelayMs: 0,
+    stopTimeoutMs: 500,
+    relaunchReadyTimeoutMs: 200,
+    launchMode: 'visible-terminal',
+    fallbackToDetached: true,
+    targets: [
+      {
+        target: 'server',
+        metadata,
+      },
+    ],
+  });
+
+  const relaunchedPid = await waitForChangedPid(pidPath, originalPid);
+  assert.equal(outcome.status, 'restarted');
+  assert.equal(outcome.targets[0].status, 'restarted');
+  assert.equal(outcome.targets[0].requestedLaunchMode, 'visible-terminal');
+  assert.equal(outcome.targets[0].launchMode, 'detached');
+  assert.equal(outcome.targets[0].fallbackReason, 'unsupported-platform');
+  assert.equal(outcome.targets[0].terminalOpened, false);
+  assert.equal(outcome.targets[0].postRestartPid, relaunchedPid);
+});
+
+test('visible restart fails safely without detached fallback on unsupported platforms', async (t) => {
+  if (process.platform === 'darwin') {
+    t.skip('Unsupported-platform path is only exercised on non-macOS platforms.');
+    return;
+  }
+
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-visible-restart-unsupported-'));
+  const probeScriptPath = writeRestartProbeScript(rootDir);
+  const eventsPath = path.join(rootDir, 'restart-events.log');
+  const pidPath = path.join(rootDir, 'server.pid');
+  const server = startRestartProbe(rootDir, probeScriptPath, 'server', pidPath, eventsPath);
+  t.after(async () => {
+    await stopPid(readPidFile(pidPath));
+    await stopChild(server);
+  });
+
+  const originalPid = await waitForPidFile(pidPath);
+  const metadata = buildProbeLifecycle('server', rootDir, probeScriptPath, pidPath, eventsPath, originalPid);
+  writeControlPlaneServiceLifecycle(rootDir, metadata);
+
+  const outcome = await runDefaultControlPlaneRestart({
+    rootDir,
+    startDelayMs: 0,
+    stopTimeoutMs: 500,
+    relaunchReadyTimeoutMs: 200,
+    launchMode: 'visible-terminal',
+    fallbackToDetached: false,
+    targets: [
+      {
+        target: 'server',
+        metadata,
+      },
+    ],
+  });
+
+  assert.equal(outcome.status, 'failed');
+  assert.equal(outcome.targets[0].status, 'failed');
+  assert.equal(outcome.targets[0].requestedLaunchMode, 'visible-terminal');
+  assert.equal(outcome.targets[0].launchMode, 'visible-terminal');
+  assert.equal(outcome.targets[0].terminalOpened, false);
+  assert.equal(outcome.targets[0].reason, 'unsupported-platform');
+  assert.match(outcome.targets[0].error || '', /only supported on macOS/i);
 });
 
 test('default restart helper records bridge results before a relaunched bridge can cache stale job state', async (t) => {
@@ -362,6 +505,7 @@ test('default restart helper records bridge results before a relaunched bridge c
     startDelayMs: 0,
     stopTimeoutMs: 500,
     relaunchReadyTimeoutMs: 100,
+    launchMode: 'detached',
     targets: [
       {
         target: 'server',

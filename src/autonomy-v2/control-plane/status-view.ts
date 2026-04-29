@@ -653,6 +653,7 @@ function buildRestartEvidence(job: any) {
     statusLabel: formatRestartStatusLabel(String(restartStatus.status || 'skipped').trim() || 'skipped'),
     completedAt,
     helperStatus: String(restartStatus.helperStatus || '').trim() || null,
+    visibleTerminalOpened: targets.some((target) => target.terminalOpened === true),
     targets,
     compactSummary: targets.map((target) => target.compactLabel).filter(Boolean).join(', '),
     allTargetsRelaunched: targets.length > 0 && targets.every((target) => target.status === 'restarted'),
@@ -669,7 +670,10 @@ function buildRestartTargetEvidence(target: string, raw: any, fallbackCompletedA
   }
   const label = target === 'controlBridge' ? 'bridge' : 'server';
   const mode = String(raw && raw.mode || '').trim() || null;
+  const restartLaunchMode = String(raw && (raw.restartLaunchMode || raw.launchMode) || '').trim() || null;
+  const requestedLaunchMode = String(raw && raw.requestedLaunchMode || '').trim() || null;
   const reason = String(raw && raw.reason || '').trim() || null;
+  const fallbackReason = String(raw && raw.fallbackReason || '').trim() || null;
   const preRestartPid = normalizeOptionalNumber(raw && (raw.preRestartPid ?? raw.pid));
   const postRestartPid = normalizeOptionalNumber(raw && raw.postRestartPid);
   const recordedAt = String(raw && raw.recordedAt || '').trim() || null;
@@ -684,6 +688,14 @@ function buildRestartTargetEvidence(target: string, raw: any, fallbackCompletedA
     reasonLabel: reason ? formatRestartReason(reason) : null,
     mode,
     modeLabel: mode ? formatStatusLabel(mode) : null,
+    restartLaunchMode,
+    restartLaunchModeLabel: restartLaunchMode ? formatRestartLaunchModeLabel(restartLaunchMode) : null,
+    requestedLaunchMode,
+    requestedLaunchModeLabel: requestedLaunchMode ? formatRestartLaunchModeLabel(requestedLaunchMode) : null,
+    terminalOpened: raw && raw.terminalOpened === true,
+    terminalApp: String(raw && raw.terminalApp || '').trim() || null,
+    fallbackReason,
+    fallbackReasonLabel: fallbackReason ? formatRestartReason(fallbackReason) : null,
     command: String(raw && raw.command || '').trim() || null,
     cwd: String(raw && raw.cwd || '').trim() || null,
     preRestartPid,
@@ -723,6 +735,16 @@ function formatRestartStatusLabel(status: string) {
   return formatStatusLabel(status);
 }
 
+function formatRestartLaunchModeLabel(mode: string) {
+  if (mode === 'visible-terminal') {
+    return 'Visible terminal';
+  }
+  if (mode === 'detached') {
+    return 'Detached';
+  }
+  return formatStatusLabel(mode);
+}
+
 function formatRestartReason(reason: string) {
   if (reason === 'missing-metadata') {
     return 'missing metadata';
@@ -735,6 +757,15 @@ function formatRestartReason(reason: string) {
   }
   if (reason === 'post-restart-pid-unavailable') {
     return 'post-restart pid unavailable';
+  }
+  if (reason === 'unsupported-platform') {
+    return 'unsupported platform';
+  }
+  if (reason === 'terminal-open-failed') {
+    return 'terminal open failed';
+  }
+  if (reason === 'pid-observation-timeout') {
+    return 'pid observation timeout';
   }
   return formatStatusLabel(reason);
 }

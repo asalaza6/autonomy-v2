@@ -150,6 +150,8 @@ export interface ControlPlaneRepoRecord extends AnyRecord {
   packageUpdateCommand?: DeployCommandConfig;
   controlBridgeRestartCommand?: DeployCommandConfig;
   serverRestartCommand?: DeployCommandConfig;
+  restartLaunchMode?: 'visible-terminal' | 'detached';
+  restartLaunchFallbackToDetached?: boolean;
   deploymentUrl?: string;
   deploymentLabel?: string;
   exclusiveControl?: boolean;
@@ -298,6 +300,7 @@ export interface ControlPlaneManagedProcessRecord extends AnyRecord {
   pid?: number | null;
   running?: boolean;
   launchMode?: 'configured' | 'default';
+  restartLaunchMode?: 'visible-terminal' | 'detached';
   lifecycleAction?: 'restart';
   singletonPolicy?: 'replace';
   singletonOutcome?: 'started' | 'replaced' | 'reused' | 'refused' | 'failed';

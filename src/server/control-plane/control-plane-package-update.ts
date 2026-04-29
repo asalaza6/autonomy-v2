@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { execFileSync, spawn, spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { AGENT_ROLES } from '../../agents/role-catalog.js';
 import { validateAutonomyConfig } from '../../config/config-main.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
@@ -14,10 +15,11 @@ import type { ControlPlaneServiceLifecycleRecord } from './control-plane-lifecyc
 import { loadControlPlaneLifecycle, validateControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import { prepareManagedProcessOutput } from './control-plane-process-output.js';
 import { getManagedProcesses } from './control-plane-store.js';
-import { runDefaultControlPlaneRestart, type DefaultRestartHelperPlan } from './control-plane-restart-helper.js';
+import type { DefaultRestartHelperPlan } from './control-plane-restart-helper.js';
 
 type RestartTarget = 'controlBridge' | 'server';
 type DeferredRestartTarget = RestartTarget | 'default';
+type RestartLaunchMode = 'visible-terminal' | 'detached';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_COMMAND_OUTPUT_LENGTH = 4000;
@@ -48,6 +50,8 @@ interface DefaultDeferredRestartCommand {
   command: string;
   cwd: string;
   helperPlan: DefaultRestartHelperPlan;
+  launchMode: RestartLaunchMode;
+  fallbackToDetached: boolean;
 }
 
 type DeferredRestartCommand = ConfiguredDeferredRestartCommand | DefaultDeferredRestartCommand;
@@ -58,6 +62,11 @@ interface DeferredRestartLaunchResult {
   command: string;
   cwd: string;
   status: 'launched' | 'failed';
+  launchMode?: RestartLaunchMode;
+  requestedLaunchMode?: RestartLaunchMode;
+  terminalOpened?: boolean;
+  terminalApp?: string;
+  fallbackReason?: string;
   targets?: RestartTarget[];
   postRestartPid?: number | null;
   outputSessionId?: string;
@@ -356,6 +365,7 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
   jobId?: string;
   repoId?: string;
 } = {}) {
+  const restartLaunch = resolveRestartLaunchSettings(config);
   const managedProcesses = (String(context.repoId || '').trim()
     ? getManagedProcesses(rootDir, context.repoId)
     : {}) as Partial<Record<RestartTarget, { pid?: number | null; running?: boolean }>>;
@@ -387,7 +397,23 @@ function prepareControlPlaneRestartCommands(rootDir: string, config: ControlPlan
       controlBridge,
       server,
     },
-    deferredCommands: buildDeferredRestartCommands(rootDir, serverPlan, controlBridgePlan, context),
+    deferredCommands: buildDeferredRestartCommands(rootDir, serverPlan, controlBridgePlan, context, restartLaunch),
+  };
+}
+
+function resolveRestartLaunchSettings(config: ControlPlaneConfig): {
+  mode: RestartLaunchMode;
+  fallbackToDetached: boolean;
+} {
+  const configuredMode = config.restartLaunchMode === 'detached'
+    ? 'detached'
+    : config.restartLaunchMode === 'visible-terminal'
+      ? 'visible-terminal'
+      : null;
+  const defaultMode: RestartLaunchMode = 'visible-terminal';
+  return {
+    mode: configuredMode || defaultMode,
+    fallbackToDetached: config.restartLaunchFallbackToDetached === true,
   };
 }
 
@@ -515,7 +541,8 @@ function buildDeferredRestartCommands(
   context: {
     jobId?: string;
     repoId?: string;
-  }
+  },
+  restartLaunch: ReturnType<typeof resolveRestartLaunchSettings>
 ) {
   const deferredCommands: DeferredRestartCommand[] = [];
   if (serverPlan.configuredCommand) {
@@ -525,7 +552,7 @@ function buildDeferredRestartCommands(
   const defaultTargets = [serverPlan.defaultTarget, controlBridgePlan.defaultTarget]
     .filter((target): target is { target: RestartTarget; metadata: ControlPlaneServiceLifecycleRecord } => Boolean(target));
   if (defaultTargets.length > 0) {
-    deferredCommands.push(createDefaultRestartCommand(rootDir, defaultTargets, context));
+    deferredCommands.push(createDefaultRestartCommand(rootDir, defaultTargets, context, restartLaunch));
   }
 
   if (controlBridgePlan.configuredCommand) {
@@ -540,13 +567,16 @@ function createDefaultRestartCommand(
   context: {
     jobId?: string;
     repoId?: string;
-  }
+  },
+  restartLaunch: ReturnType<typeof resolveRestartLaunchSettings>
 ): DefaultDeferredRestartCommand {
   const helperPlan: DefaultRestartHelperPlan = {
     rootDir,
     jobId: String(context.jobId || '').trim() || undefined,
     repoId: String(context.repoId || '').trim() || undefined,
     requestedAt: new Date().toISOString(),
+    launchMode: restartLaunch.mode,
+    fallbackToDetached: restartLaunch.fallbackToDetached,
     targets,
   };
   return {
@@ -555,6 +585,8 @@ function createDefaultRestartCommand(
     command: 'default lifecycle restart helper',
     cwd: rootDir,
     helperPlan,
+    launchMode: restartLaunch.mode,
+    fallbackToDetached: restartLaunch.fallbackToDetached,
   };
 }
 
@@ -673,6 +705,8 @@ function startDetachedDefaultRestartHelper(deferredCommand: DefaultDeferredResta
     mode: 'default' as const,
     command: deferredCommand.command,
     cwd: deferredCommand.cwd,
+    launchMode: deferredCommand.launchMode,
+    requestedLaunchMode: deferredCommand.helperPlan.launchMode,
     targets: deferredCommand.helperPlan.targets.map((target) => target.target),
   };
 
@@ -686,21 +720,59 @@ function startDetachedDefaultRestartHelper(deferredCommand: DefaultDeferredResta
       resolve(result);
     };
 
-    void runDefaultControlPlaneRestart(deferredCommand.helperPlan).then(() => {
-      settle({
-        ...base,
-        status: 'launched',
-        completedAt: new Date().toISOString(),
+    const helperCommand = buildDefaultRestartHelperCommand(deferredCommand.helperPlan);
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(helperCommand.command, helperCommand.args, {
+        cwd: helperCommand.cwd,
+        detached: true,
+        env: helperCommand.env,
+        stdio: 'ignore',
       });
-    }).catch((error) => {
+    } catch (error) {
       settle({
         ...base,
         status: 'failed',
         completedAt: new Date().toISOString(),
         error: formatErrorMessage(error),
       });
+      return;
+    }
+
+    child.once('spawn', () => {
+      child.unref();
+      settle({
+        ...base,
+        status: 'launched',
+        completedAt: new Date().toISOString(),
+      });
+    });
+    child.once('error', (error) => {
+      settle({
+        ...base,
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: error.message,
+      });
     });
   });
+}
+
+function buildDefaultRestartHelperCommand(helperPlan: DefaultRestartHelperPlan) {
+  const helperPath = fileURLToPath(new URL('./control-plane-restart-helper.js', import.meta.url));
+  return {
+    command: process.execPath,
+    args: [
+      ...process.execArgv,
+      helperPath,
+      '--payload',
+      Buffer.from(JSON.stringify(helperPlan), 'utf8').toString('base64url'),
+    ],
+    cwd: helperPlan.rootDir,
+    env: {
+      ...process.env,
+    },
+  };
 }
 
 async function stopExistingManagedProcess(pid: number | null | undefined) {
@@ -1076,9 +1148,11 @@ function collectRestartErrors(restartStatus: {
 }
 
 export {
+  buildDefaultRestartHelperCommand,
   executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
   prepareControlPlaneRestartCommands,
+  resolveRestartLaunchSettings,
   runDeferredControlPlaneRestartCommands,
   runDeferredPackageUpdateRestartCommands,
 };
