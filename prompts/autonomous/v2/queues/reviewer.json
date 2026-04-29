@@ -1286,11 +1286,13 @@
         "Keep the bridge restart flow safe so the bridge can still complete or terminally record the job before replacing itself."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-04-29T04:12:15.294Z",
-      "updatedAt": "2026-04-29T04:12:27.773Z",
+      "updatedAt": "2026-04-29T04:14:09.072Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-29T04:12:19.255Z"
+      "dispatchedAt": "2026-04-29T04:12:19.255Z",
+      "reviewedAt": "2026-04-29T04:14:09.072Z",
+      "lastDecision": "changes_requested"
     }
   ]
 }
