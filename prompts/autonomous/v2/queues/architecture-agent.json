@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5488,14 +5489,24 @@
       "acceptance": [
         "The persistence/session-resume implementation looks aligned with the task, and the required wrapper checks (`npm run typecheck`, `npm run lint`) passed. I’m still blocking merge because this change is in the high-risk control-plane path and the review does not include passing focused verification for the new restart/recovery behavior.\nMissing merge-blocking focused verification for the control-plane chat persistence changes in `src/server/control-plane/control-plane-chat.ts` and `src/server/control-plane/control-plane-store.ts`. This task changes hosted restart/redeploy behavior and adds coverage in `tests/unit/control-plane-chat.test.ts` and `tests/smoke/control-plane.test.ts`, but the provided check results only show `npm run typecheck` and `npm run lint`. Please run the added focused tests (or an equivalent targeted control-plane chat persistence/restart suite) and include passing results before merge. I attempted local execution, but this review workspace is read-only and cannot build `dist/`, so I could not independently confirm those tests here."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
       "createdAt": "2026-04-28T23:59:09.768Z",
-      "updatedAt": "2026-04-28T23:59:09.768Z",
+      "updatedAt": "2026-04-29T00:00:30.140Z",
       "startedAt": "2026-04-28T23:59:09.768Z",
-      "prId": "pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent"
+      "prId": "pr-prd-persist-control-plane-repo-assistant-fb1eba-architecture-agent",
+      "completedAt": "2026-04-29T00:00:30.140Z",
+      "completionMode": "noop",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd688-5842-7741-9b02-8e95427098ce",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T00:00:30.140Z"
+        }
+      },
+      "implementationConversationId": "019dd688-5842-7741-9b02-8e95427098ce"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
