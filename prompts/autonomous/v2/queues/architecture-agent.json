@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5944,11 +5945,11 @@
       "acceptance": [
         "The prior `--auto-stash=false` parser blocker is resolved, and the recorded wrapper checks show `npm run typecheck` and `npm run lint` passing. This still is not ready to merge because the diff changes the project-context high-risk deploy path in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and there is still no recorded passing run for the targeted deploy smoke coverage added in `tests/smoke/deploy.test.ts`. I attempted to run the targeted suite here, but this review environment is read-only and the repo test command rebuilds `dist/`, so that attempt could not produce a usable verification result. Merge remains blocked until the branch includes a passing targeted deploy test run.\nBlocking: targeted deploy verification is still missing. This change materially alters deploy semantics in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and the acceptance criteria require focused coverage in `tests/smoke/deploy.test.ts`. Expected correction: run the relevant targeted deploy test suite for this branch in a writable environment and include the passing result alongside the already-passing `npm run typecheck`/`npm run lint` checks before merge."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
       "createdAt": "2026-04-29T08:05:28.209Z",
-      "updatedAt": "2026-04-29T08:05:28.209Z",
+      "updatedAt": "2026-04-29T08:06:05.321Z",
       "startedAt": "2026-04-29T08:05:28.209Z",
       "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
       "conversationReferences": {
@@ -5956,11 +5957,12 @@
           "conversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-29T08:05:28.209Z"
+          "updatedAt": "2026-04-29T08:06:05.321Z"
         }
       },
-      "implementationConversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7"
+      "implementationConversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
+      "completedAt": "2026-04-29T08:06:05.321Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
