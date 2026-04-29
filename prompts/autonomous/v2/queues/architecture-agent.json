@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5784,11 +5785,11 @@
       "acceptance": [
         "Blocking on missing merge-required focused verification. This branch still changes high-risk control-plane and sync behavior around PR reconciliation, validation-error rendering, and idle-vs-queued implementation status in `src/sync/review-reconciliation.ts`, `src/sync/derived-pr.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, `src/autonomy-v2/commands/shared-prds.ts`, and `src/autonomy-v2/commands/shared-agent-status.ts`. I did not find a new correctness regression in the diff itself, and the branch is scoped and compareable against `origin/dev`, but it is not safe to merge with only `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui` recorded.\nMissing blocking verification for the exact high-risk behavior added by this PR. The diff adds or updates focused coverage in `tests/unit/control-plane-status.test.ts`, `tests/unit/implementation-queue-resolution.test.ts`, and `tests/unit/review-reconciliation.test.ts`, but there is still no recorded execution of those test files. Run and report those focused unit tests before approval. I am not separately blocking on `tests/smoke/control-plane.test.ts` because the current diff does not directly modify scheduler or worker-attach flow code."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
       "createdAt": "2026-04-29T07:20:10.368Z",
-      "updatedAt": "2026-04-29T07:20:10.368Z",
+      "updatedAt": "2026-04-29T07:20:56.638Z",
       "startedAt": "2026-04-29T07:20:10.368Z",
       "prId": "pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
       "conversationReferences": {
@@ -5796,11 +5797,12 @@
           "conversationId": "019dd815-d887-7512-a69d-730c726a925c",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-29T07:20:10.368Z"
+          "updatedAt": "2026-04-29T07:20:56.638Z"
         }
       },
-      "implementationConversationId": "019dd815-d887-7512-a69d-730c726a925c"
+      "implementationConversationId": "019dd815-d887-7512-a69d-730c726a925c",
+      "completedAt": "2026-04-29T07:20:56.638Z",
+      "completionMode": "noop"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
