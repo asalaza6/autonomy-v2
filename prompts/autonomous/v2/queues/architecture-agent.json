@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5868,6 +5867,30 @@
       "completedAt": "2026-04-29T07:58:14.512Z",
       "completionMode": "code",
       "commitSha": "a37206a7860dbe9a4be91d6836e5461265bd1f96"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Add optional deploy auto-stash flow with restore status and deploy coverage",
+      "description": "`npm run typecheck` and `npm run lint` passed, but this is not ready to merge. The diff changes the high-risk deploy path and adds new deploy semantics, yet there is no evidence the targeted deploy suite was actually run, and the newly documented CLI syntax is not supported by the parser.\nBlocking: the change touches the deploy flow, which the project context calls out as high risk, and the acceptance criteria require targeted deploy coverage. The branch adds/changes tests in `tests/smoke/deploy.test.ts`, but the only recorded check results are `npm run typecheck` and `npm run lint`; there is no passing run for the deploy smoke suite. Expected correction: run the relevant targeted deploy tests for this change and include the passing verification result before merge.\nBlocking: `src/autonomy-v2/cli/help.ts:24` advertises `deploy [--auto-stash[=<true|false>]]`, but `src/autonomy-v2/cli/parse.ts:11` treats the entire token after `--` as the option key and does not parse `--key=value` syntax. As shipped, `autonomy-v2 deploy --auto-stash=false` is not interpreted as the documented option. Expected correction: either add `--key=value` parsing support or change the help/output/tests to document only the supported forms (`--auto-stash` and `--auto-stash false`).",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-optional-auto-stash-behavior-e1e4bc",
+      "laneKey": "prd-add-optional-auto-stash-behavior-e1e4bc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` and `npm run lint` passed, but this is not ready to merge. The diff changes the high-risk deploy path and adds new deploy semantics, yet there is no evidence the targeted deploy suite was actually run, and the newly documented CLI syntax is not supported by the parser.\nBlocking: the change touches the deploy flow, which the project context calls out as high risk, and the acceptance criteria require targeted deploy coverage. The branch adds/changes tests in `tests/smoke/deploy.test.ts`, but the only recorded check results are `npm run typecheck` and `npm run lint`; there is no passing run for the deploy smoke suite. Expected correction: run the relevant targeted deploy tests for this change and include the passing verification result before merge.\nBlocking: `src/autonomy-v2/cli/help.ts:24` advertises `deploy [--auto-stash[=<true|false>]]`, but `src/autonomy-v2/cli/parse.ts:11` treats the entire token after `--` as the option key and does not parse `--key=value` syntax. As shipped, `autonomy-v2 deploy --auto-stash=false` is not interpreted as the documented option. Expected correction: either add `--key=value` parsing support or change the help/output/tests to document only the supported forms (`--auto-stash` and `--auto-stash false`)."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "createdAt": "2026-04-29T08:00:19.737Z",
+      "updatedAt": "2026-04-29T08:00:19.737Z",
+      "startedAt": "2026-04-29T08:00:19.737Z",
+      "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent"
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
