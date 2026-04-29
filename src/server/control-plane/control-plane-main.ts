@@ -47,7 +47,6 @@ import {
   validateRestartSubmission,
   validateServiceAuthSubmission,
 } from './control-plane-validation.js';
-import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 
 const controlPlaneAssetDir = fileURLToPath(new URL('.', import.meta.url));
 const controlPlaneAssetCache = new Map<string, string>();
@@ -1002,15 +1001,24 @@ function runRepoAssistantGithubValidation(rootDir: string, repoId: string) {
     throw new Error(`Unknown repo "${normalizedRepoId}".`);
   }
 
-  const snapshot = buildStatusSnapshot(rootDir);
+  const existingStatuses = getRepoStatuses(rootDir) || {};
+  const existingRecord = existingStatuses[normalizedRepoId] || null;
+  const existingSnapshot = existingRecord && existingRecord.snapshot && typeof existingRecord.snapshot === 'object'
+    ? existingRecord.snapshot as Record<string, unknown>
+    : {};
   const controlPlaneConfig = readControlPlaneConfig(rootDir);
-  snapshot.repoAssistant = {
-    ...(snapshot.repoAssistant && typeof snapshot.repoAssistant === 'object' ? snapshot.repoAssistant : {}),
+  const snapshot = {
+    ...existingSnapshot,
+    repoAssistant: {
+      ...(existingSnapshot.repoAssistant && typeof existingSnapshot.repoAssistant === 'object'
+        ? existingSnapshot.repoAssistant as Record<string, unknown>
+        : {}),
     github: resolveRepoAssistantGithubCapability(rootDir, {
       configuredValidationPullNumber: controlPlaneConfig && typeof controlPlaneConfig.repoAssistantValidationPullRequest === 'number'
         ? controlPlaneConfig.repoAssistantValidationPullRequest
         : null,
     }),
+    },
   };
   return setRepoStatus(rootDir, normalizedRepoId, snapshot, repo);
 }
