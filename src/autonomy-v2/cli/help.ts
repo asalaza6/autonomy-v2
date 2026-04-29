@@ -21,7 +21,7 @@ Commands:
   pr:record --task <task-id> --head-branch <branch> [--publish]
   ${buildRoleEventName(AGENT_ROLES.REVIEW, 'record')} --pr <pr-id> --reviewer <agent-id> --decision <approve|changes-requested> [--publish]
   merge --pr <pr-id> --actor <agent-id> [--execute]
-  deploy
+  deploy [--auto-stash[=<true|false>]]
   runtime:status
   update [--package-manager <npm|pnpm|yarn>] [--skip-init]
 

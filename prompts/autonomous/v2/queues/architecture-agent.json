@@ -5859,10 +5859,146 @@
         "Automated coverage verifies current clean-tree deploy behavior, dirty-tree deploy with auto-stash enabled, untracked-file preservation, deploy failure followed by restore attempt, and stash restore conflict reporting, with targeted updates centered on `tests/smoke/deploy.test.ts` and any related unit tests.",
         "Verification for the completed task includes `npm run typecheck` and the relevant targeted deploy test suite, plus a disposable manual check of one clean-tree deploy and one dirty-tree deploy with auto-stash enabled."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-29T07:50:58.902Z",
-      "updatedAt": "2026-04-29T07:50:58.902Z"
+      "updatedAt": "2026-04-29T07:58:14.589Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "startedAt": "2026-04-29T07:51:17.302Z",
+      "completedAt": "2026-04-29T07:58:14.512Z",
+      "completionMode": "code",
+      "commitSha": "a37206a7860dbe9a4be91d6836e5461265bd1f96"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Add optional deploy auto-stash flow with restore status and deploy coverage",
+      "description": "`npm run typecheck` and `npm run lint` passed, but this is not ready to merge. The diff changes the high-risk deploy path and adds new deploy semantics, yet there is no evidence the targeted deploy suite was actually run, and the newly documented CLI syntax is not supported by the parser.\nBlocking: the change touches the deploy flow, which the project context calls out as high risk, and the acceptance criteria require targeted deploy coverage. The branch adds/changes tests in `tests/smoke/deploy.test.ts`, but the only recorded check results are `npm run typecheck` and `npm run lint`; there is no passing run for the deploy smoke suite. Expected correction: run the relevant targeted deploy tests for this change and include the passing verification result before merge.\nBlocking: `src/autonomy-v2/cli/help.ts:24` advertises `deploy [--auto-stash[=<true|false>]]`, but `src/autonomy-v2/cli/parse.ts:11` treats the entire token after `--` as the option key and does not parse `--key=value` syntax. As shipped, `autonomy-v2 deploy --auto-stash=false` is not interpreted as the documented option. Expected correction: either add `--key=value` parsing support or change the help/output/tests to document only the supported forms (`--auto-stash` and `--auto-stash false`).",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-optional-auto-stash-behavior-e1e4bc",
+      "laneKey": "prd-add-optional-auto-stash-behavior-e1e4bc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` and `npm run lint` passed, but this is not ready to merge. The diff changes the high-risk deploy path and adds new deploy semantics, yet there is no evidence the targeted deploy suite was actually run, and the newly documented CLI syntax is not supported by the parser.\nBlocking: the change touches the deploy flow, which the project context calls out as high risk, and the acceptance criteria require targeted deploy coverage. The branch adds/changes tests in `tests/smoke/deploy.test.ts`, but the only recorded check results are `npm run typecheck` and `npm run lint`; there is no passing run for the deploy smoke suite. Expected correction: run the relevant targeted deploy tests for this change and include the passing verification result before merge.\nBlocking: `src/autonomy-v2/cli/help.ts:24` advertises `deploy [--auto-stash[=<true|false>]]`, but `src/autonomy-v2/cli/parse.ts:11` treats the entire token after `--` as the option key and does not parse `--key=value` syntax. As shipped, `autonomy-v2 deploy --auto-stash=false` is not interpreted as the documented option. Expected correction: either add `--key=value` parsing support or change the help/output/tests to document only the supported forms (`--auto-stash` and `--auto-stash false`)."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "createdAt": "2026-04-29T08:00:19.737Z",
+      "updatedAt": "2026-04-29T08:02:01.179Z",
+      "startedAt": "2026-04-29T08:00:19.737Z",
+      "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "completedAt": "2026-04-29T08:02:01.107Z",
+      "completionMode": "code",
+      "commitSha": "ba3eba2fe17a1ebcdc696f48ea0470cc037b0c4e"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent-2",
+      "title": "Address review for [architecture-agent] Add optional deploy auto-stash flow with restore status and deploy coverage",
+      "description": "The documented `--auto-stash=false` syntax is now supported by the parser (`src/autonomy-v2/cli/help.ts:24`, `src/autonomy-v2/cli/parse.ts:11-15`, `tests/unit/cli-parse.test.ts:6-31`), so that prior blocker is resolved. This is still not ready to merge because the diff changes the project-context high-risk deploy path (`src/autonomy-v2/commands/deploy.ts`, `src/autonomy-v2/commands/shared-github.ts`) and adds targeted deploy coverage in `tests/smoke/deploy.test.ts`, but the only recorded passing checks are `npm run typecheck` and `npm run lint`. There is still no passing run recorded for the relevant deploy smoke suite, which remains merge-blocking for this behavior change.\nBlocking: targeted deploy verification is still missing. The change materially alters deploy semantics in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and the acceptance criteria require focused deploy coverage. Although `tests/smoke/deploy.test.ts` now includes the relevant cases, the deterministic check results only show `npm run typecheck` and `npm run lint`; there is no recorded passing run for the deploy smoke suite. Expected correction: run the relevant targeted deploy tests for this branch and include the passing verification result before merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-optional-auto-stash-behavior-e1e4bc",
+      "laneKey": "prd-add-optional-auto-stash-behavior-e1e4bc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The documented `--auto-stash=false` syntax is now supported by the parser (`src/autonomy-v2/cli/help.ts:24`, `src/autonomy-v2/cli/parse.ts:11-15`, `tests/unit/cli-parse.test.ts:6-31`), so that prior blocker is resolved. This is still not ready to merge because the diff changes the project-context high-risk deploy path (`src/autonomy-v2/commands/deploy.ts`, `src/autonomy-v2/commands/shared-github.ts`) and adds targeted deploy coverage in `tests/smoke/deploy.test.ts`, but the only recorded passing checks are `npm run typecheck` and `npm run lint`. There is still no passing run recorded for the relevant deploy smoke suite, which remains merge-blocking for this behavior change.\nBlocking: targeted deploy verification is still missing. The change materially alters deploy semantics in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and the acceptance criteria require focused deploy coverage. Although `tests/smoke/deploy.test.ts` now includes the relevant cases, the deterministic check results only show `npm run typecheck` and `npm run lint`; there is no recorded passing run for the deploy smoke suite. Expected correction: run the relevant targeted deploy tests for this branch and include the passing verification result before merge."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "createdAt": "2026-04-29T08:03:19.395Z",
+      "updatedAt": "2026-04-29T08:04:06.259Z",
+      "startedAt": "2026-04-29T08:03:19.395Z",
+      "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "completedAt": "2026-04-29T08:04:06.189Z",
+      "completionMode": "noop",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T08:04:06.189Z"
+        }
+      },
+      "implementationConversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
+      "commitSha": "2c98911b716e757f62a6f8286a905d51c2a7038d"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent-3",
+      "title": "Address review for [architecture-agent] Add optional deploy auto-stash flow with restore status and deploy coverage",
+      "description": "The prior `--auto-stash=false` parser blocker is resolved, and the recorded wrapper checks show `npm run typecheck` and `npm run lint` passing. This still is not ready to merge because the diff changes the project-context high-risk deploy path in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and there is still no recorded passing run for the targeted deploy smoke coverage added in `tests/smoke/deploy.test.ts`. I attempted to run the targeted suite here, but this review environment is read-only and the repo test command rebuilds `dist/`, so that attempt could not produce a usable verification result. Merge remains blocked until the branch includes a passing targeted deploy test run.\nBlocking: targeted deploy verification is still missing. This change materially alters deploy semantics in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and the acceptance criteria require focused coverage in `tests/smoke/deploy.test.ts`. Expected correction: run the relevant targeted deploy test suite for this branch in a writable environment and include the passing result alongside the already-passing `npm run typecheck`/`npm run lint` checks before merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-optional-auto-stash-behavior-e1e4bc",
+      "laneKey": "prd-add-optional-auto-stash-behavior-e1e4bc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "The prior `--auto-stash=false` parser blocker is resolved, and the recorded wrapper checks show `npm run typecheck` and `npm run lint` passing. This still is not ready to merge because the diff changes the project-context high-risk deploy path in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and there is still no recorded passing run for the targeted deploy smoke coverage added in `tests/smoke/deploy.test.ts`. I attempted to run the targeted suite here, but this review environment is read-only and the repo test command rebuilds `dist/`, so that attempt could not produce a usable verification result. Merge remains blocked until the branch includes a passing targeted deploy test run.\nBlocking: targeted deploy verification is still missing. This change materially alters deploy semantics in `src/autonomy-v2/commands/deploy.ts` and `src/autonomy-v2/commands/shared-github.ts`, and the acceptance criteria require focused coverage in `tests/smoke/deploy.test.ts`. Expected correction: run the relevant targeted deploy test suite for this branch in a writable environment and include the passing result alongside the already-passing `npm run typecheck`/`npm run lint` checks before merge."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "createdAt": "2026-04-29T08:05:28.209Z",
+      "updatedAt": "2026-04-29T08:06:05.391Z",
+      "startedAt": "2026-04-29T08:05:28.209Z",
+      "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T08:06:05.321Z"
+        }
+      },
+      "implementationConversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
+      "completedAt": "2026-04-29T08:06:05.321Z",
+      "completionMode": "noop",
+      "commitSha": "77970ebaf4a9057a75ffa0da9215fe57c804bb3c"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent-4",
+      "title": "Address review for [architecture-agent] Add optional deploy auto-stash flow with restore status and deploy coverage",
+      "description": "`npm run typecheck` and `npm run lint` passed, the `--auto-stash=false` parser issue is fixed, and the branch merge-tree against `origin/dev` is clean. This still is not ready to merge because the diff materially changes the project-context high-risk deploy path in `src/autonomy-v2/commands/deploy.ts:15` and `src/autonomy-v2/commands/shared-github.ts:155`, while the only recorded passing checks are the wrapper results above. The branch adds the required targeted cases in `tests/smoke/deploy.test.ts:88` and `tests/smoke/deploy.test.ts:226`, but there is still no recorded passing run for the relevant deploy smoke suite, which remains merge-blocking for this behavior change.\nMissing merge-blocking focused verification for the deploy auto-stash change. The PR changes deploy semantics and restore/failure handling in `src/autonomy-v2/commands/deploy.ts:53-125` and `src/autonomy-v2/commands/shared-github.ts:155-375`, and it adds targeted coverage in `tests/smoke/deploy.test.ts:88-341`, but the deterministic results only show `npm run typecheck` and `npm run lint`. Expected correction: run the relevant targeted deploy smoke test suite for this branch in a writable environment and include the passing result before merge.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-add-optional-auto-stash-behavior-e1e4bc",
+      "laneKey": "prd-add-optional-auto-stash-behavior-e1e4bc:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` and `npm run lint` passed, the `--auto-stash=false` parser issue is fixed, and the branch merge-tree against `origin/dev` is clean. This still is not ready to merge because the diff materially changes the project-context high-risk deploy path in `src/autonomy-v2/commands/deploy.ts:15` and `src/autonomy-v2/commands/shared-github.ts:155`, while the only recorded passing checks are the wrapper results above. The branch adds the required targeted cases in `tests/smoke/deploy.test.ts:88` and `tests/smoke/deploy.test.ts:226`, but there is still no recorded passing run for the relevant deploy smoke suite, which remains merge-blocking for this behavior change.\nMissing merge-blocking focused verification for the deploy auto-stash change. The PR changes deploy semantics and restore/failure handling in `src/autonomy-v2/commands/deploy.ts:53-125` and `src/autonomy-v2/commands/shared-github.ts:155-375`, and it adds targeted coverage in `tests/smoke/deploy.test.ts:88-341`, but the deterministic results only show `npm run typecheck` and `npm run lint`. Expected correction: run the relevant targeted deploy smoke test suite for this branch in a writable environment and include the passing result before merge."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "createdAt": "2026-04-29T08:07:37.924Z",
+      "updatedAt": "2026-04-29T08:08:11.353Z",
+      "startedAt": "2026-04-29T08:07:37.924Z",
+      "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T08:08:11.285Z"
+        }
+      },
+      "implementationConversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
+      "completedAt": "2026-04-29T08:08:11.285Z",
+      "completionMode": "noop",
+      "commitSha": "3e3ff83acb443b17006f44e25b0184dafcfe017e"
     }
   ]
 }
