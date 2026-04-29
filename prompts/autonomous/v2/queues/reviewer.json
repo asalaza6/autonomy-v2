@@ -1265,7 +1265,7 @@
     {
       "id": "review-pr-prd-default-visible-restart-verification-f27178-architecture-agent",
       "title": "Review [architecture-agent] Implement Default Visible Restart Verification For Control Plane Services",
-      "description": "Review pr-prd-default-visible-restart-verification-f27178-architecture-agent for Implement Default Visible Restart Verification For Control Plane Services",
+      "description": "Review pr-prd-default-visible-restart-verification-f27178-architecture-agent for Address review for [architecture-agent] Implement Default Visible Restart Verification For Control Plane Services",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-default-visible-restart-verification-f27178-architecture-agent",
@@ -1283,12 +1283,13 @@
         "and whether launch succeeded or failed.",
         "Define the supported platform scope explicitly; if cross-platform is not implemented",
         "support macOS first and report unsupported platforms clearly.",
-        "Keep the bridge restart flow safe so the bridge can still complete or terminally record the job before replacing itself."
+        "Keep the bridge restart flow safe so the bridge can still complete or terminally record the job before replacing itself.",
+        "The PR is close, but I found one behavioral blocker in restart-mode selection and the submitted verification is still too weak for this control-plane restart/bridge change.\n`src/server/control-plane/control-plane-package-update.ts:405` makes the implicit default restart mode platform-dependent (`visible-terminal` on macOS, `detached` elsewhere). That does not satisfy the task as written: visible restart should remain the default unless explicitly configured otherwise, and unsupported platforms should be reported clearly rather than silently switching to detached mode. Align the default path so an unconfigured repo still requests `visible-terminal`, then let the helper either open Terminal on macOS, fall back only when `restartLaunchFallbackToDetached` is enabled, or fail with an explicit unsupported-platform result.\nFocused verification is still missing for this high-risk control-plane restart change. The recorded checks only show `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`, but this PR changes restart orchestration in `src/server/control-plane/control-plane-restart-helper.ts`, `src/server/control-plane/control-plane-package-update.ts`, and `src/server/control-plane/control-plane-bridge.ts`. Run and report targeted restart/bridge tests that cover the new behavior, at minimum the new restart helper suite in `tests/unit/control-plane-default-restart.test.ts` and the bridge persistence path in `tests/unit/control-plane-package-update-bridge.test.ts`, or equivalent focused coverage."
       ],
       "reviewRound": 2,
       "status": "merged",
       "createdAt": "2026-04-29T04:12:15.294Z",
-      "updatedAt": "2026-04-29T04:16:30.216Z",
+      "updatedAt": "2026-04-29T06:56:11.516Z",
       "reviewedAt": "2026-04-29T04:14:09.072Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
