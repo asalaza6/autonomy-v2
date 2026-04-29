@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "id": "prd-add-optional-auto-stash-behavior-e1e4bc",
+  "title": "Add optional auto-stash behavior for deploy when working tree is dirty",
+  "createdAt": "2026-04-29T07:50:07.837Z",
+  "specification": "# PRD: Add optional auto-stash behavior for deploy when working tree is dirty\n\nPriority: medium\n\n## Problem\nDeploy currently fails whenever the repo working tree is not clean, which blocks operators from deploying `dev` to `main` when local tracked or untracked changes are present.\n\n## Goal\nAllow deploy to proceed from a dirty working tree by automatically stashing local changes before the deploy flow and restoring them afterward, with explicit status and failure handling.\n\n## Requirements\n- Add an explicit deploy option or config-controlled behavior for auto-stash; do not silently change deploy semantics without an operator-visible setting.\n- Stash both tracked and untracked changes before deploy begins.\n- Run the existing deploy flow against the clean repo state after stashing.\n- Attempt to restore the stash after deploy completes or fails.\n- Surface clear status messages for stash created, deploy started, deploy succeeded/failed, and stash restore succeeded/failed.\n- Define failure behavior for stash restore conflicts so the operator is warned and recovery instructions are available.\n- Add focused automated coverage for clean-tree deploy, dirty-tree deploy with auto-stash enabled, untracked-file handling, deploy failure with restore, and restore-conflict scenarios.\n\n## Acceptance Criteria\n- When auto-stash is disabled or unset, dirty-tree deploy still fails with the current clean-tree error.\n- When auto-stash is enabled and the tree is dirty, deploy stashes local changes, completes the normal deploy flow, and restores the stash afterward.\n- Untracked files are preserved across the deploy flow.\n- If deploy fails after stashing, the system still attempts restoration and reports the final restore outcome.\n- If stash restoration conflicts, the deploy result includes explicit conflict/restoration status instead of claiming a clean success.\n- Tests cover the new control path and regressions around existing clean-tree deploy behavior.\n\n## Verification\n- Run the current implementation check: `npm run typecheck`.\n- Run targeted deploy coverage, especially [tests/smoke/deploy.test.ts](/Users/macmini/Documents/GitHub/autonomy-v2/tests/smoke/deploy.test.ts) and any related unit tests.\n- Manually verify one clean-tree deploy and one dirty-tree deploy with auto-stash enabled in a disposable repo state.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777448521718_f6324d04456578\nManager message: msg_1777448887910_094d525607018\nAgent message: msg_1777448887910_ad01468ce03eb8\nCreated: 2026-04-29T07:48:43.501Z",
+  "requirements": [
+    "Add an explicit deploy option or config-controlled behavior for auto-stash; do not silently change deploy semantics without an operator-visible setting.",
+    "Stash both tracked and untracked changes before deploy begins.",
+    "Run the existing deploy flow against the clean repo state after stashing.",
+    "Attempt to restore the stash after deploy completes or fails.",
+    "Surface clear status messages for stash created",
+    "deploy started",
+    "deploy succeeded/failed",
+    "and stash restore succeeded/failed.",
+    "Define failure behavior for stash restore conflicts so the operator is warned and recovery instructions are available.",
+    "Add focused automated coverage for clean-tree deploy",
+    "dirty-tree deploy with auto-stash enabled",
+    "untracked-file handling",
+    "deploy failure with restore",
+    "and restore-conflict scenarios."
+  ]
+}
