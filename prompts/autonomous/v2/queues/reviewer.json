@@ -1400,13 +1400,14 @@
       "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "sourceTaskId": "prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-2",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-29T11:21:25.947Z",
-      "updatedAt": "2026-04-29T11:21:25.947Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
+        "A review change request that asks for a focused verification step creates an implementation follow-up task containing a structured blocker or requirement entry with the requested test command captured as a required check or required evidence item.",
+        "Structured follow-up requirement data persists on the implementation follow-up task in tracked queue/spec/state output and is not limited to copied prose in description or acceptance text.",
+        "Each structured reviewer blocker records a stable category, the expected evidence or checks needed to satisfy it, and a status shape that can later be evaluated by implementation and review completion logic.",
+        "Implementation and review conversation references continue to be preserved on follow-up tasks or related state, but those references are not the only fields used to determine whether a blocker is satisfied.",
+        "Focused unit coverage proves review feedback is transformed into structured follow-up requirements and survives serialization and reload paths without losing blocker details.",
         "An implementation follow-up that makes no code changes and records no new required evidence cannot transition to done, merged, or equivalent successful completion while one or more structured reviewer blockers remain unresolved.",
         "Reviewer approval and any reviewer auto-approval path are blocked when unresolved structured blockers remain open, including unresolved verification blockers carried across repeated implementation/review rounds.",
         "When policy explicitly dismisses a blocker, the decision is represented in structured state so reviewer approval can proceed only for blockers marked satisfied or dismissed by policy.",
@@ -1414,9 +1415,12 @@
         "Existing implementation and review conversation resume behavior remains intact after the enforcement changes.",
         "Unit tests cover noop-blocking completion behavior and reviewer approval gating, and a smoke test covers a focused verification request flowing from review to follow-up to eventual approval once the structured blocker is satisfied."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-29T11:21:30.284Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-29T11:21:25.947Z",
+      "updatedAt": "2026-04-29T11:21:41.245Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-29T11:21:30.284Z"
     }
   ]
 }
