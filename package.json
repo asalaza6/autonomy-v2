@@ -34,6 +34,7 @@
     "build": "tsc",
     "build:watch": "tsc --watch --preserveWatchOutput",
     "check:publish": "node scripts/check-publish-config.js",
+    "check:repo-assistant-github": "node scripts/check-repo-assistant-github.js",
     "heroku-postbuild": "npm run build",
     "check:lines": "node scripts/check-line-count.js",
     "clean": "rm -rf dist",

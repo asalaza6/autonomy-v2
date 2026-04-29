@@ -12,7 +12,10 @@ import {
   normalizeChatPrdProposal,
   readProjectContextForChatPrompt,
 } from '../../src/server/control-plane/control-plane-chat.js';
-import { buildRepoAssistantGithubPromptContext } from '../../src/server/control-plane/control-plane-github.js';
+import {
+  buildRepoAssistantGithubPromptContext,
+  resolveRepoAssistantGithubCapability,
+} from '../../src/server/control-plane/control-plane-github.js';
 import {
   buildPrdSubmissionFromProposal,
   extractPrdProposalFromText,
@@ -185,6 +188,119 @@ test('control plane chat launches disabled GitHub sessions without inheriting ho
     const captured = JSON.parse(fs.readFileSync(capturePath, 'utf8'));
     assert.equal(captured.env.GITHUB_TOKEN, null);
     assert.equal(captured.env.GH_TOKEN, null);
+    assert.equal(captured.env.UNRELATED_SECRET, null);
+    assert.equal(typeof captured.env.PATH, 'string');
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
+    restoreEnv('GITHUB_TOKEN', originalGithubToken);
+    restoreEnv('GH_TOKEN', originalGhToken);
+    restoreEnv('UNRELATED_SECRET', originalUnrelatedSecret);
+  }
+});
+
+test('control plane chat injects approved GitHub auth into enabled repo assistant sessions', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-chat-enabled-github-'));
+  const capturePath = path.join(rootDir, 'capture.json');
+  const fakeCodexPath = path.join(rootDir, 'fake-codex-enabled.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  const originalGithubToken = process.env.GITHUB_TOKEN;
+  const originalGhToken = process.env.GH_TOKEN;
+  const originalUnrelatedSecret = process.env.UNRELATED_SECRET;
+
+  execFileSync('git', ['init'], { cwd: rootDir, stdio: 'ignore' });
+  execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/asalaza6/autonomy-v2.git'], {
+    cwd: rootDir,
+    stdio: 'ignore',
+  });
+  fs.writeFileSync(path.join(rootDir, '.env.autonomy'), 'GITHUB_TOKEN=approved-chat-token\n', 'utf8');
+
+  resolveRepoAssistantGithubCapability(rootDir, {
+    validationPullNumber: 27,
+    includePullRequestData: true,
+    githubApiRunner(args, options) {
+      assert.equal(options.token, 'approved-chat-token');
+      if (args[0] === 'repos/asalaza6/autonomy-v2') {
+        return JSON.stringify({
+          private: false,
+          visibility: 'public',
+          default_branch: 'main',
+        });
+      }
+      if (args[0] === 'repos/asalaza6/autonomy-v2/pulls/27') {
+        return JSON.stringify({
+          number: 27,
+          title: 'Validation PR',
+          state: 'open',
+          html_url: 'https://github.com/asalaza6/autonomy-v2/pull/27',
+          user: { login: 'asalaza6' },
+          base: { ref: 'main' },
+          head: { ref: 'feature/validation' },
+        });
+      }
+      if (args[0].includes('/files?per_page=100') || args[0].includes('/comments?per_page=100') || args[0].includes('/reviews?per_page=100')) {
+        return '[]';
+      }
+      if (args[0] === 'graphql') {
+        return JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  nodes: [],
+                },
+              },
+            },
+          },
+        });
+      }
+      throw new Error(`Unexpected route: ${args[0]}`);
+    },
+  });
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    "import fs from 'fs';",
+    'const args = process.argv.slice(2);',
+    "const outputIndex = args.indexOf('--output-last-message');",
+    'const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : "";',
+    `const capturePath = ${JSON.stringify(capturePath)};`,
+    'fs.writeFileSync(capturePath, JSON.stringify({',
+    '  env: {',
+    "    GITHUB_TOKEN: process.env.GITHUB_TOKEN || null,",
+    "    GH_TOKEN: process.env.GH_TOKEN || null,",
+    "    UNRELATED_SECRET: process.env.UNRELATED_SECRET || null,",
+    "    PATH: process.env.PATH || null,",
+    '  },',
+    '}, null, 2));',
+    'fs.writeFileSync(outputPath, JSON.stringify({ answer: "ok", prdProposal: null }));',
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GH_TOKEN;
+  process.env.UNRELATED_SECRET = 'host-only-secret';
+
+  try {
+    const response: any = await answerControlPlaneAgentChat({
+      repoRoot: rootDir,
+      repoId: 'alpha',
+      payload: {
+        repoId: 'alpha',
+        conversationId: 'conversation-001',
+        messageId: 'message-001',
+        responseMessageId: 'message-002',
+        prompt: 'Inspect the validation PR.',
+        history: [],
+      },
+      snapshot: {},
+    }) as any;
+
+    assert.equal(response.answer, 'ok');
+
+    const captured = JSON.parse(fs.readFileSync(capturePath, 'utf8'));
+    assert.equal(captured.env.GITHUB_TOKEN, 'approved-chat-token');
+    assert.equal(captured.env.GH_TOKEN, 'approved-chat-token');
     assert.equal(captured.env.UNRELATED_SECRET, null);
     assert.equal(typeof captured.env.PATH, 'string');
   } finally {
