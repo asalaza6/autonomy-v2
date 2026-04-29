@@ -6152,7 +6152,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "createdAt": "2026-04-29T11:32:49.763Z",
-      "updatedAt": "2026-04-29T11:36:49.617Z",
+      "updatedAt": "2026-04-29T11:36:49.701Z",
       "startedAt": "2026-04-29T11:32:49.763Z",
       "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "conversationReferences": {
@@ -6165,7 +6165,8 @@
       },
       "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
       "completedAt": "2026-04-29T11:36:49.617Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "319a0297728c3cd1d6425810c024074a71d83263"
     }
   ]
 }
