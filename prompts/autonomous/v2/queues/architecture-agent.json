@@ -5984,7 +5984,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
       "createdAt": "2026-04-29T08:07:37.924Z",
-      "updatedAt": "2026-04-29T08:08:11.285Z",
+      "updatedAt": "2026-04-29T08:08:11.353Z",
       "startedAt": "2026-04-29T08:07:37.924Z",
       "prId": "pr-prd-add-optional-auto-stash-behavior-e1e4bc-architecture-agent",
       "conversationReferences": {
@@ -5997,7 +5997,8 @@
       },
       "implementationConversationId": "019dd843-9c2b-7c81-934f-da0e1a7fe5a7",
       "completedAt": "2026-04-29T08:08:11.285Z",
-      "completionMode": "noop"
+      "completionMode": "noop",
+      "commitSha": "3e3ff83acb443b17006f44e25b0184dafcfe017e"
     }
   ]
 }
