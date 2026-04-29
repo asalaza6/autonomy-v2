@@ -1415,10 +1415,10 @@
         "Existing implementation and review conversation resume behavior remains intact after the enforcement changes.",
         "Unit tests cover noop-blocking completion behavior and reviewer approval gating, and a smoke test covers a focused verification request flowing from review to follow-up to eventual approval once the structured blocker is satisfied."
       ],
-      "reviewRound": 4,
-      "status": "changes_requested",
+      "reviewRound": 5,
+      "status": "queued",
       "createdAt": "2026-04-29T11:21:25.947Z",
-      "updatedAt": "2026-04-29T11:40:18.373Z",
+      "updatedAt": "2026-04-29T11:40:21.699Z",
       "reviewedAt": "2026-04-29T11:40:18.373Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
