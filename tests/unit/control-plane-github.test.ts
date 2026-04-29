@@ -9,7 +9,6 @@ import {
   REPO_ASSISTANT_GITHUB_SECRET_FILES,
   buildRepoAssistantGithubCodexConfigOverrides,
   buildRepoAssistantGithubEnv,
-  buildRepoAssistantGithubSessionEnv,
   buildRepoAssistantGithubPromptContext,
   readRepoAssistantGithubEnvFromApprovedFiles,
   resolveRepoAssistantGithubEnv,

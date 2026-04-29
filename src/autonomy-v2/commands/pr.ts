@@ -8,6 +8,7 @@ import { loadAllState } from './shared-prds.js';
 import { queueReviewerTask } from './shared-worktrees.js';
 import { resolvePrRecordTask } from './shared-lanes.js';
 import { writeTaskQueues } from './shared-queues.js';
+import { collectCurrentReviewerBlockers } from './shared-review-blockers.js';
 import {
   getAgentConversationId,
   setAgentConversationReference,
@@ -49,6 +50,10 @@ async function run(rootDir, options) {
     : listLaneTasks(state.taskQueues, task.agentId, laneKey);
   const pendingLaneTasks = laneTasks
     .filter((candidate) => !completedTaskIds.includes(candidate.id));
+  const currentReviewerBlockers = collectCurrentReviewerBlockers(
+    null,
+    completedLaneTasks.concat([task]).concat(pendingLaneTasks)
+  );
   let record = findPullRequestByLane(state.prs, task);
   const now = new Date().toISOString();
   if (!record) {
@@ -81,6 +86,7 @@ async function run(rootDir, options) {
         ...pendingLaneTasks.flatMap((candidate) => candidate.acceptance || []),
       ]),
       scopeViolations: laneScopeViolations.slice(),
+      reviewerBlockers: currentReviewerBlockers,
       headBranch,
       baseBranch,
       status: pendingLaneTasks.length === 0 ? 'open' : 'building',
@@ -125,6 +131,7 @@ async function run(rootDir, options) {
       ...(record.scopeViolations || []),
       ...laneScopeViolations,
     ]);
+    record.reviewerBlockers = currentReviewerBlockers;
     record.headBranch = headBranch;
     record.baseBranch = baseBranch;
     record.status = pendingLaneTasks.length === 0 ? 'open' : 'building';

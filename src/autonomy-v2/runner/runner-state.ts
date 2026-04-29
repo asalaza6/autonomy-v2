@@ -238,8 +238,18 @@ function buildTaskSnapshot(task, scopeResult) {
     checks: uniqueStrings(task.checks || []),
     acceptance: uniqueStrings(task.acceptance || []),
     scopeViolations: uniqueScopeViolations(scopeResult && scopeResult.violations),
+    status: task.status || null,
+    state: task.state || null,
+    source: task.source || null,
+    prId: task.prId || null,
+    branch: task.branch || null,
+    completionMode: task.completionMode || null,
+    commitSha: task.commitSha || null,
     completedAt: new Date().toISOString(),
   };
+  if (Array.isArray(task && task.reviewerBlockers) && task.reviewerBlockers.length > 0) {
+    snapshot.reviewerBlockers = task.reviewerBlockers.map((blocker) => ({ ...blocker }));
+  }
   const conversationReferences = normalizeConversationReferences(task && task.conversationReferences);
   if (Object.keys(conversationReferences).length > 0) {
     snapshot.conversationReferences = conversationReferences;

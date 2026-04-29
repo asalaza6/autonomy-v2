@@ -560,6 +560,114 @@ test('review follow-up is appended only to the implementation branch queue and r
   assert.equal(followupTask.status, 'active');
 });
 
+test('structured verification blockers block approval until the follow-up records satisfied evidence', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-review-blocker-approval-');
+  initAutonomyRepo(repoDir);
+
+  const task = {
+    id: 'prd-review-blocker-001-architecture-agent-1',
+    title: 'Review blocker task',
+    agentId: 'architecture-agent',
+    description: 'Initial implementation task',
+    acceptance: ['Implementation is completed before review feedback.'],
+    sprintId: 'multi-agent-mvp',
+  };
+  addPrdWithTasks(repoDir, 'prd-review-blocker-001', 'Review blocker PRD', [task]);
+
+  runTick(repoDir);
+
+  const paths = getAutonomyPathsForTest(repoDir);
+  const initialPrState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
+  const pr = initialPrState.pullRequests[0];
+
+  runNode(CLI_BIN, [
+    'review:record',
+    '--root',
+    repoDir,
+    '--pr',
+    pr.id,
+    '--reviewer',
+    'reviewer',
+    '--decision',
+    'changes-requested',
+    '--summary',
+    'Run `npm run typecheck` before approval.',
+  ]);
+
+  assert.throws(() => {
+    runNode(CLI_BIN, [
+      'review:record',
+      '--root',
+      repoDir,
+      '--pr',
+      pr.id,
+      '--reviewer',
+      'reviewer',
+      '--decision',
+      'approve',
+      '--summary',
+      'Looks good now.',
+    ]);
+  }, /structured reviewer blockers remain unresolved/i);
+
+  const branchLocks = JSON.parse(fs.readFileSync(paths.branchLocksState, 'utf8'));
+  const worktreePath = branchLocks.locks[0].worktreePath;
+  const queuePath = path.join(worktreePath, 'prompts', 'autonomous', 'v2', 'queues', 'architecture-agent.json');
+  const branchQueue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+  const followupTaskId = `architecture-agent-followup-${pr.id}-1`;
+  const followupTask = findTaskInQueue(branchQueue, followupTaskId);
+  followupTask.status = 'done';
+  followupTask.state = 'done';
+  followupTask.completionMode = 'noop';
+  followupTask.completedAt = '2026-04-21T00:40:00.000Z';
+  followupTask.updatedAt = '2026-04-21T00:40:00.000Z';
+  followupTask.reviewerBlockers[0].status.state = 'satisfied';
+  followupTask.reviewerBlockers[0].status.satisfiedAt = '2026-04-21T00:40:00.000Z';
+  followupTask.reviewerBlockers[0].status.satisfiedByTaskId = followupTaskId;
+  followupTask.reviewerBlockers[0].status.evidence = [{
+    kind: 'command_output',
+    label: 'Record output for npm run typecheck',
+    command: 'npm run typecheck',
+    detail: 'Command passed: npm run typecheck (exit 0)',
+  }];
+  fs.writeFileSync(queuePath, `${JSON.stringify(branchQueue, null, 2)}\n`, 'utf8');
+
+  runNode(CLI_BIN, [
+    'pr:record',
+    '--root',
+    repoDir,
+    '--task',
+    followupTaskId,
+    '--head-branch',
+    pr.headBranch,
+    '--completed-task',
+    followupTaskId,
+  ]);
+
+  const refreshedPrState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
+  const refreshedPr = refreshedPrState.pullRequests.find((candidate: any) => candidate.id === pr.id);
+  assert.equal(refreshedPr.reviewerBlockers[0].status.state, 'satisfied');
+  assert.equal(refreshedPr.reviewerBlockers[0].status.satisfiedByTaskId, followupTaskId);
+
+  runNode(CLI_BIN, [
+    'review:record',
+    '--root',
+    repoDir,
+    '--pr',
+    pr.id,
+    '--reviewer',
+    'reviewer',
+    '--decision',
+    'approve',
+    '--summary',
+    'Looks good now.',
+  ]);
+
+  const approvedPrState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
+  const approvedPr = approvedPrState.pullRequests.find((candidate: any) => candidate.id === pr.id);
+  assert.equal(approvedPr.status, 'approved');
+});
+
 test('reviewer merge archives completed PRDs on dev without leaving staged fragments behind', () => {
   const repoDir = createFixtureRepo('autonomy-v2-reviewer-merge-archive-');
   initAutonomyRepo(repoDir);

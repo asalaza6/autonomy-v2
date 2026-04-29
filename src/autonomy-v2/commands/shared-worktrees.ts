@@ -20,7 +20,9 @@ import {
   runGit,
   runGitWorktreeAdd,
   upsertBranchLock,
+  uniqueStrings,
 } from './shared-repo.js';
+import { collectReviewerBlockerChecks } from './shared-review-blockers.js';
 import {
   buildTaskQueueState,
   findTask,
@@ -201,6 +203,8 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
       || (task && task.description)
       || `Address ${getRoleLabel(AGENT_ROLES.REVIEW)}er feedback for ${pr.title}`
   ).trim();
+  const nextBlockers = Array.isArray(patch.reviewerBlockers) ? patch.reviewerBlockers : (task && Array.isArray(task.reviewerBlockers) ? task.reviewerBlockers : []);
+  const nextChecks = uniqueStrings([...(patch.checks || []), ...collectReviewerBlockerChecks(nextBlockers)]);
   if (!task) {
     task = {
       id: taskId,
@@ -212,12 +216,13 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
       type: patch.type || TASK_TYPES.DEFAULT,
       sprintId: pr.sprintId || 'shared',
       baseBranch: pr.baseBranch,
-      checks: [],
+      checks: nextChecks,
       acceptance: buildReviewFollowupAcceptance(pr, nextDescription),
       status: 'queued',
       createdAt: patch.createdAt || new Date().toISOString(),
       updatedAt: patch.updatedAt || new Date().toISOString(),
       prId: pr.id,
+      reviewerBlockers: nextBlockers,
     };
     if (implementationConversationId) {
       setAgentConversationReference(task, {
@@ -235,10 +240,12 @@ function enqueueLaneFollowupTask(taskQueues, config, pr, patch) {
   task.title = patch.title || task.title;
   task.description = nextDescription;
   task.type = patch.type || task.type;
+  task.checks = nextChecks.length > 0 ? nextChecks : (task.checks || []);
   task.acceptance = buildReviewFollowupAcceptance(pr, nextDescription, task.acceptance);
   task.status = 'queued';
   task.updatedAt = patch.updatedAt || new Date().toISOString();
   task.prId = pr.id;
+  task.reviewerBlockers = nextBlockers;
   if (implementationConversationId) {
     setAgentConversationReference(task, {
       agentId: pr.agentId,
@@ -343,12 +350,14 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
     : buildTaskQueueState(agent, []);
   const tasks = Array.isArray(queueState.tasks) ? queueState.tasks : [];
   const taskId = patch.id;
+  let task = tasks.find((candidate) => candidate.id === taskId);
   const implementationConversationId = resolveFollowupImplementationConversationId(patch, pr, tasks);
   const nextDescription = String(
     patch.description
       || 'Address reviewer feedback'
   ).trim();
-  let task = tasks.find((candidate) => candidate.id === taskId);
+  const nextBlockers = Array.isArray(patch.reviewerBlockers) ? patch.reviewerBlockers : (task && Array.isArray(task.reviewerBlockers) ? task.reviewerBlockers : []);
+  const nextChecks = uniqueStrings([...(patch.checks || []), ...collectReviewerBlockerChecks(nextBlockers)]);
   if (!task) {
     const hasActiveTask = tasks.some((candidate) => getImplementationTaskState(candidate) === 'active');
     task = {
@@ -362,7 +371,7 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
       source: patch.source || patch.type || 'review_followup',
       sprintId: pr.sprintId || 'shared',
       baseBranch: pr.baseBranch,
-      checks: [],
+      checks: nextChecks,
       acceptance: buildReviewFollowupAcceptance(pr, nextDescription),
       state: hasActiveTask ? 'queued' : 'active',
       status: hasActiveTask ? 'queued' : 'active',
@@ -371,6 +380,7 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
       updatedAt: patch.updatedAt || new Date().toISOString(),
       startedAt: hasActiveTask ? null : (patch.updatedAt || new Date().toISOString()),
       prId: pr.id,
+      reviewerBlockers: nextBlockers,
     };
     if (implementationConversationId) {
       setAgentConversationReference(task, {
@@ -387,9 +397,11 @@ function appendTrackedBranchFollowupTask(rootDir, state, pr, patch) {
     task.description = nextDescription;
     task.type = patch.type || task.type;
     task.source = patch.source || patch.type || task.source || 'review_followup';
+    task.checks = nextChecks.length > 0 ? nextChecks : (task.checks || []);
     task.acceptance = buildReviewFollowupAcceptance(pr, nextDescription, task.acceptance);
     task.updatedAt = patch.updatedAt || new Date().toISOString();
     task.prId = pr.id;
+    task.reviewerBlockers = nextBlockers;
     if (implementationConversationId) {
       setAgentConversationReference(task, {
         agentId: pr.agentId,

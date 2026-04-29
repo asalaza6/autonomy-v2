@@ -125,7 +125,7 @@ function createReviewRunnerExecutionContext(params: AnyRecord, deps: AnyRecord):
     },
     prStore: {
       getPr: bindArgs(deps.getPr, rootDir),
-      recordReviewDecision({ prId, reviewerId, decision, summary, conversationId, publish }) {
+      recordReviewDecision({ prId, reviewerId, decision, summary, conversationId, publish, dismissReviewerBlockerIds, dismissalReason }) {
         const args = [
           deps.CLI_PATH,
           deps.buildRoleEventName(deps.AGENT_ROLES.REVIEW, 'record'),
@@ -145,6 +145,12 @@ function createReviewRunnerExecutionContext(params: AnyRecord, deps: AnyRecord):
         }
         if (publish) {
           args.push('--publish');
+        }
+        (dismissReviewerBlockerIds || []).forEach((blockerId) => {
+          args.push('--dismiss-blocker', blockerId);
+        });
+        if (dismissalReason) {
+          args.push('--dismiss-reason', dismissalReason);
         }
         deps.execFileSync(process.execPath, args, {
           cwd: rootDir,

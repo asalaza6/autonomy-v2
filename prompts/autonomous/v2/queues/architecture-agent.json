@@ -6021,10 +6021,15 @@
         "Implementation and review conversation references continue to be preserved on follow-up tasks or related state, but those references are not the only fields used to determine whether a blocker is satisfied.",
         "Focused unit coverage proves review feedback is transformed into structured follow-up requirements and survives serialization and reload paths without losing blocker details."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-29T11:02:54.433Z",
-      "updatedAt": "2026-04-29T11:02:54.433Z"
+      "updatedAt": "2026-04-29T11:09:15.477Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "startedAt": "2026-04-29T11:03:13.465Z",
+      "completedAt": "2026-04-29T11:09:15.400Z",
+      "completionMode": "code",
+      "commitSha": "beffc56b5c647685ddce5bc16c7d23c01834e1bd"
     },
     {
       "id": "prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-2",
@@ -6048,10 +6053,155 @@
         "Existing implementation and review conversation resume behavior remains intact after the enforcement changes.",
         "Unit tests cover noop-blocking completion behavior and reviewer approval gating, and a smoke test covers a focused verification request flowing from review to follow-up to eventual approval once the structured blocker is satisfied."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-29T11:02:54.433Z",
-      "updatedAt": "2026-04-29T11:02:54.433Z"
+      "updatedAt": "2026-04-29T11:21:24.773Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "startedAt": "2026-04-29T11:09:15.400Z",
+      "completedAt": "2026-04-29T11:21:24.687Z",
+      "completionMode": "code",
+      "commitSha": "49cce3bdc2aeea2f16da3c02b27eaedb6bacd52e"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-1",
+      "title": "Address review for [architecture-agent] architecture lane work for prd-harden-review-to-implementation-feedback-contract-69211d",
+      "description": "`npm run lint` is failing, so this branch is not mergeable yet.\nMerge-blocking verification failed: `npm run lint` reports an unused `buildRepoAssistantGithubSessionEnv` symbol in `tests/unit/control-plane-github.test.ts:12`. Fix that lint error and rerun the required checks before approval.\nBlocking checks failed: npm run lint",
+      "agentId": "architecture-agent",
+      "prdId": "prd-harden-review-to-implementation-feedback-contract-69211d",
+      "laneKey": "prd-harden-review-to-implementation-feedback-contract-69211d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run lint` is failing, so this branch is not mergeable yet.\nMerge-blocking verification failed: `npm run lint` reports an unused `buildRepoAssistantGithubSessionEnv` symbol in `tests/unit/control-plane-github.test.ts:12`. Fix that lint error and rerun the required checks before approval.\nBlocking checks failed: npm run lint"
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "createdAt": "2026-04-29T11:23:01.784Z",
+      "updatedAt": "2026-04-29T11:23:44.030Z",
+      "startedAt": "2026-04-29T11:23:01.784Z",
+      "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "completedAt": "2026-04-29T11:23:43.931Z",
+      "completionMode": "code",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T11:23:43.931Z"
+        }
+      },
+      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+      "commitSha": "205737d9e089b937c75f785b0ce8c8d7482d5433"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-2",
+      "title": "Address review for [architecture-agent] architecture lane work for prd-harden-review-to-implementation-feedback-contract-69211d",
+      "description": "Changes in the review/blocker contract touch high-risk queue, review, and sync paths, and the required minimum checks (`npm run typecheck`, `npm run lint`) passed. I’m still blocking approval because there is no recorded focused test execution for the new blocker lifecycle coverage added in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts` that exercises the behavior introduced in `src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, and `src/sync/derived-pr.ts`. Run and pass focused verification for those new paths before merge.\nMissing focused verification is blocking. This PR changes merge-gating and task-completion behavior in high-risk workflow code (`src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, `src/sync/derived-pr.ts`), but the provided check results only cover `npm run typecheck` and `npm run lint`. The branch adds the intended focused coverage in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts`; please run and record those tests (for example, `npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js dist/tests/smoke/package-smoke.test.js`) before approval.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-harden-review-to-implementation-feedback-contract-69211d",
+      "laneKey": "prd-harden-review-to-implementation-feedback-contract-69211d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Changes in the review/blocker contract touch high-risk queue, review, and sync paths, and the required minimum checks (`npm run typecheck`, `npm run lint`) passed. I’m still blocking approval because there is no recorded focused test execution for the new blocker lifecycle coverage added in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts` that exercises the behavior introduced in `src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, and `src/sync/derived-pr.ts`. Run and pass focused verification for those new paths before merge.\nMissing focused verification is blocking. This PR changes merge-gating and task-completion behavior in high-risk workflow code (`src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, `src/sync/derived-pr.ts`), but the provided check results only cover `npm run typecheck` and `npm run lint`. The branch adds the intended focused coverage in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts`; please run and record those tests (for example, `npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js dist/tests/smoke/package-smoke.test.js`) before approval."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "createdAt": "2026-04-29T11:26:11.262Z",
+      "updatedAt": "2026-04-29T11:30:04.768Z",
+      "startedAt": "2026-04-29T11:26:11.262Z",
+      "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T11:30:04.698Z"
+        }
+      },
+      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+      "completedAt": "2026-04-29T11:30:04.698Z",
+      "completionMode": "code",
+      "commitSha": "bff13979cdd6334722acc97f7ef094a14c01713f"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-3",
+      "title": "Address review for [architecture-agent] architecture lane work for prd-harden-review-to-implementation-feedback-contract-69211d",
+      "description": "`npm run typecheck` and `npm run lint` passed, but this branch is still not mergeable. The high-risk blocker lifecycle changes still have no recorded focused execution of the new unit/smoke coverage, and the new blocker-satisfaction logic currently marks any correctness/documentation blocker as satisfied after any code change, which weakens the review gate.\nMissing focused verification is still blocking. This PR changes merge-gating and task-completion behavior in high-risk queue/review/sync paths (`src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, `src/sync/derived-pr.ts`), but the provided results only include `npm run typecheck` and `npm run lint`. Please run and record the focused coverage added in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts` (for example: `npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js dist/tests/smoke/package-smoke.test.js`).\n`src/autonomy-v2/commands/shared-review-blockers.ts:270-292`, `src/autonomy-v2/commands/shared-review-blockers.ts:313-320`, and `src/autonomy-v2/commands/shared-review-blockers.ts:364-367` let any non-empty `changedFiles` list satisfy every `code_change` blocker. `deriveTaskEvidenceForBlocker` emits a generic `code_change` evidence record for any diff, and `blockerEvidenceRequirementSatisfied` returns `true` for any `code_change` requirement without checking which requested correction was actually addressed. That means an unrelated edit can clear a correctness/documentation blocker, and the later approval path in `src/agents/ReviewAgentDefinition.ts:341-364` will treat it as resolved. Tighten the satisfaction criteria or stop auto-satisfying these blocker categories, and add focused tests for that case.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-harden-review-to-implementation-feedback-contract-69211d",
+      "laneKey": "prd-harden-review-to-implementation-feedback-contract-69211d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "`npm run typecheck` and `npm run lint` passed, but this branch is still not mergeable. The high-risk blocker lifecycle changes still have no recorded focused execution of the new unit/smoke coverage, and the new blocker-satisfaction logic currently marks any correctness/documentation blocker as satisfied after any code change, which weakens the review gate.\nMissing focused verification is still blocking. This PR changes merge-gating and task-completion behavior in high-risk queue/review/sync paths (`src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, `src/sync/derived-pr.ts`), but the provided results only include `npm run typecheck` and `npm run lint`. Please run and record the focused coverage added in `tests/unit/implementation-conversation-continuity.test.ts` and `tests/smoke/package-smoke.test.ts` (for example: `npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js dist/tests/smoke/package-smoke.test.js`).\n`src/autonomy-v2/commands/shared-review-blockers.ts:270-292`, `src/autonomy-v2/commands/shared-review-blockers.ts:313-320`, and `src/autonomy-v2/commands/shared-review-blockers.ts:364-367` let any non-empty `changedFiles` list satisfy every `code_change` blocker. `deriveTaskEvidenceForBlocker` emits a generic `code_change` evidence record for any diff, and `blockerEvidenceRequirementSatisfied` returns `true` for any `code_change` requirement without checking which requested correction was actually addressed. That means an unrelated edit can clear a correctness/documentation blocker, and the later approval path in `src/agents/ReviewAgentDefinition.ts:341-364` will treat it as resolved. Tighten the satisfaction criteria or stop auto-satisfying these blocker categories, and add focused tests for that case."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "createdAt": "2026-04-29T11:32:49.763Z",
+      "updatedAt": "2026-04-29T11:36:49.701Z",
+      "startedAt": "2026-04-29T11:32:49.763Z",
+      "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T11:36:49.617Z"
+        }
+      },
+      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+      "completedAt": "2026-04-29T11:36:49.617Z",
+      "completionMode": "code",
+      "commitSha": "319a0297728c3cd1d6425810c024074a71d83263"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent-4",
+      "title": "Address review for [architecture-agent] architecture lane work for prd-harden-review-to-implementation-feedback-contract-69211d",
+      "description": "Blocking issues remain in the blocker-lifecycle contract. The branch adds the new types/helpers, but the tracked queue state in this PR still does not persist structured reviewer blockers or requested checks on the generated follow-up tasks, and the policy-dismissal path required by the acceptance criteria is only represented in tests, not by a production state transition.\n`prompts/autonomous/v2/queues/architecture-agent.json:6067-6169` shows all three generated `review_followup` tasks as `done` with `checks: []` and no `reviewerBlockers`, even when the review summaries explicitly requested commands like `npm run lint` and the focused `npm run build && node --test ...` verification. That breaks the acceptance criteria requiring structured blocker/check persistence in tracked queue/state output, and it is merge-risky because PR recovery depends on task/PR state to rebuild blockers (`src/autonomy-v2/commands/pr.ts:53-56,89,134` and `src/sync/derived-pr.ts:367-404`). If `.autonomy` PR state is missing or rebuilt, these blockers are not recoverable from the tracked queue artifacts committed in this branch.\nThe policy-dismissal acceptance is still not implemented as a real runtime path. In production code, `dismissed` is only normalized/preserved if it already exists (`src/autonomy-v2/commands/shared-review-blockers.ts:181-188,403-420`); nothing in this diff records a policy dismissal. The only evidence for that behavior is a unit test that manually fabricates `status.state = 'dismissed'` (`tests/unit/implementation-conversation-continuity.test.ts:846-862`). As written, reviewer approval can proceed past dismissed blockers only if some external actor edits state by hand, which does not satisfy the required structured policy-dismissal flow.",
+      "agentId": "architecture-agent",
+      "prdId": "prd-harden-review-to-implementation-feedback-contract-69211d",
+      "laneKey": "prd-harden-review-to-implementation-feedback-contract-69211d:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issues remain in the blocker-lifecycle contract. The branch adds the new types/helpers, but the tracked queue state in this PR still does not persist structured reviewer blockers or requested checks on the generated follow-up tasks, and the policy-dismissal path required by the acceptance criteria is only represented in tests, not by a production state transition.\n`prompts/autonomous/v2/queues/architecture-agent.json:6067-6169` shows all three generated `review_followup` tasks as `done` with `checks: []` and no `reviewerBlockers`, even when the review summaries explicitly requested commands like `npm run lint` and the focused `npm run build && node --test ...` verification. That breaks the acceptance criteria requiring structured blocker/check persistence in tracked queue/state output, and it is merge-risky because PR recovery depends on task/PR state to rebuild blockers (`src/autonomy-v2/commands/pr.ts:53-56,89,134` and `src/sync/derived-pr.ts:367-404`). If `.autonomy` PR state is missing or rebuilt, these blockers are not recoverable from the tracked queue artifacts committed in this branch.\nThe policy-dismissal acceptance is still not implemented as a real runtime path. In production code, `dismissed` is only normalized/preserved if it already exists (`src/autonomy-v2/commands/shared-review-blockers.ts:181-188,403-420`); nothing in this diff records a policy dismissal. The only evidence for that behavior is a unit test that manually fabricates `status.state = 'dismissed'` (`tests/unit/implementation-conversation-continuity.test.ts:846-862`). As written, reviewer approval can proceed past dismissed blockers only if some external actor edits state by hand, which does not satisfy the required structured policy-dismissal flow."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "createdAt": "2026-04-29T11:40:18.373Z",
+      "updatedAt": "2026-04-29T11:55:39.748Z",
+      "startedAt": "2026-04-29T11:40:18.373Z",
+      "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-04-29T11:55:39.668Z"
+        }
+      },
+      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+      "completedAt": "2026-04-29T11:55:39.668Z",
+      "completionMode": "code",
+      "commitSha": "6532c7c280cf581bf3a0792591d110c95efdd37b"
     }
   ]
 }

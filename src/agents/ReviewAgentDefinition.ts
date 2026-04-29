@@ -17,6 +17,7 @@ import {
   resolveReviewCheckCommands,
   shouldForceApproveAfterRepeatedReviews as shouldAutoApproveAfterRepeatedReviews,
 } from '../autonomy-v2/runner/gate-support.js';
+import { listUnresolvedReviewerBlockers } from '../autonomy-v2/commands/shared-review-blockers.js';
 import type { AgentConfig, AutonomyConfig, PullRequestRecord, TaskRecord, AnyRecord } from '../types.js';
 import type { AgentExecutionContext, ClaimedReviewWork, ClaimedWork, ExecutionResult } from './AgentDefinition.js';
 
@@ -338,14 +339,18 @@ class ReviewAgentDefinition extends AgentDefinition {
     });
 
     const failedChecks = checkResults.filter((entry) => entry.status === 'failed');
+    const unresolvedReviewerBlockers = listUnresolvedReviewerBlockers(pr.reviewerBlockers || []);
     const scopeConcernOnly = scopeResult.ok && isScopeOnlyReviewFeedback(codexReview);
     const checkExpectationOnly = failedChecks.length === 0
       && this.isCheckExpectationOnlyReviewFeedback(codexReview, checkResults, reviewCheckCommands);
     const repeatedReviewAutoApprove = failedChecks.length === 0
       && scopeResult.ok
+      && unresolvedReviewerBlockers.length === 0
       && shouldAutoApproveAfterRepeatedReviews(pr);
     const decision = failedChecks.length > 0
       ? 'changes-requested'
+      : unresolvedReviewerBlockers.length > 0
+        ? 'changes-requested'
       : !scopeResult.ok
         ? 'changes-requested'
         : scopeConcernOnly
@@ -369,6 +374,9 @@ class ReviewAgentDefinition extends AgentDefinition {
         : [codexReview.summary].concat(codexReview.concerns || []);
     if (failedChecks.length > 0) {
       summaryParts.push(`Blocking checks failed: ${failedChecks.map((entry) => entry.command).join(', ')}`);
+    }
+    if (unresolvedReviewerBlockers.length > 0) {
+      summaryParts.push(`Structured reviewer blockers remain unresolved: ${unresolvedReviewerBlockers.map((blocker) => blocker.summary).join(' | ')}`);
     }
     if (!scopeResult.ok) {
       summaryParts.push(`Blocking scope violations: ${scopeResult.violations.map((entry) => `${entry.file} (${entry.reason})`).join(', ')}`);
@@ -457,9 +465,12 @@ class ReviewAgentDefinition extends AgentDefinition {
     sourceAgentId: string;
   }): ExecutionResult {
     const { reviewerTask, pr, reviewRound, sourceAgentId } = input;
-    const decision = reviewRound === 1 ? 'changes-requested' : 'approve';
+    const unresolvedReviewerBlockers = listUnresolvedReviewerBlockers(pr.reviewerBlockers || []);
+    const decision = reviewRound === 1 || unresolvedReviewerBlockers.length > 0 ? 'changes-requested' : 'approve';
     const summary = reviewRound === 1
       ? `Add one more ${sourceAgentId.replace(/-agent$/, '') || 'feature'} follow-up line before merge.`
+      : unresolvedReviewerBlockers.length > 0
+        ? `Structured reviewer blockers remain unresolved: ${unresolvedReviewerBlockers.map((blocker) => blocker.summary).join(' | ')}`
       : `Ready to merge ${pr.title}.`;
 
     if (pr.remote && pr.remote.number && context.reviewClient.hasGithubAuth?.()) {

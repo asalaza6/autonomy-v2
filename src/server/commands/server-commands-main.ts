@@ -76,7 +76,12 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   if (command === 'tick') {
     let result;
+    const shouldSuppressInlineWorkerStreamOutput = options.json === true && options.inline === true;
+    const originalStreamWorkerOutput = process.env.AUTONOMY_STREAM_WORKER_OUTPUT;
     try {
+      if (shouldSuppressInlineWorkerStreamOutput) {
+        delete process.env.AUTONOMY_STREAM_WORKER_OUTPUT;
+      }
       result = runSchedulerTick(rootDir, { inline: options.inline === true });
       if (options.json === true) {
         console.log(JSON.stringify(result, null, 2));
@@ -87,6 +92,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
         });
       }
     } finally {
+      if (shouldSuppressInlineWorkerStreamOutput) {
+        if (typeof originalStreamWorkerOutput === 'string') {
+          process.env.AUTONOMY_STREAM_WORKER_OUTPUT = originalStreamWorkerOutput;
+        } else {
+          delete process.env.AUTONOMY_STREAM_WORKER_OUTPUT;
+        }
+      }
       await reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler tick complete');
     }
     return;
