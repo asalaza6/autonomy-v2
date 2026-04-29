@@ -1252,10 +1252,10 @@
         "Keep current read-only repo assistant behavior and existing conversation-history prompt continuity.",
         "Handle missing or stale persisted conversation/session references safely without breaking chat UX."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-28T23:56:12.652Z",
-      "updatedAt": "2026-04-29T00:01:55.015Z",
+      "updatedAt": "2026-04-29T00:02:08.711Z",
       "reviewedAt": "2026-04-29T00:01:55.015Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
