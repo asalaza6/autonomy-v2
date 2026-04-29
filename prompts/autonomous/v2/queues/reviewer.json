@@ -1298,31 +1298,26 @@
     {
       "id": "review-pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
       "title": "Review [architecture-agent] architecture lane work for prd-stabilize-control-plane-reconciliation-for-5c2e43",
-      "description": "Review pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent for Reconcile queued implementation work with runtime worker status and pickup flow",
+      "description": "Review pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent for Address review for [architecture-agent] architecture lane work for prd-stabilize-control-plane-reconciliation-for-5c2e43",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
-      "sourceTaskId": "prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent-2",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-stabilize-control-plane-reconciliation-for-5c2e43-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "When GitHub validation fails, the control plane does not silently fall back to a misleading terminal PR state; it instead exposes a clear degraded or validation-error status while preserving existing tracked PRD and queue file formats.",
-        "Targeted tests are added or updated for stale PR reconciliation and degraded GitHub validation behavior, including relevant `tests/unit/control-plane-*.test.ts` coverage and any sync-focused unit tests that reconstruct PR status.",
-        "Verification for this task includes `npm run typecheck` and the focused unit tests covering PR reconciliation and status rendering.",
-        "If tracked queue state for `architecture-agent` contains queued work, status snapshots and rendered control-plane details do not report `idle` with `detail: no queued tasks` unless they also include an explicit reconciliation or stale-worker error code explaining the mismatch.",
-        "When a new implementation task or PRD is queued for the responsible lane, the scheduler or worker attach path picks it up within the expected polling window, or the control plane surfaces a clear pickup error instead of idle or no-work messaging.",
-        "Targeted tests are added or updated for queued-task pickup and idle-vs-queued status rendering, including relevant sync or queue unit tests and `tests/unit/control-plane-*.test.ts` coverage.",
-        "If the scheduler or worker attach flow is touched, verification also includes `tests/smoke/control-plane.test.ts` alongside `npm run typecheck` and the focused unit tests."
+        "Blocking on missing focused verification. The diff is scoped and appears textually mergeable with current `origin/dev`, but this branch changes high-risk control-plane/sync behavior around PR reconciliation and queued-task pickup/status rendering without recorded runs of the focused unit tests added for those paths.\nMissing merge-blocking verification for the new high-risk behavior. This branch changes PR reconciliation and status derivation in `src/sync/review-reconciliation.ts`, `src/sync/derived-pr.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, `src/autonomy-v2/commands/shared-prds.ts`, and queued-task status rendering in `src/autonomy-v2/commands/shared-agent-status.ts`, but the recorded checks only show `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. Please run and report the focused tests that were added/updated for this work: `tests/unit/control-plane-status.test.ts`, `tests/unit/implementation-queue-resolution.test.ts`, and `tests/unit/review-reconciliation.test.ts`. If the queue-pickup change path is considered part of scheduler/worker attach behavior, also include `tests/smoke/control-plane.test.ts` per the task acceptance."
       ],
       "reviewRound": 2,
       "status": "queued",
       "createdAt": "2026-04-29T07:10:46.106Z",
-      "updatedAt": "2026-04-29T07:13:46.106Z",
+      "updatedAt": "2026-04-29T07:14:28.470Z",
       "reviewedAt": "2026-04-29T07:13:20.073Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-29T07:10:50.287Z"
+      "dispatchedAt": "2026-04-29T07:10:50.287Z",
+      "scopeViolations": []
     }
   ]
 }
