@@ -60,20 +60,26 @@ function prdStateChanged(currentPrd, nextPrd) {
 }
 
 function buildDerivedCompletedTaskSnapshot(task, prdId, integrationBranch, agentConfig, now) {
-  return {
+  const snapshot: AnyRecord = {
     id: task.id,
     title: task.title,
     description: task.description || '',
     agentId: task.agentId,
     prdId,
     laneKey: `${prdId}:${task.agentId}`,
-    type: TASK_TYPES.DEFAULT,
+    type: task.type || TASK_TYPES.DEFAULT,
+    source: task.source || null,
     sprintId: task.sprintId || 'shared',
     baseBranch: integrationBranch,
     checks: uniqueStrings([...(task.checks || []), ...((agentConfig && agentConfig.checks) || [])]),
     acceptance: normalizeStringList(task.acceptance),
+    prId: task.prId || null,
+    reviewerBlockers: Array.isArray(task.reviewerBlockers)
+      ? task.reviewerBlockers.map((blocker) => ({ ...blocker }))
+      : [],
     completedAt: now,
   };
+  return snapshot;
 }
 
 function buildDerivedPrdRecord({ integrationBranch, remoteSpec, implementationTasks, laneStates, now, fetchedRef }: AnyRecord) {

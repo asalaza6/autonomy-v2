@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -6182,11 +6183,11 @@
       "acceptance": [
         "Blocking issues remain in the blocker-lifecycle contract. The branch adds the new types/helpers, but the tracked queue state in this PR still does not persist structured reviewer blockers or requested checks on the generated follow-up tasks, and the policy-dismissal path required by the acceptance criteria is only represented in tests, not by a production state transition.\n`prompts/autonomous/v2/queues/architecture-agent.json:6067-6169` shows all three generated `review_followup` tasks as `done` with `checks: []` and no `reviewerBlockers`, even when the review summaries explicitly requested commands like `npm run lint` and the focused `npm run build && node --test ...` verification. That breaks the acceptance criteria requiring structured blocker/check persistence in tracked queue/state output, and it is merge-risky because PR recovery depends on task/PR state to rebuild blockers (`src/autonomy-v2/commands/pr.ts:53-56,89,134` and `src/sync/derived-pr.ts:367-404`). If `.autonomy` PR state is missing or rebuilt, these blockers are not recoverable from the tracked queue artifacts committed in this branch.\nThe policy-dismissal acceptance is still not implemented as a real runtime path. In production code, `dismissed` is only normalized/preserved if it already exists (`src/autonomy-v2/commands/shared-review-blockers.ts:181-188,403-420`); nothing in this diff records a policy dismissal. The only evidence for that behavior is a unit test that manually fabricates `status.state = 'dismissed'` (`tests/unit/implementation-conversation-continuity.test.ts:846-862`). As written, reviewer approval can proceed past dismissed blockers only if some external actor edits state by hand, which does not satisfy the required structured policy-dismissal flow."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "createdAt": "2026-04-29T11:40:18.373Z",
-      "updatedAt": "2026-04-29T11:40:18.373Z",
+      "updatedAt": "2026-04-29T11:55:39.668Z",
       "startedAt": "2026-04-29T11:40:18.373Z",
       "prId": "pr-prd-harden-review-to-implementation-feedback-contract-69211d-architecture-agent",
       "conversationReferences": {
@@ -6194,11 +6195,12 @@
           "conversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-04-29T11:40:18.373Z"
+          "updatedAt": "2026-04-29T11:55:39.668Z"
         }
       },
-      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006"
+      "implementationConversationId": "019dd8fa-73a1-7d62-a41a-6412415d1006",
+      "completedAt": "2026-04-29T11:55:39.668Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

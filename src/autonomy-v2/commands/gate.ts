@@ -6,7 +6,7 @@ import {
   isReviewRole,
   resolveGithubAuthToken,
 } from './command-dependencies.js';
-import { appendAgentLog, buildSignedReviewSummary, ensureInitialized, getAgent, getAutonomyPaths, getPr, getStringOption, printOutput, requireOption, writeJson, } from './shared-core.js';
+import { appendAgentLog, buildSignedReviewSummary, ensureInitialized, getAgent, getAutonomyPaths, getListOption, getPr, getStringOption, printOutput, requireOption, writeJson, } from './shared-core.js';
 import { loadAllState } from './shared-prds.js';
 import { writeTaskQueues } from './shared-queues.js';
 import { addIssueComment, isSelfPullRequestReviewError, publishReview, resolveGithubRepo } from './shared-github.js';
@@ -15,10 +15,13 @@ import { appendTrackedBranchFollowupTask, ensureReviewerTask, enqueueLaneFollowu
 import { findTask } from './shared-queues.js';
 import { normalizeReviewDecision } from './shared-repo.js';
 import { uniqueStrings } from './shared-repo.js';
+import fs from 'fs';
+import path from 'path';
 import {
   buildReviewerBlockersFromReview,
   collectCurrentReviewerBlockers,
   collectReviewerBlockerChecks,
+  dismissReviewerBlockersByPolicy,
   listUnresolvedReviewerBlockers,
 } from './shared-review-blockers.js';
 import {
@@ -57,7 +60,21 @@ async function run(rootDir, options) {
   if (decision === 'changes_requested') {
     decisionRecord.reviewerBlockers = buildReviewerBlockersFromReview(pr, decisionRecord);
   }
-  const preDecisionBlockers = collectCurrentReviewerBlockers(pr);
+  const dismissalReason = getStringOption(options, 'dismiss-reason', '').trim();
+  const dismissBlockerIds = uniqueStrings(getListOption(options, 'dismiss-blocker'));
+  let preDecisionBlockers = collectCurrentReviewerBlockers(pr);
+  if (dismissBlockerIds.length > 0) {
+    const dismissal = dismissReviewerBlockersByPolicy(preDecisionBlockers, {
+      blockerIds: dismissBlockerIds,
+      dismissedAt: decisionRecord.reviewedAt,
+      dismissalReason: dismissalReason || 'policy-dismissed',
+    });
+    preDecisionBlockers = dismissal.blockers;
+    if (dismissal.dismissedBlockerIds.length > 0) {
+      decisionRecord.dismissedReviewerBlockerIds = dismissal.dismissedBlockerIds;
+      decisionRecord.dismissalReason = dismissalReason || 'policy-dismissed';
+    }
+  }
   const unresolvedBlockers = listUnresolvedReviewerBlockers(preDecisionBlockers);
   if (decision === 'approved' && unresolvedBlockers.length > 0) {
     throw new Error(`Cannot approve ${pr.id} while structured reviewer blockers remain unresolved: ${unresolvedBlockers.map((blocker) => blocker.id).join(', ')}`);
@@ -72,6 +89,9 @@ async function run(rootDir, options) {
   delete pr.mergeBlockedCode;
   delete pr.mergeBlockedReason;
   delete pr.mergeWatchdog;
+  if (dismissBlockerIds.length > 0) {
+    applyDismissedReviewerBlockersToLaneState(state, pr, preDecisionBlockers);
+  }
 
   const task = findTask(state.taskQueues, pr.taskId);
   const implementationAgent = getAgent(state.config, pr.agentId);
@@ -171,6 +191,7 @@ async function run(rootDir, options) {
 
   const paths = getAutonomyPaths(rootDir);
   writeJson(paths.prsState, state.prs);
+  writeJson(paths.branchLocksState, state.branchLocks);
   writeTaskQueues(rootDir, state.config, state.taskQueues);
   appendAgentLog(rootDir, state.config, reviewerId, buildRoleEventName(AGENT_ROLES.REVIEW, 'record'), {
     input: {
@@ -202,6 +223,56 @@ async function run(rootDir, options) {
 
   printOutput(options, { pr, [getRoleLabel(AGENT_ROLES.REVIEW)]: decisionRecord }, () => {
     console.log(`Recorded ${decision} ${getRoleLabel(AGENT_ROLES.REVIEW)} on ${pr.id}`);
+  });
+}
+
+function applyDismissedReviewerBlockersToLaneState(state, pr, reviewerBlockers) {
+  const blockerIds = new Set((reviewerBlockers || []).map((blocker) => String(blocker && blocker.id || '').trim()).filter(Boolean));
+  if (blockerIds.size === 0) {
+    return;
+  }
+  const implementationAgent = getAgent(state.config, pr.agentId);
+  const applyToTask = (task) => {
+    if (!task || !Array.isArray(task.reviewerBlockers) || task.reviewerBlockers.length === 0) {
+      return;
+    }
+    task.reviewerBlockers = task.reviewerBlockers.map((blocker) => {
+      const blockerId = String(blocker && blocker.id || '').trim();
+      const nextBlocker = reviewerBlockers.find((candidate) => String(candidate && candidate.id || '').trim() === blockerId);
+      return blockerIds.has(blockerId) && nextBlocker
+        ? { ...nextBlocker }
+        : blocker;
+    });
+    task.checks = uniqueStrings([...(task.checks || []), ...collectReviewerBlockerChecks(task.reviewerBlockers || [])]);
+  };
+
+  Object.values(state.taskQueues || {}).forEach((queue: any) => {
+    (queue && queue.tasks || []).forEach((task) => {
+      if (task && task.agentId === pr.agentId && (task.laneKey || task.taskId) === (pr.laneKey || pr.taskId)) {
+        applyToTask(task);
+      }
+    });
+  });
+  ((state.branchLocks && state.branchLocks.locks) || []).forEach((lock) => {
+    if (!lock || lock.agentId !== pr.agentId || (lock.laneKey || lock.taskId) !== (pr.laneKey || pr.taskId)) {
+      return;
+    }
+    (lock.completedTasks || []).forEach((task) => applyToTask(task));
+    const relativePath = implementationAgent.taskQueue;
+    if (path.isAbsolute(relativePath) || !lock.worktreePath) {
+      return;
+    }
+    const queuePath = path.join(lock.worktreePath, relativePath);
+    if (!fs.existsSync(queuePath)) {
+      return;
+    }
+    const queueState = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+    (queueState.tasks || []).forEach((task) => {
+      if (task && task.agentId === pr.agentId && (task.laneKey || task.taskId) === (pr.laneKey || pr.taskId)) {
+        applyToTask(task);
+      }
+    });
+    writeJson(queuePath, queueState);
   });
 }
 

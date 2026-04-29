@@ -435,6 +435,50 @@ function applyTaskCompletionToReviewerBlockers(
   };
 }
 
+function dismissReviewerBlockersByPolicy(
+  blockers: ReviewerBlockerRecord[] = [],
+  options: AnyRecord = {}
+): {
+  blockers: ReviewerBlockerRecord[];
+  dismissedBlockerIds: string[];
+} {
+  const dismissedAt = String(options.dismissedAt || new Date().toISOString());
+  const dismissalReason = String(options.dismissalReason || '').trim() || 'policy-dismissed';
+  const allowedIds = new Set(uniqueStrings(Array.isArray(options.blockerIds) ? options.blockerIds : []));
+  const dismissAll = allowedIds.size === 0 && options.dismissAll === true;
+  const dismissedBlockerIds: string[] = [];
+
+  const nextBlockers = blockers.map((candidate) => {
+    const blocker = normalizeReviewerBlocker(candidate);
+    if (!blocker.id) {
+      return blocker;
+    }
+    if (blocker.status.state === 'dismissed') {
+      return blocker;
+    }
+    if (!dismissAll && !allowedIds.has(blocker.id)) {
+      return blocker;
+    }
+    dismissedBlockerIds.push(blocker.id);
+    return {
+      ...blocker,
+      status: {
+        ...normalizeReviewerBlockerStatus(blocker.status),
+        state: 'dismissed' as const,
+        dismissedAt,
+        dismissalReason,
+        satisfiedAt: null,
+        satisfiedByTaskId: null,
+      },
+    };
+  });
+
+  return {
+    blockers: nextBlockers,
+    dismissedBlockerIds: uniqueStrings(dismissedBlockerIds),
+  };
+}
+
 function collectCurrentReviewerBlockers(pr: PullRequestRecord | null | undefined, tasks: TaskRecord[] = []): ReviewerBlockerRecord[] {
   const blockersById = new Map<string, ReviewerBlockerRecord>();
   const insert = (candidate: ReviewerBlockerRecord | null | undefined) => {
@@ -485,6 +529,7 @@ export {
   buildReviewerBlockersFromReview,
   collectCurrentReviewerBlockers,
   collectReviewerBlockerChecks,
+  dismissReviewerBlockersByPolicy,
   isReviewerBlockerResolved,
   listUnresolvedReviewerBlockers,
   normalizeReviewerBlocker,

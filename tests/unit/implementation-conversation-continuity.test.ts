@@ -8,9 +8,11 @@ import { execFileSync } from 'child_process';
 import { getAgentDefinition } from '../../src/agents/AgentDefinitionRegistry.js';
 import { AGENT_ROLES } from '../../src/agents/role-catalog.js';
 import { buildAgentConversationKey, getAgentConversationId } from '../../src/agents/conversation-references.js';
+import { run as runGate } from '../../src/autonomy-v2/commands/gate.js';
 import { appendTrackedBranchFollowupTask, enqueueLaneFollowupTask } from '../../src/autonomy-v2/commands/shared-worktrees.js';
 import { buildReviewerBlockersFromReview } from '../../src/autonomy-v2/commands/shared-review-blockers.js';
 import { markImplementationTaskComplete } from '../../src/autonomy-v2/runner/workspace.js';
+import { recordLaneTaskCompletion } from '../../src/autonomy-v2/runner/runner-state.js';
 
 const queueRelativePath = 'prompts/autonomous/v2/queues/architecture-agent.json';
 const reviewerConversationKey = buildAgentConversationKey({ agentId: 'reviewer', role: AGENT_ROLES.REVIEW });
@@ -33,6 +35,7 @@ function buildImplementationAgent() {
   return {
     id: 'architecture-agent',
     role: AGENT_ROLES.IMPLEMENTATION,
+    systemPrompt: 'prompts/autonomous/v2/agents/architecture-agent/system.md',
     taskQueue: queueRelativePath,
     include: ['**/*'],
     checks: [],
@@ -56,6 +59,10 @@ function buildConfig() {
         role: AGENT_ROLES.REVIEW,
         taskQueue: 'prompts/autonomous/v2/queues/reviewer.json',
         systemPrompt: 'prompts/autonomous/v2/agents/reviewer/system.md',
+        gitIdentity: {
+          name: 'Reviewer Agent',
+          email: 'reviewer@example.com',
+        },
       },
     ],
   };
@@ -574,6 +581,146 @@ test('implementation task completion satisfies a code-change blocker when it upd
     queue.tasks[0].reviewerBlockers[0].status.evidence[0].detail,
     'Matched requested files: src/autonomy-v2/commands/gate.ts'
   );
+});
+
+test('completed lane task snapshots preserve structured reviewer blockers for recovery', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-completed-blocker-snapshot-'));
+  const blockerTask = buildTask({
+    type: 'review_followup',
+    source: 'review_followup',
+    status: 'done',
+    state: 'done',
+    prId: 'pr-prd-conversation-architecture-agent',
+    checks: ['npm run lint'],
+  });
+  blockerTask.reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Run `npm run lint` before approval.',
+  });
+
+  const completedTasks = recordLaneTaskCompletion(
+    rootDir,
+    blockerTask,
+    'agent/shared/architecture-agent/prd-conversation-architecture-agent',
+    path.join(rootDir, '.autonomy', 'worktrees', 'architecture-agent', 'shared-prd-conversation-architecture-agent'),
+    { ok: true, violations: [] }
+  );
+
+  assert.equal(completedTasks.length, 1);
+  assert.equal(completedTasks[0].checks[0], 'npm run lint');
+  assert.equal(completedTasks[0].reviewerBlockers.length, 1);
+  assert.equal(completedTasks[0].reviewerBlockers[0].requiredChecks[0], 'npm run lint');
+  assert.equal(completedTasks[0].reviewerBlockers[0].status.state, 'open');
+  assert.equal(completedTasks[0].source, 'review_followup');
+  assert.equal(completedTasks[0].prId, 'pr-prd-conversation-architecture-agent');
+});
+
+test('review:record can dismiss reviewer blockers by policy and persists the dismissal to tracked tasks', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-policy-dismissal-'));
+  const agentsPath = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json');
+  const sprintPath = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config', 'sprint.json');
+  const prsPath = path.join(rootDir, '.autonomy', 'runtime', 'state', 'prs.json');
+  const branchLocksPath = path.join(rootDir, '.autonomy', 'runtime', 'state', 'branch-locks.json');
+  const worktreePath = path.join(rootDir, '.autonomy', 'worktrees', 'architecture-agent', 'shared-prd-conversation-architecture-agent');
+  const implementationQueuePath = path.join(worktreePath, queueRelativePath);
+  const reviewerQueuePath = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'queues', 'reviewer.json');
+
+  git(rootDir, ['init', '-b', 'dev']);
+  git(rootDir, ['config', 'user.email', 'autonomy-test@example.com']);
+  git(rootDir, ['config', 'user.name', 'Autonomy Test']);
+  writeJson(agentsPath, buildConfig());
+  writeJson(sprintPath, { sprintId: 'shared', name: 'Shared Sprint' });
+
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Run `npm run lint` before approval.',
+  });
+  const blockerId = reviewerBlockers[0].id;
+  const followupTask = buildTask({
+    id: 'architecture-agent-followup-pr-prd-conversation-architecture-agent-1',
+    type: 'review_followup',
+    source: 'review_followup',
+    status: 'done',
+    state: 'done',
+    prId: 'pr-prd-conversation-architecture-agent',
+    checks: ['npm run lint'],
+    reviewerBlockers,
+  });
+  writeJson(implementationQueuePath, buildQueue([followupTask]));
+  writeJson(reviewerQueuePath, {
+    agentId: 'reviewer',
+    role: AGENT_ROLES.REVIEW,
+    tasks: [{
+      id: 'review-pr-prd-conversation-architecture-agent',
+      title: 'Review conversation continuity',
+      description: 'Review the follow-up.',
+      agentId: 'reviewer',
+      type: 'review',
+      prId: 'pr-prd-conversation-architecture-agent',
+      sourceTaskId: followupTask.id,
+      sourceAgentId: 'architecture-agent',
+      reviewRound: 2,
+      status: 'queued',
+      createdAt: '2026-04-21T00:30:00.000Z',
+      updatedAt: '2026-04-21T00:30:00.000Z',
+    }],
+  });
+  writeJson(prsPath, {
+    pullRequests: [buildPr({
+      taskId: followupTask.id,
+      taskIds: [followupTask.id],
+      pendingTaskIds: [],
+      completedTaskIds: [followupTask.id],
+      checks: ['npm run lint'],
+      reviewerBlockers,
+    })],
+  });
+  writeJson(branchLocksPath, {
+    locks: [{
+      taskId: followupTask.id,
+      laneKey: followupTask.laneKey,
+      agentId: followupTask.agentId,
+      branch: 'agent/shared/architecture-agent/prd-conversation-architecture-agent',
+      worktreePath,
+      completedTasks: [followupTask],
+      updatedAt: '2026-04-21T00:30:00.000Z',
+    }],
+  });
+  git(rootDir, ['add', '.']);
+  git(rootDir, ['commit', '-m', 'seed policy dismissal fixture']);
+
+  await runGate(rootDir, {
+    pr: 'pr-prd-conversation-architecture-agent',
+    reviewer: 'reviewer',
+    decision: 'approved',
+    summary: 'Policy waived after external verification.',
+    'dismiss-blocker': [blockerId],
+    'dismiss-reason': 'policy-waived',
+    json: true,
+  });
+
+  const prsState = JSON.parse(fs.readFileSync(prsPath, 'utf8'));
+  assert.equal(prsState.pullRequests[0].status, 'approved');
+  assert.equal(prsState.pullRequests[0].reviewerBlockers[0].status.state, 'dismissed');
+  assert.equal(prsState.pullRequests[0].reviewerBlockers[0].status.dismissalReason, 'policy-waived');
+
+  const trackedQueue = JSON.parse(fs.readFileSync(implementationQueuePath, 'utf8'));
+  assert.equal(trackedQueue.tasks[0].reviewerBlockers[0].status.state, 'dismissed');
+  assert.equal(trackedQueue.tasks[0].reviewerBlockers[0].status.dismissalReason, 'policy-waived');
+
+  const branchLocks = JSON.parse(fs.readFileSync(branchLocksPath, 'utf8'));
+  assert.equal(branchLocks.locks[0].completedTasks[0].reviewerBlockers[0].status.state, 'dismissed');
+  assert.equal(branchLocks.locks[0].completedTasks[0].reviewerBlockers[0].status.dismissalReason, 'policy-waived');
 });
 
 function buildRunnerContext(executeTask: (input: any) => Promise<any>, taskOverrides: Record<string, unknown> = {}) {
