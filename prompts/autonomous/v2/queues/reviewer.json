@@ -1420,13 +1420,14 @@
         "Blocking issues remain in the blocker-lifecycle contract. The branch adds the new types/helpers, but the tracked queue state in this PR still does not persist structured reviewer blockers or requested checks on the generated follow-up tasks, and the policy-dismissal path required by the acceptance criteria is only represented in tests, not by a production state transition.\n`prompts/autonomous/v2/queues/architecture-agent.json:6067-6169` shows all three generated `review_followup` tasks as `done` with `checks: []` and no `reviewerBlockers`, even when the review summaries explicitly requested commands like `npm run lint` and the focused `npm run build && node --test ...` verification. That breaks the acceptance criteria requiring structured blocker/check persistence in tracked queue/state output, and it is merge-risky because PR recovery depends on task/PR state to rebuild blockers (`src/autonomy-v2/commands/pr.ts:53-56,89,134` and `src/sync/derived-pr.ts:367-404`). If `.autonomy` PR state is missing or rebuilt, these blockers are not recoverable from the tracked queue artifacts committed in this branch.\nThe policy-dismissal acceptance is still not implemented as a real runtime path. In production code, `dismissed` is only normalized/preserved if it already exists (`src/autonomy-v2/commands/shared-review-blockers.ts:181-188,403-420`); nothing in this diff records a policy dismissal. The only evidence for that behavior is a unit test that manually fabricates `status.state = 'dismissed'` (`tests/unit/implementation-conversation-continuity.test.ts:846-862`). As written, reviewer approval can proceed past dismissed blockers only if some external actor edits state by hand, which does not satisfy the required structured policy-dismissal flow."
       ],
       "reviewRound": 5,
-      "status": "approved",
+      "status": "merged",
       "createdAt": "2026-04-29T11:21:25.947Z",
-      "updatedAt": "2026-04-29T11:57:24.236Z",
+      "updatedAt": "2026-04-29T11:57:43.933Z",
       "reviewedAt": "2026-04-29T11:57:12.987Z",
       "lastDecision": "approved",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-29T11:55:41.959Z"
+      "dispatchedAt": "2026-04-29T11:55:41.959Z",
+      "mergedAt": "2026-04-29T11:57:17Z"
     }
   ]
 }
