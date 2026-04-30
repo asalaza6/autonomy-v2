@@ -1449,10 +1449,10 @@
         "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior."
       ],
       "reviewRound": 2,
-      "status": "queued",
+      "status": "changes_requested",
       "createdAt": "2026-04-30T06:12:25.377Z",
-      "updatedAt": "2026-04-30T06:16:09.972Z",
-      "reviewedAt": "2026-04-30T06:14:39.358Z",
+      "updatedAt": "2026-04-30T06:16:54.433Z",
+      "reviewedAt": "2026-04-30T06:16:54.433Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-04-30T06:15:43.457Z"
