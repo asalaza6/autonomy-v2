@@ -83,8 +83,12 @@ test('control plane chat prompt includes project context for a first-turn conver
   assert.match(prompt, /Current manager message:\nSummarize the repo\./);
   assert.match(prompt, /GitHub PR inspection capability:/);
   assert.match(prompt, /api\.github\.com/);
-  assert.match(prompt, /GH_TOKEN\/GITHUB_TOKEN/);
+  assert.match(prompt, /injected GitHub runtime auth/);
   assert.match(prompt, /\.env\.autonomy/);
+  assert.match(prompt, /scripts\/repo-assistant-github-read\.js/);
+  assert.match(prompt, /Do not use external GitHub connectors/);
+  assert.match(prompt, /--repo asalaza6\/autonomy-v2 --pr 27 --json/);
+  assert.match(prompt, /Do not mention failed refresh attempts/);
 });
 
 test('control plane chat project context loader degrades cleanly when the file is missing', async () => {

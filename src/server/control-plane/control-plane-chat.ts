@@ -173,13 +173,46 @@ function buildAgentChatPrompt(
     'GitHub PR inspection capability:',
     JSON.stringify(buildRepoAssistantGithubPromptContext(githubCapability), null, 2),
     '',
+    ...buildRepoAssistantGithubUsageGuidance(githubCapability),
+    '',
     'When GitHub PR inspection is enabled:',
-    '- You may use the injected GH_TOKEN/GITHUB_TOKEN with `gh api` for live GitHub reads.',
-    '- Limit GitHub network reads to api.github.com endpoints needed for pull request metadata, changed files, issue comments, reviews, and review threads.',
+    '- Do not use external GitHub connectors or MCP GitHub tools for repo-assistant PR inspection. Use the provided GitHub capability data and the local repo script only.',
+    '- Use that script for PR metadata, changed files, commits, issue comments, reviews, and unresolved review threads instead of relying only on the snapshot.',
+    '- Limit direct GitHub network reads to api.github.com endpoints needed for pull request metadata, changed files, commits, issue comments, reviews, and review threads.',
     '- If GitHub access is not enabled, do not pretend live PR inspection succeeded; explain the reported status instead.',
     '',
     'Return JSON only with answer and prdProposal fields. Set prdProposal to null unless you are recommending a new PRD.',
   ].join('\n');
+}
+
+function buildRepoAssistantGithubUsageGuidance(githubCapability?: AnyRecord | null) {
+  const github = githubCapability && typeof githubCapability === 'object' ? githubCapability : {};
+  const repository = github.repository && typeof github.repository === 'object'
+    ? github.repository
+    : null;
+  const pullRequest = github.pullRequest && typeof github.pullRequest === 'object'
+    ? github.pullRequest
+    : null;
+  const owner = repository && String(repository.owner || '').trim();
+  const repo = repository && String(repository.repo || '').trim();
+  const pullNumber = Number(pullRequest && pullRequest.number || 0) || Number(github.validation && github.validation.pullRequestNumber || 0) || null;
+  const lines = [
+    'GitHub usage guidance:',
+  ];
+  if (pullRequest && pullNumber) {
+    lines.push(`- The \`pullRequest\` object in the GitHub capability block is already a live GitHub read for PR #${pullNumber}. Use it directly when the manager asks about that PR.`);
+    lines.push(`- For questions about PR #${pullNumber}, do not rerun the local GitHub read script unless the manager explicitly asks for a refresh or newer remote state than the provided bundle.`);
+  }
+  if (owner && repo && pullNumber) {
+    lines.push(`- If you need to refresh or inspect that same PR again, run \`node scripts/repo-assistant-github-read.js --repo ${owner}/${repo} --pr ${pullNumber} --json\`.`);
+  } else if (owner && repo) {
+    lines.push(`- If you need live PR data, run \`node scripts/repo-assistant-github-read.js --repo ${owner}/${repo} --pr <number> --json\`.`);
+  } else {
+    lines.push('- If you need live PR data, run `node scripts/repo-assistant-github-read.js --repo owner/name --pr <number> --json`.');
+  }
+  lines.push('- Prefer the provided live pullRequest bundle over extra commands when it already answers the manager question.');
+  lines.push('- Do not mention failed refresh attempts when the provided live pullRequest bundle already answers the question.');
+  return lines;
 }
 
 async function readProjectContextForChatPrompt(repoRoot: string) {
@@ -288,6 +321,7 @@ export {
   CHAT_RESPONSE_SCHEMA,
   answerControlPlaneAgentChat,
   buildAgentChatPrompt,
+  buildRepoAssistantGithubUsageGuidance,
   buildRepoChatContext,
   normalizeChatPrdProposal,
   readProjectContextForChatPrompt,
