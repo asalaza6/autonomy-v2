@@ -1431,7 +1431,7 @@
     {
       "id": "review-pr-prd-make-script-based-github-inspection-43d77d-architecture-agent",
       "title": "Review [architecture-agent] Make script-based PR reconciliation authoritative over server-side GitHub validation",
-      "description": "Review pr-prd-make-script-based-github-inspection-43d77d-architecture-agent for Make script-based PR reconciliation authoritative over server-side GitHub validation",
+      "description": "Review pr-prd-make-script-based-github-inspection-43d77d-architecture-agent for Address review for [architecture-agent] Make script-based PR reconciliation authoritative over server-side GitHub validation",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-make-script-based-github-inspection-43d77d-architecture-agent",
@@ -1446,12 +1446,13 @@
         "PR drift reporting still surfaces genuine disagreements between script-read remote state and local workflow inference, including PR #29-style cases, and those cases are no longer produced by the deprecated validation path alone.",
         "Repo status outputs and any affected manager UI labels clearly reflect the authoritative PR-state source for script-only repos, so canonical source or status messaging no longer implies validation authority when reconciliation came from script-read remote state or workflow inference.",
         "Focused tests cover script-only reconciliation with unavailable server-side validation, fallback to tracked workflow inference, and status-shaping behavior in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, with additional focused coverage added only if UI or adapter logic changes require it.",
-        "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior."
+        "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior.",
+        "Blocking on verification only: the diff is scoped and `npm run typecheck`/`npm run lint` passed, but this change touches high-risk sync and control-plane PR reconciliation paths and I do not have evidence that the required focused tests were run.\nMissing merge-blocking focused verification for the behavioral changes in `src/sync/review-reconciliation.ts`, `src/sync/derived-pr.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, and `src/autonomy-v2/commands/shared-prds.ts`. The wrapper results include only `npm run typecheck` and `npm run lint`, but this task also requires the focused reconciliation/status coverage called out in the acceptance criteria. Please run and report the relevant focused tests covering this diff, at minimum the suites for `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, before merge."
       ],
       "reviewRound": 3,
       "status": "queued",
       "createdAt": "2026-04-30T06:12:25.377Z",
-      "updatedAt": "2026-04-30T06:17:10.684Z",
+      "updatedAt": "2026-04-30T07:25:45.474Z",
       "reviewedAt": "2026-04-30T06:16:54.433Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
