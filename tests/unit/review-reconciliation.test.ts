@@ -89,7 +89,7 @@ test('remote merged PR is canonical merged', () => {
   assert.equal(reconciled.reconciliation.canonicalSource, 'remote');
 });
 
-test('missing canonical remote state for a known GitHub PR surfaces validation error instead of inferred merged', () => {
+test('missing canonical remote state for a known GitHub PR falls back to inferred merged and keeps validation as a warning', () => {
   const pr = {
     id: 'pr-inferred',
     status: 'changes_requested',
@@ -114,9 +114,41 @@ test('missing canonical remote state for a known GitHub PR surfaces validation e
   const reconciliation = getPullRequestStateReconciliation(pr, implementationTasks);
   const reconciled = reconcilePullRequestRecord(pr, implementationTasks, '2026-04-26T10:05:00.000Z');
 
-  assert.equal(reconciliation.canonicalState, 'validation-error');
-  assert.equal(reconciliation.canonicalSource, 'validation');
-  assert.equal(reconciliation.reconciliationStatus, 'validation-error');
+  assert.equal(reconciliation.canonicalState, 'merged');
+  assert.equal(reconciliation.canonicalSource, 'inferred');
+  assert.equal(reconciliation.reconciliationStatus, 'inferred');
   assert.equal(reconciliation.inferredState, 'merged');
-  assert.equal(reconciled.status, 'validation_error');
+  assert.deepEqual(reconciliation.diagnostics, [{
+    source: 'validation',
+    level: 'warning',
+    code: 'remote_state_unavailable',
+    message: 'remote state unavailable for known GitHub pull request',
+  }]);
+  assert.equal(reconciled.status, 'merged');
+});
+
+test('missing canonical remote state for a known GitHub PR falls back to inferred open before validation diagnostics', () => {
+  const pr = {
+    id: 'pr-open',
+    status: 'changes_requested',
+    remote: {
+      number: 42,
+      url: 'https://github.com/example/repo/pull/42',
+    },
+  };
+
+  const reconciliation = getPullRequestStateReconciliation(pr, []);
+  const reconciled = reconcilePullRequestRecord(pr, [], '2026-04-26T10:05:00.000Z');
+
+  assert.equal(reconciliation.canonicalState, 'open');
+  assert.equal(reconciliation.canonicalSource, 'inferred');
+  assert.equal(reconciliation.canonicalReason, 'stored.status=changes_requested');
+  assert.equal(reconciliation.reconciliationStatus, 'inferred');
+  assert.deepEqual(reconciliation.diagnostics, [{
+    source: 'validation',
+    level: 'warning',
+    code: 'remote_state_unavailable',
+    message: 'remote state unavailable for known GitHub pull request',
+  }]);
+  assert.equal(reconciled.status, 'changes_requested');
 });

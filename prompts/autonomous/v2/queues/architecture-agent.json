@@ -6226,10 +6226,15 @@
         "Focused tests cover script-only reconciliation with unavailable server-side validation, fallback to tracked workflow inference, and status-shaping behavior in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, with additional focused coverage added only if UI or adapter logic changes require it.",
         "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-04-30T06:06:39.002Z",
-      "updatedAt": "2026-04-30T06:06:39.002Z"
+      "updatedAt": "2026-04-30T06:12:24.172Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-script-based-github-inspection-43d77d-architecture-agent",
+      "startedAt": "2026-04-30T06:06:57.292Z",
+      "reviewerBlockers": [],
+      "completedAt": "2026-04-30T06:12:24.172Z",
+      "completionMode": "code"
     }
   ]
 }

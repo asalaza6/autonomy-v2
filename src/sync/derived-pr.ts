@@ -165,9 +165,6 @@ function resolveDerivedPullRequestStatus(existingStatus, remote, pendingTasks, p
   if (reconciliation.canonicalState === 'closed') {
     return 'closed';
   }
-  if (reconciliation.canonicalState === 'validation-error') {
-    return 'validation_error';
-  }
   const hasPendingWork = (pendingTasks || []).length > 0 || (pendingExtraTaskIds || []).length > 0;
   const hasUnresolvedReviewerBlockers = listUnresolvedReviewerBlockers(reviewerBlockers).length > 0;
   const hasChangesRequestedSignal = existingStatus === 'changes_requested'

@@ -54,6 +54,7 @@ function buildPullRequestStatusSummaries({ taskQueues, prs, runtime, branchLocks
         reconciliationStatus: reconciliation.reconciliationStatus,
         drifted: reconciliation.drifted,
         driftReason: reconciliation.driftReason,
+        diagnostics: Array.isArray(reconciliation.diagnostics) ? reconciliation.diagnostics : [],
       };
     });
 }

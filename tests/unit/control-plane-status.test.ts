@@ -747,7 +747,7 @@ test('status snapshots preserve remote provenance for remotely resolved PRDs', (
   assert.equal(snapshot.pullRequestStatuses.length, 0);
 });
 
-test('status snapshots surface degraded validation state instead of inferred terminal PR state', () => {
+test('status snapshots treat inferred terminal PR state as authoritative when remote validation state is unavailable', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-pr-validation-error-');
   initAutonomyRepo(repoDir);
 
@@ -792,18 +792,79 @@ test('status snapshots surface degraded validation state instead of inferred ter
   const prd = snapshot.prds.prds.find((candidate) => candidate.id === 'prd-validation-error-001');
 
   assert.ok(prd);
+  assert.equal(snapshot.pullRequestStatuses.length, 0);
+  assert.equal(prd.status, 'completed');
+  assert.equal(prd.statusSource, 'inferred');
+  assert.equal(prd.reconciliationStatus, 'inferred');
+  assert.equal(prd.statusReason, 'all linked pull requests are resolved upstream');
+  assert.deepEqual(prd.linkedPullRequestSummary, {
+    total: 1,
+    open: 0,
+    resolved: 1,
+    stale: 0,
+  });
+});
+
+test('status snapshots keep validation read failures as warnings when inferred open state remains active', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-pr-validation-warning-');
+  initAutonomyRepo(repoDir);
+
+  const task = {
+    id: 'prd-validation-warning-001-architecture-agent-1',
+    title: 'Build active slice',
+    agentId: 'architecture-agent',
+    description: 'Remote validation is unavailable but local work is still active.',
+    acceptance: ['Control-plane status preserves active workflow state.'],
+    sprintId: 'multi-agent-mvp',
+  };
+  addPrdWithTasks(repoDir, 'prd-validation-warning-001', 'Validation warning PRD', [task]);
+
+  const paths = getAutonomyPathsForTest(repoDir);
+  fs.writeFileSync(paths.prsState, `${JSON.stringify({
+    pullRequests: [
+      {
+        id: 'pr-prd-validation-warning-001-architecture-agent',
+        taskId: task.id,
+        agentId: 'architecture-agent',
+        laneKey: 'prd-validation-warning-001:architecture-agent',
+        prdId: 'prd-validation-warning-001',
+        sprintId: 'multi-agent-mvp',
+        taskIds: [task.id],
+        completedTaskIds: [],
+        pendingTaskIds: [task.id],
+        headBranch: 'agent/multi-agent-mvp/architecture-agent/prd-validation-warning-001-architecture-agent',
+        baseBranch: 'dev',
+        status: 'changes_requested',
+        title: '[architecture-agent] Validation warning PRD',
+        createdAt: '2026-04-21T07:50:00.000Z',
+        updatedAt: '2026-04-21T08:00:00.000Z',
+        remote: {
+          number: 15,
+          url: 'https://github.com/asalaza6/autonomy-v2/pull/15',
+        },
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  const prd = snapshot.prds.prds.find((candidate) => candidate.id === 'prd-validation-warning-001');
+
+  assert.ok(prd);
   assert.equal(snapshot.pullRequestStatuses.length, 1);
-  assert.equal(snapshot.pullRequestStatuses[0].status, 'validation_error');
-  assert.equal(snapshot.pullRequestStatuses[0].statusLabel, 'GitHub validation failed');
-  assert.equal(snapshot.pullRequestStatuses[0].canonicalState, 'validation-error');
-  assert.equal(snapshot.pullRequestStatuses[0].canonicalSource, 'validation');
-  assert.equal(snapshot.pullRequestStatuses[0].inferredState, 'merged');
-  assert.equal(snapshot.pullRequestStatuses[0].reconciliationStatus, 'validation-error');
-  assert.match(snapshot.pullRequestStatuses[0].action, /GitHub validation failed/i);
+  assert.equal(snapshot.pullRequestStatuses[0].status, 'changes_requested');
+  assert.equal(snapshot.pullRequestStatuses[0].statusLabel, 'review active');
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalState, 'open');
+  assert.equal(snapshot.pullRequestStatuses[0].canonicalSource, 'inferred');
+  assert.equal(snapshot.pullRequestStatuses[0].reconciliationStatus, 'inferred');
+  assert.deepEqual(snapshot.pullRequestStatuses[0].diagnostics, [{
+    source: 'validation',
+    level: 'warning',
+    code: 'remote_state_unavailable',
+    message: 'remote state unavailable for known GitHub pull request',
+  }]);
   assert.equal(prd.status, 'planned');
-  assert.equal(prd.statusSource, 'validation');
-  assert.equal(prd.reconciliationStatus, 'validation-error');
-  assert.equal(prd.statusReason, 'GitHub pull request state could not be validated');
+  assert.equal(prd.statusSource, 'inferred');
+  assert.equal(prd.reconciliationStatus, 'inferred');
   assert.deepEqual(prd.linkedPullRequestSummary, {
     total: 1,
     open: 1,

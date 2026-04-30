@@ -141,9 +141,6 @@ function derivePrdStatusSource(
   plannedTaskIds = [],
   isQueued = false
 ) {
-  if (pullRequestReconciliations.some((entry) => entry && entry.reconciliationStatus === 'validation-error')) {
-    return 'validation';
-  }
   if (pullRequestReconciliations.some((entry) => entry && entry.canonicalSource === 'remote')) {
     return 'remote';
   }
@@ -160,9 +157,6 @@ function derivePrdStatusSource(
 }
 
 function derivePrdReconciliationStatus(pullRequestReconciliations = []) {
-  if (pullRequestReconciliations.some((entry) => entry && entry.reconciliationStatus === 'validation-error')) {
-    return 'validation-error';
-  }
   if (pullRequestReconciliations.some((entry) => entry && entry.reconciliationStatus === 'stale')) {
     return 'stale';
   }
@@ -246,7 +240,6 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
       const completedTaskSpecIdSet = new Set(completedTaskSpecIds);
       const hasActivePullRequest = linkedPullRequests.some((pr) => isActiveLinkedPullRequest(pr, linkedTasks));
       const pullRequestReconciliations = linkedPullRequests.map((pr) => getPullRequestStateReconciliation(pr, linkedTasks));
-      const hasValidationErrorPullRequest = pullRequestReconciliations.some((entry) => entry && entry.reconciliationStatus === 'validation-error');
       const prdStatusSource = derivePrdStatusSource(linkedPullRequests, pullRequestReconciliations, plannedTaskIds, entry.isQueued === true);
       const prdReconciliationStatus = derivePrdReconciliationStatus(pullRequestReconciliations);
       const hasPendingUncompletedTask = linkedTasks.some((task) => {
@@ -278,9 +271,7 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
         isQueued: entry.isQueued === true,
         status,
         statusSource: prdStatusSource,
-        statusReason: hasValidationErrorPullRequest
-          ? 'GitHub pull request state could not be validated'
-          : hasActivePullRequest
+        statusReason: hasActivePullRequest
           ? 'linked pull request remains open upstream'
           : linkedPullRequests.length > 0 && linkedPullRequests.every(isMergedPullRequest)
             ? 'all linked pull requests are resolved upstream'
@@ -292,8 +283,8 @@ function loadTrackedPrds(rootDir: string, config: AutonomyConfig, options: AnyRe
         reconciliationStatus: prdReconciliationStatus,
         linkedPullRequestSummary: linkedPullRequests.length > 0 ? {
           total: linkedPullRequests.length,
-          open: pullRequestReconciliations.filter((entry) => entry.canonicalState === 'open' || entry.reconciliationStatus === 'validation-error').length,
-          resolved: pullRequestReconciliations.filter((entry) => entry.canonicalState !== 'open' && entry.reconciliationStatus !== 'validation-error').length,
+          open: pullRequestReconciliations.filter((entry) => entry.canonicalState === 'open').length,
+          resolved: pullRequestReconciliations.filter((entry) => entry.canonicalState !== 'open').length,
           stale: pullRequestReconciliations.filter((entry) => entry.reconciliationStatus === 'stale').length,
         } : undefined,
         plannedTaskIds: plannedTaskIds.length > 0 ? plannedTaskIds : undefined,
