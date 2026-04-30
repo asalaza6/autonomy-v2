@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "prd-make-review-verification-requests-6c6446",
+  "status": "planned",
+  "createdAt": "2026-04-30T07:27:11.013Z",
+  "updatedAt": "2026-04-30T07:27:11.013Z",
+  "plannedTaskIds": [
+    "prd-make-review-verification-requests-6c6446-architecture-agent-1"
+  ]
+}

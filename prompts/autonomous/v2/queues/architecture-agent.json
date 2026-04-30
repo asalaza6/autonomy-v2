@@ -6370,6 +6370,36 @@
       },
       "implementationConversationId": "019ddd06-7b21-7503-a964-285c2eef19a0",
       "commitSha": "218d2b9d69eb8940cd21f3926576e161b55f0d0a"
+    },
+    {
+      "id": "prd-make-review-verification-requests-6c6446-architecture-agent-1",
+      "title": "Implement Make Review Verification Requests Executable Without Reviewer-Supplied Literal Commands",
+      "description": "# PRD: Make Review Verification Requests Executable Without Reviewer-Supplied Literal Commands\n\nPriority: high\n\n## Problem\nImplementation follow-ups only treat reviewer verification requests as actionable when the review text includes a literal runnable command. Requests phrased as focused verification, named test files, or affected areas do not reliably become executable required checks, so agents can loop or noop instead of running the appropriate test themselves.\n\n## Goal\nAllow implementation follow-ups to derive, run, and record the correct verification command from reviewer intent when the reviewer specifies files, suites, or risk areas rather than an exact shell command.\n\n## Requirements\n- Extend review blocker extraction so file-based or suite-based verification requests are normalized into structured executable verification targets, not just freeform notes.\n- Define a deterministic resolver that maps changed files and reviewer-mentioned test files/areas to one or more runnable commands.\n- Require implementation follow-ups to execute or explicitly fail the resolved verification command before completion when an open verification blocker exists.\n- Record the chosen command, pass/fail result, and evidence on the follow-up task so reviewer gating uses structured proof.\n- Prevent noop completion and reviewer approval when a verification blocker remains unresolved because no command was resolved or executed.\n- Add fallback behavior for ambiguous requests: mark the blocker unresolved with a clear reason instead of silently accepting noop completion.\n\n## Acceptance Criteria\n- A review request that references a test file or focused area without a literal shell command produces a follow-up task with at least one concrete executable verification command.\n- An implementation follow-up with an open verification blocker cannot complete until the resolved command is run and recorded as passing, or the task remains blocked with a clear unresolved reason.\n- Reviewer approval and auto-approval paths refuse to approve while derived verification blockers remain unresolved.\n- Task/state history shows which reviewer request produced which resolved command and which follow-up run satisfied it.\n\n## Verification\n- Unit tests for blocker extraction from review text that mentions files or focused verification without explicit commands.\n- Unit tests for command resolution from changed files and mentioned test targets.\n- Unit tests proving noop completion is blocked when a verification blocker has no passing recorded result.\n- Smoke test covering review request -> follow-up resolves command -> command runs -> reviewer approval.\n\n## Source Chat Message\nRepo: autonomy-v2\nConversation: chat_1777529934061_aa82c69d65a128\nManager message: msg_1777530332057_37716d227f7f08\nAgent message: msg_1777530332057_ffcce2997f55c\nCreated: 2026-04-30T06:26:15.955Z",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-review-verification-requests-6c6446",
+      "laneKey": "prd-make-review-verification-requests-6c6446:architecture-agent",
+      "type": "implementation",
+      "source": "planned",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [
+        "npm run typecheck"
+      ],
+      "acceptance": [
+        "Extend review blocker extraction so file-based or suite-based verification requests are normalized into structured executable verification targets",
+        "not just freeform notes.",
+        "Define a deterministic resolver that maps changed files and reviewer-mentioned test files/areas to one or more runnable commands.",
+        "Require implementation follow-ups to execute or explicitly fail the resolved verification command before completion when an open verification blocker exists.",
+        "Record the chosen command",
+        "pass/fail result",
+        "and evidence on the follow-up task so reviewer gating uses structured proof.",
+        "Prevent noop completion and reviewer approval when a verification blocker remains unresolved because no command was resolved or executed.",
+        "Add fallback behavior for ambiguous requests: mark the blocker unresolved with a clear reason instead of silently accepting noop completion."
+      ],
+      "state": "queued",
+      "status": "queued",
+      "createdAt": "2026-04-30T07:27:10.896Z",
+      "updatedAt": "2026-04-30T07:27:10.896Z"
     }
   ]
 }
