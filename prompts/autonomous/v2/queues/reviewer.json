@@ -1437,10 +1437,6 @@
       "prId": "pr-prd-make-script-based-github-inspection-43d77d-architecture-agent",
       "sourceTaskId": "prd-make-script-based-github-inspection-43d77d-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-04-30T06:12:25.377Z",
-      "updatedAt": "2026-04-30T06:12:25.377Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-script-based-github-inspection-43d77d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1452,9 +1448,12 @@
         "Focused tests cover script-only reconciliation with unavailable server-side validation, fallback to tracked workflow inference, and status-shaping behavior in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, with additional focused coverage added only if UI or adapter logic changes require it.",
         "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-04-30T06:12:29.447Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-04-30T06:12:25.377Z",
+      "updatedAt": "2026-04-30T06:12:38.313Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-04-30T06:12:29.447Z"
     }
   ]
 }
