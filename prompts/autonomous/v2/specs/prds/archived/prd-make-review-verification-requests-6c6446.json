@@ -15,6 +15,13 @@
     "Prevent noop completion and reviewer approval when a verification blocker remains unresolved because no command was resolved or executed.",
     "Add fallback behavior for ambiguous requests: mark the blocker unresolved with a clear reason instead of silently accepting noop completion."
   ],
+  "archive": {
+    "kind": "reset",
+    "status": "abandoned",
+    "archivedAt": "2026-04-30T08:10:34.328Z",
+    "fromStatus": "planned",
+    "actor": "manager"
+  },
   "tasks": [
     {
       "id": "prd-make-review-verification-requests-6c6446-architecture-agent-1",
