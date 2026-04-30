@@ -6229,12 +6229,13 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-04-30T06:06:39.002Z",
-      "updatedAt": "2026-04-30T06:12:24.172Z",
+      "updatedAt": "2026-04-30T06:12:24.248Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-script-based-github-inspection-43d77d-architecture-agent",
       "startedAt": "2026-04-30T06:06:57.292Z",
       "reviewerBlockers": [],
       "completedAt": "2026-04-30T06:12:24.172Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "ad161f8a5c82ef0d5ff625fc66b8c87fa3a960b8"
     }
   ]
 }
