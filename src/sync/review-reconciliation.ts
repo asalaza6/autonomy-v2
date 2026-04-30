@@ -21,6 +21,18 @@ function hasKnownRemotePullRequest(pr: AnyRecord | null | undefined) {
   );
 }
 
+function buildValidationDiagnostic(pr: AnyRecord | null | undefined) {
+  if (!hasKnownRemotePullRequest(pr)) {
+    return [];
+  }
+  return [{
+    source: 'validation',
+    level: 'warning',
+    code: 'remote_state_unavailable',
+    message: 'remote state unavailable for known GitHub pull request',
+  }];
+}
+
 function normalizeStringList(value) {
   if (!Array.isArray(value)) {
     return [];
@@ -101,6 +113,7 @@ function inferLocalPullRequestState(pr: AnyRecord | null | undefined, implementa
 function getPullRequestStateReconciliation(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
   const remote = resolveRemotePullRequestState(pr);
   const inferred = inferLocalPullRequestState(pr, implementationTasks);
+  const diagnostics = !remote ? buildValidationDiagnostic(pr) : [];
 
   if (remote) {
     const drifted = Boolean(inferred && inferred.state && inferred.state !== remote.state);
@@ -115,19 +128,7 @@ function getPullRequestStateReconciliation(pr: AnyRecord | null | undefined, imp
       driftReason: drifted
         ? `remote ${remote.state} disagrees with local inference ${inferred && inferred.state}`
         : null,
-    };
-  }
-
-  if (hasKnownRemotePullRequest(pr)) {
-    return {
-      canonicalState: 'validation-error',
-      canonicalSource: 'validation',
-      canonicalReason: 'remote state unavailable for known GitHub pull request',
-      inferredState: inferred && inferred.state ? inferred.state : null,
-      inferredReason: inferred && inferred.reason ? inferred.reason : null,
-      reconciliationStatus: 'validation-error',
-      drifted: false,
-      driftReason: null,
+      diagnostics,
     };
   }
 
@@ -145,6 +146,7 @@ function getPullRequestStateReconciliation(pr: AnyRecord | null | undefined, imp
     reconciliationStatus: 'inferred',
     drifted: false,
     driftReason: null,
+    diagnostics,
   };
 }
 
@@ -160,7 +162,7 @@ function isPullRequestResolved(pr: AnyRecord | null | undefined, implementationT
 
 function isPullRequestActive(pr: AnyRecord | null | undefined, implementationTasks: AnyRecord[] = []) {
   const canonicalState = getPullRequestStateReconciliation(pr, implementationTasks).canonicalState;
-  return canonicalState === 'open' || canonicalState === 'validation-error';
+  return canonicalState === 'open';
 }
 
 function taskMatchesPullRequest(task: AnyRecord | null | undefined, pr: AnyRecord | null | undefined) {
@@ -333,14 +335,6 @@ function reconcilePullRequestRecord(pr: AnyRecord, implementationTasks: AnyRecor
   if (reconciliation.canonicalState === 'closed') {
     nextRecord.status = 'closed';
     nextRecord.updatedAt = now;
-    delete nextRecord.mergedAt;
-    return nextRecord;
-  }
-  if (reconciliation.canonicalState === 'validation-error') {
-    nextRecord.status = 'validation_error';
-    if (normalizeString(nextRecord.status) !== normalizeString(pr.status)) {
-      nextRecord.updatedAt = now;
-    }
     delete nextRecord.mergedAt;
     return nextRecord;
   }
