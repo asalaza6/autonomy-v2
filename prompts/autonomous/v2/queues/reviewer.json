@@ -1448,10 +1448,10 @@
         "Focused tests cover script-only reconciliation with unavailable server-side validation, fallback to tracked workflow inference, and status-shaping behavior in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, with additional focused coverage added only if UI or adapter logic changes require it.",
         "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior."
       ],
-      "reviewRound": 2,
-      "status": "changes_requested",
+      "reviewRound": 3,
+      "status": "queued",
       "createdAt": "2026-04-30T06:12:25.377Z",
-      "updatedAt": "2026-04-30T06:16:54.433Z",
+      "updatedAt": "2026-04-30T06:17:10.684Z",
       "reviewedAt": "2026-04-30T06:16:54.433Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
