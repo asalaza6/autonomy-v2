@@ -13,5 +13,23 @@
     "Preserve visibility into real read failures",
     "but downgrade them to non-authoritative diagnostics when they come from the disabled server-side validation path.",
     "Update repo status/reconciliation output so PRs no longer accumulate misleading `validation_error` states solely from the old validation path."
+  ],
+  "tasks": [
+    {
+      "id": "prd-make-script-based-github-inspection-43d77d-architecture-agent-1",
+      "title": "Make script-based PR reconciliation authoritative over server-side GitHub validation",
+      "agentId": "architecture-agent",
+      "description": "Update pull-request reconciliation so repos configured for script-based GitHub inspection treat script-read remote PR state as the authoritative source and fall back to tracked workflow inference before emitting canonical validation failures from the deprecated Node validation path. Scope the change narrowly to the reconciliation and status-shaping flow that currently marks `canonicalSource: 'validation'` and `status: 'validation_error'`, especially `src/sync/review-reconciliation.ts`, derived PR status shaping under `src/sync/derived-pr.ts`, CLI or status snapshot adapters under `src/autonomy-v2/commands/shared-pr-status.ts` and `src/autonomy-v2/control-plane/status-view.ts`, and manager UI presentation in `src/server/control-plane/control-plane-client.tsx` only as needed to reflect the configured authoritative source. Preserve non-authoritative diagnostics for server-side validation read failures instead of letting them drive canonical PR state in script-only mode, and add focused coverage around reconciliation, status shaping, and the historical merged-PR fallback path.",
+      "acceptance": [
+        "When script-read remote PR metadata is available, canonical PR state and reconciliation status are derived from that remote state; when script-read remote state is unavailable, tracked workflow inference is used as the canonical fallback before any deprecated validation-path failure is allowed to affect authoritative PR status.",
+        "The specific reason `remote state unavailable for known GitHub pull request` no longer surfaces as a canonical PR error in script-only mode, but the underlying server-side validation read failure remains available as a non-authoritative diagnostic or warning for operators.",
+        "Historical merged or otherwise resolved PRs that can be classified from script-read remote state or tracked workflow inference no longer appear in repo status as `validation_error` or `GitHub validation failed` solely because the old Node validation path could not fetch remote state.",
+        "PR drift reporting still surfaces genuine disagreements between script-read remote state and local workflow inference, including PR #29-style cases, and those cases are no longer produced by the deprecated validation path alone.",
+        "Repo status outputs and any affected manager UI labels clearly reflect the authoritative PR-state source for script-only repos, so canonical source or status messaging no longer implies validation authority when reconciliation came from script-read remote state or workflow inference.",
+        "Focused tests cover script-only reconciliation with unavailable server-side validation, fallback to tracked workflow inference, and status-shaping behavior in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, with additional focused coverage added only if UI or adapter logic changes require it.",
+        "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior."
+      ],
+      "sprintId": "multi-agent-mvp"
+    }
   ]
 }
