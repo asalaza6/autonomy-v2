@@ -1431,7 +1431,7 @@
     {
       "id": "review-pr-prd-make-script-based-github-inspection-43d77d-architecture-agent",
       "title": "Review [architecture-agent] Make script-based PR reconciliation authoritative over server-side GitHub validation",
-      "description": "Review pr-prd-make-script-based-github-inspection-43d77d-architecture-agent for Address review for [architecture-agent] Make script-based PR reconciliation authoritative over server-side GitHub validation",
+      "description": "Review pr-prd-make-script-based-github-inspection-43d77d-architecture-agent for Make script-based PR reconciliation authoritative over server-side GitHub validation",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-make-script-based-github-inspection-43d77d-architecture-agent",
@@ -1440,17 +1440,22 @@
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-script-based-github-inspection-43d77d-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "Blocking on verification only: the diff is scoped and `npm run typecheck`/`npm run lint` passed, but this change touches high-risk sync and control-plane PR reconciliation paths and I do not have evidence that the required focused tests were run.\nMissing merge-blocking focused verification for the behavioral changes in `src/sync/review-reconciliation.ts`, `src/sync/derived-pr.ts`, `src/autonomy-v2/commands/shared-pr-status.ts`, and `src/autonomy-v2/commands/shared-prds.ts`. The wrapper results include only `npm run typecheck` and `npm run lint`, but this task also requires the focused reconciliation/status coverage called out in the acceptance criteria. Please run and report the relevant focused tests covering this diff, at minimum the suites for `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, before merge."
+        "When script-read remote PR metadata is available, canonical PR state and reconciliation status are derived from that remote state; when script-read remote state is unavailable, tracked workflow inference is used as the canonical fallback before any deprecated validation-path failure is allowed to affect authoritative PR status.",
+        "The specific reason `remote state unavailable for known GitHub pull request` no longer surfaces as a canonical PR error in script-only mode, but the underlying server-side validation read failure remains available as a non-authoritative diagnostic or warning for operators.",
+        "Historical merged or otherwise resolved PRs that can be classified from script-read remote state or tracked workflow inference no longer appear in repo status as `validation_error` or `GitHub validation failed` solely because the old Node validation path could not fetch remote state.",
+        "PR drift reporting still surfaces genuine disagreements between script-read remote state and local workflow inference, including PR #29-style cases, and those cases are no longer produced by the deprecated validation path alone.",
+        "Repo status outputs and any affected manager UI labels clearly reflect the authoritative PR-state source for script-only repos, so canonical source or status messaging no longer implies validation authority when reconciliation came from script-read remote state or workflow inference.",
+        "Focused tests cover script-only reconciliation with unavailable server-side validation, fallback to tracked workflow inference, and status-shaping behavior in `tests/unit/review-reconciliation.test.ts` and `tests/unit/control-plane-status.test.ts`, with additional focused coverage added only if UI or adapter logic changes require it.",
+        "Verification includes `npm run typecheck` and the relevant focused reconciliation or status tests that cover the updated PR-state authority and fallback behavior."
       ],
       "reviewRound": 2,
-      "status": "assigned",
+      "status": "queued",
       "createdAt": "2026-04-30T06:12:25.377Z",
-      "updatedAt": "2026-04-30T06:15:41.458Z",
+      "updatedAt": "2026-04-30T06:16:09.972Z",
       "reviewedAt": "2026-04-30T06:14:39.358Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-04-30T06:15:43.457Z",
-      "scopeViolations": []
+      "dispatchedAt": "2026-04-30T06:15:43.457Z"
     }
   ]
 }
