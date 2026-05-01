@@ -1,5 +1,4 @@
 {
-  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -37,6 +36,84 @@
       "completedAt": "2026-05-01T07:21:45.671Z",
       "completionMode": "code",
       "commitSha": "2d485b294d31bf48d74f6c995202a562e5b190b8"
+    },
+    {
+      "id": "architecture-agent-followup-pr-prd-make-review-verification-requests-d5537b-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Implement Make Review Verification Requests Executable Without Reviewer-Supplied Literal Commands",
+      "description": "Blocking issue in verification-target resolution: changed-file-based follow-up checks are not actually implemented, so the PR does not satisfy the requirement to derive runnable verification commands from changed files when reviewers reference an affected area without a literal command.\n`src/autonomy-v2/commands/shared-review-blockers.ts:261-276` never resolves a blocker from changed files alone. `detectReferencedAreas()` is the only source of `areaCommands`, so when `areaCommands.length > 0`, `referencedAreas.length` is always non-empty and the `changed_files` branch at line 265 is unreachable. In practice this means the resolver only handles explicit test files plus a few hard-coded text/area matches; it does not deterministically map arbitrary changed files to runnable commands as required by the PRD. A reviewer request like \"rerun focused verification for the files touched here\" will still fall through to `unresolved` unless it happens to match one of the hard-coded area heuristics. Please implement an actual changed-file -> command resolution path and add a focused test for it (the new tests at `tests/unit/implementation-conversation-continuity.test.ts:355-390` cover mentioned test files/areas and ambiguity, but not changed-file-derived resolution).",
+      "agentId": "architecture-agent",
+      "prdId": "prd-make-review-verification-requests-d5537b",
+      "laneKey": "prd-make-review-verification-requests-d5537b:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Blocking issue in verification-target resolution: changed-file-based follow-up checks are not actually implemented, so the PR does not satisfy the requirement to derive runnable verification commands from changed files when reviewers reference an affected area without a literal command.\n`src/autonomy-v2/commands/shared-review-blockers.ts:261-276` never resolves a blocker from changed files alone. `detectReferencedAreas()` is the only source of `areaCommands`, so when `areaCommands.length > 0`, `referencedAreas.length` is always non-empty and the `changed_files` branch at line 265 is unreachable. In practice this means the resolver only handles explicit test files plus a few hard-coded text/area matches; it does not deterministically map arbitrary changed files to runnable commands as required by the PRD. A reviewer request like \"rerun focused verification for the files touched here\" will still fall through to `unresolved` unless it happens to match one of the hard-coded area heuristics. Please implement an actual changed-file -> command resolution path and add a focused test for it (the new tests at `tests/unit/implementation-conversation-continuity.test.ts:355-390` cover mentioned test files/areas and ambiguity, but not changed-file-derived resolution)."
+      ],
+      "state": "active",
+      "status": "active",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
+      "createdAt": "2026-05-01T07:24:11.410Z",
+      "updatedAt": "2026-05-01T07:24:11.410Z",
+      "startedAt": "2026-05-01T07:24:11.410Z",
+      "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
+      "reviewerBlockers": [
+        {
+          "id": "pr-prd-make-review-verification-requests-d5537b-architecture-agent-review-blocker-1-1",
+          "category": "verification",
+          "summary": "Blocking issue in verification-target resolution: changed-file-based follow-up checks are not actually implemented, so the PR does not satisfy the requirement to derive runnable verification commands from changed files when reviewers reference an affected area without a literal command.",
+          "requiredChecks": [],
+          "requiredEvidence": [
+            {
+              "kind": "note",
+              "label": "Provide focused verification evidence",
+              "detail": "Blocking issue in verification-target resolution: changed-file-based follow-up checks are not actually implemented, so the PR does not satisfy the requirement to derive runnable verification commands from changed files when reviewers reference an affected area without a literal command."
+            }
+          ],
+          "status": {
+            "state": "open",
+            "satisfiedAt": null,
+            "satisfiedByTaskId": null,
+            "dismissedAt": null,
+            "dismissalReason": null,
+            "evidence": []
+          },
+          "sourceReview": {
+            "reviewerId": "reviewer",
+            "reviewRound": 1,
+            "reviewedAt": "2026-05-01T07:24:11.410Z"
+          }
+        },
+        {
+          "id": "pr-prd-make-review-verification-requests-d5537b-architecture-agent-review-blocker-1-2",
+          "category": "verification",
+          "summary": "`src/autonomy-v2/commands/shared-review-blockers.ts:261-276` never resolves a blocker from changed files alone. `detectReferencedAreas()` is the only source of `areaCommands`, so when `areaCommands.length > 0`, `referencedAreas.length` is always non-empty and the `changed_files` branch at line 265 is unreachable. In practice this means the resolver only handles explicit test files plus a few hard-coded text/area matches; it does not deterministically map arbitrary changed files to runnable commands as required by the PRD. A reviewer request like \"rerun focused verification for the files touched here\" will still fall through to `unresolved` unless it happens to match one of the hard-coded area heuristics. Please implement an actual changed-file -> command resolution path and add a focused test for it (the new tests at `tests/unit/implementation-conversation-continuity.test.ts:355-390` cover mentioned test files/areas and ambiguity, but not changed-file-derived resolution).",
+          "requiredChecks": [],
+          "requiredEvidence": [
+            {
+              "kind": "note",
+              "label": "Provide focused verification evidence",
+              "detail": "`src/autonomy-v2/commands/shared-review-blockers.ts:261-276` never resolves a blocker from changed files alone. `detectReferencedAreas()` is the only source of `areaCommands`, so when `areaCommands.length > 0`, `referencedAreas.length` is always non-empty and the `changed_files` branch at line 265 is unreachable. In practice this means the resolver only handles explicit test files plus a few hard-coded text/area matches; it does not deterministically map arbitrary changed files to runnable commands as required by the PRD. A reviewer request like \"rerun focused verification for the files touched here\" will still fall through to `unresolved` unless it happens to match one of the hard-coded area heuristics. Please implement an actual changed-file -> command resolution path and add a focused test for it (the new tests at `tests/unit/implementation-conversation-continuity.test.ts:355-390` cover mentioned test files/areas and ambiguity, but not changed-file-derived resolution)."
+            }
+          ],
+          "status": {
+            "state": "open",
+            "satisfiedAt": null,
+            "satisfiedByTaskId": null,
+            "dismissedAt": null,
+            "dismissalReason": null,
+            "evidence": []
+          },
+          "sourceReview": {
+            "reviewerId": "reviewer",
+            "reviewRound": 1,
+            "reviewedAt": "2026-05-01T07:24:11.410Z"
+          }
+        }
+      ]
     }
-  ]
+  ],
+  "schemaVersion": 1
 }
