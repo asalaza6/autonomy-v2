@@ -25,11 +25,13 @@
         "Add fallback behavior for ambiguous requests: mark the blocker unresolved with a clear reason instead of silently accepting noop completion."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-05-01T07:21:46.753Z",
-      "updatedAt": "2026-05-01T07:21:52.004Z",
+      "updatedAt": "2026-05-01T07:24:11.410Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-05-01T07:21:50.184Z"
+      "dispatchedAt": "2026-05-01T07:21:50.184Z",
+      "reviewedAt": "2026-05-01T07:24:11.410Z",
+      "lastDecision": "changes_requested"
     }
   ]
 }
