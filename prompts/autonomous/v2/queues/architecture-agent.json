@@ -31,11 +31,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-05-01T07:13:03.721Z",
-      "updatedAt": "2026-05-01T07:21:45.671Z",
+      "updatedAt": "2026-05-01T07:21:45.730Z",
       "reviewerBlockers": [],
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "completedAt": "2026-05-01T07:21:45.671Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "2d485b294d31bf48d74f6c995202a562e5b190b8"
     }
   ]
 }
