@@ -332,6 +332,64 @@ test('review follow-up task stores structured reviewer blockers and required che
   assert.equal(followupTask.reviewerBlockers[0].status.state, 'open');
 });
 
+test('review blocker extraction resolves mentioned test files into executable verification commands', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please run `tests/unit/control-plane-summary-ui.test.ts` before approval.',
+  });
+
+  assert.equal(reviewerBlockers.length, 1);
+  assert.equal(reviewerBlockers[0].category, 'verification');
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'mentioned_test_file');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedFiles, ['tests/unit/control-plane-summary-ui.test.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js']);
+  assert.equal(reviewerBlockers[0].requiredEvidence[0].command, 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js');
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves focused verification areas into executable commands', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun the control plane summary UI verification before approval.',
+  }, {
+    packageScripts: {
+      'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+    changedFiles: ['src/server/control-plane/control-plane-client.tsx'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'mentioned_area');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:control-plane-summary-ui']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction leaves ambiguous verification requests unresolved with a clear reason', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please add focused verification before approval.',
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'unresolved');
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, []);
+  assert.match(String(reviewerBlockers[0].status.unresolvedReason || ''), /no runnable command/i);
+});
+
 test('tracked review follow-up persistence keeps structured blocker details after reload', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-followup-blockers-'));
   const config = buildConfig();
@@ -500,6 +558,49 @@ test('implementation task completion records verification evidence and satisfies
   assert.equal(queue.tasks[0].reviewerBlockers[0].status.satisfiedByTaskId, blockerTask.id);
   assert.equal(queue.tasks[0].reviewerBlockers[0].status.evidence[0].kind, 'command_output');
   assert.equal(queue.tasks[0].reviewerBlockers[0].status.evidence[0].command, 'npm run test:unit -- review-followup');
+  assert.equal(queue.tasks[0].reviewerBlockers[0].status.lastCheckResults[0].status, 'passed');
+});
+
+test('implementation task completion records failed derived verification runs and keeps the blocker open', () => {
+  const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-derived-check-failed-'));
+  const queuePath = path.join(worktreePath, queueRelativePath);
+  const blockerTask = buildTask({
+    type: 'review_followup',
+  });
+  blockerTask.reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please run `tests/unit/control-plane-summary-ui.test.ts` before approval.',
+  });
+  writeJson(queuePath, buildQueue([blockerTask]));
+
+  assert.throws(() => {
+    markImplementationTaskComplete(
+      worktreePath,
+      buildConfig(),
+      blockerTask,
+      'agent/shared/architecture-agent/prd-conversation-architecture-agent',
+      'noop',
+      {
+        changedFiles: [],
+        checkResults: [{
+          command: 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js',
+          status: 'failed',
+          code: 1,
+          output: 'boom',
+        }],
+      }
+    );
+  }, /reviewer blockers remain unresolved/i);
+
+  const queue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+  assert.equal(queue.tasks[0].reviewerBlockers[0].status.state, 'open');
+  assert.equal(queue.tasks[0].reviewerBlockers[0].status.lastCheckResults[0].status, 'failed');
+  assert.equal(queue.tasks[0].reviewerBlockers[0].status.lastCheckResults[0].command, 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js');
 });
 
 test('implementation task completion does not satisfy a code-change blocker with unrelated file edits', () => {

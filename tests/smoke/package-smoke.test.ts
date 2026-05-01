@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { markImplementationTaskComplete } from '../../src/autonomy-v2/runner/workspace.js';
 import {
   addPrdWithTasks,
   CLI_BIN,
@@ -560,7 +561,7 @@ test('review follow-up is appended only to the implementation branch queue and r
   assert.equal(followupTask.status, 'active');
 });
 
-test('structured verification blockers block approval until the follow-up records satisfied evidence', () => {
+test('structured verification blockers block approval until the follow-up runs the derived verification command', () => {
   const repoDir = createFixtureRepo('autonomy-v2-review-blocker-approval-');
   initAutonomyRepo(repoDir);
 
@@ -591,7 +592,7 @@ test('structured verification blockers block approval until the follow-up record
     '--decision',
     'changes-requested',
     '--summary',
-    'Run `npm run typecheck` before approval.',
+    'Run `tests/unit/control-plane-summary-ui.test.ts` before approval.',
   ]);
 
   assert.throws(() => {
@@ -616,21 +617,22 @@ test('structured verification blockers block approval until the follow-up record
   const branchQueue = JSON.parse(fs.readFileSync(queuePath, 'utf8'));
   const followupTaskId = `architecture-agent-followup-${pr.id}-1`;
   const followupTask = findTaskInQueue(branchQueue, followupTaskId);
-  followupTask.status = 'done';
-  followupTask.state = 'done';
-  followupTask.completionMode = 'noop';
-  followupTask.completedAt = '2026-04-21T00:40:00.000Z';
-  followupTask.updatedAt = '2026-04-21T00:40:00.000Z';
-  followupTask.reviewerBlockers[0].status.state = 'satisfied';
-  followupTask.reviewerBlockers[0].status.satisfiedAt = '2026-04-21T00:40:00.000Z';
-  followupTask.reviewerBlockers[0].status.satisfiedByTaskId = followupTaskId;
-  followupTask.reviewerBlockers[0].status.evidence = [{
-    kind: 'command_output',
-    label: 'Record output for npm run typecheck',
-    command: 'npm run typecheck',
-    detail: 'Command passed: npm run typecheck (exit 0)',
-  }];
-  fs.writeFileSync(queuePath, `${JSON.stringify(branchQueue, null, 2)}\n`, 'utf8');
+  assert.deepEqual(followupTask.checks, ['npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js']);
+  markImplementationTaskComplete(
+    worktreePath,
+    JSON.parse(fs.readFileSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json'), 'utf8')),
+    followupTask,
+    pr.headBranch,
+    'noop',
+    {
+      changedFiles: [],
+      checkResults: [{
+        command: 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js',
+        status: 'passed',
+        code: 0,
+      }],
+    }
+  );
 
   runNode(CLI_BIN, [
     'pr:record',
@@ -648,6 +650,7 @@ test('structured verification blockers block approval until the follow-up record
   const refreshedPr = refreshedPrState.pullRequests.find((candidate: any) => candidate.id === pr.id);
   assert.equal(refreshedPr.reviewerBlockers[0].status.state, 'satisfied');
   assert.equal(refreshedPr.reviewerBlockers[0].status.satisfiedByTaskId, followupTaskId);
+  assert.equal(refreshedPr.reviewerBlockers[0].status.lastCheckResults[0].command, 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js');
 
   runNode(CLI_BIN, [
     'review:record',

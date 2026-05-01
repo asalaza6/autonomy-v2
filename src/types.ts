@@ -73,6 +73,22 @@ export interface ReviewerBlockerEvidenceRecord extends AnyRecord {
   detail?: string;
 }
 
+export interface ReviewerBlockerCheckResultRecord extends AnyRecord {
+  command: string;
+  status: string;
+  code?: number;
+  output?: string;
+}
+
+export interface ReviewerBlockerVerificationTargetRecord extends AnyRecord {
+  source: 'literal_command' | 'mentioned_test_file' | 'mentioned_area' | 'changed_files' | 'unresolved';
+  referencedFiles?: string[];
+  referencedAreas?: string[];
+  changedFiles?: string[];
+  resolvedCommands?: string[];
+  unresolvedReason?: string | null;
+}
+
 export interface ReviewerBlockerStatusRecord extends AnyRecord {
   state: 'open' | 'satisfied' | 'dismissed';
   satisfiedAt?: string | null;
@@ -80,6 +96,8 @@ export interface ReviewerBlockerStatusRecord extends AnyRecord {
   dismissedAt?: string | null;
   dismissalReason?: string | null;
   evidence?: ReviewerBlockerEvidenceRecord[];
+  unresolvedReason?: string | null;
+  lastCheckResults?: ReviewerBlockerCheckResultRecord[];
 }
 
 export interface ReviewerBlockerRecord extends AnyRecord {
@@ -88,6 +106,7 @@ export interface ReviewerBlockerRecord extends AnyRecord {
   summary: string;
   requiredChecks?: string[];
   requiredEvidence?: ReviewerBlockerEvidenceRecord[];
+  verificationTarget?: ReviewerBlockerVerificationTargetRecord;
   status: ReviewerBlockerStatusRecord;
   sourceReview?: {
     reviewerId?: string;

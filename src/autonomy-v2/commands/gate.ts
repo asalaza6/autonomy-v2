@@ -17,6 +17,7 @@ import { normalizeReviewDecision } from './shared-repo.js';
 import { uniqueStrings } from './shared-repo.js';
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import {
   buildReviewerBlockersFromReview,
   collectCurrentReviewerBlockers,
@@ -58,7 +59,8 @@ async function run(rootDir, options) {
     decisionRecord.conversationId = reviewConversationId;
   }
   if (decision === 'changes_requested') {
-    decisionRecord.reviewerBlockers = buildReviewerBlockersFromReview(pr, decisionRecord);
+    const reviewResolutionContext = resolveReviewBlockerContext(rootDir, state, pr);
+    decisionRecord.reviewerBlockers = buildReviewerBlockersFromReview(pr, decisionRecord, reviewResolutionContext);
   }
   const dismissalReason = getStringOption(options, 'dismiss-reason', '').trim();
   const dismissBlockerIds = uniqueStrings(getListOption(options, 'dismiss-blocker'));
@@ -274,6 +276,57 @@ function applyDismissedReviewerBlockersToLaneState(state, pr, reviewerBlockers) 
     });
     writeJson(queuePath, queueState);
   });
+}
+
+function resolveReviewBlockerContext(rootDir, state, pr) {
+  const worktreePath = resolveLaneWorktreePath(state, pr);
+  return {
+    worktreePath: worktreePath || rootDir,
+    changedFiles: listReviewDiffFiles(worktreePath || rootDir, pr.baseBranch || 'dev'),
+  };
+}
+
+function resolveLaneWorktreePath(state, pr) {
+  const laneKey = pr.laneKey || pr.taskId;
+  const lock = ((state.branchLocks && state.branchLocks.locks) || []).find((candidate) => {
+    return candidate
+      && candidate.agentId === pr.agentId
+      && (candidate.laneKey || candidate.taskId) === laneKey
+      && String(candidate.worktreePath || '').trim();
+  });
+  return lock ? String(lock.worktreePath || '').trim() : '';
+}
+
+function listReviewDiffFiles(worktreePath, baseBranch) {
+  const normalizedWorktreePath = String(worktreePath || '').trim();
+  if (!normalizedWorktreePath || !fs.existsSync(normalizedWorktreePath)) {
+    return [];
+  }
+  const baseRef = gitRefExists(normalizedWorktreePath, `origin/${baseBranch}`)
+    ? `origin/${baseBranch}`
+    : baseBranch;
+  try {
+    const output = execFileSync('git', ['diff', '--name-only', `${baseRef}...HEAD`], {
+      cwd: normalizedWorktreePath,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    return output ? output.split('\n').filter(Boolean) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function gitRefExists(worktreePath, ref) {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', ref], {
+      cwd: worktreePath,
+      stdio: 'ignore',
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 

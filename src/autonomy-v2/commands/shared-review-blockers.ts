@@ -1,10 +1,14 @@
+import fs from 'fs';
+import path from 'path';
 import type {
   AnyRecord,
   PullRequestRecord,
   ReviewDecisionRecord,
+  ReviewerBlockerCheckResultRecord,
   ReviewerBlockerEvidenceRecord,
   ReviewerBlockerRecord,
   ReviewerBlockerStatusRecord,
+  ReviewerBlockerVerificationTargetRecord,
   TaskRecord,
 } from '../autonomy-types.js';
 
@@ -103,7 +107,189 @@ function classifyReviewerBlocker(text: string, commands: string[]): ReviewerBloc
   return 'other';
 }
 
-function buildRequiredEvidence(category: ReviewerBlockerRecord['category'], text: string, commands: string[]): ReviewerBlockerEvidenceRecord[] {
+function normalizePathLikeToken(value: string): string {
+  return String(value || '')
+    .trim()
+    .replace(/^[`'"]+|[`'",.;:!?]+$/g, '')
+    .replace(/\\/g, '/');
+}
+
+function extractReferencedFiles(text: string): string[] {
+  const normalized = String(text || '');
+  const matches = normalized.match(/(?:^|[\s`'"])([A-Za-z0-9._/-]+\.[A-Za-z0-9_-]+)(?=$|[\s`'",.;:!?])/g) || [];
+  return uniqueStrings(matches.map((entry) => normalizePathLikeToken(entry)));
+}
+
+function normalizePackageScripts(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>((acc, [key, candidate]) => {
+    const script = String(candidate || '').trim();
+    if (script) {
+      acc[key] = script;
+    }
+    return acc;
+  }, {});
+}
+
+function readPackageScripts(worktreePath: string): Record<string, string> {
+  const manifestPath = path.join(worktreePath, 'package.json');
+  if (!worktreePath || !fs.existsSync(manifestPath)) {
+    return {};
+  }
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return normalizePackageScripts(manifest && manifest.scripts);
+  } catch (_) {
+    return {};
+  }
+}
+
+function normalizeTestExecutionPath(filePath: string): string {
+  const normalized = normalizePathLikeToken(filePath);
+  if (!normalized) {
+    return '';
+  }
+  if (normalized.startsWith('dist/')) {
+    return normalized;
+  }
+  if (/^tests\/.+\.tsx?$/i.test(normalized)) {
+    return normalized
+      .replace(/^tests\//, 'dist/tests/')
+      .replace(/\.tsx?$/i, '.js');
+  }
+  return normalized;
+}
+
+function buildFocusedTestFileCommand(referencedFiles: string[]): string[] {
+  const testTargets = uniqueStrings(
+    referencedFiles
+      .filter((candidate) => /(^|\/)(tests|test)\/.+\.test\.[cm]?[jt]sx?$/i.test(candidate) || /(^|\/).+\.test\.[cm]?[jt]sx?$/i.test(candidate))
+      .map((candidate) => normalizeTestExecutionPath(candidate))
+      .filter(Boolean)
+  );
+  if (testTargets.length === 0) {
+    return [];
+  }
+  return [`npm run build && node --test ${testTargets.join(' ')}`];
+}
+
+function detectReferencedAreas(text: string, referencedFiles: string[] = [], changedFiles: string[] = []): string[] {
+  const normalized = String(text || '').toLowerCase();
+  const areas: string[] = [];
+  if (/\btypecheck\b|\btypes?\b/.test(normalized)) {
+    areas.push('typecheck');
+  }
+  if (/\blint\b/.test(normalized)) {
+    areas.push('lint');
+  }
+  if (/\bsmoke\b/.test(normalized)) {
+    areas.push('smoke');
+  }
+  if (/\bunit tests?\b|\bunit verification\b/.test(normalized)) {
+    areas.push('unit');
+  }
+  const controlPlaneSummaryUiFiles = new Set([
+    'src/server/control-plane/control-plane-client.tsx',
+    'src/server/control-plane/control-plane-page.tsx',
+    'tests/unit/control-plane-summary-ui.test.ts',
+    'tests/unit/control-plane-restart-ui.test.ts',
+  ]);
+  const summaryUiFiles = referencedFiles.concat(changedFiles).map((entry) => normalizePathLikeToken(entry));
+  if (
+    /\bcontrol plane summary ui\b|\bsummary ui\b|\brestart ui\b/.test(normalized)
+    || summaryUiFiles.some((filePath) => controlPlaneSummaryUiFiles.has(filePath))
+  ) {
+    areas.push('control-plane-summary-ui');
+  }
+  return uniqueStrings(areas);
+}
+
+function resolveAreaCommands(areas: string[], scripts: Record<string, string>): string[] {
+  const commands: string[] = [];
+  const pushScript = (scriptName: string) => {
+    if (typeof scripts[scriptName] === 'string' && scripts[scriptName].trim()) {
+      commands.push(`npm run ${scriptName}`);
+    }
+  };
+  areas.forEach((area) => {
+    if (area === 'typecheck') {
+      pushScript('typecheck');
+    } else if (area === 'lint') {
+      pushScript('lint');
+    } else if (area === 'smoke') {
+      pushScript('smoke');
+    } else if (area === 'control-plane-summary-ui') {
+      pushScript('test:control-plane-summary-ui');
+    } else if (area === 'unit') {
+      commands.push('npm run build && node --test dist/tests/unit/*.test.js');
+    }
+  });
+  return uniqueStrings(commands);
+}
+
+function resolveVerificationTarget(text: string, options: AnyRecord = {}): ReviewerBlockerVerificationTargetRecord {
+  const optionScripts = normalizePackageScripts(options.packageScripts);
+  const scripts = Object.keys(optionScripts).length > 0
+    ? optionScripts
+    : readPackageScripts(String(options.worktreePath || ''));
+  const changedFiles = uniqueStrings(Array.isArray(options.changedFiles) ? options.changedFiles.map((entry) => normalizePathLikeToken(entry)) : []);
+  const referencedFiles = extractReferencedFiles(text);
+  const literalCommands = extractCommands(text);
+  if (literalCommands.length > 0) {
+    return {
+      source: 'literal_command',
+      referencedFiles,
+      changedFiles,
+      resolvedCommands: literalCommands,
+      unresolvedReason: null,
+    };
+  }
+
+  const testFileCommands = buildFocusedTestFileCommand(referencedFiles);
+  if (testFileCommands.length > 0) {
+    return {
+      source: 'mentioned_test_file',
+      referencedFiles,
+      changedFiles,
+      resolvedCommands: testFileCommands,
+      unresolvedReason: null,
+    };
+  }
+
+  const referencedAreas = detectReferencedAreas(text, referencedFiles, changedFiles);
+  const areaCommands = resolveAreaCommands(referencedAreas, scripts);
+  if (areaCommands.length > 0) {
+    return {
+      source: referencedAreas.length > 0 ? 'mentioned_area' : 'changed_files',
+      referencedFiles,
+      referencedAreas,
+      changedFiles,
+      resolvedCommands: areaCommands,
+      unresolvedReason: null,
+    };
+  }
+
+  const ambiguityReason = referencedFiles.length > 0
+    ? `No runnable verification command could be resolved from: ${referencedFiles.join(', ')}`
+    : 'Reviewer requested verification, but no runnable command, test file, or known area could be resolved.';
+  return {
+    source: 'unresolved',
+    referencedFiles,
+    referencedAreas,
+    changedFiles,
+    resolvedCommands: [],
+    unresolvedReason: ambiguityReason,
+  };
+}
+
+function buildRequiredEvidence(
+  category: ReviewerBlockerRecord['category'],
+  text: string,
+  commands: string[],
+  verificationTarget?: ReviewerBlockerVerificationTargetRecord
+): ReviewerBlockerEvidenceRecord[] {
   if (commands.length > 0) {
     return commands.map((command) => ({
       kind: 'command_output',
@@ -115,7 +301,7 @@ function buildRequiredEvidence(category: ReviewerBlockerRecord['category'], text
     return [{
       kind: 'note',
       label: 'Provide focused verification evidence',
-      detail: text,
+      detail: String(verificationTarget && verificationTarget.unresolvedReason || text).trim(),
     }];
   }
   if (category === 'documentation') {
@@ -132,21 +318,35 @@ function buildRequiredEvidence(category: ReviewerBlockerRecord['category'], text
   }];
 }
 
-function buildReviewerBlockersFromReview(pr: { id?: string; reviews?: unknown[] }, decisionRecord: ReviewDecisionRecord): ReviewerBlockerRecord[] {
+function buildReviewerBlockersFromReview(
+  pr: { id?: string; reviews?: unknown[] },
+  decisionRecord: ReviewDecisionRecord,
+  options: AnyRecord = {}
+): ReviewerBlockerRecord[] {
   const summaryLines = normalizeReviewSummaryLines(String(decisionRecord.summary || ''));
   const explicitReviewRound = Number((decisionRecord as any).reviewRound || 0);
   const reviewRound = Number.isFinite(explicitReviewRound) && explicitReviewRound > 0
     ? explicitReviewRound
     : Math.max(1, Array.isArray(pr && pr.reviews) ? pr.reviews.length : 0);
   return summaryLines.map((summary, index) => {
-    const requiredChecks = extractCommands(summary);
-    const category = classifyReviewerBlocker(summary, requiredChecks);
+    const literalCommands = extractCommands(summary);
+    const category = classifyReviewerBlocker(summary, literalCommands);
+    const verificationTarget = category === 'verification'
+      ? resolveVerificationTarget(summary, options)
+      : undefined;
+    const requiredChecks = category === 'verification'
+      ? uniqueStrings(Array.isArray(verificationTarget && verificationTarget.resolvedCommands) ? verificationTarget.resolvedCommands : literalCommands)
+      : literalCommands;
+    const unresolvedReason = category === 'verification'
+      ? String(verificationTarget && verificationTarget.unresolvedReason || '').trim() || null
+      : null;
     return {
       id: `${String(pr && pr.id || 'pr').trim() || 'pr'}-review-blocker-${reviewRound || 1}-${index + 1}`,
       category,
       summary,
       requiredChecks,
-      requiredEvidence: buildRequiredEvidence(category, summary, requiredChecks),
+      requiredEvidence: buildRequiredEvidence(category, summary, requiredChecks, verificationTarget),
+      verificationTarget,
       status: {
         state: 'open',
         satisfiedAt: null,
@@ -154,6 +354,8 @@ function buildReviewerBlockersFromReview(pr: { id?: string; reviews?: unknown[] 
         dismissedAt: null,
         dismissalReason: null,
         evidence: [],
+        unresolvedReason,
+        lastCheckResults: [],
       },
       sourceReview: {
         reviewerId: decisionRecord.reviewerId,
@@ -178,6 +380,39 @@ function normalizeReviewerBlockerEvidence(evidence: ReviewerBlockerEvidenceRecor
   };
 }
 
+function normalizeReviewerBlockerCheckResult(result: ReviewerBlockerCheckResultRecord): ReviewerBlockerCheckResultRecord {
+  return {
+    command: String(result && result.command || '').trim(),
+    status: String(result && result.status || '').trim(),
+    code: result && result.code !== undefined ? Number(result.code) : undefined,
+    output: result && result.output ? String(result.output).trim() : undefined,
+  };
+}
+
+function normalizeReviewerBlockerVerificationTarget(value: ReviewerBlockerVerificationTargetRecord | null | undefined): ReviewerBlockerVerificationTargetRecord | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const source = String(value.source || '').trim();
+  if (!source) {
+    return undefined;
+  }
+  return {
+    source: ([
+      'literal_command',
+      'mentioned_test_file',
+      'mentioned_area',
+      'changed_files',
+      'unresolved',
+    ].includes(source) ? source : 'unresolved') as ReviewerBlockerVerificationTargetRecord['source'],
+    referencedFiles: uniqueStrings(Array.isArray(value.referencedFiles) ? value.referencedFiles.map((entry) => normalizePathLikeToken(entry)) : []),
+    referencedAreas: uniqueStrings(Array.isArray(value.referencedAreas) ? value.referencedAreas.map((entry) => String(entry || '').trim()) : []),
+    changedFiles: uniqueStrings(Array.isArray(value.changedFiles) ? value.changedFiles.map((entry) => normalizePathLikeToken(entry)) : []),
+    resolvedCommands: uniqueStrings(Array.isArray(value.resolvedCommands) ? value.resolvedCommands.map((entry) => String(entry || '').trim()) : []),
+    unresolvedReason: value.unresolvedReason ? String(value.unresolvedReason).trim() : null,
+  };
+}
+
 function normalizeReviewerBlockerStatus(status: ReviewerBlockerStatusRecord | null | undefined): ReviewerBlockerStatusRecord {
   return {
     state: status && (status.state === 'satisfied' || status.state === 'dismissed') ? status.state : 'open',
@@ -187,6 +422,10 @@ function normalizeReviewerBlockerStatus(status: ReviewerBlockerStatusRecord | nu
     dismissalReason: status && status.dismissalReason ? String(status.dismissalReason) : null,
     evidence: Array.isArray(status && status.evidence)
       ? status.evidence.map((entry) => normalizeReviewerBlockerEvidence(entry))
+      : [],
+    unresolvedReason: status && status.unresolvedReason ? String(status.unresolvedReason).trim() : null,
+    lastCheckResults: Array.isArray(status && status.lastCheckResults)
+      ? status.lastCheckResults.map((entry) => normalizeReviewerBlockerCheckResult(entry)).filter((entry) => entry.command && entry.status)
       : [],
   };
 }
@@ -201,6 +440,7 @@ function normalizeReviewerBlocker(blocker: ReviewerBlockerRecord): ReviewerBlock
     requiredEvidence: Array.isArray(blocker && blocker.requiredEvidence)
       ? blocker.requiredEvidence.map((entry) => normalizeReviewerBlockerEvidence(entry))
       : [],
+    verificationTarget: normalizeReviewerBlockerVerificationTarget(blocker && blocker.verificationTarget),
     status: normalizeReviewerBlockerStatus(blocker && blocker.status),
     sourceReview: blocker && blocker.sourceReview ? { ...blocker.sourceReview } : undefined,
   };
@@ -288,19 +528,6 @@ function buildCodeChangeEvidence(blocker: ReviewerBlockerRecord, changedFiles: s
   };
 }
 
-function normalizePathLikeToken(value: string): string {
-  return String(value || '')
-    .trim()
-    .replace(/^[`'"]+|[`'",.;:!?]+$/g, '')
-    .replace(/\\/g, '/');
-}
-
-function extractReferencedFiles(text: string): string[] {
-  const normalized = String(text || '');
-  const matches = normalized.match(/(?:^|[\s`'"])([A-Za-z0-9._/-]+\.[A-Za-z0-9_-]+)(?=$|[\s`'",.;:!?])/g) || [];
-  return uniqueStrings(matches.map((entry) => normalizePathLikeToken(entry)));
-}
-
 function extractChangedFilesFromEvidenceDetail(detail: string): string[] {
   const normalized = String(detail || '').trim();
   const prefix = normalized.startsWith('Matched requested files:')
@@ -349,6 +576,18 @@ function findPassingCheckResult(command: string, checkResults: AnyRecord[] = [])
     return String(entry && entry.command || '').trim() === String(command || '').trim()
       && String(entry && entry.status || '').trim() === 'passed';
   }) || null;
+}
+
+function findBlockerCheckResults(command: string, checkResults: AnyRecord[] = []): ReviewerBlockerCheckResultRecord[] {
+  return checkResults
+    .filter((entry) => String(entry && entry.command || '').trim() === String(command || '').trim())
+    .map((entry) => normalizeReviewerBlockerCheckResult({
+      command,
+      status: entry && entry.status,
+      code: entry && entry.code,
+      output: entry && entry.output,
+    }))
+    .filter((entry) => entry.command && entry.status);
 }
 
 function deriveTaskEvidenceForBlocker(
@@ -408,6 +647,13 @@ function applyTaskCompletionToReviewerBlockers(
     recordedEvidenceCount += mergedEvidence.addedCount;
     const nextStatus = normalizeReviewerBlockerStatus(blocker.status);
     nextStatus.evidence = mergedEvidence.evidence;
+    nextStatus.lastCheckResults = uniqueStrings(blocker.requiredChecks || [])
+      .flatMap((command) => findBlockerCheckResults(command, checkResults));
+    nextStatus.unresolvedReason = String(
+      blocker.verificationTarget && blocker.verificationTarget.unresolvedReason
+      || blocker.status && blocker.status.unresolvedReason
+      || ''
+    ).trim() || null;
 
     const requiredEvidence = Array.isArray(blocker.requiredEvidence) ? blocker.requiredEvidence : [];
     const evidenceSatisfied = requiredEvidence.every((requirement) => blockerEvidenceRequirementSatisfied(requirement, nextStatus.evidence || []));
@@ -418,6 +664,7 @@ function applyTaskCompletionToReviewerBlockers(
       nextStatus.satisfiedByTaskId = taskId;
       nextStatus.dismissedAt = null;
       nextStatus.dismissalReason = null;
+      nextStatus.unresolvedReason = null;
       satisfiedBlockerIds.push(blocker.id);
     }
 
