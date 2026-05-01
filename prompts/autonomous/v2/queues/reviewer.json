@@ -11,10 +11,6 @@
       "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
       "sourceTaskId": "prd-make-review-verification-requests-d5537b-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-05-01T07:21:46.753Z",
-      "updatedAt": "2026-05-01T07:21:46.753Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -28,9 +24,12 @@
         "Prevent noop completion and reviewer approval when a verification blocker remains unresolved because no command was resolved or executed.",
         "Add fallback behavior for ambiguous requests: mark the blocker unresolved with a clear reason instead of silently accepting noop completion."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-05-01T07:21:50.184Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-05-01T07:21:46.753Z",
+      "updatedAt": "2026-05-01T07:21:52.004Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-05-01T07:21:50.184Z"
     }
   ]
 }
