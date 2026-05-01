@@ -1,5 +1,34 @@
 {
   "agentId": "reviewer",
   "role": "review",
-  "tasks": []
+  "tasks": [
+    {
+      "id": "review-pr-prd-make-review-verification-requests-d5537b-architecture-agent",
+      "title": "Review [architecture-agent] Implement Make Review Verification Requests Executable Without Reviewer-Supplied Literal Commands",
+      "description": "Review pr-prd-make-review-verification-requests-d5537b-architecture-agent for Implement Make Review Verification Requests Executable Without Reviewer-Supplied Literal Commands",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
+      "sourceTaskId": "prd-make-review-verification-requests-d5537b-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-05-01T07:21:46.753Z",
+      "updatedAt": "2026-05-01T07:21:46.753Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Extend review blocker extraction so file-based or suite-based verification requests are normalized into structured executable verification targets",
+        "not just freeform notes.",
+        "Define a deterministic resolver that maps changed files and reviewer-mentioned test files/areas to one or more runnable commands.",
+        "Require implementation follow-ups to execute or explicitly fail the resolved verification command before completion when an open verification blocker exists.",
+        "Record the chosen command",
+        "pass/fail result",
+        "and evidence on the follow-up task so reviewer gating uses structured proof.",
+        "Prevent noop completion and reviewer approval when a verification blocker remains unresolved because no command was resolved or executed.",
+        "Add fallback behavior for ambiguous requests: mark the blocker unresolved with a clear reason instead of silently accepting noop completion."
+      ],
+      "scopeViolations": []
+    }
+  ]
 }
