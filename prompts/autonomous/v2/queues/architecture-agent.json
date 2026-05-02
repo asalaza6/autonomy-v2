@@ -57,7 +57,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "createdAt": "2026-05-01T07:24:11.410Z",
-      "updatedAt": "2026-05-02T08:45:03.408Z",
+      "updatedAt": "2026-05-02T08:45:03.467Z",
       "startedAt": "2026-05-01T07:24:11.410Z",
       "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
       "reviewerBlockers": [
@@ -115,7 +115,8 @@
         }
       ],
       "completedAt": "2026-05-02T08:45:03.408Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "46129209d2993a03da446616bf29b88e29e7533b"
     }
   ]
 }
