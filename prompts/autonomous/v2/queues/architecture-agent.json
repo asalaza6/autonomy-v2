@@ -172,7 +172,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "createdAt": "2026-05-02T08:50:47.081Z",
-      "updatedAt": "2026-05-02T08:56:01.467Z",
+      "updatedAt": "2026-05-02T08:56:01.526Z",
       "startedAt": "2026-05-02T08:50:47.081Z",
       "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
       "conversationReferences": {
@@ -185,7 +185,8 @@
       },
       "implementationConversationId": "019de7de-86d2-7252-a9ba-42d9ea592b2e",
       "completedAt": "2026-05-02T08:56:01.467Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "1efb753a4c411aeb33156cd890a3366f292f3e39"
     }
   ]
 }
