@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -132,14 +133,24 @@
       "acceptance": [
         "Blocking: verification is still not sufficient for this high-risk reviewer-gating/sync change. The implementation adds the changed-file resolver in `src/autonomy-v2/commands/shared-review-blockers.ts:406-582` and wires blocker enforcement into approval/completion paths in `src/autonomy-v2/commands/gate.ts:61-82` and `src/autonomy-v2/runner/workspace.ts:95-109`, but the recorded check set only shows `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. The new focused coverage for this behavior in `tests/unit/implementation-conversation-continuity.test.ts:517-922`, `tests/unit/implementation-queue-resolution.test.ts:108-206`, `tests/unit/review-reconciliation.test.ts:92-153`, and the end-to-end smoke in `tests/smoke/package-smoke.test.ts:564-672` was not run, so merge safety is not established for the queue/review/sync paths touched by this PR.\nFocused verification is missing for the exact behavior changed. This PR modifies reviewer blocker resolution and enforcement across `shared-review-blockers`, `gate`, `workspace`, `pr`, and derived PR state, but the only reported passing checks are `typecheck`, `lint`, and `test:control-plane-summary-ui`. Please run and attach passing results for the new focused unit coverage in `tests/unit/implementation-conversation-continuity.test.ts:517-922`, `tests/unit/implementation-queue-resolution.test.ts:108-206`, `tests/unit/review-reconciliation.test.ts:92-153`, and the smoke path added in `tests/smoke/package-smoke.test.ts:564-672` before this is merged."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "createdAt": "2026-05-02T08:46:50.515Z",
-      "updatedAt": "2026-05-02T08:46:50.515Z",
+      "updatedAt": "2026-05-02T08:49:03.083Z",
       "startedAt": "2026-05-02T08:46:50.515Z",
-      "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent"
+      "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
+      "completedAt": "2026-05-02T08:49:03.083Z",
+      "completionMode": "noop",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019de7de-86d2-7252-a9ba-42d9ea592b2e",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-05-02T08:49:03.083Z"
+        }
+      },
+      "implementationConversationId": "019de7de-86d2-7252-a9ba-42d9ea592b2e"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
