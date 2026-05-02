@@ -1058,7 +1058,7 @@
       "sourceTaskId": "architecture-agent-followup-pr-prd-make-review-verification-requests-d5537b-architecture-agent-4",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 5,
-      "status": "queued",
+      "status": "assigned",
       "createdAt": "2026-05-02T08:45:04.519Z",
       "updatedAt": "2026-05-02T08:59:53.122Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
@@ -1067,7 +1067,7 @@
         "The branch is not safe to merge into `dev`. Beyond the still-missing focused verification evidence for the reviewer-gating/sync changes, this PR now regresses tracked repo state by deleting unrelated queue and PRD-state data from the committed repo files.\nBlocking regression in tracked queue state: `prompts/autonomous/v2/queues/reviewer.json:1-4` now contains only an empty `tasks` array, and `prompts/autonomous/v2/queues/architecture-agent.json:1-192` has been truncated to just this lane's four tasks. Compared with `origin/dev`, the diff deletes the rest of the reviewer queue and the architecture queue history. The project context calls these tracked queues durable workflow truth on `dev`; merging this would destroy unrelated scheduler/review state.\nBlocking regression in PRD state files: against `origin/dev`, the branch deletes multiple existing tracked PRD-state records under `prompts/autonomous/v2/specs/prd-state/` (for example `prd-add-dedicated-chat-prd-882bd5.json`, `prd-approved-pr-merge-watchdog-5461cc.json`, `prd-when-prds-run-the-d8bef0.json`) while adding only `prd-make-review-verification-requests-d5537b.json`. That is unrelated state loss and is not merge-safe for the repo's sync/recovery paths.\nRequired focused verification is still not recorded as structured proof. The only deterministic passing checks provided are `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. In the committed state, the follow-up tasks that were supposed to satisfy the reviewer verification blocker still show no recorded checks: `prompts/autonomous/v2/queues/architecture-agent.json:132` and `:167` both remain `\"checks\": []`, and follow-up 2 is still `\"completionMode\": \"noop\"` at `:144`. There is still no committed evidence that the requested focused coverage in `tests/unit/implementation-conversation-continuity.test.ts`, `tests/unit/implementation-queue-resolution.test.ts`, `tests/unit/review-reconciliation.test.ts`, and `tests/smoke/package-smoke.test.ts` was actually executed and recorded."
       ],
       "scopeViolations": [],
-      "dispatchedAt": "2026-05-02T08:56:04.876Z",
+      "dispatchedAt": "2026-05-02T08:59:55.075Z",
       "dispatcher": "scheduler",
       "reviewedAt": "2026-05-02T08:57:17.391Z",
       "lastDecision": "changes_requested"
