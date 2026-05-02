@@ -1058,9 +1058,9 @@
       "sourceTaskId": "architecture-agent-followup-pr-prd-make-review-verification-requests-d5537b-architecture-agent-3",
       "sourceAgentId": "architecture-agent",
       "reviewRound": 4,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-05-02T08:45:04.519Z",
-      "updatedAt": "2026-05-02T08:56:02.587Z",
+      "updatedAt": "2026-05-02T08:57:17.391Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1069,7 +1069,7 @@
       "scopeViolations": [],
       "dispatchedAt": "2026-05-02T08:56:04.876Z",
       "dispatcher": "scheduler",
-      "reviewedAt": "2026-05-02T08:50:47.081Z",
+      "reviewedAt": "2026-05-02T08:57:17.391Z",
       "lastDecision": "changes_requested"
     }
   ]
