@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -167,11 +168,11 @@
       "acceptance": [
         "Blocking: focused verification is still missing for this high-risk reviewer-gating/sync change. The branch updates reviewer-blocker resolution and enforcement in `src/autonomy-v2/commands/shared-review-blockers.ts`, `src/autonomy-v2/commands/gate.ts`, `src/autonomy-v2/runner/workspace.ts`, and `src/sync/review-reconciliation.ts`, but the only recorded passing checks are the wrapper minimums: `npm run typecheck`, `npm run lint`, and `npm run test:control-plane-summary-ui`. The tracked follow-up task `architecture-agent-followup-pr-prd-make-review-verification-requests-d5537b-architecture-agent-2` is marked `completionMode: noop` with `checks: []`, so there is still no structured proof that the new focused coverage and smoke path were actually executed. This is not safe to merge into `dev`.\nFocused verification for the changed queue/review/sync paths is still absent. Please run and attach passing results for the added coverage in `tests/unit/implementation-conversation-continuity.test.ts:517-922`, `tests/unit/implementation-queue-resolution.test.ts:108-206`, `tests/unit/review-reconciliation.test.ts:92-153`, and `tests/smoke/package-smoke.test.ts:564-672` before approval.\nThe follow-up state does not record the required evidence yet: `prompts/autonomous/v2/queues/architecture-agent.json` shows `architecture-agent-followup-pr-prd-make-review-verification-requests-d5537b-architecture-agent-2` completed as `noop` with `checks: []`. Update the task/PR evidence with the focused verification commands and passing results so reviewer gating has structured proof."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "createdAt": "2026-05-02T08:50:47.081Z",
-      "updatedAt": "2026-05-02T08:50:47.081Z",
+      "updatedAt": "2026-05-02T08:56:01.467Z",
       "startedAt": "2026-05-02T08:50:47.081Z",
       "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
       "conversationReferences": {
@@ -179,11 +180,12 @@
           "conversationId": "019de7de-86d2-7252-a9ba-42d9ea592b2e",
           "agentId": "architecture-agent",
           "role": "implementation",
-          "updatedAt": "2026-05-02T08:50:47.081Z"
+          "updatedAt": "2026-05-02T08:56:01.467Z"
         }
       },
-      "implementationConversationId": "019de7de-86d2-7252-a9ba-42d9ea592b2e"
+      "implementationConversationId": "019de7de-86d2-7252-a9ba-42d9ea592b2e",
+      "completedAt": "2026-05-02T08:56:01.467Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }

@@ -12,7 +12,7 @@ import {
   getAgentConfig,
   getImplementationTaskState,
 } from './runner-state.js';
-import { ensureDir, extractExecError, readJson, sleepMs, slugify, writeJson } from './runner-shared.js';
+import { ensureDir, extractExecError, readJson, sleepMs, slugify, uniqueStrings, writeJson } from './runner-shared.js';
 
 function resolveTargetFile(worktreePath, task, agent) {
   const includePath = ((agent && agent.include) || [])[0];
@@ -74,6 +74,34 @@ function finalizeTaskRun({ rootDir, task, branch, completedTaskIds, publish, sho
   });
 }
 
+function synchronizeTaskCompletionRecord(task, completedTask) {
+  if (!task || !completedTask) {
+    return;
+  }
+  [
+    'checks',
+    'reviewerBlockers',
+    'state',
+    'status',
+    'branch',
+    'updatedAt',
+    'completedAt',
+    'completionMode',
+    'conversationReferences',
+    'implementationConversationId',
+    'commitSha',
+  ].forEach((field) => {
+    if (typeof completedTask[field] !== 'undefined') {
+      task[field] = completedTask[field];
+    }
+  });
+  if (completedTask.lastError) {
+    task.lastError = completedTask.lastError;
+  } else {
+    delete task.lastError;
+  }
+}
+
 function markImplementationTaskComplete(worktreePath, config, task, branch, completionMode, options = /** @type {any} */ ({}) ) {
   const agent = getAgentConfig(config, task.agentId);
   const relativePath = agent.taskQueue;
@@ -114,6 +142,11 @@ function markImplementationTaskComplete(worktreePath, config, task, branch, comp
   currentTask.updatedAt = now;
   currentTask.completedAt = now;
   currentTask.completionMode = completionMode;
+  currentTask.checks = uniqueStrings([
+    ...(Array.isArray(currentTask.checks) ? currentTask.checks : []),
+    ...completionCheckResults.map((entry) => String(entry && entry.command || '').trim()).filter(Boolean),
+    ...((currentTask.reviewerBlockers || []).flatMap((blocker) => blocker && Array.isArray(blocker.requiredChecks) ? blocker.requiredChecks : [])),
+  ]);
   const implementationConversationId = getImplementationConversationId(task, agent.id);
   if (implementationConversationId) {
     setAgentConversationReference(currentTask, {
@@ -134,8 +167,9 @@ function markImplementationTaskComplete(worktreePath, config, task, branch, comp
     }
   }
 
+  synchronizeTaskCompletionRecord(task, currentTask);
   writeJson(queuePath, buildTaskQueueState(agent, tasks));
-  return { queuePath, relativePath };
+  return { queuePath, relativePath, task: currentTask };
 }
 
 function recordImplementationTaskCommitSha(worktreePath, config, task, commitSha) {

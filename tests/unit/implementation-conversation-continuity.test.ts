@@ -1130,6 +1130,56 @@ test('implementation task completion records verification evidence and satisfies
   assert.equal(queue.tasks[0].reviewerBlockers[0].status.lastCheckResults[0].status, 'passed');
 });
 
+test('implementation task completion carries noop verification evidence into completed lane snapshots', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-noop-snapshot-'));
+  const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-noop-snapshot-worktree-'));
+  const queuePath = path.join(worktreePath, queueRelativePath);
+  const blockerTask = buildTask({
+    id: 'architecture-agent-followup-pr-prd-conversation-architecture-agent-1',
+    type: 'review_followup',
+    checks: [],
+  });
+  blockerTask.reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Run `npm run test:unit -- review-followup` before approval.',
+  });
+  writeJson(queuePath, buildQueue([blockerTask]));
+
+  markImplementationTaskComplete(
+    worktreePath,
+    buildConfig(),
+    blockerTask,
+    'agent/shared/architecture-agent/prd-conversation-architecture-agent',
+    'noop',
+    {
+      changedFiles: [],
+      checkResults: [{
+        command: 'npm run test:unit -- review-followup',
+        status: 'passed',
+        code: 0,
+      }],
+    }
+  );
+
+  const completedTasks = recordLaneTaskCompletion(
+    rootDir,
+    blockerTask,
+    'agent/shared/architecture-agent/prd-conversation-architecture-agent',
+    worktreePath,
+    undefined
+  );
+  assert.equal(completedTasks[0].completionMode, 'noop');
+  assert.deepEqual(completedTasks[0].checks, ['npm run test:unit -- review-followup']);
+  assert.equal(completedTasks[0].reviewerBlockers[0].status.state, 'satisfied');
+  assert.equal(completedTasks[0].reviewerBlockers[0].status.lastCheckResults[0].status, 'passed');
+  assert.equal(completedTasks[0].reviewerBlockers[0].status.evidence[0].command, 'npm run test:unit -- review-followup');
+});
+
 test('implementation task completion records failed derived verification runs and keeps the blocker open', () => {
   const worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-derived-check-failed-'));
   const queuePath = path.join(worktreePath, queueRelativePath);
