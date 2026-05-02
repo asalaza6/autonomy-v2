@@ -1060,7 +1060,7 @@
       "reviewRound": 5,
       "status": "approved",
       "createdAt": "2026-05-02T08:45:04.519Z",
-      "updatedAt": "2026-05-02T09:01:16.362Z",
+      "updatedAt": "2026-05-02T09:01:43.017Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1071,8 +1071,9 @@
       "dispatcher": "scheduler",
       "reviewedAt": "2026-05-02T09:01:11.143Z",
       "lastDecision": "approved",
-      "lastMergeFailureCode": "stale_branch",
-      "lastMergeFailureMessage": "ERROR: GitHub API 405: Base branch was modified. Review and try the merge again."
+      "lastMergeFailureCode": "closed",
+      "lastMergeFailureMessage": "PR is closed on GitHub",
+      "lastError": null
     }
   ]
 }
