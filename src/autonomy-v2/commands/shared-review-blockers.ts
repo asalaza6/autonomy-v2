@@ -48,6 +48,10 @@ function uniqueStrings(values: string[] = []): string[] {
   return output;
 }
 
+function sortStrings(values: string[] = []): string[] {
+  return [...values].sort((left, right) => left.localeCompare(right));
+}
+
 function looksLikeCommand(value: string): boolean {
   return /^(npm|pnpm|yarn|npx|node|pytest|jest|vitest|cargo|go test)\b/i.test(value.trim());
 }
@@ -162,6 +166,14 @@ function normalizeTestExecutionPath(filePath: string): string {
   return normalized;
 }
 
+const CONTROL_PLANE_SUMMARY_UI_SCRIPT = 'test:control-plane-summary-ui';
+const CONTROL_PLANE_SUMMARY_UI_FILES = new Set([
+  'src/server/control-plane/control-plane-client.tsx',
+  'src/server/control-plane/control-plane-page.tsx',
+  'tests/unit/control-plane-summary-ui.test.ts',
+  'tests/unit/control-plane-restart-ui.test.ts',
+]);
+
 function buildFocusedTestFileCommand(referencedFiles: string[]): string[] {
   const testTargets = uniqueStrings(
     referencedFiles
@@ -175,7 +187,202 @@ function buildFocusedTestFileCommand(referencedFiles: string[]): string[] {
   return [`npm run build && node --test ${testTargets.join(' ')}`];
 }
 
-function detectReferencedAreas(text: string, referencedFiles: string[] = [], changedFiles: string[] = []): string[] {
+function extractScriptTestTargets(command: string): string[] {
+  const normalizedCommand = String(command || '').trim();
+  if (!normalizedCommand || !/\bnode\s+--test\b/.test(normalizedCommand)) {
+    return [];
+  }
+
+  const tokens = normalizedCommand
+    .split(/\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const nodeTestIndex = tokens.findIndex((entry, index) => entry === '--test' && tokens[index - 1] === 'node');
+  if (nodeTestIndex < 0) {
+    return [];
+  }
+
+  return uniqueStrings(
+    tokens
+      .slice(nodeTestIndex + 1)
+      .filter((entry) => entry.startsWith('dist/tests/') && entry.endsWith('.js'))
+  );
+}
+
+function resolveScriptCommandsForTestFiles(testFiles: string[], scripts: Record<string, string>): string[] {
+  const normalizedTestTargets = new Set(
+    uniqueStrings(testFiles.map((entry) => normalizeTestExecutionPath(entry)).filter(Boolean))
+  );
+  if (normalizedTestTargets.size === 0) {
+    return [];
+  }
+
+  return uniqueStrings(
+    Object.entries(scripts)
+      .filter(([, command]) => {
+        const scriptTargets = extractScriptTestTargets(command);
+        return (
+          scriptTargets.length > 0
+          && scriptTargets.every((target) => normalizedTestTargets.has(target))
+        );
+      })
+      .sort((left, right) => {
+        const leftTargets = extractScriptTestTargets(left[1]).length;
+        const rightTargets = extractScriptTestTargets(right[1]).length;
+        if (leftTargets !== rightTargets) {
+          return leftTargets - rightTargets;
+        }
+        return left[0].localeCompare(right[0]);
+      })
+      .map(([scriptName]) => `npm run ${scriptName}`)
+  );
+}
+
+function resolveWorktreePath(options: AnyRecord = {}): string {
+  const explicitWorktreePath = String(options.worktreePath || '').trim();
+  if (explicitWorktreePath) {
+    return explicitWorktreePath;
+  }
+  return process.cwd();
+}
+
+function listUnitTestFiles(options: AnyRecord = {}): string[] {
+  const provided = Array.isArray(options.availableTestFiles)
+    ? options.availableTestFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean)
+    : [];
+  if (provided.length > 0) {
+    return uniqueStrings(provided);
+  }
+
+  const worktreePath = resolveWorktreePath(options);
+  const unitTestsDir = path.join(worktreePath, 'tests', 'unit');
+  if (!fs.existsSync(unitTestsDir)) {
+    return [];
+  }
+
+  const discovered: string[] = [];
+  const visitDirectory = (directoryPath: string) => {
+    const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+    entries.forEach((entry) => {
+      const entryPath = path.join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        visitDirectory(entryPath);
+        return;
+      }
+      if (entry.isFile() && /\.test\.[cm]?[jt]sx?$/i.test(entry.name)) {
+        discovered.push(normalizePathLikeToken(path.relative(worktreePath, entryPath)));
+      }
+    });
+  };
+
+  try {
+    visitDirectory(unitTestsDir);
+    return sortStrings(uniqueStrings(discovered));
+  } catch (_) {
+    return [];
+  }
+}
+
+function stripKnownFileExtensions(filePath: string): string {
+  return path.basename(filePath).replace(/\.(?:test\.)?[cm]?[jt]sx?$/i, '');
+}
+
+function buildChangedFileImportCandidates(testFile: string, changedFile: string): string[] {
+  const normalizedTestFile = normalizePathLikeToken(testFile);
+  const normalizedChangedFile = normalizePathLikeToken(changedFile);
+  if (!normalizedTestFile || !normalizedChangedFile) {
+    return [];
+  }
+
+  const relativeImportPath = normalizePathLikeToken(
+    path.posix.relative(path.posix.dirname(normalizedTestFile), normalizedChangedFile)
+  );
+  const relativeWithoutExtension = relativeImportPath.replace(/\.[^/.]+$/g, '');
+  const prefixedRelativePath = relativeWithoutExtension.startsWith('.')
+    ? relativeWithoutExtension
+    : `./${relativeWithoutExtension}`;
+  const prefixedRelativeJsPath = prefixedRelativePath.endsWith('.js')
+    ? prefixedRelativePath
+    : `${prefixedRelativePath}.js`;
+
+  return uniqueStrings([
+    prefixedRelativePath,
+    prefixedRelativeJsPath,
+    path.posix.basename(relativeWithoutExtension),
+    path.posix.basename(normalizedChangedFile).replace(/\.[^/.]+$/g, ''),
+  ]);
+}
+
+function resolveReferencedUnitTestFiles(
+  changedFiles: string[],
+  testFiles: string[],
+  options: AnyRecord = {}
+): string[] {
+  const worktreePath = resolveWorktreePath(options);
+  const matchedTests = new Set<string>();
+
+  testFiles.forEach((testFile) => {
+    const absoluteTestPath = path.join(worktreePath, testFile);
+    if (!fs.existsSync(absoluteTestPath)) {
+      return;
+    }
+
+    let content = '';
+    try {
+      content = fs.readFileSync(absoluteTestPath, 'utf8');
+    } catch (_) {
+      return;
+    }
+
+    const referencesChangedFile = changedFiles.some((changedFile) => buildChangedFileImportCandidates(testFile, changedFile)
+      .some((candidate) => content.includes(`'${candidate}'`) || content.includes(`"${candidate}"`)));
+    if (referencesChangedFile) {
+      matchedTests.add(testFile);
+    }
+  });
+
+  return sortStrings(Array.from(matchedTests));
+}
+
+function resolveFocusedChangedFileTestFiles(changedFiles: string[], testFiles: string[], options: AnyRecord = {}): string[] {
+  const normalizedChangedFiles = uniqueStrings(changedFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean));
+  const normalizedTestFiles = uniqueStrings(testFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean));
+  if (normalizedChangedFiles.length === 0 || normalizedTestFiles.length === 0) {
+    return [];
+  }
+
+  const exactMatches = new Set<string>();
+  const prefixMatches = new Set<string>();
+
+  normalizedChangedFiles.forEach((filePath) => {
+    const sourceStem = stripKnownFileExtensions(filePath);
+    if (!sourceStem) {
+      return;
+    }
+
+    normalizedTestFiles.forEach((testFile) => {
+      const testStem = stripKnownFileExtensions(testFile);
+      if (!testStem) {
+        return;
+      }
+      if (testStem === sourceStem) {
+        exactMatches.add(testFile);
+        return;
+      }
+      if (testStem.startsWith(`${sourceStem}-`) || sourceStem.startsWith(`${testStem}-`)) {
+        prefixMatches.add(testFile);
+      }
+    });
+  });
+
+  return exactMatches.size > 0
+    ? sortStrings(Array.from(exactMatches))
+    : prefixMatches.size > 0
+      ? sortStrings(Array.from(prefixMatches))
+      : resolveReferencedUnitTestFiles(normalizedChangedFiles, normalizedTestFiles, options);
+}
+
+function detectReferencedAreas(text: string): string[] {
   const normalized = String(text || '').toLowerCase();
   const areas: string[] = [];
   if (/\btypecheck\b|\btypes?\b/.test(normalized)) {
@@ -190,20 +397,36 @@ function detectReferencedAreas(text: string, referencedFiles: string[] = [], cha
   if (/\bunit tests?\b|\bunit verification\b/.test(normalized)) {
     areas.push('unit');
   }
-  const controlPlaneSummaryUiFiles = new Set([
-    'src/server/control-plane/control-plane-client.tsx',
-    'src/server/control-plane/control-plane-page.tsx',
-    'tests/unit/control-plane-summary-ui.test.ts',
-    'tests/unit/control-plane-restart-ui.test.ts',
-  ]);
-  const summaryUiFiles = referencedFiles.concat(changedFiles).map((entry) => normalizePathLikeToken(entry));
-  if (
-    /\bcontrol plane summary ui\b|\bsummary ui\b|\brestart ui\b/.test(normalized)
-    || summaryUiFiles.some((filePath) => controlPlaneSummaryUiFiles.has(filePath))
-  ) {
+  if (/\bcontrol plane summary ui\b|\bsummary ui\b|\brestart ui\b/.test(normalized)) {
     areas.push('control-plane-summary-ui');
   }
   return uniqueStrings(areas);
+}
+
+function detectChangedFileAreas(changedFiles: string[] = []): string[] {
+  const normalizedChangedFiles = uniqueStrings(changedFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean));
+  const areas: string[] = [];
+  if (normalizedChangedFiles.some((filePath) => CONTROL_PLANE_SUMMARY_UI_FILES.has(filePath))) {
+    areas.push('control-plane-summary-ui');
+  }
+  if (normalizedChangedFiles.some((filePath) => /(^|\/)(package\.json|tsconfig(?:\.[^.]+)?\.json)$/.test(filePath))) {
+    areas.push('typecheck');
+  }
+  if (normalizedChangedFiles.some((filePath) => filePath.startsWith('tests/smoke/'))) {
+    areas.push('smoke');
+  }
+  const hasSpecificArea = areas.some((area) => !['typecheck', 'lint', 'smoke', 'unit'].includes(area));
+  if (
+    !hasSpecificArea
+    && normalizedChangedFiles.some((filePath) => /^(src\/(autonomy-v2|agents|sync)\/|tests\/unit\/)/.test(filePath))
+  ) {
+    areas.push('unit');
+  }
+  return uniqueStrings(areas);
+}
+
+function hasSpecificVerificationArea(areas: string[]): boolean {
+  return areas.some((area) => !['typecheck', 'lint', 'smoke', 'unit'].includes(area));
 }
 
 function resolveAreaCommands(areas: string[], scripts: Record<string, string>): string[] {
@@ -221,7 +444,7 @@ function resolveAreaCommands(areas: string[], scripts: Record<string, string>): 
     } else if (area === 'smoke') {
       pushScript('smoke');
     } else if (area === 'control-plane-summary-ui') {
-      pushScript('test:control-plane-summary-ui');
+      pushScript(CONTROL_PLANE_SUMMARY_UI_SCRIPT);
     } else if (area === 'unit') {
       commands.push('npm run build && node --test dist/tests/unit/*.test.js');
     }
@@ -229,11 +452,332 @@ function resolveAreaCommands(areas: string[], scripts: Record<string, string>): 
   return uniqueStrings(commands);
 }
 
+function resolveChangedFileAreaCommands(changedFiles: string[], scripts: Record<string, string>): {
+  areas: string[];
+  commands: string[];
+} {
+  const areas = detectChangedFileAreas(changedFiles);
+  return {
+    areas,
+    commands: resolveAreaCommands(areas, scripts),
+  };
+}
+
+function resolveFocusedChangedFileCommands(
+  changedFiles: string[],
+  scripts: Record<string, string>,
+  options: AnyRecord = {}
+): string[] {
+  const normalizedChangedFiles = uniqueStrings(changedFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean));
+  if (normalizedChangedFiles.length === 0) {
+    return [];
+  }
+
+  const directTestCommands = buildFocusedTestFileCommand(normalizedChangedFiles);
+  if (directTestCommands.length > 0) {
+    return directTestCommands;
+  }
+
+  const focusedChangedTests = resolveFocusedChangedFileTestFiles(
+    normalizedChangedFiles,
+    listUnitTestFiles(options),
+    options
+  );
+  const focusedScriptCommands = resolveScriptCommandsForTestFiles(focusedChangedTests, scripts);
+  if (focusedScriptCommands.length > 0) {
+    return focusedScriptCommands;
+  }
+
+  const focusedSourceTestCommands = buildFocusedTestFileCommand(focusedChangedTests);
+  if (focusedSourceTestCommands.length > 0) {
+    return focusedSourceTestCommands;
+  }
+
+  return [];
+}
+
+function resolveChangedFileCommands(
+  changedFiles: string[],
+  scripts: Record<string, string>,
+  options: AnyRecord = {}
+): {
+  commands: string[];
+  specificity: 'direct' | 'inferred' | 'fallback';
+} {
+  const normalizedChangedFiles = uniqueStrings(changedFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean));
+  if (normalizedChangedFiles.length === 0) {
+    return { commands: [], specificity: 'fallback' };
+  }
+
+  const directTestCommands = buildFocusedTestFileCommand(normalizedChangedFiles);
+  if (directTestCommands.length > 0) {
+    return {
+      commands: directTestCommands,
+      specificity: 'direct',
+    };
+  }
+
+  const focusedChangedFileCommands = resolveFocusedChangedFileCommands(normalizedChangedFiles, scripts, options);
+  if (focusedChangedFileCommands.length > 0) {
+    return {
+      commands: focusedChangedFileCommands,
+      specificity: 'inferred',
+    };
+  }
+
+  if (normalizedChangedFiles.some((filePath) => filePath.startsWith('src/server/control-plane/'))) {
+    return {
+      commands: ['npm run build && node --test dist/tests/unit/control-plane-*.test.js'],
+      specificity: 'fallback',
+    };
+  }
+
+  if (normalizedChangedFiles.some((filePath) => /^(src\/(autonomy-v2|agents|sync)\/|tests\/unit\/)/.test(filePath))) {
+    return {
+      commands: ['npm run build && node --test dist/tests/unit/*.test.js'],
+      specificity: 'fallback',
+    };
+  }
+
+  if (
+    normalizedChangedFiles.some((filePath) => /(^|\/)(package\.json|tsconfig(?:\.[^.]+)?\.json)$/.test(filePath))
+    && typeof scripts.typecheck === 'string'
+    && scripts.typecheck.trim()
+  ) {
+    return {
+      commands: ['npm run typecheck'],
+      specificity: 'fallback',
+    };
+  }
+
+  return {
+    commands: [],
+    specificity: 'fallback',
+  };
+}
+
+function reviewerAreasAreBroadVerificationBuckets(areas: string[]): boolean {
+  if (areas.length === 0) {
+    return false;
+  }
+  return areas.every((area) => ['unit', 'smoke', 'lint', 'typecheck'].includes(area));
+}
+
+function reviewRequestsChangedFileVerification(text: string): boolean {
+  const normalized = String(text || '').toLowerCase();
+  return /\b(files?\s+(?:touched|changed|modified)|touched here|files?\s+in\s+(?:this\s+)?(?:diff|pr|patch)|changed files?|affected files?)\b/.test(normalized);
+}
+
+function changedFileAreasCoverReferencedAreas(referencedAreas: string[], changedFileAreas: string[]): boolean {
+  if (referencedAreas.length === 0 || changedFileAreas.length === 0) {
+    return false;
+  }
+  const changedAreaSet = new Set(changedFileAreas);
+  return referencedAreas.every((area) => changedAreaSet.has(area));
+}
+
+function shouldPreferChangedFileVerificationTarget(
+  referencedFiles: string[],
+  changedFiles: string[],
+  referencedAreas: string[],
+  changedFileAreas: string[]
+): boolean {
+  const changedFileSet = new Set(changedFiles);
+  return (
+    referencedFiles.some((filePath) => changedFileSet.has(filePath))
+    || changedFileAreasCoverReferencedAreas(referencedAreas, changedFileAreas)
+    || reviewerAreasAreBroadVerificationBuckets(referencedAreas)
+    || referencedAreas.length === 0
+  );
+}
+
+function shouldUseChangedFileVerificationTarget(
+  text: string,
+  referencedFiles: string[],
+  changedFiles: string[],
+  referencedAreas: string[],
+  changedFileTarget: ReviewerBlockerVerificationTargetRecord | null
+): boolean {
+  if (!changedFileTarget || changedFiles.length === 0) {
+    return false;
+  }
+
+  if (referencedFiles.length === 0 && referencedAreas.length === 0) {
+    return true;
+  }
+
+  if (reviewRequestsChangedFileVerification(text)) {
+    return true;
+  }
+
+  return shouldPreferChangedFileVerificationTarget(
+    referencedFiles,
+    changedFiles,
+    referencedAreas,
+    Array.isArray(changedFileTarget.referencedAreas) ? changedFileTarget.referencedAreas : []
+  );
+}
+
+function selectChangedFilesForVerification(referencedFiles: string[], changedFiles: string[]): string[] {
+  const normalizedChangedFiles = uniqueStrings(changedFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean));
+  if (normalizedChangedFiles.length === 0) {
+    return [];
+  }
+
+  const changedFileSet = new Set(normalizedChangedFiles);
+  const referencedChangedFiles = uniqueStrings(
+    referencedFiles
+      .map((entry) => normalizePathLikeToken(entry))
+      .filter((entry) => changedFileSet.has(entry))
+  );
+
+  return referencedChangedFiles.length > 0
+    ? referencedChangedFiles
+    : normalizedChangedFiles;
+}
+
+function resolveDeterministicChangedFileVerification(
+  changedFiles: string[],
+  scripts: Record<string, string>,
+  options: AnyRecord = {}
+): {
+  areas: string[];
+  commands: string[];
+  specificity: 'direct' | 'inferred' | 'fallback';
+} {
+  const normalizedChangedFiles = uniqueStrings(changedFiles.map((entry) => normalizePathLikeToken(entry)).filter(Boolean));
+  const { areas: changedFileAreas, commands: changedFileAreaCommands } = resolveChangedFileAreaCommands(
+    normalizedChangedFiles,
+    scripts
+  );
+  const changedFileCommandTarget = resolveChangedFileCommands(normalizedChangedFiles, scripts, options);
+
+  if (changedFileCommandTarget.specificity === 'direct') {
+    return {
+      areas: changedFileAreas,
+      commands: changedFileCommandTarget.commands,
+      specificity: changedFileCommandTarget.specificity,
+    };
+  }
+
+  if (
+    changedFileCommandTarget.specificity === 'inferred'
+    && !(hasSpecificVerificationArea(changedFileAreas) && changedFileAreaCommands.length > 0)
+  ) {
+    return {
+      areas: changedFileAreas,
+      commands: changedFileCommandTarget.commands,
+      specificity: changedFileCommandTarget.specificity,
+    };
+  }
+
+  return {
+    areas: changedFileAreas,
+    commands: changedFileAreaCommands.length > 0
+      ? changedFileAreaCommands
+      : changedFileCommandTarget.commands,
+    specificity: changedFileCommandTarget.specificity,
+  };
+}
+
+function resolveChangedFileVerificationTarget(
+  referencedFiles: string[],
+  changedFiles: string[],
+  scripts: Record<string, string>,
+  options: AnyRecord = {}
+): ReviewerBlockerVerificationTargetRecord | null {
+  const targetFiles = selectChangedFilesForVerification(referencedFiles, changedFiles);
+  const changedFileResolution = resolveDeterministicChangedFileVerification(targetFiles, scripts, options);
+  const resolvedCommands = changedFileResolution.commands;
+  if (resolvedCommands.length > 0) {
+    return {
+      source: 'changed_files',
+      referencedFiles,
+      referencedAreas: changedFileResolution.areas,
+      changedFiles: targetFiles,
+      resolvedCommands,
+      unresolvedReason: null,
+    };
+  }
+
+  return null;
+}
+
+function resolveVerificationCommandsFromChangedFiles(
+  changedFiles: string[],
+  options: AnyRecord = {}
+): ReviewerBlockerVerificationTargetRecord | null {
+  const optionScripts = normalizePackageScripts(options.packageScripts);
+  const scripts = Object.keys(optionScripts).length > 0
+    ? optionScripts
+    : readPackageScripts(resolveWorktreePath(options));
+  return resolveChangedFileVerificationTarget([], changedFiles, scripts, options);
+}
+
+function resolveMentionedAreaVerificationTarget(
+  referencedFiles: string[],
+  referencedAreas: string[],
+  changedFiles: string[],
+  scripts: Record<string, string>
+): ReviewerBlockerVerificationTargetRecord | null {
+  const resolvedCommands = resolveAreaCommands(referencedAreas, scripts);
+  if (resolvedCommands.length === 0) {
+    return null;
+  }
+  return {
+    source: 'mentioned_area',
+    referencedFiles,
+    referencedAreas,
+    changedFiles,
+    resolvedCommands,
+    unresolvedReason: null,
+  };
+}
+
+function resolveVerificationTargetFromReviewIntent(
+  text: string,
+  referencedFiles: string[],
+  referencedAreas: string[],
+  changedFiles: string[],
+  scripts: Record<string, string>,
+  options: AnyRecord = {}
+): ReviewerBlockerVerificationTargetRecord | null {
+  const changedFileTarget = resolveChangedFileVerificationTarget(referencedFiles, changedFiles, scripts, options);
+  const mentionedAreaTarget = resolveMentionedAreaVerificationTarget(
+    referencedFiles,
+    referencedAreas,
+    changedFiles,
+    scripts
+  );
+
+  if (!changedFileTarget) {
+    return mentionedAreaTarget;
+  }
+
+  if (reviewRequestsChangedFileVerification(text)) {
+    return changedFileTarget;
+  }
+
+  if (!mentionedAreaTarget) {
+    return changedFileTarget;
+  }
+
+  return shouldUseChangedFileVerificationTarget(
+    text,
+    referencedFiles,
+    changedFiles,
+    referencedAreas,
+    changedFileTarget
+  )
+    ? changedFileTarget
+    : mentionedAreaTarget;
+}
+
 function resolveVerificationTarget(text: string, options: AnyRecord = {}): ReviewerBlockerVerificationTargetRecord {
   const optionScripts = normalizePackageScripts(options.packageScripts);
   const scripts = Object.keys(optionScripts).length > 0
     ? optionScripts
-    : readPackageScripts(String(options.worktreePath || ''));
+    : readPackageScripts(resolveWorktreePath(options));
   const changedFiles = uniqueStrings(Array.isArray(options.changedFiles) ? options.changedFiles.map((entry) => normalizePathLikeToken(entry)) : []);
   const referencedFiles = extractReferencedFiles(text);
   const literalCommands = extractCommands(text);
@@ -258,26 +802,28 @@ function resolveVerificationTarget(text: string, options: AnyRecord = {}): Revie
     };
   }
 
-  const referencedAreas = detectReferencedAreas(text, referencedFiles, changedFiles);
-  const areaCommands = resolveAreaCommands(referencedAreas, scripts);
-  if (areaCommands.length > 0) {
-    return {
-      source: referencedAreas.length > 0 ? 'mentioned_area' : 'changed_files',
-      referencedFiles,
-      referencedAreas,
-      changedFiles,
-      resolvedCommands: areaCommands,
-      unresolvedReason: null,
-    };
+  const referencedAreas = detectReferencedAreas(text);
+  const intentResolvedTarget = resolveVerificationTargetFromReviewIntent(
+    text,
+    referencedFiles,
+    referencedAreas,
+    changedFiles,
+    scripts,
+    options
+  );
+  if (intentResolvedTarget) {
+    return intentResolvedTarget;
   }
 
   const ambiguityReason = referencedFiles.length > 0
     ? `No runnable verification command could be resolved from: ${referencedFiles.join(', ')}`
-    : 'Reviewer requested verification, but no runnable command, test file, or known area could be resolved.';
+    : changedFiles.length > 0
+      ? `Reviewer requested verification for changed files, but no runnable command could be resolved for: ${changedFiles.join(', ')}`
+      : 'Reviewer requested verification, but no runnable command, test file, or known area could be resolved.';
   return {
     source: 'unresolved',
     referencedFiles,
-    referencedAreas,
+    referencedAreas: detectChangedFileAreas(changedFiles),
     changedFiles,
     resolvedCommands: [],
     unresolvedReason: ambiguityReason,
@@ -780,4 +1326,5 @@ export {
   isReviewerBlockerResolved,
   listUnresolvedReviewerBlockers,
   normalizeReviewerBlocker,
+  resolveVerificationCommandsFromChangedFiles,
 };

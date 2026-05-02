@@ -10,7 +10,10 @@ import { AGENT_ROLES } from '../../src/agents/role-catalog.js';
 import { buildAgentConversationKey, getAgentConversationId } from '../../src/agents/conversation-references.js';
 import { run as runGate } from '../../src/autonomy-v2/commands/gate.js';
 import { appendTrackedBranchFollowupTask, enqueueLaneFollowupTask } from '../../src/autonomy-v2/commands/shared-worktrees.js';
-import { buildReviewerBlockersFromReview } from '../../src/autonomy-v2/commands/shared-review-blockers.js';
+import {
+  buildReviewerBlockersFromReview,
+  resolveVerificationCommandsFromChangedFiles,
+} from '../../src/autonomy-v2/commands/shared-review-blockers.js';
 import { markImplementationTaskComplete } from '../../src/autonomy-v2/runner/workspace.js';
 import { recordLaneTaskCompletion } from '../../src/autonomy-v2/runner/runner-state.js';
 
@@ -365,12 +368,578 @@ test('review blocker extraction resolves focused verification areas into executa
     packageScripts: {
       'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
     },
-    changedFiles: ['src/server/control-plane/control-plane-client.tsx'],
   });
 
   assert.equal(reviewerBlockers[0].verificationTarget?.source, 'mentioned_area');
   assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
   assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:control-plane-summary-ui']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction prefers changed-file-derived area commands when changed files resolve the same mentioned area', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun the control plane summary UI verification before approval.',
+  }, {
+    packageScripts: {
+      'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+    changedFiles: ['src/server/control-plane/control-plane-client.tsx'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/server/control-plane/control-plane-client.tsx']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:control-plane-summary-ui']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves changed-file-derived areas into executable verification commands', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+    changedFiles: ['src/server/control-plane/control-plane-client.tsx'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/server/control-plane/control-plane-client.tsx']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:control-plane-summary-ui']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction derives changed-file area commands without reviewer-supplied area text', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification before approval.',
+  }, {
+    packageScripts: {
+      'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+    changedFiles: ['src/server/control-plane/control-plane-client.tsx'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/server/control-plane/control-plane-client.tsx']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:control-plane-summary-ui']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction prefers changed-file-derived area commands when the review mentions an affected area and touched files', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun the control plane summary UI verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+    changedFiles: ['src/server/control-plane/control-plane-client.tsx'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/server/control-plane/control-plane-client.tsx']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:control-plane-summary-ui']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction derives focused test commands from changed source files alone', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/autonomy-v2/commands/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/review-followup.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves changed files through the matching package test script when one exists', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+      typecheck: 'tsc --noEmit',
+    },
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/autonomy-v2/commands/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:review-followup']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves changed files deterministically when candidate test files are unsorted', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+      'test:review-followup-suite': 'npm run build && node --test dist/tests/unit/review-followup-extra.test.js dist/tests/unit/review-followup.test.js',
+    },
+    availableTestFiles: [
+      'tests/unit/review-followup-extra.test.ts',
+      'tests/unit/review-followup.test.ts',
+    ],
+    changedFiles: ['src/lib/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, []);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/lib/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:review-followup']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves changed files into runnable verification without area heuristics', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+    },
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/lib/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, []);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/lib/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:review-followup']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves changed files without reviewer-supplied changed-file keywords', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification before approval.',
+  }, {
+    packageScripts: {
+      'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+    },
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/lib/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, []);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/lib/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:review-followup']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction keeps changed-file-derived commands executable when reviewer mentions an unmapped area for the touched files', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun lint for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+    },
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/lib/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, []);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/lib/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:review-followup']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction picks the most focused matching package script for changed files', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+      'test:review-followup-suite': 'npm run build && node --test dist/tests/unit/review-followup.test.js dist/tests/unit/implementation-conversation-continuity.test.js',
+    },
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/autonomy-v2/commands/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:review-followup']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction derives broad unit verification from changed source files when no focused test can be resolved', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    changedFiles: ['src/autonomy-v2/commands/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/*.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction derives typecheck from changed config files alone', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      typecheck: 'tsc --noEmit',
+    },
+    changedFiles: ['package.json'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['typecheck']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['package.json']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run typecheck']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction prefers focused changed-file commands over broad unit verification requests', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun unit verification for the files touched here before approval.',
+  }, {
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/autonomy-v2/commands/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/review-followup.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves broad area requests through changed-file-derived focused tests', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun unit verification before approval.',
+  }, {
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/autonomy-v2/commands/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/review-followup.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction derives changed-file area commands even when reviewer only gives a broad verification area', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun unit verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+    changedFiles: ['src/server/control-plane/control-plane-client.tsx'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/server/control-plane/control-plane-client.tsx']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:control-plane-summary-ui']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction prefers direct changed test-file commands over broader changed-file area scripts', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+    },
+    changedFiles: ['tests/unit/control-plane-summary-ui.test.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['tests/unit/control-plane-summary-ui.test.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction derives focused test commands from unit tests that import changed source files', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    worktreePath: process.cwd(),
+    changedFiles: ['src/autonomy-v2/commands/shared-review-blockers.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/shared-review-blockers.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves changed files through import-based test discovery without reviewer area hints', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification before approval.',
+  }, {
+    worktreePath: process.cwd(),
+    changedFiles: ['src/autonomy-v2/commands/shared-review-blockers.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/shared-review-blockers.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('changed-file verification resolution derives a runnable command from changed source files alone', () => {
+  const verificationTarget = resolveVerificationCommandsFromChangedFiles(
+    ['src/autonomy-v2/commands/shared-review-blockers.ts'],
+    {
+      worktreePath: process.cwd(),
+    }
+  );
+
+  assert.equal(verificationTarget?.source, 'changed_files');
+  assert.deepEqual(verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(verificationTarget?.changedFiles, ['src/autonomy-v2/commands/shared-review-blockers.ts']);
+  assert.deepEqual(verificationTarget?.resolvedCommands, ['npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js']);
+  assert.equal(verificationTarget?.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves "files touched here" requests from changed files without reviewer-supplied area text or literal commands', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    packageScripts: {
+      'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+    },
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/lib/review-followup.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, []);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/lib/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run test:review-followup']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('changed-file verification resolution resolves touched source files without reviewer area keywords', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for the files touched here before approval.',
+  }, {
+    worktreePath: process.cwd(),
+    changedFiles: ['src/autonomy-v2/commands/shared-review-blockers.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedAreas, ['unit']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/shared-review-blockers.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/implementation-conversation-continuity.test.js']);
+  assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
+});
+
+test('changed-file verification resolution resolves an arbitrary changed source file through the matching package test script', () => {
+  const verificationTarget = resolveVerificationCommandsFromChangedFiles(
+    ['src/lib/review-followup.ts'],
+    {
+      packageScripts: {
+        'test:review-followup': 'npm run build && node --test dist/tests/unit/review-followup.test.js',
+      },
+      availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    }
+  );
+
+  assert.equal(verificationTarget?.source, 'changed_files');
+  assert.deepEqual(verificationTarget?.referencedAreas, []);
+  assert.deepEqual(verificationTarget?.changedFiles, ['src/lib/review-followup.ts']);
+  assert.deepEqual(verificationTarget?.resolvedCommands, ['npm run test:review-followup']);
+  assert.equal(verificationTarget?.unresolvedReason, null);
+});
+
+test('changed-file verification resolution derives area-based commands from changed files alone', () => {
+  const verificationTarget = resolveVerificationCommandsFromChangedFiles(
+    ['src/server/control-plane/control-plane-client.tsx'],
+    {
+      packageScripts: {
+        'test:control-plane-summary-ui': 'npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js',
+      },
+    }
+  );
+
+  assert.equal(verificationTarget?.source, 'changed_files');
+  assert.deepEqual(verificationTarget?.referencedAreas, ['control-plane-summary-ui']);
+  assert.deepEqual(verificationTarget?.changedFiles, ['src/server/control-plane/control-plane-client.tsx']);
+  assert.deepEqual(verificationTarget?.resolvedCommands, ['npm run test:control-plane-summary-ui']);
+  assert.equal(verificationTarget?.unresolvedReason, null);
+});
+
+test('changed-file verification resolution derives typecheck from changed config files alone', () => {
+  const verificationTarget = resolveVerificationCommandsFromChangedFiles(
+    ['package.json'],
+    {
+      packageScripts: {
+        typecheck: 'tsc --noEmit',
+      },
+    }
+  );
+
+  assert.equal(verificationTarget?.source, 'changed_files');
+  assert.deepEqual(verificationTarget?.referencedAreas, ['typecheck']);
+  assert.deepEqual(verificationTarget?.changedFiles, ['package.json']);
+  assert.deepEqual(verificationTarget?.resolvedCommands, ['npm run typecheck']);
+  assert.equal(verificationTarget?.unresolvedReason, null);
+});
+
+test('review blocker extraction resolves a directly referenced changed file into runnable verification', () => {
+  const reviewerBlockers = buildReviewerBlockersFromReview({
+    id: 'pr-prd-conversation-architecture-agent',
+    reviews: [{ decision: 'changes_requested' }],
+  }, {
+    reviewerId: 'reviewer',
+    decision: 'changes_requested',
+    reviewedAt: '2026-04-21T00:20:00.000Z',
+    summary: 'Please rerun focused verification for src/autonomy-v2/commands/review-followup.ts before approval.',
+  }, {
+    availableTestFiles: ['tests/unit/review-followup.test.ts'],
+    changedFiles: ['src/autonomy-v2/commands/review-followup.ts', 'src/autonomy-v2/commands/shared-review-blockers.ts'],
+  });
+
+  assert.equal(reviewerBlockers[0].verificationTarget?.source, 'changed_files');
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.referencedFiles, ['src/autonomy-v2/commands/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].verificationTarget?.changedFiles, ['src/autonomy-v2/commands/review-followup.ts']);
+  assert.deepEqual(reviewerBlockers[0].requiredChecks, ['npm run build && node --test dist/tests/unit/review-followup.test.js']);
   assert.equal(reviewerBlockers[0].status.unresolvedReason, null);
 });
 

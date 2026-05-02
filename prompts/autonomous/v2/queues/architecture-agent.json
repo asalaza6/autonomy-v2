@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -52,11 +53,11 @@
       "acceptance": [
         "Blocking issue in verification-target resolution: changed-file-based follow-up checks are not actually implemented, so the PR does not satisfy the requirement to derive runnable verification commands from changed files when reviewers reference an affected area without a literal command.\n`src/autonomy-v2/commands/shared-review-blockers.ts:261-276` never resolves a blocker from changed files alone. `detectReferencedAreas()` is the only source of `areaCommands`, so when `areaCommands.length > 0`, `referencedAreas.length` is always non-empty and the `changed_files` branch at line 265 is unreachable. In practice this means the resolver only handles explicit test files plus a few hard-coded text/area matches; it does not deterministically map arbitrary changed files to runnable commands as required by the PRD. A reviewer request like \"rerun focused verification for the files touched here\" will still fall through to `unresolved` unless it happens to match one of the hard-coded area heuristics. Please implement an actual changed-file -> command resolution path and add a focused test for it (the new tests at `tests/unit/implementation-conversation-continuity.test.ts:355-390` cover mentioned test files/areas and ambiguity, but not changed-file-derived resolution)."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-make-review-verification-requests-d5537b-architecture-agent",
       "createdAt": "2026-05-01T07:24:11.410Z",
-      "updatedAt": "2026-05-01T07:24:11.410Z",
+      "updatedAt": "2026-05-02T08:45:03.408Z",
       "startedAt": "2026-05-01T07:24:11.410Z",
       "prId": "pr-prd-make-review-verification-requests-d5537b-architecture-agent",
       "reviewerBlockers": [
@@ -112,8 +113,9 @@
             "reviewedAt": "2026-05-01T07:24:11.410Z"
           }
         }
-      ]
+      ],
+      "completedAt": "2026-05-02T08:45:03.408Z",
+      "completionMode": "code"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
