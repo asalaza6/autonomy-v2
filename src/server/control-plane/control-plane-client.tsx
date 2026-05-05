@@ -4318,6 +4318,7 @@ export {
   ManagerRepoCard,
   ChatPrdProposalCard,
   PackageUpdateButton,
+  ProjectMainDeployActions,
   ProjectMainProgressActions,
   PrdHistoryDetail,
   QueuedPrdDetail,

@@ -138,11 +138,13 @@ test('project deploy actions stay hidden for aligned repos without pending chang
       statusLabel: 'Branches aligned',
       detail: 'dev and main are aligned',
     },
+    deploymentUrl: 'https://example.test/alpha',
   };
 
   const projectCardHtml = renderToHtml(h(client.ProjectRepoCard as any, { repo }));
   const projectMainHtml = renderToHtml(h(client.ProjectMainDeployActions as any, { repo }));
 
+  assert.match(projectMainHtml, /Deployment site/);
   assert.doesNotMatch(projectCardHtml, /data-action="deploy"/);
   assert.doesNotMatch(projectCardHtml, /Deploy dev to main/);
   assert.doesNotMatch(projectMainHtml, /data-action="deploy"/);

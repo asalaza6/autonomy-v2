@@ -1,4 +1,5 @@
 {
+  "schemaVersion": 1,
   "agentId": "architecture-agent",
   "role": "implementation",
   "tasks": [
@@ -5083,14 +5084,24 @@
       "acceptance": [
         "Blocking verification gap: the required checks passed, but one focused test intended to cover the project main deploy action is currently vacuous.\ntests/unit/control-plane-summary-ui.test.ts:144 renders client.ProjectMainDeployActions, but src/server/control-plane/control-plane-client.tsx:4314-4340 does not export ProjectMainDeployActions. The JSX runtime returns an empty string for an undefined component type, so the assertions at lines 148-149 would pass even if the real project main deploy action regressed. Export the component for this test or exercise it through the real project-main render path, include an assertion that proves the component/render path was actually reached, then rerun npm run test:control-plane-summary-ui and npm run typecheck."
       ],
-      "state": "active",
-      "status": "active",
+      "state": "done",
+      "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "createdAt": "2026-05-05T06:35:51.018Z",
-      "updatedAt": "2026-05-05T06:35:51.018Z",
+      "updatedAt": "2026-05-05T06:37:01.616Z",
       "startedAt": "2026-05-05T06:35:51.018Z",
-      "prId": "pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent"
+      "prId": "pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent",
+      "completedAt": "2026-05-05T06:37:01.616Z",
+      "completionMode": "code",
+      "conversationReferences": {
+        "agent:architecture-agent": {
+          "conversationId": "019df6d9-b0ee-7b51-87f0-b10ffb0c51ce",
+          "agentId": "architecture-agent",
+          "role": "implementation",
+          "updatedAt": "2026-05-05T06:37:01.616Z"
+        }
+      },
+      "implementationConversationId": "019df6d9-b0ee-7b51-87f0-b10ffb0c51ce"
     }
-  ],
-  "schemaVersion": 1
+  ]
 }
