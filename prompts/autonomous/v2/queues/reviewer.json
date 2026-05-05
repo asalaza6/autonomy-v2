@@ -1074,6 +1074,33 @@
       "lastMergeFailureCode": "closed",
       "lastMergeFailureMessage": "PR is closed on GitHub",
       "lastError": null
+    },
+    {
+      "id": "review-pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent",
+      "title": "Review [architecture-agent] Implement Allow Manager Pool Deploys When Branches Are Aligned",
+      "description": "Review pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent for Implement Allow Manager Pool Deploys When Branches Are Aligned",
+      "agentId": "reviewer",
+      "type": "review",
+      "prId": "pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent",
+      "sourceTaskId": "prd-allow-manager-pool-deploys-063cf6-architecture-agent-1",
+      "sourceAgentId": "architecture-agent",
+      "reviewRound": 1,
+      "status": "queued",
+      "createdAt": "2026-05-05T06:33:18.608Z",
+      "updatedAt": "2026-05-05T06:33:18.608Z",
+      "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-allow-manager-pool-deploys-063cf6-architecture-agent",
+      "baseBranch": "dev",
+      "acceptance": [
+        "Add a deploy action to the manager repo pool/card UI for repos the session can manage.",
+        "Show the deploy action even when `deployment.branchesAligned=true`",
+        "`hasChanges=false`",
+        "and `deployable=false`.",
+        "Reuse existing deploy job queueing and button busy/queued/running states.",
+        "Keep project UI deploy buttons gated by existing deployment-change logic.",
+        "Do not mark aligned repos as deployable in dashboard counts unless product explicitly wants the metric renamed or redefined.",
+        "Preserve read-only session blocking through existing lifecycle access checks."
+      ],
+      "scopeViolations": []
     }
   ]
 }
