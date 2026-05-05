@@ -5062,11 +5062,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-05-05T06:28:52.609Z",
-      "updatedAt": "2026-05-05T06:33:17.448Z",
+      "updatedAt": "2026-05-05T06:33:17.522Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "startedAt": "2026-05-05T06:29:12.034Z",
       "completedAt": "2026-05-05T06:33:17.448Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "8fbadd22c4382b7836c295b5a1bfb1445a9dd3bc"
     }
   ]
 }
