@@ -5088,7 +5088,7 @@
       "status": "done",
       "branch": "agent/multi-agent-mvp/architecture-agent/prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "createdAt": "2026-05-05T06:35:51.018Z",
-      "updatedAt": "2026-05-05T06:37:01.616Z",
+      "updatedAt": "2026-05-05T06:37:01.688Z",
       "startedAt": "2026-05-05T06:35:51.018Z",
       "prId": "pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "completedAt": "2026-05-05T06:37:01.616Z",
@@ -5101,7 +5101,8 @@
           "updatedAt": "2026-05-05T06:37:01.616Z"
         }
       },
-      "implementationConversationId": "019df6d9-b0ee-7b51-87f0-b10ffb0c51ce"
+      "implementationConversationId": "019df6d9-b0ee-7b51-87f0-b10ffb0c51ce",
+      "commitSha": "7a3bbd68284bdb542338fae3e0d8fd36038a3ecd"
     }
   ]
 }
