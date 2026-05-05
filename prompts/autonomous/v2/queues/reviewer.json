@@ -1097,11 +1097,11 @@
         "Preserve read-only session blocking through existing lifecycle access checks."
       ],
       "reviewRound": 2,
-      "status": "merged",
+      "status": "approved",
       "createdAt": "2026-05-05T06:33:18.608Z",
-      "updatedAt": "2026-05-05T06:37:20.168Z",
-      "reviewedAt": "2026-05-05T06:35:51.018Z",
-      "lastDecision": "changes_requested",
+      "updatedAt": "2026-05-05T06:39:07.628Z",
+      "reviewedAt": "2026-05-05T06:39:07.628Z",
+      "lastDecision": "approved",
       "dispatcher": "scheduler",
       "dispatchedAt": "2026-05-05T06:37:05.553Z"
     }
