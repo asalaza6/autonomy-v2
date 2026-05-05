@@ -61,6 +61,94 @@ test('manager repo card renders a compact summary with attention signals and con
   assert.doesNotMatch(html, /Autonomy v2/);
 });
 
+test('manager repo card shows deploy action for aligned manageable repos', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?manager-aligned-deploy=${Date.now()}`);
+
+  const html = renderToHtml(h(client.ManagerRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      controlAccess: {
+        canManage: true,
+      },
+      deployment: {
+        sourceBranch: 'dev',
+        targetBranch: 'main',
+        branchesAligned: true,
+        hasChanges: false,
+        deployable: false,
+        status: 'online',
+        statusLabel: 'Branches aligned',
+        detail: 'dev and main are aligned',
+      },
+    },
+  }));
+
+  assert.match(html, /data-action="deploy"/);
+  assert.match(html, /data-repo-id="alpha"/);
+  assert.match(html, /Deploy dev to main/);
+  assert.doesNotMatch(html, /disabled/);
+});
+
+test('manager repo card reuses deploy queued state', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?manager-queued-deploy=${Date.now()}`);
+
+  const html = renderToHtml(h(client.ManagerRepoCard as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+      controlAccess: {
+        canManage: true,
+      },
+      deployment: {
+        sourceBranch: 'dev',
+        targetBranch: 'main',
+        branchesAligned: true,
+        hasChanges: false,
+        deployable: false,
+      },
+      deployJob: {
+        status: 'queued',
+        statusLabel: 'Queued',
+      },
+    },
+  }));
+
+  assert.match(html, /data-action="deploy"/);
+  assert.match(html, /Deploy queued/);
+  assert.match(html, /disabled/);
+});
+
+test('project deploy actions stay hidden for aligned repos without pending changes', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?project-aligned-deploy=${Date.now()}`);
+  const repo = {
+    repoId: 'alpha',
+    label: 'Alpha',
+    queuedPrds: [],
+    deployment: {
+      sourceBranch: 'dev',
+      targetBranch: 'main',
+      branchesAligned: true,
+      hasChanges: false,
+      deployable: false,
+      status: 'online',
+      statusLabel: 'Branches aligned',
+      detail: 'dev and main are aligned',
+    },
+  };
+
+  const projectCardHtml = renderToHtml(h(client.ProjectRepoCard as any, { repo }));
+  const projectMainHtml = renderToHtml(h(client.ProjectMainDeployActions as any, { repo }));
+
+  assert.doesNotMatch(projectCardHtml, /data-action="deploy"/);
+  assert.doesNotMatch(projectCardHtml, /Deploy dev to main/);
+  assert.doesNotMatch(projectMainHtml, /data-action="deploy"/);
+  assert.doesNotMatch(projectMainHtml, /Deploy dev to main/);
+});
+
 test('project repo card hides operational diagnostics behind labeled disclosures', async () => {
   installBrowserStubs();
   const client = await import(`../../src/server/control-plane/control-plane-client.js?project-summary=${Date.now()}`);

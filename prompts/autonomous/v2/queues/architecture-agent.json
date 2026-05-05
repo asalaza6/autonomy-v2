@@ -5059,10 +5059,14 @@
         "Do not mark aligned repos as deployable in dashboard counts unless product explicitly wants the metric renamed or redefined.",
         "Preserve read-only session blocking through existing lifecycle access checks."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-05-05T06:28:52.609Z",
-      "updatedAt": "2026-05-05T06:28:52.609Z"
+      "updatedAt": "2026-05-05T06:33:17.448Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/prd-allow-manager-pool-deploys-063cf6-architecture-agent",
+      "startedAt": "2026-05-05T06:29:12.034Z",
+      "completedAt": "2026-05-05T06:33:17.448Z",
+      "completionMode": "code"
     }
   ]
 }

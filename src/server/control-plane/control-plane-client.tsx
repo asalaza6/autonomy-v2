@@ -3139,6 +3139,8 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
   const attentionSignals = buildRepoAttentionSignals(repo);
   const snapshotItems = buildManagerSnapshotItems(repo);
   const currentWork = buildRepoCurrentWorkSummary(repo);
+  const deployButtonState = buildDeployButtonState(repo);
+  const showDeployButton = shouldShowManagerDeployButton(repo);
 
   return (
     <article className="repo repo-compact">
@@ -3195,6 +3197,9 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
       </div>
       <RepoAttentionPanel signals={attentionSignals} />
       <div className="repo-actions" style={{ marginTop: '16px' }}>
+        {showDeployButton ? (
+          <DeployButton repo={repo} deployButtonState={deployButtonState} />
+        ) : null}
         {projectUrl ? (
           <a className="action-link" href={projectUrl}>
             Open repo control page
@@ -3213,6 +3218,14 @@ function ManagerRepoCard({ repo }: { repo: RepoSummary }) {
       </div>
     </article>
   );
+}
+
+function shouldShowManagerDeployButton(repo: RepoSummary | null) {
+  if (!repo || !repo.repoId) {
+    return false;
+  }
+  const access = repo.controlAccess || null;
+  return !access || access.canManage !== false;
 }
 
 function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
@@ -3393,20 +3406,32 @@ function CompactDeploymentPanel({
       ) : null}
       <div className="repo-actions" style={{ marginTop: '12px' }}>
         {showDeployButton ? (
-          <button
-            type="button"
-            className={`primary deploy-button${deployButtonState.busy ? ' is-loading' : ''}`}
-            data-action="deploy"
-            data-repo-id={repo.repoId || ''}
-            disabled={deployButtonState.disabled}
-            aria-busy={deployButtonState.busy}
-          >
-            {deployButtonState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
-            <span>{deployButtonState.label}</span>
-          </button>
+          <DeployButton repo={repo} deployButtonState={deployButtonState} />
         ) : null}
       </div>
     </div>
+  );
+}
+
+function DeployButton({
+  repo,
+  deployButtonState,
+}: {
+  repo: RepoSummary;
+  deployButtonState: ReturnType<typeof buildDeployButtonState>;
+}) {
+  return (
+    <button
+      type="button"
+      className={`primary deploy-button${deployButtonState.busy ? ' is-loading' : ''}`}
+      data-action="deploy"
+      data-repo-id={repo.repoId || ''}
+      disabled={deployButtonState.disabled}
+      aria-busy={deployButtonState.busy}
+    >
+      {deployButtonState.busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+      <span>{deployButtonState.label}</span>
+    </button>
   );
 }
 
