@@ -1084,10 +1084,6 @@
       "prId": "pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "sourceTaskId": "prd-allow-manager-pool-deploys-063cf6-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-05-05T06:33:18.608Z",
-      "updatedAt": "2026-05-05T06:33:18.608Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1100,9 +1096,12 @@
         "Do not mark aligned repos as deployable in dashboard counts unless product explicitly wants the metric renamed or redefined.",
         "Preserve read-only session blocking through existing lifecycle access checks."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-05-05T06:33:22.683Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-05-05T06:33:18.608Z",
+      "updatedAt": "2026-05-05T06:33:47.248Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-05-05T06:33:22.683Z"
     }
   ]
 }
