@@ -1078,32 +1078,26 @@
     {
       "id": "review-pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "title": "Review [architecture-agent] Implement Allow Manager Pool Deploys When Branches Are Aligned",
-      "description": "Review pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent for Implement Allow Manager Pool Deploys When Branches Are Aligned",
+      "description": "Review pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent for Address review for [architecture-agent] Implement Allow Manager Pool Deploys When Branches Are Aligned",
       "agentId": "reviewer",
       "type": "review",
       "prId": "pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent",
-      "sourceTaskId": "prd-allow-manager-pool-deploys-063cf6-architecture-agent-1",
+      "sourceTaskId": "architecture-agent-followup-pr-prd-allow-manager-pool-deploys-063cf6-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/prd-allow-manager-pool-deploys-063cf6-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
-        "Add a deploy action to the manager repo pool/card UI for repos the session can manage.",
-        "Show the deploy action even when `deployment.branchesAligned=true`",
-        "`hasChanges=false`",
-        "and `deployable=false`.",
-        "Reuse existing deploy job queueing and button busy/queued/running states.",
-        "Keep project UI deploy buttons gated by existing deployment-change logic.",
-        "Do not mark aligned repos as deployable in dashboard counts unless product explicitly wants the metric renamed or redefined.",
-        "Preserve read-only session blocking through existing lifecycle access checks."
+        "Blocking verification gap: the required checks passed, but one focused test intended to cover the project main deploy action is currently vacuous.\ntests/unit/control-plane-summary-ui.test.ts:144 renders client.ProjectMainDeployActions, but src/server/control-plane/control-plane-client.tsx:4314-4340 does not export ProjectMainDeployActions. The JSX runtime returns an empty string for an undefined component type, so the assertions at lines 148-149 would pass even if the real project main deploy action regressed. Export the component for this test or exercise it through the real project-main render path, include an assertion that proves the component/render path was actually reached, then rerun npm run test:control-plane-summary-ui and npm run typecheck."
       ],
       "reviewRound": 2,
       "status": "queued",
       "createdAt": "2026-05-05T06:33:18.608Z",
-      "updatedAt": "2026-05-05T06:36:19.599Z",
+      "updatedAt": "2026-05-05T06:37:02.922Z",
       "reviewedAt": "2026-05-05T06:35:51.018Z",
       "lastDecision": "changes_requested",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-05-05T06:33:22.683Z"
+      "dispatchedAt": "2026-05-05T06:33:22.683Z",
+      "scopeViolations": []
     }
   ]
 }
