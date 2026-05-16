@@ -115,6 +115,7 @@ function buildCustomAgentNetworkConfigOverrides(runtimeContext, env: NodeJS.Proc
   }
 
   return [
+    'sandbox_workspace_write.network_access=true',
     `experimental_network.allowed_domains=${JSON.stringify(allowedDomains)}`,
     'experimental_network.open_world_enabled=false',
   ];

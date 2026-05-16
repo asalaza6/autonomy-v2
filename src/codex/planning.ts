@@ -14,6 +14,16 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
   const specRelativePath = buildPrdSpecRelativePath(prd.id, {
     queue: prd.isQueued === true,
   });
+  const fallbackSprintId = prd.sprintId || sprint.sprintId || 'shared';
+
+  if (process.env.AUTONOMY_CODEX_STUB === '1') {
+    const normalizedTasks = validateFallbackTaskSpecs(prd, implementationAgents, fallbackSprintId);
+    return {
+      summary: `Stub planned ${normalizedTasks.length} task(s) for ${prd.id}.`,
+      tasks: normalizedTasks,
+    };
+  }
+
   const worktreePath = ensurePlanningWorktree(rootDir, integrationBranch, prd.id);
   const prompt = buildPlanningPrompt({
     rootDir,
@@ -21,7 +31,7 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
     laneLabel,
     implementationAgents,
     prd,
-    sprintId: prd.sprintId || sprint.sprintId || 'shared',
+    sprintId: fallbackSprintId,
     worktreePath,
     specRelativePath,
   });
@@ -38,7 +48,7 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
       specRelativePath,
       prd,
       implementationAgents,
-      fallbackSprintId: prd.sprintId || sprint.sprintId || 'shared',
+      fallbackSprintId,
     });
   } catch (_) {
     plannedSpec = null;
@@ -48,7 +58,7 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
 
   const plannedTasks = plannedSpec && Array.isArray(plannedSpec.tasks) && plannedSpec.tasks.length > 0
     ? plannedSpec.tasks
-    : buildFallbackPlannedTaskSpecs(prd, implementationAgents, prd.sprintId || sprint.sprintId || 'shared');
+    : buildFallbackPlannedTaskSpecs(prd, implementationAgents, fallbackSprintId);
 
   let normalizedTasks = [];
   try {
@@ -56,7 +66,7 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
       prd,
       tasks: plannedTasks,
       implementationAgents,
-      fallbackSprintId: prd.sprintId || sprint.sprintId || 'shared',
+      fallbackSprintId,
     });
   } catch (_) {
     normalizedTasks = [];
@@ -68,6 +78,19 @@ function planPrdTasksWithCodex({ rootDir, agent, config, sprint, prd }) {
       : `Fallback planned ${normalizedTasks.length} task(s) for ${prd.id}.`,
     tasks: normalizedTasks,
   };
+}
+
+function validateFallbackTaskSpecs(prd, implementationAgents, fallbackSprintId) {
+  try {
+    return validatePlannedTaskSpecs({
+      prd,
+      tasks: buildFallbackPlannedTaskSpecs(prd, implementationAgents, fallbackSprintId),
+      implementationAgents,
+      fallbackSprintId,
+    });
+  } catch (_) {
+    return [];
+  }
 }
 
 function buildPlanningPrompt({
