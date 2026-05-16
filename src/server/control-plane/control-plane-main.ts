@@ -11,6 +11,7 @@ import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './control-plane-browser.js';
+import { handleAgentToolRequest } from './control-plane-agent-tools.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import { readManagedProcessOutput } from './control-plane-process-output.js';
@@ -149,6 +150,23 @@ async function handleRequest(
 
   if (options.proxyUrl && url.pathname.startsWith('/api/')) {
     await proxyControlPlaneApiRequest(req, res, url, options.proxyUrl);
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/agent-tools')) {
+    try {
+      const body = req.method === 'GET' || req.method === 'HEAD' ? {} : await readJsonBody(req);
+      const result = handleAgentToolRequest(rootDir, {
+        method: req.method || 'GET',
+        pathname: url.pathname,
+        searchParams: url.searchParams,
+        headers: req.headers,
+        body,
+      });
+      sendJson(res, result.statusCode, result.payload);
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
     return;
   }
 
@@ -793,7 +811,7 @@ function sendJson(res: http.ServerResponse, statusCode: number, payload: unknown
 function applyCors(res: http.ServerResponse, method: string) {
   res.setHeader('access-control-allow-origin', '*');
   res.setHeader('access-control-allow-methods', 'GET,POST,OPTIONS');
-  res.setHeader('access-control-allow-headers', 'content-type,x-autonomy-control-session-id,x-autonomy-control-session-label,x-control-session-id,x-control-session-label');
+  res.setHeader('access-control-allow-headers', 'authorization,content-type,x-autonomy-agent-key,x-autonomy-control-session-id,x-autonomy-control-session-label,x-control-session-id,x-control-session-label');
   if (method === 'OPTIONS') {
     res.setHeader('access-control-max-age', '86400');
   }

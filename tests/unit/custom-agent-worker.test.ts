@@ -50,6 +50,51 @@ test('custom agent worker deduplicates repeated network allowlist hosts', () => 
   ]);
 });
 
+test('custom agent worker allowlists configured tool hosts', () => {
+  const overrides = buildCustomAgentNetworkConfigOverrides(
+    {
+      controlPanel: {
+        baseUrl: 'https://control.example/v0/agent-control',
+      },
+      tools: {
+        autonomy: {
+          baseUrl: 'https://autonomy.example/api/agent-tools',
+        },
+      },
+    },
+    {} as NodeJS.ProcessEnv,
+  );
+
+  assert.deepEqual(overrides, [
+    'sandbox_workspace_write.network_access=true',
+    'experimental_network.allowed_domains=["control.example","autonomy.example"]',
+    'experimental_network.open_world_enabled=false',
+  ]);
+});
+
+test('custom agent prompt includes tool metadata without token values', () => {
+  const prompt = buildCustomAgentPrompt({
+    rootDir: process.cwd(),
+    agent: { id: 'feedback-bot' },
+    target: { type: 'project', id: 'frontend' },
+    workspacePath: '/tmp/feedback-bot',
+    controlPanel: {},
+    context: {},
+    tools: {
+      autonomy: {
+        baseUrl: 'https://autonomy.example/api/agent-tools',
+        authHeader: 'x-autonomy-agent-key',
+        authEnv: 'FEEDBACK_BOT_AUTONOMY_TOKEN',
+        value: 'secret-tool-token',
+      },
+    },
+  });
+
+  assert.match(prompt, /"autonomy"/);
+  assert.match(prompt, /FEEDBACK_BOT_AUTONOMY_TOKEN/);
+  assert.doesNotMatch(prompt, /secret-tool-token/);
+});
+
 test('custom agent worker uses configured prompt role in wrapper text', () => {
   const prompt = buildCustomAgentPrompt({
     rootDir: process.cwd(),

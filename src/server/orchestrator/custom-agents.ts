@@ -7,17 +7,27 @@ import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
 const DEFAULT_INTERVAL_SECONDS = 60;
 
 function loadCustomAgentConfig(rootDir: string): AnyRecord | null {
+  const configs = loadCustomAgentConfigs(rootDir);
+  return configs[0] || null;
+}
+
+function loadCustomAgentConfigs(rootDir: string): AnyRecord[] {
   const controlPlanePath = path.join(getPaths(rootDir).configDir, 'control-plane.json');
   const controlPlaneConfig = readJson(controlPlanePath, null);
-  const customConfigPath = String(controlPlaneConfig && controlPlaneConfig.spawnCustomAgents || '').trim();
-  if (!customConfigPath) {
-    return null;
+  const customConfigPaths = normalizeCustomAgentConfigPaths(controlPlaneConfig && controlPlaneConfig.spawnCustomAgents);
+  if (customConfigPaths.length === 0) {
+    return [];
   }
-  const resolvedPath = resolvePathInside(rootDir, customConfigPath, 'spawnCustomAgents');
-  return {
-    ...readJson(resolvedPath, {}),
-    configPath: resolvedPath,
-  };
+  return customConfigPaths.map((customConfigPath, index) => {
+    const resolvedPath = resolvePathInside(rootDir, customConfigPath, 'spawnCustomAgents');
+    return {
+      ...readJson(resolvedPath, {}),
+      configPath: resolvedPath,
+      configSource: customConfigPath,
+      configIndex: index,
+      configCount: customConfigPaths.length,
+    };
+  });
 }
 
 function refreshCustomAgentRuntime(runtime: RuntimeState, nowIso = new Date().toISOString()) {
@@ -40,31 +50,41 @@ function refreshCustomAgentRuntime(runtime: RuntimeState, nowIso = new Date().to
 
 function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRecord = {}) {
   const nowIso = resolveNowIso(options);
-  const config = loadCustomAgentConfig(rootDir);
-  if (!config) {
-    return { started: [], pendingSpawnStarts: [], config: null };
+  const configs = loadCustomAgentConfigs(rootDir);
+  if (configs.length === 0) {
+    return { started: [], pendingSpawnStarts: [], config: null, configs: [] };
   }
   runtime.customAgents = runtime.customAgents || {};
 
-  const enabled = config.enabled !== false;
-  const agents = Array.isArray(config.agents) ? config.agents : [];
   const started = [];
   const pendingSpawnStarts = [];
-  const context = normalizeContext(rootDir, config.context || {});
-  const controlPanel = normalizeControlPanel(config.controlPanel || {});
   const decisionClient = options.customAgentDecisionClient || callDecisionEndpointSync;
 
-  agents.forEach((agent) => {
-    const normalizedAgent = normalizeAgent(rootDir, agent, context);
-    const statusKey = getCustomAgentStatusKey(normalizedAgent);
-    const status = ensureCustomAgentStatus(runtime, statusKey, normalizedAgent, enabled);
-    status.enabled = enabled && normalizedAgent.enabled;
-    status.target = normalizedAgent.target;
-    status.workspacePath = normalizedAgent.workspacePath;
-    status.singletonKey = normalizedAgent.singletonKey;
-    status.singletonValue = normalizedAgent.singletonValue;
-    status.intervalSeconds = normalizedAgent.intervalSeconds;
-    status.offsetSeconds = normalizedAgent.offsetSeconds;
+  configs.forEach((config) => {
+    const enabled = config.enabled !== false;
+    const agents = Array.isArray(config.agents) ? config.agents : [];
+    const context = normalizeContext(rootDir, config.context || {});
+    const controlPanel = normalizeControlPanel(config.controlPanel || {});
+    const agentTools = normalizeAgentTools(config.agentTools || {});
+
+    agents.forEach((agent) => {
+      const normalizedAgent = normalizeAgent(rootDir, agent, context, {
+        config,
+        agentTools,
+        includeConfigInStatusKey: configs.length > 1,
+      });
+      const statusKey = getCustomAgentStatusKey(normalizedAgent);
+      const status = ensureCustomAgentStatus(runtime, statusKey, normalizedAgent, enabled);
+      status.enabled = enabled && normalizedAgent.enabled;
+      status.kind = normalizedAgent.kind;
+      status.configPath = normalizedAgent.configPath;
+      status.target = normalizedAgent.target;
+      status.workspacePath = normalizedAgent.workspacePath;
+      status.singletonKey = normalizedAgent.singletonKey;
+      status.singletonValue = normalizedAgent.singletonValue;
+      status.intervalSeconds = normalizedAgent.intervalSeconds;
+      status.offsetSeconds = normalizedAgent.offsetSeconds;
+      status.tools = buildRuntimeToolStatus(normalizedAgent.tools);
 
     if (!enabled || !normalizedAgent.enabled) {
       status.status = 'disabled';
@@ -76,12 +96,13 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.lastError = null;
       return;
     }
-    if (normalizedAgent.offsetError) {
+    const configError = normalizedAgent.offsetError || normalizedAgent.toolError;
+    if (configError) {
       status.status = 'blocked';
       status.running = false;
       status.lastDecision = 'invalid_config';
-      status.lastDecisionReason = normalizedAgent.offsetError;
-      status.lastError = normalizedAgent.offsetError;
+      status.lastDecisionReason = configError;
+      status.lastError = configError;
       return;
     }
     if (normalizedAgent.spawnMode !== 'poll') {
@@ -143,6 +164,15 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.running = false;
       return;
     }
+    const missingTool = findMissingToolEnv(normalizedAgent.tools);
+    if (missingTool) {
+      status.status = 'blocked';
+      status.running = false;
+      status.lastDecision = 'blocked';
+      status.lastDecisionReason = `missing environment variable ${missingTool.authEnv} for tool "${missingTool.name}"`;
+      status.lastError = status.lastDecisionReason;
+      return;
+    }
 
     const singletonBlocker = findActiveSingleton(runtime, normalizedAgent.singletonKey, normalizedAgent.singletonValue, statusKey);
     if (singletonBlocker) {
@@ -160,6 +190,8 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       runtimeKey: statusKey,
       rootDir,
       kind: String(config.kind || ''),
+      configPath: config.configPath,
+      configSource: config.configSource,
       promptRole: String(config.promptRole || config.agentPromptRole || '').trim(),
       promptIntro: String(config.promptIntro || config.agentPromptIntro || '').trim(),
       agent: {
@@ -183,9 +215,10 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
         envKey,
         value: authValue,
       },
+      tools: buildRuntimeTools(normalizedAgent.tools),
       context: {
-        globalReadOnly: context.globalReadOnly,
-        workspaceReadWrite: context.workspaceReadWrite,
+        globalReadOnly: normalizedAgent.context.globalReadOnly,
+        workspaceReadWrite: normalizedAgent.context.workspaceReadWrite,
       },
       decision,
     });
@@ -210,8 +243,9 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       startedAt: nowIso,
     });
   });
+  });
 
-  return { started, pendingSpawnStarts, config };
+  return { started, pendingSpawnStarts, config: configs[0] || null, configs };
 }
 
 function spawnCustomAgentProcess(rootDir: string, entry: AnyRecord, options: AnyRecord = {}) {
@@ -278,8 +312,9 @@ function normalizeContext(rootDir: string, context: AnyRecord) {
   };
 }
 
-function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord) {
+function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, options: AnyRecord = {}) {
   const agentId = String(agent && agent.id || '').trim();
+  const effectiveContext = mergeAgentContext(rootDir, context, agent && agent.context);
   const target = {
     ...(agent && agent.target && typeof agent.target === 'object' ? agent.target : {}),
     type: String(agent && agent.target && agent.target.type || agent && agent.targetType || '').trim(),
@@ -292,19 +327,27 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord) {
   const singletonValue = resolveSingletonValue({ agentId, target, workspacePath }, singletonKey);
   const intervalSeconds = normalizePositiveNumber(agent && agent.spawn && agent.spawn.intervalSeconds, DEFAULT_INTERVAL_SECONDS);
   const offset = normalizeOffsetSeconds(agent && agent.spawn ? agent.spawn.offsetSeconds : undefined, intervalSeconds, agentId);
+  const tools = normalizeGrantedTools(agent && agent.tools, options.agentTools || {});
   return {
     ...agent,
     agentId,
+    kind: String(options.config && options.config.kind || '').trim(),
+    configPath: String(options.config && options.config.configPath || '').trim(),
+    configSource: String(options.config && options.config.configSource || '').trim(),
+    statusKeyPrefix: options.includeConfigInStatusKey ? slugify(String(options.config && (options.config.configSource || options.config.configPath) || 'custom-agents')) : '',
     enabled: agent && agent.enabled !== false,
     target,
     workspace,
     workspacePath,
-    workspaceReadWrite: context.workspaceReadWrite,
+    context: effectiveContext,
+    workspaceReadWrite: effectiveContext.workspaceReadWrite,
     authEnv: String(agent && agent.authEnv || '').trim(),
     spawnMode: String(agent && agent.spawn && agent.spawn.mode || '').trim(),
     intervalSeconds,
     offsetSeconds: offset.value,
     offsetError: offset.error,
+    tools: tools.tools,
+    toolError: tools.error,
     singletonKey,
     singletonValue,
     decisionEndpoint: String(agent && agent.spawn && agent.spawn.decision && agent.spawn.decision.endpoint || '').trim(),
@@ -414,6 +457,99 @@ function writeCustomAgentRuntimeContext(rootDir: string, statusKey: string, star
   return contextPath;
 }
 
+function normalizeCustomAgentConfigPaths(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  const normalized = String(value || '').trim();
+  return normalized ? [normalized] : [];
+}
+
+function mergeAgentContext(rootDir: string, defaultContext: AnyRecord, agentContext: AnyRecord | null | undefined) {
+  const context = agentContext && typeof agentContext === 'object' ? agentContext : {};
+  return {
+    globalReadOnly: Object.prototype.hasOwnProperty.call(context, 'globalReadOnly')
+      ? normalizeContext(rootDir, { globalReadOnly: context.globalReadOnly }).globalReadOnly
+      : defaultContext.globalReadOnly,
+    workspaceReadWrite: Object.prototype.hasOwnProperty.call(context, 'workspaceReadWrite')
+      ? normalizeContext(rootDir, { workspaceReadWrite: context.workspaceReadWrite }).workspaceReadWrite
+      : defaultContext.workspaceReadWrite,
+  };
+}
+
+function normalizeAgentTools(agentTools: AnyRecord) {
+  return Object.fromEntries(Object.entries(agentTools || {}).map(([name, value]) => {
+    const tool = value && typeof value === 'object' ? value as AnyRecord : {};
+    return [name, {
+      name,
+      baseUrl: String(tool.baseUrl || '').trim(),
+      authHeader: String(tool.authHeader || '').trim(),
+    }];
+  }));
+}
+
+function normalizeGrantedTools(agentToolGrants: AnyRecord, configuredTools: AnyRecord) {
+  const grants = agentToolGrants && typeof agentToolGrants === 'object' ? agentToolGrants : {};
+  const tools = {};
+  for (const [name, grantValue] of Object.entries(grants)) {
+    const configuredTool = configuredTools[name];
+    if (!configuredTool) {
+      return {
+        tools,
+        error: `agent tool "${name}" is not defined in agentTools`,
+      };
+    }
+    const grant = grantValue && typeof grantValue === 'object' ? grantValue as AnyRecord : {};
+    const authEnv = String(grant.authEnv || '').trim();
+    if (!authEnv) {
+      return {
+        tools,
+        error: `agent tool "${name}" is missing authEnv`,
+      };
+    }
+    tools[name] = {
+      name,
+      baseUrl: configuredTool.baseUrl,
+      authHeader: configuredTool.authHeader,
+      authEnv,
+    };
+  }
+  return { tools, error: null };
+}
+
+function findMissingToolEnv(tools: AnyRecord) {
+  return Object.values(tools || {}).find((tool: AnyRecord) => {
+    const authEnv = String(tool && tool.authEnv || '').trim();
+    return !authEnv || !process.env[authEnv];
+  }) as AnyRecord | undefined;
+}
+
+function buildRuntimeTools(tools: AnyRecord) {
+  return Object.fromEntries(Object.entries(tools || {}).map(([name, toolValue]) => {
+    const tool = toolValue as AnyRecord;
+    const authEnv = String(tool.authEnv || '').trim();
+    return [name, {
+      baseUrl: String(tool.baseUrl || '').trim(),
+      authHeader: String(tool.authHeader || '').trim(),
+      authEnv,
+      value: authEnv ? String(process.env[authEnv] || '') : '',
+    }];
+  }));
+}
+
+function buildRuntimeToolStatus(tools: AnyRecord) {
+  return Object.fromEntries(Object.entries(tools || {}).map(([name, toolValue]) => {
+    const tool = toolValue as AnyRecord;
+    const authEnv = String(tool.authEnv || '').trim();
+    return [name, {
+      baseUrl: String(tool.baseUrl || '').trim(),
+      authHeader: String(tool.authHeader || '').trim(),
+      authEnv,
+      envPresent: Boolean(authEnv && process.env[authEnv]),
+    }];
+  }));
+}
+
 function resolvePathInside(rootDir: string, relativePath: string, label: string) {
   const resolved = path.resolve(rootDir, relativePath);
   const relative = path.relative(rootDir, resolved);
@@ -468,7 +604,8 @@ function normalizeDecisionReason(decision: AnyRecord) {
 }
 
 function getCustomAgentStatusKey(agent: AnyRecord) {
-  return `${agent.agentId}:${agent.target && agent.target.id || ''}`;
+  const baseKey = `${agent.agentId}:${agent.target && agent.target.id || ''}`;
+  return agent.statusKeyPrefix ? `${agent.statusKeyPrefix}:${baseKey}` : baseKey;
 }
 
 function resolveSingletonValue(input: AnyRecord, singletonKey: string) {
@@ -533,6 +670,7 @@ function isProcessAlive(pid) {
 
 export {
   loadCustomAgentConfig,
+  loadCustomAgentConfigs,
   markCustomAgentSpawnFailed,
   markCustomAgentSpawned,
   pollCustomAgents,

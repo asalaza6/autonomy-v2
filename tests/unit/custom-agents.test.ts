@@ -8,6 +8,7 @@ import { AGENT_ROLES } from '../../src/agents/role-catalog.js';
 import { findDueAgents } from '../../src/server/orchestrator/orchestrator-runtime-core.js';
 import {
   loadCustomAgentConfig,
+  loadCustomAgentConfigs,
   pollCustomAgents,
 } from '../../src/server/orchestrator/custom-agents.js';
 
@@ -23,6 +24,25 @@ function makeRepo(customConfig, controlPlane = {}) {
     ...controlPlane,
   }, null, 2)}\n`, 'utf8');
   fs.writeFileSync(path.join(configDir, 'custom-agents.json'), `${JSON.stringify(customConfig, null, 2)}\n`, 'utf8');
+  return rootDir;
+}
+
+function makeRepoWithCustomConfigs(customConfigs, controlPlane = {}) {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
+  const configDir = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config');
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.mkdirSync(path.join(rootDir, 'prompts', 'autonomous', 'v2', 'feedback-bot'), { recursive: true });
+  fs.writeFileSync(path.join(rootDir, 'context.md'), '# Strategy context\n', 'utf8');
+  fs.writeFileSync(path.join(rootDir, 'feedback.md'), '# Feedback bot context\n', 'utf8');
+  fs.writeFileSync(path.join(configDir, 'control-plane.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    repoId: 'fixture',
+    spawnCustomAgents: customConfigs.map((entry) => `prompts/autonomous/v2/config/${entry.name}`),
+    ...controlPlane,
+  }, null, 2)}\n`, 'utf8');
+  customConfigs.forEach((entry) => {
+    fs.writeFileSync(path.join(configDir, entry.name), `${JSON.stringify(entry.config, null, 2)}\n`, 'utf8');
+  });
   return rootDir;
 }
 
@@ -64,6 +84,20 @@ test('loads spawnCustomAgents config relative to the repo root', () => {
   assert.equal(config.kind, 'strategy-agents');
   assert.equal(config.agents[0].id, 'strategy-agent');
   assert.equal(config.configPath, path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config', 'custom-agents.json'));
+});
+
+test('loads multiple spawnCustomAgents config files when configured as an array', () => {
+  const rootDir = makeRepoWithCustomConfigs([
+    { name: 'strategy-agents.json', config: baseCustomConfig({ kind: 'strategy-agents' }) },
+    { name: 'feedback-bots.json', config: baseCustomConfig({ kind: 'feedback-bots' }) },
+  ]);
+
+  const configs = loadCustomAgentConfigs(rootDir);
+
+  assert.equal(configs.length, 2);
+  assert.equal(configs[0].kind, 'strategy-agents');
+  assert.equal(configs[1].kind, 'feedback-bots');
+  assert.equal(loadCustomAgentConfig(rootDir)?.kind, 'strategy-agents');
 });
 
 test('missing spawnCustomAgents leaves existing repo-agent runtime untouched', () => {
@@ -358,6 +392,157 @@ test('shouldRun true spawns once and creates the configured workspace', () => {
   });
   assert.equal(runtimeContext.context.globalReadOnly[0].path, path.join(rootDir, 'context.md'));
   assert.deepEqual(runtimeContext.context.workspaceReadWrite, ['state.json', 'notes.md']);
+});
+
+test('per-agent context overrides top-level context', () => {
+  const rootDir = makeRepo(baseCustomConfig({
+    context: {
+      globalReadOnly: ['context.md'],
+      workspaceReadWrite: ['state.json'],
+    },
+    agents: [
+      {
+        ...baseCustomConfig().agents[0],
+        context: {
+          globalReadOnly: ['feedback.md'],
+        },
+      },
+    ],
+  }));
+  fs.writeFileSync(path.join(rootDir, 'feedback.md'), '# Feedback context\n', 'utf8');
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  const runtimeContext = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(runtimeContext.context.globalReadOnly[0].path, path.join(rootDir, 'feedback.md'));
+  assert.deepEqual(runtimeContext.context.workspaceReadWrite, ['state.json']);
+});
+
+test('declared custom-agent tools are passed into runtime context with env values', () => {
+  const rootDir = makeRepo(baseCustomConfig({
+    agentTools: {
+      autonomy: {
+        baseUrl: 'https://autonomy.example/api/agent-tools',
+        authHeader: 'x-autonomy-agent-key',
+      },
+    },
+    agents: [
+      {
+        ...baseCustomConfig().agents[0],
+        tools: {
+          autonomy: {
+            authEnv: 'FEEDBACK_BOT_AUTONOMY_TOKEN',
+          },
+        },
+      },
+    ],
+  }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  process.env.FEEDBACK_BOT_AUTONOMY_TOKEN = 'tool-secret';
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  const runtimeContext = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.deepEqual(runtimeContext.tools.autonomy, {
+    baseUrl: 'https://autonomy.example/api/agent-tools',
+    authHeader: 'x-autonomy-agent-key',
+    authEnv: 'FEEDBACK_BOT_AUTONOMY_TOKEN',
+    value: 'tool-secret',
+  });
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].tools.autonomy.envPresent, true);
+});
+
+test('missing declared custom-agent tool env blocks spawn after a run decision', () => {
+  const rootDir = makeRepo(baseCustomConfig({
+    agentTools: {
+      autonomy: {
+        baseUrl: 'https://autonomy.example/api/agent-tools',
+        authHeader: 'x-autonomy-agent-key',
+      },
+    },
+    agents: [
+      {
+        ...baseCustomConfig().agents[0],
+        tools: {
+          autonomy: {
+            authEnv: 'FEEDBACK_BOT_AUTONOMY_TOKEN',
+          },
+        },
+      },
+    ],
+  }));
+  const previous = process.env.FEEDBACK_BOT_AUTONOMY_TOKEN;
+  delete process.env.FEEDBACK_BOT_AUTONOMY_TOKEN;
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const runtime: any = { workers: {} };
+
+  try {
+    const result = pollCustomAgents(rootDir, runtime as any, {
+      nowIso: '2026-01-01T00:00:00.000Z',
+      customAgentDecisionClient() {
+        return { shouldRun: true };
+      },
+    });
+
+    assert.equal(result.pendingSpawnStarts.length, 0);
+    assert.equal(runtime.customAgents['strategy-agent:target-1'].status, 'blocked');
+    assert.match(runtime.customAgents['strategy-agent:target-1'].lastError, /FEEDBACK_BOT_AUTONOMY_TOKEN/);
+  } finally {
+    if (typeof previous === 'string') {
+      process.env.FEEDBACK_BOT_AUTONOMY_TOKEN = previous;
+    }
+  }
+});
+
+test('multiple custom-agent files keep independent status keys while preserving singleton blocking', () => {
+  const strategy = baseCustomConfig({
+    kind: 'strategy-agents',
+    agents: [baseCustomConfig().agents[0]],
+  });
+  const feedback = baseCustomConfig({
+    kind: 'feedback-bots',
+    context: { globalReadOnly: ['feedback.md'] },
+    agents: [
+      {
+        ...baseCustomConfig().agents[0],
+        id: 'feedback-bot',
+        workspace: '.autonomy/custom/feedback-target-1',
+      },
+    ],
+  });
+  const rootDir = makeRepoWithCustomConfigs([
+    { name: 'strategy-agents.json', config: strategy },
+    { name: 'feedback-bots.json', config: feedback },
+  ]);
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  assert.equal(result.pendingSpawnStarts.length, 1);
+  const statusKeys = Object.keys(runtime.customAgents).sort();
+  assert.equal(statusKeys.length, 2);
+  assert.equal(statusKeys.some((key) => key.includes('strategy-agents-json:strategy-agent:target-1')), true);
+  assert.equal(statusKeys.some((key) => key.includes('feedback-bots-json:feedback-bot:target-1')), true);
+  assert.equal(Object.values(runtime.customAgents).filter((status: any) => status.status === 'blocked').length, 1);
 });
 
 test('offsetSeconds is included in runtime context when an offset agent spawns', () => {

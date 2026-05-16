@@ -75,16 +75,23 @@ async function runCustomAgent(runtimeContext) {
   const workspacePath = String(runtimeContext.workspacePath || '');
   const auth = runtimeContext.auth || {};
   const controlPanel = runtimeContext.controlPanel || {};
+  const tools = runtimeContext.tools || {};
   const env = {
     AUTONOMY_CUSTOM_AGENT_ID: String(runtimeContext.agent && runtimeContext.agent.id || ''),
     AUTONOMY_CUSTOM_AGENT_TARGET: JSON.stringify(runtimeContext.target || {}),
     AUTONOMY_CUSTOM_AGENT_WORKSPACE: workspacePath,
     AUTONOMY_CONTROL_PANEL_BASE_URL: String(controlPanel.baseUrl || ''),
     AUTONOMY_CONTROL_PANEL_AUTH_HEADER: String(controlPanel.authHeader || ''),
+    AUTONOMY_CUSTOM_AGENT_TOOLS: JSON.stringify(buildPromptToolContext(tools)),
   };
   if (auth.envKey && auth.value) {
     env[String(auth.envKey)] = String(auth.value);
   }
+  Object.values(tools || {}).forEach((tool: any) => {
+    if (tool && tool.authEnv && tool.value) {
+      env[String(tool.authEnv)] = String(tool.value);
+    }
+  });
 
   const result = await runCodexExec({
     cwd: workspacePath,
@@ -107,6 +114,7 @@ function buildCustomAgentNetworkConfigOverrides(runtimeContext, env: NodeJS.Proc
   const controlPanel = runtimeContext.controlPanel || {};
   const allowedDomains = uniqueStrings([
     extractHostname(controlPanel.baseUrl),
+    ...Object.values(runtimeContext.tools || {}).map((tool: any) => extractHostname(tool && tool.baseUrl)),
     extractHostname(env.AUTONOMY_CONTROL_PLANE_SERVER_URL),
   ]);
 
@@ -158,6 +166,7 @@ function buildCustomAgentPrompt(runtimeContext) {
       target: runtimeContext.target || {},
       workspacePath: runtimeContext.workspacePath,
       controlPanel: runtimeContext.controlPanel || {},
+      tools: buildPromptToolContext(runtimeContext.tools || {}),
       workspaceReadWrite,
       decision: runtimeContext.decision || {},
     }, null, 2),
@@ -167,6 +176,7 @@ function buildCustomAgentPrompt(runtimeContext) {
     '- Write only inside the configured workspace path.',
     '- Do not modify files outside the configured workspace.',
     '- Use the configured control-panel base URL and auth header when reporting or fetching work.',
+    '- Use configured tools only through their listed base URLs, auth headers, and auth environment variables.',
     '- Do not commit, push, merge, or change repository runtime state.',
     '',
     'Read-only context files:',
@@ -177,6 +187,17 @@ function buildCustomAgentPrompt(runtimeContext) {
     '',
     'Run the custom-agent task for the configured target. No structured response is required.',
   ].filter((entry) => String(entry || '').length > 0).join('\n');
+}
+
+function buildPromptToolContext(tools) {
+  return Object.fromEntries(Object.entries(tools || {}).map(([name, toolValue]) => {
+    const tool: any = toolValue || {};
+    return [name, {
+      baseUrl: String(tool.baseUrl || '').trim(),
+      authHeader: String(tool.authHeader || '').trim(),
+      authEnv: String(tool.authEnv || '').trim(),
+    }];
+  }));
 }
 
 function buildCustomAgentPromptIntro(runtimeContext) {
