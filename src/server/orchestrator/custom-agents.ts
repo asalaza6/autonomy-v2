@@ -63,6 +63,8 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     status.workspacePath = normalizedAgent.workspacePath;
     status.singletonKey = normalizedAgent.singletonKey;
     status.singletonValue = normalizedAgent.singletonValue;
+    status.intervalSeconds = normalizedAgent.intervalSeconds;
+    status.offsetSeconds = normalizedAgent.offsetSeconds;
 
     if (!enabled || !normalizedAgent.enabled) {
       status.status = 'disabled';
@@ -74,6 +76,14 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.lastError = null;
       return;
     }
+    if (normalizedAgent.offsetError) {
+      status.status = 'blocked';
+      status.running = false;
+      status.lastDecision = 'invalid_config';
+      status.lastDecisionReason = normalizedAgent.offsetError;
+      status.lastError = normalizedAgent.offsetError;
+      return;
+    }
     if (normalizedAgent.spawnMode !== 'poll') {
       status.status = 'idle';
       status.lastDecision = 'unsupported';
@@ -83,11 +93,15 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     if (status.running === true) {
       return;
     }
-    if (!pollIsDue(status, normalizedAgent.intervalSeconds, nowIso)) {
+    const pollEligibility = getPollEligibility(status, normalizedAgent.intervalSeconds, normalizedAgent.offsetSeconds, nowIso);
+    if (!pollEligibility.due) {
       return;
     }
 
     status.lastPollAt = nowIso;
+    if (typeof pollEligibility.windowStart === 'number') {
+      status.lastPollWindowStart = pollEligibility.windowStart;
+    }
     const envKey = normalizedAgent.authEnv;
     const authValue = envKey ? process.env[envKey] : '';
     if (!envKey || !authValue) {
@@ -156,6 +170,11 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       },
       target: normalizedAgent.target,
       workspacePath: normalizedAgent.workspacePath,
+      spawn: {
+        intervalSeconds: normalizedAgent.intervalSeconds,
+        offsetSeconds: normalizedAgent.offsetSeconds,
+        pollWindowStart: pollEligibility.windowStart ?? null,
+      },
       controlPanel: {
         baseUrl: controlPanel.baseUrl,
         authHeader: controlPanel.authHeader,
@@ -271,6 +290,8 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord) {
   const workspacePath = resolvePathInside(rootDir, workspace, `${agentId}.workspace`);
   const singletonKey = String(agent && agent.spawn && agent.spawn.singletonKey || 'target.id').trim();
   const singletonValue = resolveSingletonValue({ agentId, target, workspacePath }, singletonKey);
+  const intervalSeconds = normalizePositiveNumber(agent && agent.spawn && agent.spawn.intervalSeconds, DEFAULT_INTERVAL_SECONDS);
+  const offset = normalizeOffsetSeconds(agent && agent.spawn ? agent.spawn.offsetSeconds : undefined, intervalSeconds, agentId);
   return {
     ...agent,
     agentId,
@@ -281,7 +302,9 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord) {
     workspaceReadWrite: context.workspaceReadWrite,
     authEnv: String(agent && agent.authEnv || '').trim(),
     spawnMode: String(agent && agent.spawn && agent.spawn.mode || '').trim(),
-    intervalSeconds: normalizePositiveNumber(agent && agent.spawn && agent.spawn.intervalSeconds, DEFAULT_INTERVAL_SECONDS),
+    intervalSeconds,
+    offsetSeconds: offset.value,
+    offsetError: offset.error,
     singletonKey,
     singletonValue,
     decisionEndpoint: String(agent && agent.spawn && agent.spawn.decision && agent.spawn.decision.endpoint || '').trim(),
@@ -310,6 +333,33 @@ function findActiveSingleton(runtime: RuntimeState, singletonKey: string, single
     }
     return status.singletonKey === singletonKey && status.singletonValue === singletonValue;
   }) || null;
+}
+
+function getPollEligibility(status: AnyRecord, intervalSeconds: number, offsetSeconds: number | null, nowIso: string) {
+  if (typeof offsetSeconds === 'number') {
+    return getOffsetPollEligibility(status, intervalSeconds, offsetSeconds, nowIso);
+  }
+  return {
+    due: pollIsDue(status, intervalSeconds, nowIso),
+    windowStart: null,
+  };
+}
+
+function getOffsetPollEligibility(status: AnyRecord, intervalSeconds: number, offsetSeconds: number, nowIso: string) {
+  const nowMs = Date.parse(nowIso);
+  if (!Number.isFinite(nowMs)) {
+    return { due: false, windowStart: null };
+  }
+  const nowSeconds = Math.floor(nowMs / 1000);
+  const windowStart = Math.floor(nowSeconds / intervalSeconds) * intervalSeconds;
+  const eligibleAt = windowStart + offsetSeconds;
+  if (nowSeconds < eligibleAt) {
+    return { due: false, windowStart };
+  }
+  if (Number(status.lastPollWindowStart) === windowStart) {
+    return { due: false, windowStart };
+  }
+  return { due: true, windowStart };
 }
 
 function pollIsDue(status: AnyRecord, intervalSeconds: number, nowIso: string) {
@@ -390,6 +440,20 @@ function normalizeStringArray(value: unknown) {
 function normalizePositiveNumber(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeOffsetSeconds(value: unknown, intervalSeconds: number, agentId: string) {
+  if (typeof value === 'undefined' || value === null || value === '') {
+    return { value: null, error: null };
+  }
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed >= 0 && parsed < intervalSeconds) {
+    return { value: parsed, error: null };
+  }
+  return {
+    value: null,
+    error: `invalid spawn.offsetSeconds for "${agentId}": expected >= 0 and < intervalSeconds (${intervalSeconds})`,
+  };
 }
 
 function normalizeDecisionReason(decision: AnyRecord) {

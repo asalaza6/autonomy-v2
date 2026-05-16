@@ -333,6 +333,9 @@ function buildCustomAgentStatuses(runtime) {
     if (status.lastDecisionReason) {
       detailParts.push(summarizeStatusText(status.lastDecisionReason));
     }
+    if (typeof status.offsetSeconds === 'number') {
+      detailParts.push(`offset=${status.offsetSeconds}s`);
+    }
     if (status.workspacePath) {
       detailParts.push(`workspace=${status.workspacePath}`);
     }
@@ -351,6 +354,9 @@ function buildCustomAgentStatuses(runtime) {
       lastDecision: status.lastDecision || null,
       lastDecisionReason: status.lastDecisionReason || null,
       workspacePath: status.workspacePath || null,
+      intervalSeconds: typeof status.intervalSeconds === 'number' ? status.intervalSeconds : null,
+      offsetSeconds: typeof status.offsetSeconds === 'number' ? status.offsetSeconds : null,
+      lastPollWindowStart: typeof status.lastPollWindowStart === 'number' ? status.lastPollWindowStart : null,
       lastError: status.lastError || null,
       detail: detailParts.length > 0 ? detailParts.join(' | ') : 'custom agent idle',
     };

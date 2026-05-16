@@ -238,6 +238,87 @@ test('decision request failures are recorded without preventing later polls', ()
   assert.deepEqual(later.pendingSpawnStarts, []);
 });
 
+test('offsetSeconds staggers polling within epoch interval windows', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      intervalSeconds: 1800,
+      offsetSeconds: 540,
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const calls: string[] = [];
+  const runtime: any = { workers: {} };
+
+  pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:08:59.000Z',
+    customAgentDecisionClient() {
+      calls.push('before');
+      return { shouldRun: false };
+    },
+  });
+  pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:09:00.000Z',
+    customAgentDecisionClient() {
+      calls.push('first-window');
+      return { shouldRun: false, reason: 'first' };
+    },
+  });
+  pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:20:00.000Z',
+    customAgentDecisionClient() {
+      calls.push('duplicate-window');
+      return { shouldRun: false };
+    },
+  });
+  pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:39:00.000Z',
+    customAgentDecisionClient() {
+      calls.push('second-window');
+      return { shouldRun: false, reason: 'second' };
+    },
+  });
+
+  assert.deepEqual(calls, ['first-window', 'second-window']);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].offsetSeconds, 540);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].intervalSeconds, 1800);
+  assert.equal(
+    runtime.customAgents['strategy-agent:target-1'].lastPollWindowStart,
+    Date.parse('2026-01-01T00:30:00.000Z') / 1000,
+  );
+});
+
+test('invalid offsetSeconds is reported as a custom-agent config warning and not polled', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      intervalSeconds: 60,
+      offsetSeconds: 60,
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  let decisionCalls = 0;
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      decisionCalls += 1;
+      return { shouldRun: true };
+    },
+  });
+
+  assert.equal(decisionCalls, 0);
+  assert.deepEqual(result.pendingSpawnStarts, []);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].status, 'blocked');
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecision, 'invalid_config');
+  assert.match(runtime.customAgents['strategy-agent:target-1'].lastError, /offsetSeconds/);
+});
+
 test('shouldRun true spawns once and creates the configured workspace', () => {
   const rootDir = makeRepo(baseCustomConfig({
     promptRole: 'trading strategy operator agent',
@@ -270,8 +351,42 @@ test('shouldRun true spawns once and creates the configured workspace', () => {
   assert.equal(runtimeContext.controlPanel.baseUrl, 'https://control.example');
   assert.equal(runtimeContext.controlPanel.authHeader, 'X-Strategy-Token');
   assert.equal(runtimeContext.auth.value, 'secret-token');
+  assert.deepEqual(runtimeContext.spawn, {
+    intervalSeconds: 60,
+    offsetSeconds: null,
+    pollWindowStart: null,
+  });
   assert.equal(runtimeContext.context.globalReadOnly[0].path, path.join(rootDir, 'context.md'));
   assert.deepEqual(runtimeContext.context.workspaceReadWrite, ['state.json', 'notes.md']);
+});
+
+test('offsetSeconds is included in runtime context when an offset agent spawns', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      intervalSeconds: 1800,
+      offsetSeconds: 540,
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:09:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  assert.equal(result.pendingSpawnStarts.length, 1);
+  const runtimeContext = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.deepEqual(runtimeContext.spawn, {
+    intervalSeconds: 1800,
+    offsetSeconds: 540,
+    pollWindowStart: Date.parse('2026-01-01T00:00:00.000Z') / 1000,
+  });
 });
 
 test('singleton target.id prevents duplicate active target spawns', () => {

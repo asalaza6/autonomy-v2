@@ -472,6 +472,9 @@ export interface CustomAgentRuntime extends AnyRecord {
   workspacePath?: string | null;
   singletonKey?: string | null;
   singletonValue?: string | null;
+  intervalSeconds?: number | null;
+  offsetSeconds?: number | null;
+  lastPollWindowStart?: number | null;
   lastError?: string | null;
 }
 
