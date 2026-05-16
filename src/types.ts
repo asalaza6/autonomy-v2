@@ -457,8 +457,27 @@ export interface WorkerRuntime extends AnyRecord {
   lastError?: string | null;
 }
 
+export interface CustomAgentRuntime extends AnyRecord {
+  agentId: string;
+  enabled?: boolean;
+  target?: AnyRecord;
+  status?: string;
+  running?: boolean;
+  pid?: number | null;
+  startedAt?: string;
+  finishedAt?: string;
+  lastPollAt?: string;
+  lastDecision?: string | null;
+  lastDecisionReason?: string | null;
+  workspacePath?: string | null;
+  singletonKey?: string | null;
+  singletonValue?: string | null;
+  lastError?: string | null;
+}
+
 export interface RuntimeState extends AnyRecord {
   workers: Record<string, WorkerRuntime>;
+  customAgents?: Record<string, CustomAgentRuntime>;
   backlogGraceConsumed?: boolean;
   backlogGraceUntil?: string;
   lastPrdPromotion?: AnyRecord | null;

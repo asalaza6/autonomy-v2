@@ -1,0 +1,227 @@
+#!/usr/bin/env node
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { runCodexExec } from '../../codex/cli.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
+import { loadRuntime, writeRuntime } from '../orchestrator/orchestrator-state.js';
+import { ensureDir, readJson } from '../orchestrator/paths.js';
+
+function parseCli(argv: string[]) {
+  const options: Record<string, any> = {};
+  const positionals: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token.startsWith('--')) {
+      const key = token.slice(2);
+      const next = argv[index + 1];
+      if (typeof next === 'undefined' || next.startsWith('--')) {
+        options[key] = true;
+      } else {
+        options[key] = next;
+        index += 1;
+      }
+      continue;
+    }
+    positionals.push(token);
+  }
+  return {
+    command: positionals[0] || 'run',
+    options,
+  };
+}
+
+async function main(argv: string[] = process.argv.slice(2)) {
+  const { command, options } = parseCli(argv);
+  if (command !== 'run') {
+    throw new Error(`Unknown command "${command}". Use "run".`);
+  }
+
+  const contextPath = String(options.context || process.env.AUTONOMY_CUSTOM_AGENT_CONTEXT || '').trim();
+  if (!contextPath) {
+    throw new Error('Missing required option --context');
+  }
+  const runtimeContext: any = readJson(contextPath, {});
+  const rootDir = String(runtimeContext.rootDir || '').trim();
+  const runtimeKey = String(runtimeContext.runtimeKey || '').trim();
+  const workspacePath = String(runtimeContext.workspacePath || '').trim();
+  if (!rootDir || !runtimeKey || !workspacePath) {
+    throw new Error('Custom agent runtime context must include rootDir, runtimeKey, and workspacePath.');
+  }
+  ensureWorkspaceInsideRoot(rootDir, workspacePath);
+  ensureDir(workspacePath);
+
+  let result = null;
+  let error = null;
+  try {
+    result = await runCustomAgent(runtimeContext);
+  } catch (caughtError) {
+    error = caughtError;
+    throw caughtError;
+  } finally {
+    finalizeCustomAgentRuntime(rootDir, runtimeKey, result, error);
+  }
+}
+
+async function runCustomAgent(runtimeContext) {
+  if (process.env.AUTONOMY_CUSTOM_AGENT_STUB === '1') {
+    return {
+      ok: true,
+      status: 'stubbed',
+    };
+  }
+
+  const workspacePath = String(runtimeContext.workspacePath || '');
+  const auth = runtimeContext.auth || {};
+  const controlPanel = runtimeContext.controlPanel || {};
+  const env = {
+    AUTONOMY_CUSTOM_AGENT_ID: String(runtimeContext.agent && runtimeContext.agent.id || ''),
+    AUTONOMY_CUSTOM_AGENT_TARGET: JSON.stringify(runtimeContext.target || {}),
+    AUTONOMY_CUSTOM_AGENT_WORKSPACE: workspacePath,
+    AUTONOMY_CONTROL_PANEL_BASE_URL: String(controlPanel.baseUrl || ''),
+    AUTONOMY_CONTROL_PANEL_AUTH_HEADER: String(controlPanel.authHeader || ''),
+  };
+  if (auth.envKey && auth.value) {
+    env[String(auth.envKey)] = String(auth.value);
+  }
+
+  const result = await runCodexExec({
+    cwd: workspacePath,
+    prompt: buildCustomAgentPrompt(runtimeContext),
+    readOnly: false,
+    sandboxMode: 'workspace-write',
+    env,
+    inheritHostEnv: true,
+  });
+
+  return {
+    ok: true,
+    status: 'completed',
+    conversationId: result.conversationId || '',
+  };
+}
+
+function buildCustomAgentPrompt(runtimeContext) {
+  const context = runtimeContext.context || {};
+  const globalReadOnly = Array.isArray(context.globalReadOnly) ? context.globalReadOnly : [];
+  const workspaceReadWrite = Array.isArray(context.workspaceReadWrite) ? context.workspaceReadWrite : [];
+  const agent = runtimeContext.agent || {};
+  const instructionText = [
+    String(agent.instructions || '').trim(),
+    readOptionalPromptFile(runtimeContext.rootDir, agent.prompt || agent.systemPrompt),
+  ].filter(Boolean).join('\n\n');
+
+  return [
+    instructionText,
+    'You are a repo-defined custom Autonomy agent.',
+    '',
+    'Runtime context:',
+    JSON.stringify({
+      agentId: agent.id,
+      kind: runtimeContext.kind || '',
+      target: runtimeContext.target || {},
+      workspacePath: runtimeContext.workspacePath,
+      controlPanel: runtimeContext.controlPanel || {},
+      workspaceReadWrite,
+      decision: runtimeContext.decision || {},
+    }, null, 2),
+    '',
+    'Hard rules:',
+    '- Treat the global context files below as read-only context.',
+    '- Write only inside the configured workspace path.',
+    '- Do not modify files outside the configured workspace.',
+    '- Use the configured control-panel base URL and auth header when reporting or fetching work.',
+    '- Do not commit, push, merge, or change repository runtime state.',
+    '',
+    'Read-only context files:',
+    ...globalReadOnly.map((entry) => formatReadOnlyContextFile(entry)),
+    '',
+    'Writable workspace file names:',
+    JSON.stringify(workspaceReadWrite, null, 2),
+    '',
+    'Run the custom-agent task for the configured target. No structured response is required.',
+  ].filter((entry) => String(entry || '').length > 0).join('\n');
+}
+
+function formatReadOnlyContextFile(entry) {
+  const filePath = String(entry && entry.path || '').trim();
+  const label = String(entry && (entry.relativePath || entry.name) || filePath).trim();
+  let content = '';
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    content = `Unable to read context file: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  return [
+    `### ${label}`,
+    '```',
+    content,
+    '```',
+  ].join('\n');
+}
+
+function readOptionalPromptFile(rootDir: string, promptPath: unknown) {
+  const normalized = String(promptPath || '').trim();
+  if (!normalized) {
+    return '';
+  }
+  const resolved = path.resolve(rootDir, normalized);
+  const relative = path.relative(rootDir, resolved);
+  if (relative.startsWith('..') || path.isAbsolute(relative) || !fs.existsSync(resolved)) {
+    return '';
+  }
+  return fs.readFileSync(resolved, 'utf8');
+}
+
+function ensureWorkspaceInsideRoot(rootDir: string, workspacePath: string) {
+  const relative = path.relative(rootDir, workspacePath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Custom agent workspace must resolve inside the repository root.');
+  }
+}
+
+function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, result, error) {
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    runtime.customAgents = runtime.customAgents || {};
+    runtime.customAgents[runtimeKey] = {
+      agentId: String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].agentId || runtimeKey),
+      ...(runtime.customAgents[runtimeKey] || {}),
+      status: 'idle',
+      running: false,
+      finishedAt: new Date().toISOString(),
+      pid: null,
+      lastResult: result || null,
+      lastError: error ? extractError(error) : null,
+    };
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
+}
+
+function extractError(error) {
+  if (error && typeof error === 'object') {
+    if (error.stderr) {
+      return String(error.stderr);
+    }
+    if (error.stdout) {
+      return String(error.stdout);
+    }
+    if (error.message) {
+      return String(error.message);
+    }
+  }
+  return String(error || 'custom agent failed');
+}
+
+export { main };
+
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error) => {
+    console.error(`ERROR: ${extractError(error)}`);
+    process.exit(1);
+  });
+}

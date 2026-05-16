@@ -41,6 +41,8 @@ type CodexRuntimeOptions = {
   configOverrides?: string[];
 };
 
+type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+
 async function runCodexStructured({
   cwd,
   prompt,
@@ -51,6 +53,7 @@ async function runCodexStructured({
   env,
   inheritHostEnv = true,
   configOverrides = [],
+  sandboxMode,
 }: {
   cwd: string;
   prompt: string;
@@ -61,6 +64,7 @@ async function runCodexStructured({
   env?: NodeJS.ProcessEnv;
   inheritHostEnv?: boolean;
   configOverrides?: string[];
+  sandboxMode?: CodexSandboxMode;
 }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
@@ -70,7 +74,7 @@ async function runCodexStructured({
 
   try {
     fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
-    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId, captureConversationId, configOverrides });
+    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId, captureConversationId, configOverrides, sandboxMode });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
     const result = await runCodexCommand({
       binary: codexBin,
@@ -102,6 +106,7 @@ async function runCodexExec({
   env,
   inheritHostEnv = true,
   configOverrides = [],
+  sandboxMode,
 }: {
   cwd: string;
   prompt: string;
@@ -111,11 +116,12 @@ async function runCodexExec({
   env?: NodeJS.ProcessEnv;
   inheritHostEnv?: boolean;
   configOverrides?: string[];
+  sandboxMode?: CodexSandboxMode;
 }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const streamOutput = shouldStreamCodexOutput();
   try {
-    const args = buildCodexExecArgs({ cwd, readOnly, resumeSessionId, captureConversationId, configOverrides });
+    const args = buildCodexExecArgs({ cwd, readOnly, resumeSessionId, captureConversationId, configOverrides, sandboxMode });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
     const result = await runCodexCommand({
       binary: codexBin,
@@ -144,6 +150,7 @@ function runCodexExecSync({
   env,
   inheritHostEnv = true,
   configOverrides = [],
+  sandboxMode,
 }: {
   cwd: string;
   prompt: string;
@@ -153,11 +160,12 @@ function runCodexExecSync({
   env?: NodeJS.ProcessEnv;
   inheritHostEnv?: boolean;
   configOverrides?: string[];
+  sandboxMode?: CodexSandboxMode;
 }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const streamOutput = shouldStreamCodexOutput();
   try {
-    const args = buildCodexExecArgs({ cwd, readOnly, resumeSessionId, captureConversationId, configOverrides });
+    const args = buildCodexExecArgs({ cwd, readOnly, resumeSessionId, captureConversationId, configOverrides, sandboxMode });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
     const result = runCodexCommandSync({
       binary: codexBin,
@@ -186,6 +194,7 @@ function runCodexStructuredSync({
   env,
   inheritHostEnv = true,
   configOverrides = [],
+  sandboxMode,
 }: {
   cwd: string;
   prompt: string;
@@ -196,6 +205,7 @@ function runCodexStructuredSync({
   env?: NodeJS.ProcessEnv;
   inheritHostEnv?: boolean;
   configOverrides?: string[];
+  sandboxMode?: CodexSandboxMode;
 }) {
   const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
@@ -205,7 +215,7 @@ function runCodexStructuredSync({
 
   try {
     fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
-    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId, captureConversationId, configOverrides });
+    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId, captureConversationId, configOverrides, sandboxMode });
     logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
     const result = runCodexCommandSync({
       binary: codexBin,
@@ -228,9 +238,16 @@ function runCodexStructuredSync({
   }
 }
 
-function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId = '', captureConversationId = false, configOverrides = [] }) {
+function resolveSandboxMode(readOnly, sandboxMode: CodexSandboxMode | undefined) {
+  if (sandboxMode) {
+    return sandboxMode;
+  }
+  return readOnly ? 'read-only' : 'danger-full-access';
+}
+
+function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId = '', captureConversationId = false, configOverrides = [], sandboxMode = undefined }) {
   const args = ['--ask-for-approval', 'never', 'exec'];
-  args.push('--sandbox', readOnly ? 'read-only' : 'danger-full-access');
+  args.push('--sandbox', resolveSandboxMode(readOnly, sandboxMode));
 
   const model = String(process.env.AUTONOMY_CODEX_MODEL || '').trim();
   if (model) {
@@ -272,9 +289,9 @@ function buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId
   return args;
 }
 
-function buildCodexExecArgs({ cwd, readOnly, resumeSessionId = '', captureConversationId = false, configOverrides = [] }) {
+function buildCodexExecArgs({ cwd, readOnly, resumeSessionId = '', captureConversationId = false, configOverrides = [], sandboxMode = undefined }) {
   const args = ['--ask-for-approval', 'never', 'exec'];
-  args.push('--sandbox', readOnly ? 'read-only' : 'danger-full-access');
+  args.push('--sandbox', resolveSandboxMode(readOnly, sandboxMode));
 
   const model = String(process.env.AUTONOMY_CODEX_MODEL || '').trim();
   if (model) {

@@ -6,6 +6,13 @@ import { loadQueues } from './queues.js';
 import { findDueAgents, finalizePendingInlineWorkers, refreshRuntime, setWorkerState, spawnWorkerProcess, updateBacklogGrace } from './orchestrator-runtime.js';
 import { loadBranchLocks, loadConfig, loadPrds, loadRuntime, writeRuntime } from './orchestrator-state.js';
 import { runWorkerOnce } from './workers.js';
+import {
+  markCustomAgentSpawnFailed,
+  markCustomAgentSpawned,
+  pollCustomAgents,
+  refreshCustomAgentRuntime,
+  spawnCustomAgentProcess,
+} from './custom-agents.js';
 
 function emitSchedulerProgress(options, event, payload = {}) {
   if (!options || typeof options.onProgress !== 'function') {
@@ -62,7 +69,9 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   let dueAgents = [];
   let runtime = null;
   const started = [];
+  const customAgentStarted = [];
   const pendingSpawnStarts = [];
+  const pendingCustomAgentStarts = [];
 
   try {
     emitSchedulerProgress(options, 'state-lock:acquired', { lock: 'state-lock' });
@@ -92,8 +101,10 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
       workers: Object.keys((runtime && runtime.workers) || {}).length,
     });
     refreshRuntime(rootDir, config, queues, runtime);
+    refreshCustomAgentRuntime(runtime);
     emitSchedulerProgress(options, 'runtime:refreshed', {
       workers: Object.keys((runtime && runtime.workers) || {}).length,
+      customAgents: Object.keys((runtime && runtime.customAgents) || {}).length,
     });
 
     const { pendingPrdWork, suppressNonPmDispatch } = updateBacklogGrace(rootDir, config, queues, branchLocks, prds, runtime, options);
@@ -142,12 +153,25 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
       pendingSpawnStarts.push({ agentId: due.agentId, reason: due.reason, startedAt: now });
     }
 
+    if (options.inline !== true) {
+      const customAgentPoll = pollCustomAgents(rootDir, runtime, options);
+      customAgentStarted.push(...customAgentPoll.started);
+      pendingCustomAgentStarts.push(...customAgentPoll.pendingSpawnStarts);
+      emitSchedulerProgress(options, 'custom-agents:computed', {
+        configured: customAgentPoll.config ? 'yes' : 'no',
+        started: customAgentPoll.started.length,
+        pendingSpawnStarts: customAgentPoll.pendingSpawnStarts.length,
+      });
+    }
+
     emitSchedulerProgress(options, 'runtime:write:start', {
       started: started.length,
+      customAgentStarted: customAgentStarted.length,
     });
     writeRuntime(rootDir, runtime);
     emitSchedulerProgress(options, 'runtime:write:done', {
       started: started.length,
+      customAgentStarted: customAgentStarted.length,
       running: (Object.values((runtime && runtime.workers) || {}) as WorkerRuntime[])
         .filter((worker) => worker && worker.status === 'running').length,
     });
@@ -192,6 +216,38 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
         throw error;
       }
     }
+
+    for (const entry of pendingCustomAgentStarts) {
+      try {
+        const child = spawnCustomAgentProcess(rootDir, entry, {
+          streamOutput: options.streamWorkerOutput === true,
+          customAgentSpawner: options.customAgentSpawner,
+        });
+        const pid = child && typeof child === 'object' ? child.pid : null;
+        const startedEntry = customAgentStarted.find((candidate) => candidate.agentId === entry.agentId && candidate.startedAt === entry.startedAt);
+        if (startedEntry) {
+          startedEntry.pid = pid;
+        }
+        updateCustomAgentSpawnedPid(rootDir, entry, pid);
+        emitSchedulerProgress(options, 'custom-agent:dispatch:done', {
+          agentId: entry.agentId,
+          targetId: entry.target && entry.target.id || '',
+          pid,
+        });
+        if (typeof options.onWorkerSpawn === 'function') {
+          options.onWorkerSpawn({
+            agentId: entry.agentId,
+            mode: 'custom-agent',
+            reason: 'custom-agent',
+            pid,
+            child,
+          });
+        }
+      } catch (error) {
+        updateCustomAgentSpawnFailed(rootDir, entry, error);
+        throw error;
+      }
+    }
   }
 
   if (options.inline === true) {
@@ -230,8 +286,31 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     sync,
     dueAgents,
     started,
+    customAgentStarted,
     runtime,
   };
+}
+
+function updateCustomAgentSpawnedPid(rootDir: string, entry: AnyRecord, pid: number | null | undefined) {
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    markCustomAgentSpawned(runtime, entry, pid);
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
+}
+
+function updateCustomAgentSpawnFailed(rootDir: string, entry: AnyRecord, error: unknown) {
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    markCustomAgentSpawnFailed(runtime, entry, error);
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
 }
 
 function updateSpawnedWorkerPid(rootDir: string, agentId: string, startedAt: string, pid: number | null | undefined) {

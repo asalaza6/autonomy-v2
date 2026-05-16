@@ -15,7 +15,7 @@ function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, branchLoc
       .filter(([laneKey]) => laneKey)
   );
 
-  return (config.agents || []).map((agent) => {
+  const repoAgentStatuses = (config.agents || []).map((agent) => {
     const queue = getTaskQueue(taskQueues, config, agent.id);
     const worker = ((runtime && runtime.workers) || {})[agent.id] || {
       agentId: agent.id,
@@ -30,6 +30,7 @@ function buildAgentStatusSummaries({ rootDir, config, taskQueues, prs, branchLoc
     }
     return buildImplementationAgentStatus(rootDir, config, branchLocks, agent, queue, worker, prById, branchLockByLane);
   });
+  return repoAgentStatuses.concat(buildCustomAgentStatuses(runtime));
 }
 
 function buildPmAgentStatus(agent, worker, prds) {
@@ -318,6 +319,42 @@ function summarizeStatusText(value, maxLength = 120) {
     return summary;
   }
   return `${summary.slice(0, maxLength - 1)}…`;
+}
+
+function buildCustomAgentStatuses(runtime) {
+  return Object.values((runtime && runtime.customAgents) || {}).map((status: AnyRecord) => {
+    const detailParts = [];
+    if (status.target && status.target.id) {
+      detailParts.push(`target=${status.target.id}`);
+    }
+    if (status.lastDecision) {
+      detailParts.push(`decision=${status.lastDecision}`);
+    }
+    if (status.lastDecisionReason) {
+      detailParts.push(summarizeStatusText(status.lastDecisionReason));
+    }
+    if (status.workspacePath) {
+      detailParts.push(`workspace=${status.workspacePath}`);
+    }
+    if (status.lastError) {
+      detailParts.push(`last error: ${summarizeStatusText(status.lastError)}`);
+    }
+    return {
+      agentId: status.agentId,
+      role: 'custom',
+      target: status.target || null,
+      enabled: status.enabled !== false,
+      workerStatus: status.status || (status.running ? 'running' : 'idle'),
+      running: status.running === true,
+      pid: status.pid || null,
+      lastPollAt: status.lastPollAt || null,
+      lastDecision: status.lastDecision || null,
+      lastDecisionReason: status.lastDecisionReason || null,
+      workspacePath: status.workspacePath || null,
+      lastError: status.lastError || null,
+      detail: detailParts.length > 0 ? detailParts.join(' | ') : 'custom agent idle',
+    };
+  });
 }
 
 function formatAgentStatusLine(agentStatus: AnyRecord, options: AnyRecord = {}) {
