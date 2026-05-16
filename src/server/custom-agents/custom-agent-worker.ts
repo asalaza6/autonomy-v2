@@ -149,7 +149,7 @@ function buildCustomAgentPrompt(runtimeContext) {
 
   return [
     instructionText,
-    'You are a repo-defined custom Autonomy agent.',
+    buildCustomAgentPromptIntro(runtimeContext),
     '',
     'Runtime context:',
     JSON.stringify({
@@ -177,6 +177,45 @@ function buildCustomAgentPrompt(runtimeContext) {
     '',
     'Run the custom-agent task for the configured target. No structured response is required.',
   ].filter((entry) => String(entry || '').length > 0).join('\n');
+}
+
+function buildCustomAgentPromptIntro(runtimeContext) {
+  const agent = runtimeContext.agent || {};
+  const promptIntro = firstNonEmptyString(
+    agent.promptIntro,
+    runtimeContext.promptIntro,
+  );
+  if (promptIntro) {
+    return promptIntro;
+  }
+
+  const promptRole = firstNonEmptyString(
+    agent.promptRole,
+    runtimeContext.promptRole,
+  );
+  if (promptRole) {
+    return `You are ${withIndefiniteArticle(promptRole)}.`;
+  }
+
+  return 'You are a repo-defined custom Autonomy agent.';
+}
+
+function firstNonEmptyString(...values: unknown[]) {
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return '';
+}
+
+function withIndefiniteArticle(value: string) {
+  const normalized = value.replace(/[.]+$/g, '').trim();
+  if (/^(a|an|the)\s+/i.test(normalized)) {
+    return normalized;
+  }
+  return `${/^[aeiou]/i.test(normalized) ? 'an' : 'a'} ${normalized}`;
 }
 
 function formatReadOnlyContextFile(entry) {
@@ -252,7 +291,7 @@ function extractError(error) {
   return String(error || 'custom agent failed');
 }
 
-export { buildCustomAgentNetworkConfigOverrides, main };
+export { buildCustomAgentNetworkConfigOverrides, buildCustomAgentPrompt, main };
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {

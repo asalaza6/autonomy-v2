@@ -239,7 +239,9 @@ test('decision request failures are recorded without preventing later polls', ()
 });
 
 test('shouldRun true spawns once and creates the configured workspace', () => {
-  const rootDir = makeRepo(baseCustomConfig());
+  const rootDir = makeRepo(baseCustomConfig({
+    promptRole: 'trading strategy operator agent',
+  }));
   process.env.STRATEGY_TOKEN = 'secret-token';
   const runtime: any = { workers: {} };
 
@@ -262,6 +264,7 @@ test('shouldRun true spawns once and creates the configured workspace', () => {
   assert.equal(fs.existsSync(workspacePath), true);
   const runtimeContext = JSON.parse(fs.readFileSync(first.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
   assert.equal(runtimeContext.agent.id, 'strategy-agent');
+  assert.equal(runtimeContext.promptRole, 'trading strategy operator agent');
   assert.deepEqual(runtimeContext.target, { type: 'strategy', id: 'target-1' });
   assert.equal(runtimeContext.workspacePath, workspacePath);
   assert.equal(runtimeContext.controlPanel.baseUrl, 'https://control.example');

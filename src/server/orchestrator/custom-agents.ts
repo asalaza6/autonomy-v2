@@ -146,6 +146,8 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       runtimeKey: statusKey,
       rootDir,
       kind: String(config.kind || ''),
+      promptRole: String(config.promptRole || config.agentPromptRole || '').trim(),
+      promptIntro: String(config.promptIntro || config.agentPromptIntro || '').trim(),
       agent: {
         ...pickRuntimeAgentFields(agent),
         id: normalizedAgent.agentId,

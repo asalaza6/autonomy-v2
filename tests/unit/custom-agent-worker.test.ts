@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildCustomAgentNetworkConfigOverrides } from '../../src/server/custom-agents/custom-agent-worker.js';
+import {
+  buildCustomAgentNetworkConfigOverrides,
+  buildCustomAgentPrompt,
+} from '../../src/server/custom-agents/custom-agent-worker.js';
 
 test('custom agent worker allowlists configured control hosts', () => {
   const overrides = buildCustomAgentNetworkConfigOverrides(
@@ -45,4 +48,37 @@ test('custom agent worker deduplicates repeated network allowlist hosts', () => 
     'experimental_network.allowed_domains=["control.example"]',
     'experimental_network.open_world_enabled=false',
   ]);
+});
+
+test('custom agent worker uses configured prompt role in wrapper text', () => {
+  const prompt = buildCustomAgentPrompt({
+    rootDir: process.cwd(),
+    promptRole: 'trading strategy operator agent',
+    agent: { id: 'strategy-agent' },
+    target: { type: 'strategy', id: 'target-1' },
+    workspacePath: '/tmp/strategy-agent',
+    controlPanel: {},
+    context: {},
+  });
+
+  assert.match(prompt, /^You are a trading strategy operator agent\./);
+  assert.doesNotMatch(prompt, /repo-defined custom Autonomy agent/);
+});
+
+test('custom agent worker lets agent prompt intro override prompt role', () => {
+  const prompt = buildCustomAgentPrompt({
+    rootDir: process.cwd(),
+    promptRole: 'trading strategy operator agent',
+    agent: {
+      id: 'strategy-agent',
+      promptIntro: 'You are the overnight crypto strategy operator.',
+    },
+    target: { type: 'strategy', id: 'target-1' },
+    workspacePath: '/tmp/strategy-agent',
+    controlPanel: {},
+    context: {},
+  });
+
+  assert.match(prompt, /^You are the overnight crypto strategy operator\./);
+  assert.doesNotMatch(prompt, /^You are a trading strategy operator agent\./);
 });

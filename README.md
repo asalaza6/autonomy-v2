@@ -78,6 +78,26 @@ decision polling and spawning:
 }
 ```
 
+## Custom Agent Prompt Identity
+
+Custom-agent configs can customize the wrapper identity text shown at the top of
+the spawned agent prompt. Use top-level `promptRole` to apply one role to the
+whole config, or per-agent `promptRole` to override it for one agent. The
+launcher renders it as `You are a ...`. For full control over the sentence, use
+`promptIntro` instead.
+
+```json
+{
+  "promptRole": "trading strategy operator agent",
+  "agents": [
+    {
+      "id": "strategy-agent-alpacaTraderCrypto24x7",
+      "target": { "type": "strategy", "id": "alpacaTraderCrypto24x7" }
+    }
+  ]
+}
+```
+
 ## Current package command usage
 
 The package itself is used through `npx autonomy-v2 ...` or by invoking the
