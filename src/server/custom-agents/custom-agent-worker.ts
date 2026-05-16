@@ -93,6 +93,7 @@ async function runCustomAgent(runtimeContext) {
     sandboxMode: 'workspace-write',
     env,
     inheritHostEnv: true,
+    configOverrides: buildCustomAgentNetworkConfigOverrides(runtimeContext, process.env),
   });
 
   return {
@@ -100,6 +101,39 @@ async function runCustomAgent(runtimeContext) {
     status: 'completed',
     conversationId: result.conversationId || '',
   };
+}
+
+function buildCustomAgentNetworkConfigOverrides(runtimeContext, env: NodeJS.ProcessEnv = process.env) {
+  const controlPanel = runtimeContext.controlPanel || {};
+  const allowedDomains = uniqueStrings([
+    extractHostname(controlPanel.baseUrl),
+    extractHostname(env.AUTONOMY_CONTROL_PLANE_SERVER_URL),
+  ]);
+
+  if (allowedDomains.length === 0) {
+    return [];
+  }
+
+  return [
+    `experimental_network.allowed_domains=${JSON.stringify(allowedDomains)}`,
+    'experimental_network.open_world_enabled=false',
+  ];
+}
+
+function extractHostname(value: unknown) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function buildCustomAgentPrompt(runtimeContext) {
@@ -217,7 +251,7 @@ function extractError(error) {
   return String(error || 'custom agent failed');
 }
 
-export { main };
+export { buildCustomAgentNetworkConfigOverrides, main };
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {

@@ -59,6 +59,25 @@ repo.
 - [Current Issues / Deferred Fixes](./issues.md)
 - [Feature Design Template](./features.md)
 
+## Custom Agent Enable Flags
+
+Custom-agent configs support both a top-level `enabled` flag and per-agent
+`enabled` flags. Omitting either flag defaults to enabled. Set a specific
+agent to `false` to keep it registered in runtime status while preventing
+decision polling and spawning:
+
+```json
+{
+  "agents": [
+    {
+      "id": "strategy-agent-alpacaTrader4",
+      "enabled": false,
+      "target": { "type": "strategy", "id": "alpacaTrader4" }
+    }
+  ]
+}
+```
+
 ## Current package command usage
 
 The package itself is used through `npx autonomy-v2 ...` or by invoking the

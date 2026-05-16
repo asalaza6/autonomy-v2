@@ -1,5 +1,5 @@
 import path from 'path';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import type { AnyRecord, RuntimeState } from '../server-types.js';
 import { CUSTOM_AGENT_WORKER_PATH } from './orchestrator-constants.js';
 import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
@@ -67,6 +67,11 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     if (!enabled || !normalizedAgent.enabled) {
       status.status = 'disabled';
       status.running = false;
+      status.lastDecision = 'disabled';
+      status.lastDecisionReason = enabled
+        ? 'agent disabled by custom-agent config'
+        : 'custom-agent config disabled';
+      status.lastError = null;
       return;
     }
     if (normalizedAgent.spawnMode !== 'poll') {
@@ -329,11 +334,22 @@ fetch(url, { method: 'GET', headers }).then(async (response) => {
   process.exit(1);
 });
 `;
-  const output = execFileSync(process.execPath, ['-e', script, request.url, JSON.stringify(request.headers || {})], {
+  const result = spawnSync(process.execPath, ['-e', script, request.url, JSON.stringify(request.headers || {})], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  return JSON.parse(output || '{}');
+  if (result.error) {
+    throw new Error(result.error.message);
+  }
+  if (result.status !== 0) {
+    throw new Error(sanitizeDecisionRequestError(result.stderr || result.stdout || 'decision request failed'));
+  }
+  return JSON.parse(result.stdout || '{}');
+}
+
+function sanitizeDecisionRequestError(value: string) {
+  const text = String(value || '').trim();
+  return text || 'decision request failed';
 }
 
 function writeCustomAgentRuntimeContext(rootDir: string, statusKey: string, startedAt: string, payload: AnyRecord) {

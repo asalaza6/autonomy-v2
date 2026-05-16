@@ -104,6 +104,48 @@ test('disabled custom-agent config is a no-op', () => {
   assert.equal(runtime.customAgents['strategy-agent:target-1'].status, 'disabled');
 });
 
+test('disabled individual custom agent is not polled or spawned', () => {
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        id: 'strategy-agent',
+        enabled: false,
+        authEnv: 'STRATEGY_TOKEN',
+        target: { type: 'strategy', id: 'target-1' },
+        workspace: '.autonomy/custom/target-1',
+        spawn: {
+          mode: 'poll',
+          intervalSeconds: 60,
+          singletonKey: 'target.id',
+          decision: { endpoint: '/api/strategy/target-1/decision' },
+        },
+      },
+    ],
+  }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  let decisionCalls = 0;
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      decisionCalls += 1;
+      return { shouldRun: true };
+    },
+  });
+
+  assert.equal(decisionCalls, 0);
+  assert.deepEqual(result.pendingSpawnStarts, []);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].enabled, false);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].status, 'disabled');
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].running, false);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecision, 'disabled');
+  assert.equal(
+    runtime.customAgents['strategy-agent:target-1'].lastDecisionReason,
+    'agent disabled by custom-agent config',
+  );
+});
+
 test('missing auth env key blocks spawn without calling the decision API', () => {
   const rootDir = makeRepo(baseCustomConfig());
   const previous = process.env.STRATEGY_TOKEN;
