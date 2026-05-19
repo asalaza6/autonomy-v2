@@ -5126,10 +5126,14 @@
         "The fix is implemented in `autonomy-v2` infrastructure code only and does not modify Moving Game product UI files or target `main`/`master` automation.",
         "Verification includes a focused reconciliation/status unit test or equivalent local simulation for the stale active merged PRD case, plus `npm run typecheck`."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-05-19T22:51:20.325Z",
-      "updatedAt": "2026-05-19T22:51:20.325Z"
+      "updatedAt": "2026-05-19T23:02:21.056Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/pressure-unblock-queue-promotion-stale-active-architecture-agent",
+      "startedAt": "2026-05-19T22:51:39.862Z",
+      "completedAt": "2026-05-19T23:02:21.056Z",
+      "completionMode": "code"
     }
   ]
 }

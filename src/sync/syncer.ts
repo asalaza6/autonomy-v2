@@ -12,11 +12,11 @@ import type { AnyRecord, AutonomyConfig } from './sync-types.js';
 import { buildDerivedImportedRuntimeState, isImportedPrdRecord } from './derived-state.js';
 import { buildTrackedImplementationTaskIndex, readTrackedImplementationQueuesFromRef, readTrackedReviewerTasksFromRef, resolveRemoteLaneStates } from './lanes.js';
 import { buildImportedSpecState } from './lanes.js';
-import { buildPrdSpecRelativePath, parsePrdSpec } from './sync-prd.js';
+import { buildPrdSpecRelativePath, buildPrdStateRelativePath, parsePrdSpec } from './sync-prd.js';
 import { commitTrackedFilesToIntegrationBranch, fetchIntegrationBranch } from './sync-git.js';
 import { listTreeFiles, readGit, readJsonFromGitRef, readTreeFile } from './git-shared.js';
-import { AGENT_ROLES } from '../agents/role-catalog.js';
-import { reconcileReviewTaskRecord } from './review-reconciliation.js';
+import { AGENT_ROLES, isImplementationRole, isReviewRole } from '../agents/role-catalog.js';
+import { isPullRequestResolved, reconcileReviewTaskRecord } from './review-reconciliation.js';
 
 function buildTrackedReviewQueueState(agent, tasks = []) {
   return {
@@ -158,6 +158,105 @@ function promoteQueuedPrdSpec(rootDir: string, integrationBranch: string, queued
   });
 }
 
+function buildTrackedQueueMap(config: AutonomyConfig, implementationQueues: AnyRecord = {}, reviewerTasks: AnyRecord[] = []) {
+  return (config.agents || []).reduce((queues, agent) => {
+    if (isImplementationRole(agent.role)) {
+      queues[agent.id] = implementationQueues[agent.id] || {
+        schemaVersion: 1,
+        agentId: agent.id,
+        role: agent.role,
+        tasks: [],
+      };
+      return queues;
+    }
+    if (isReviewRole(agent.role)) {
+      queues[agent.id] = {
+        agentId: agent.id,
+        role: agent.role,
+        tasks: (reviewerTasks || []).filter((task) => String(task && task.agentId || '') === agent.id),
+      };
+    }
+    return queues;
+  }, {});
+}
+
+function listQueueTasks(queues) {
+  return Object.values(queues || {}).flatMap((queue: AnyRecord) => {
+    return Array.isArray(queue && queue.tasks) ? queue.tasks : [];
+  });
+}
+
+function getTaskStatus(task) {
+  return String(task && (task.status || task.state) || '').trim();
+}
+
+function isTerminalTask(task) {
+  return ['approved', 'merged', 'done'].includes(getTaskStatus(task));
+}
+
+function activePrdHasTerminalTaskEvidence(prdId, queues) {
+  const linkedTasks = listQueueTasks(queues).filter((task: AnyRecord) => {
+    return task
+      && String(task.prdId || '').trim() === prdId
+      && String(task.type || '') !== AGENT_ROLES.REVIEW;
+  });
+  return linkedTasks.length > 0 && linkedTasks.every(isTerminalTask);
+}
+
+function archiveCompletedActivePrdSpecs(rootDir: string, integrationBranch: string, activeSpecs: AnyRecord[], derivedPrds: AnyRecord[], queues: AnyRecord, prs: AnyRecord[], options: AnyRecord = {}) {
+  const derivedById = new Map((derivedPrds || []).map((prd) => [String(prd && prd.id || ''), prd]));
+  const implementationTasks = listQueueTasks(queues).filter((task: AnyRecord) => String(task && task.type || '') !== AGENT_ROLES.REVIEW);
+  const completedEntries = (activeSpecs || []).filter((entry) => {
+    const prdId = String(entry && entry.spec && entry.spec.id || '').trim();
+    if (!prdId) {
+      return false;
+    }
+    const linkedPullRequests = (prs || []).filter((pr) => String(pr && pr.prdId || '').trim() === prdId);
+    if (linkedPullRequests.length > 0) {
+      return linkedPullRequests.every((pr) => isPullRequestResolved(pr, implementationTasks));
+    }
+    const derivedPrd = derivedById.get(prdId);
+    return String(derivedPrd && derivedPrd.status || '') === 'completed'
+      || activePrdHasTerminalTaskEvidence(prdId, queues);
+  });
+
+  if (completedEntries.length === 0) {
+    return [];
+  }
+
+  const updates = [];
+  const archived = completedEntries.map((entry) => {
+    const fileName = path.posix.basename(entry.relativePath);
+    const archivedPath = path.posix.join(PRD_ARCHIVE_DIR, fileName);
+    updates.push({
+      relativePath: archivedPath,
+      content: entry.spec,
+    });
+    updates.push({
+      relativePath: entry.relativePath,
+      delete: true,
+    });
+    updates.push({
+      relativePath: buildPrdStateRelativePath(entry.spec.id),
+      delete: true,
+    });
+    return {
+      id: entry.spec.id,
+      from: entry.relativePath,
+      to: archivedPath,
+    };
+  });
+
+  const commit = commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, updates, {
+    commitMessage: `autonomy(specs): archive completed prd${completedEntries.length === 1 ? '' : 's'}`,
+    gitIdentity: options.gitIdentity,
+  });
+  return archived.map((entry) => ({
+    ...entry,
+    commitSha: commit.commitSha || null,
+  }));
+}
+
 function compareQueuedPrdSpecsForPromotion(left: AnyRecord, right: AnyRecord) {
   const priorityOrder = getQueuedPrdPromotionPriority(right) - getQueuedPrdPromotionPriority(left);
   if (priorityOrder !== 0) {
@@ -213,6 +312,7 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
     invalid: [],
     fetchMessage: fetchResult.message || '',
     queuedPromotion: null,
+    archivedCompletedPrds: [],
   };
 
   if (!ref) {
@@ -298,15 +398,15 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
 
   emitSyncProgress(options, 'sync:state-lock:wait', { lock: 'state-lock' });
   const release = acquireStateLock(rootDir);
+  let followUpSync: AnyRecord | null = null;
   try {
     emitSyncProgress(options, 'sync:state-lock:acquired', { lock: 'state-lock' });
     const prsState = readJson(paths.prsState, { pullRequests: [] });
     const branchLocksState = readJson(paths.branchLocksState, { locks: [] });
     const syncState = readJson(paths.specSyncState, DEFAULT_SYNC_STATE);
     const currentQueueTasks = readTrackedReviewerTasksFromRef(rootDir, config, ref);
-    const trackedImplementationTasksByPrd = buildTrackedImplementationTaskIndex(
-      readTrackedImplementationQueuesFromRef(rootDir, config, ref)
-    );
+    const trackedImplementationQueues = readTrackedImplementationQueuesFromRef(rootDir, config, ref);
+    const trackedImplementationTasksByPrd = buildTrackedImplementationTaskIndex(trackedImplementationQueues);
     const importedSpecs = remoteSpecs.filter((remoteSpec) => !remoteSpec.isQueued);
 
     const laneStatesStartedAt = Date.now();
@@ -384,6 +484,68 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
       branchLocks: nextBranchLocks.length,
     });
 
+    const trackedQueues = buildTrackedQueueMap(config, trackedImplementationQueues, currentQueueTasks);
+    const archivedCompletedPrds = options.skipCompletedPrdArchive === true
+      ? []
+      : archiveCompletedActivePrdSpecs(rootDir, integrationBranch, importedSpecs, derived.prds || [], trackedQueues, nextPrs, {
+          gitIdentity: (config.agents || []).find((agent) => agent.role === AGENT_ROLES.PM)?.gitIdentity,
+        });
+    if (archivedCompletedPrds.length > 0) {
+      result.archivedCompletedPrds = archivedCompletedPrds;
+      emitSyncProgress(options, 'sync:specs:completed:archived', {
+        archived: archivedCompletedPrds.length,
+        prds: archivedCompletedPrds.map((entry) => entry.id).join(','),
+      });
+      const archivedIds = new Set(archivedCompletedPrds.map((entry) => String(entry.id || '')));
+      const hasRemainingActivePrd = importedSpecs.some((entry) => {
+        return !archivedIds.has(String(entry && entry.spec && entry.spec.id || ''));
+      });
+      if (!hasRemainingActivePrd && options.skipQueuePromotion !== true) {
+        const queuedSpecToPromote = remoteSpecs
+          .filter((remoteSpec) => remoteSpec.isQueued)
+          .slice()
+          .sort(compareQueuedPrdSpecsForPromotion)[0];
+        if (queuedSpecToPromote) {
+          promoteQueuedPrdSpec(rootDir, integrationBranch, queuedSpecToPromote);
+          const queuedPromotion = {
+            id: String(queuedSpecToPromote.spec.id),
+            title: String(queuedSpecToPromote.spec.title || queuedSpecToPromote.spec.id || ''),
+            source: queuedSpecToPromote.relativePath,
+            destination: buildPrdSpecRelativePath(queuedSpecToPromote.spec.id),
+            promotedAt: new Date().toISOString(),
+          };
+          emitSyncProgress(options, 'sync:specs:queue:promoted', {
+            ...queuedPromotion,
+          });
+          followUpSync = {
+            options: {
+              ...options,
+              skipQueuePromotion: true,
+              skipCompletedPrdArchive: true,
+            },
+            queuedPromotion,
+            archivedCompletedPrds,
+          };
+        } else {
+          followUpSync = {
+            options: {
+              ...options,
+              skipCompletedPrdArchive: true,
+            },
+            archivedCompletedPrds,
+          };
+        }
+      } else {
+        followUpSync = {
+          options: {
+            ...options,
+            skipCompletedPrdArchive: true,
+          },
+          archivedCompletedPrds,
+        };
+      }
+    }
+
     importedSpecs.forEach((remoteSpec) => {
       syncState.importedSpecs[remoteSpec.relativePath] = buildImportedSpecState(remoteSpec, fetchResult.commitSha);
     });
@@ -397,6 +559,15 @@ function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: s
   } finally {
     emitSyncProgress(options, 'sync:state-lock:release', { lock: 'state-lock' });
     release();
+  }
+
+  if (followUpSync) {
+    const followUpResult = syncPrdSpecsFromIntegrationBranch(rootDir, integrationBranch, followUpSync.options);
+    return {
+      ...followUpResult,
+      archivedCompletedPrds: followUpSync.archivedCompletedPrds || [],
+      queuedPromotion: followUpSync.queuedPromotion || followUpResult.queuedPromotion || null,
+    };
   }
 
   return result;
