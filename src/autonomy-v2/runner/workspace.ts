@@ -51,7 +51,6 @@ function finalizeTaskRun({ rootDir, task, branch, completedTaskIds, publish, sho
   if (!shouldRecordPr) {
     return;
   }
-  const publishToGithub = publish && hasGithubOriginRemote(rootDir);
   const recordArgs = [
     CLI_PATH,
     'pr:record',
@@ -65,44 +64,13 @@ function finalizeTaskRun({ rootDir, task, branch, completedTaskIds, publish, sho
   completedTaskIds.forEach((completedTaskId) => {
     recordArgs.push('--completed-task', completedTaskId);
   });
-  if (publishToGithub) {
+  if (publish) {
     recordArgs.push('--publish');
   }
   execFileSync(process.execPath, recordArgs, {
     cwd: rootDir,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-}
-
-function hasGithubOriginRemote(rootDir) {
-  try {
-    const remoteUrl = execFileSync('git', ['config', '--get', 'remote.origin.url'], {
-      cwd: rootDir,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }).trim();
-    return isGithubRemoteUrl(remoteUrl);
-  } catch (_) {
-    return false;
-  }
-}
-
-function isGithubRemoteUrl(remoteUrl) {
-  const normalized = String(remoteUrl || '').trim();
-  if (!normalized) {
-    return false;
-  }
-  if (/^git@github\.com:[^/]+\/.+/.test(normalized)) {
-    return true;
-  }
-  if (/^(?:https?:\/\/)?(?:[^@/]+@)?github\.com[/:][^/]+\/.+/.test(normalized)) {
-    return true;
-  }
-  try {
-    return new URL(normalized).hostname === 'github.com';
-  } catch (_) {
-    return false;
-  }
 }
 
 function markImplementationTaskComplete(worktreePath, config, task, branch, completionMode) {
