@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "prdId": "pressure-unblock-queue-promotion-stale-active",
+  "status": "planned",
+  "createdAt": "2026-05-19T22:51:20.429Z",
+  "updatedAt": "2026-05-19T22:51:20.429Z",
+  "plannedTaskIds": [
+    "pressure-unblock-queue-promotion-stale-active-architecture-agent-1"
+  ]
+}
