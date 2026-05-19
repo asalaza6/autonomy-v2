@@ -11,6 +11,7 @@ import {
 } from './codex-shared.js';
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
+const DEFAULT_SYNC_PROCESS_BUFFER_LIMIT = 16 * 1024 * 1024;
 const DEFAULT_CODEX_EXEC_TIMEOUT_MS = 0;
 const SAFE_CODEX_ENV_KEYS = [
   'HOME',
@@ -335,7 +336,7 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput, env }) {
     input,
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe'],
-    maxBuffer: DEFAULT_CAPTURE_LIMIT,
+    maxBuffer: DEFAULT_SYNC_PROCESS_BUFFER_LIMIT,
     killSignal: 'SIGKILL',
     env: env || process.env,
   });

@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { runCodexExec, runCodexStructured } from '../../src/codex/cli.js';
+import { runCodexExec, runCodexExecSync, runCodexStructured } from '../../src/codex/cli.js';
 
 test('runCodexStructured can launch Codex with a restricted env and GitHub-only network config', async () => {
   const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-'));
@@ -250,5 +250,33 @@ test('runCodexExec defaults to no wall-clock timeout when unset', async () => {
   } finally {
     restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
     restoreEnv('AUTONOMY_CODEX_EXEC_TIMEOUT_MS', originalTimeout);
+  }
+});
+
+test('runCodexExecSync tolerates verbose Codex output', () => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-sync-buffer-'));
+  const fakeCodexPath = path.join(fixtureDir, 'fake-codex-verbose.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    "process.stdout.write('x'.repeat(128 * 1024) + '\\n');",
+    "process.stdout.write(JSON.stringify({ session_id: 'sess-sync-verbose' }) + '\\n');",
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+
+  try {
+    const output: any = runCodexExecSync({
+      cwd: fixtureDir,
+      prompt: 'Plan the PRD.',
+      readOnly: false,
+      captureConversationId: true,
+    });
+
+    assert.equal(output.conversationId, 'sess-sync-verbose');
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
   }
 });
