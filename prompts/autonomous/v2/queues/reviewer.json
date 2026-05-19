@@ -1126,11 +1126,14 @@
         "Verification includes a focused reconciliation/status unit test or equivalent local simulation for the stale active merged PRD case, plus `npm run typecheck`."
       ],
       "reviewRound": 1,
-      "status": "assigned",
+      "status": "changes_requested",
       "createdAt": "2026-05-19T23:02:22.366Z",
-      "updatedAt": "2026-05-19T23:02:40.321Z",
+      "updatedAt": "2026-05-19T23:04:14.825Z",
       "dispatcher": "scheduler",
-      "dispatchedAt": "2026-05-19T23:02:26.434Z"
+      "dispatchedAt": "2026-05-19T23:02:26.434Z",
+      "reviewedAt": "2026-05-19T23:04:14.825Z",
+      "lastDecision": "changes_requested",
+      "reviewedCommitCount": 2
     }
   ]
 }
