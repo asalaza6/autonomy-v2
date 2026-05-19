@@ -4,6 +4,7 @@ import { loadCustomAgentConfigs } from '../orchestrator/custom-agents.js';
 import {
   createControlPlaneDeployJob,
   createControlPlaneJob,
+  createControlPlanePackageUpdateJob,
   enqueueJob,
   listDiscoveredRepos,
   listJobs,
@@ -11,6 +12,7 @@ import {
 } from './control-plane-store.js';
 import {
   validateDeploySubmission,
+  validatePackageUpdateSubmission,
   validatePrdAddSubmission,
 } from './control-plane-validation.js';
 
@@ -98,6 +100,18 @@ function handleAgentToolRequest(rootDir: string, request: AgentToolRequest) {
   if (method === 'POST' && pathname === '/deploy') {
     const { payload } = validateDeploySubmission(listDiscoveredRepos(rootDir), body);
     const job = enqueueJob(rootDir, createControlPlaneDeployJob(payload));
+    return {
+      statusCode: 201,
+      payload: {
+        ok: true,
+        job,
+      },
+    };
+  }
+
+  if (method === 'POST' && pathname === '/package-update') {
+    const { payload } = validatePackageUpdateSubmission(listDiscoveredRepos(rootDir), body);
+    const job = enqueueJob(rootDir, createControlPlanePackageUpdateJob(payload));
     return {
       statusCode: 201,
       payload: {
