@@ -845,6 +845,49 @@ test('reviewer runner includes repo merge-blocking lint and typecheck scripts in
   assert.match(recordedReviews[0].summary, /Blocking checks failed: npm run lint/);
 });
 
+test('reviewer runner includes valid npm run commands mentioned in acceptance', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-review-acceptance-checks-'));
+  const worktreePath = path.join(rootDir, '.autonomy', 'worktrees', 'reviewer', 'pr-prd-conversation-architecture-agent');
+  fs.mkdirSync(worktreePath, { recursive: true });
+  fs.writeFileSync(path.join(worktreePath, 'package.json'), `${JSON.stringify({
+    name: 'review-acceptance-check-fixture',
+    scripts: {
+      typecheck: 'tsc --noEmit',
+      'verify:matching-game': 'node scripts/verify-matching-game.mjs',
+    },
+  }, null, 2)}\n`, 'utf8');
+
+  const seenCommands: string[][] = [];
+  const { context, recordedReviews } = buildReviewRunnerContext(async () => ({
+    decision: 'approved',
+    summary: 'Looks good.',
+    concerns: [],
+  }), {
+    rootDir,
+    worktreePath,
+    prOverrides: {
+      acceptance: [
+        'The status label is clear.',
+        '`npm run verify:matching-game` passes after the change.',
+        '`npm run missing-script` should not be invented.',
+      ],
+    },
+    runCheckCommands(_checkPath, commands) {
+      seenCommands.push(commands);
+      return commands.map((command) => ({
+        command,
+        status: 'passed',
+        output: '',
+      }));
+    },
+  });
+
+  await runReview(context);
+
+  assert.deepEqual(seenCommands[0], ['npm run typecheck', 'npm run verify:matching-game']);
+  assert.equal(recordedReviews[0].decision, 'approve');
+});
+
 test('reviewer runner includes focused control-plane summary ui checks when the diff touches summary surfaces', async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-review-summary-ui-checks-'));
   const worktreePath = path.join(rootDir, '.autonomy', 'worktrees', 'reviewer', 'pr-prd-conversation-architecture-agent');

@@ -21,10 +21,18 @@ const CONTROL_PLANE_SUMMARY_UI_FILES = new Set([
 ]);
 
 function runCheckCommands(worktreePath, commands) {
+  const tmpDir = path.join(worktreePath, '.autonomy', 'tmp', 'checks');
+  fs.mkdirSync(tmpDir, { recursive: true });
   return uniqueStrings(commands).map((command) => {
     try {
       execFileSync(command, {
         cwd: worktreePath,
+        env: {
+          ...process.env,
+          TMPDIR: tmpDir,
+          TMP: tmpDir,
+          TEMP: tmpDir,
+        },
         encoding: 'utf8',
         shell: true,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -83,7 +91,28 @@ function shouldIncludeControlPlaneSummaryUiCheck(diffFiles) {
   return Array.isArray(diffFiles) && diffFiles.some((filePath) => CONTROL_PLANE_SUMMARY_UI_FILES.has(String(filePath || '').trim()));
 }
 
-function resolveReviewCheckCommands(worktreePath, configuredChecks, diffFiles = []) {
+function extractAcceptanceCheckCommands(worktreePath, acceptance) {
+  const scripts = readPackageScripts(worktreePath);
+  const commands = [];
+  const entries = Array.isArray(acceptance) ? acceptance : [];
+
+  entries.forEach((entry) => {
+    const text = String(entry || '');
+    const matches = text.match(/npm run [a-z0-9:_-]+/gi) || [];
+
+    matches.forEach((match) => {
+      const command = match.trim();
+      const scriptName = command.replace(/^npm run\s+/i, '').trim();
+      if (typeof scripts[scriptName] === 'string' && scripts[scriptName].trim()) {
+        commands.push(`npm run ${scriptName}`);
+      }
+    });
+  });
+
+  return uniqueStrings(commands);
+}
+
+function resolveReviewCheckCommands(worktreePath, configuredChecks, diffFiles = [], acceptance = []) {
   const commands = uniqueStrings(configuredChecks || []);
   const scripts = readPackageScripts(worktreePath);
   const repoChecks = REVIEW_MERGE_BLOCKING_SCRIPTS
@@ -94,7 +123,7 @@ function resolveReviewCheckCommands(worktreePath, configuredChecks, diffFiles = 
     && scripts[CONTROL_PLANE_SUMMARY_UI_SCRIPT].trim()
     ? [`npm run ${CONTROL_PLANE_SUMMARY_UI_SCRIPT}`]
     : [];
-  return uniqueStrings(commands.concat(repoChecks, focusedChecks));
+  return uniqueStrings(commands.concat(repoChecks, focusedChecks, extractAcceptanceCheckCommands(worktreePath, acceptance)));
 }
 
 function isScopeOnlyReviewFeedback(codexReview) {

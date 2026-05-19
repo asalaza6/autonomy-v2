@@ -300,7 +300,12 @@ class ReviewAgentDefinition extends AgentDefinition {
           task: { id: pr.taskId },
         })
       : { ok: true, violations: [] };
-    const reviewCheckCommands = resolveReviewCheckCommands(reviewContext.worktreePath, pr.checks || [], reviewDiffFiles);
+    const reviewCheckCommands = resolveReviewCheckCommands(
+      reviewContext.worktreePath,
+      pr.checks || [],
+      reviewDiffFiles,
+      pr.acceptance || reviewerTask.acceptance || [],
+    );
     context.scm.ensureCheckEnvironment?.(reviewContext.worktreePath, reviewCheckCommands);
     const checkResults = context.scm.runCheckCommands
       ? context.scm.runCheckCommands(reviewContext.worktreePath, reviewCheckCommands)
