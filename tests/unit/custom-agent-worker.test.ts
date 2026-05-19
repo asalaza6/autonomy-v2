@@ -127,3 +127,21 @@ test('custom agent worker lets agent prompt intro override prompt role', () => {
   assert.match(prompt, /^You are the overnight crypto strategy operator\./);
   assert.doesNotMatch(prompt, /^You are a trading strategy operator agent\./);
 });
+
+test('custom agent prompt can allow explicit runtime-state recovery', () => {
+  const prompt = buildCustomAgentPrompt({
+    rootDir: process.cwd(),
+    agent: { id: 'pressure-bot' },
+    target: { type: 'project', id: 'fixture' },
+    workspacePath: '/tmp/pressure-bot',
+    controlPanel: {},
+    context: {
+      allowRuntimeStateChanges: true,
+      workspaceReadWrite: ['.autonomy/helper-state.json'],
+    },
+  });
+
+  assert.match(prompt, /"allowRuntimeStateChanges": true/);
+  assert.match(prompt, /Repository runtime state changes are allowed only when explicitly required for local recovery/);
+  assert.doesNotMatch(prompt, /Do not commit, push, merge, or change repository runtime state/);
+});

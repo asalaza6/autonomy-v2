@@ -239,6 +239,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       context: {
         globalReadOnly: normalizedAgent.context.globalReadOnly,
         workspaceReadWrite: normalizedAgent.context.workspaceReadWrite,
+        allowRuntimeStateChanges: normalizedAgent.context.allowRuntimeStateChanges,
       },
       decision,
     });
@@ -329,6 +330,7 @@ function normalizeContext(rootDir: string, context: AnyRecord) {
       }),
     workspaceReadWrite: normalizeStringArray(context.workspaceReadWrite)
       .map((entry) => normalizeWorkspaceFileName(entry)),
+    allowRuntimeStateChanges: context.allowRuntimeStateChanges === true,
   };
 }
 
@@ -560,6 +562,9 @@ function mergeAgentContext(rootDir: string, defaultContext: AnyRecord, agentCont
     workspaceReadWrite: Object.prototype.hasOwnProperty.call(context, 'workspaceReadWrite')
       ? normalizeContext(rootDir, { workspaceReadWrite: context.workspaceReadWrite }).workspaceReadWrite
       : defaultContext.workspaceReadWrite,
+    allowRuntimeStateChanges: Object.prototype.hasOwnProperty.call(context, 'allowRuntimeStateChanges')
+      ? context.allowRuntimeStateChanges === true
+      : defaultContext.allowRuntimeStateChanges === true,
   };
 }
 

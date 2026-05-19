@@ -73,6 +73,8 @@ async function runCustomAgent(runtimeContext) {
   }
 
   const workspacePath = String(runtimeContext.workspacePath || '');
+  const context = runtimeContext.context || {};
+  const allowRuntimeStateChanges = context.allowRuntimeStateChanges === true;
   const auth = runtimeContext.auth || {};
   const controlPanel = runtimeContext.controlPanel || {};
   const tools = runtimeContext.tools || {};
@@ -97,7 +99,7 @@ async function runCustomAgent(runtimeContext) {
     cwd: workspacePath,
     prompt: buildCustomAgentPrompt(runtimeContext),
     readOnly: false,
-    sandboxMode: 'workspace-write',
+    sandboxMode: allowRuntimeStateChanges ? 'danger-full-access' : 'workspace-write',
     env,
     inheritHostEnv: true,
     configOverrides: buildCustomAgentNetworkConfigOverrides(runtimeContext, process.env),
@@ -149,11 +151,15 @@ function buildCustomAgentPrompt(runtimeContext) {
   const context = runtimeContext.context || {};
   const globalReadOnly = Array.isArray(context.globalReadOnly) ? context.globalReadOnly : [];
   const workspaceReadWrite = Array.isArray(context.workspaceReadWrite) ? context.workspaceReadWrite : [];
+  const allowRuntimeStateChanges = context.allowRuntimeStateChanges === true;
   const agent = runtimeContext.agent || {};
   const instructionText = [
     String(agent.instructions || '').trim(),
     readOptionalPromptFile(runtimeContext.rootDir, agent.prompt || agent.systemPrompt),
   ].filter(Boolean).join('\n\n');
+  const runtimeStateRule = allowRuntimeStateChanges
+    ? '- Repository runtime state changes are allowed only when explicitly required for local recovery by the agent instructions. Keep changes minimal, inspect before mutating, do not discard user/source work, and record the action taken.'
+    : '- Do not commit, push, merge, or change repository runtime state.';
 
   return [
     instructionText,
@@ -168,6 +174,7 @@ function buildCustomAgentPrompt(runtimeContext) {
       controlPanel: runtimeContext.controlPanel || {},
       tools: buildPromptToolContext(runtimeContext.tools || {}),
       workspaceReadWrite,
+      allowRuntimeStateChanges,
       decision: runtimeContext.decision || {},
     }, null, 2),
     '',
@@ -177,7 +184,8 @@ function buildCustomAgentPrompt(runtimeContext) {
     '- Do not modify files outside the configured workspace.',
     '- Use the configured control-panel base URL and auth header when reporting or fetching work.',
     '- Use configured tools only through their listed base URLs, auth headers, and auth environment variables.',
-    '- Do not commit, push, merge, or change repository runtime state.',
+    runtimeStateRule,
+    '- Do not commit, push, or merge unless the agent instructions explicitly allow that exact operation.',
     '',
     'Read-only context files:',
     ...globalReadOnly.map((entry) => formatReadOnlyContextFile(entry)),

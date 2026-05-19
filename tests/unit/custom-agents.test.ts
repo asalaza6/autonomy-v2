@@ -486,6 +486,29 @@ test('shouldRun true spawns once and creates the configured workspace', () => {
   });
   assert.equal(runtimeContext.context.globalReadOnly[0].path, path.join(rootDir, 'context.md'));
   assert.deepEqual(runtimeContext.context.workspaceReadWrite, ['state.json', 'notes.md']);
+  assert.equal(runtimeContext.context.allowRuntimeStateChanges, false);
+});
+
+test('custom-agent runtime context carries explicit runtime recovery permission', () => {
+  const rootDir = makeRepo(baseCustomConfig({
+    context: {
+      globalReadOnly: ['context.md'],
+      workspaceReadWrite: ['state.json', 'notes.md'],
+      allowRuntimeStateChanges: true,
+    },
+  }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  const runtimeContext = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(runtimeContext.context.allowRuntimeStateChanges, true);
 });
 
 test('per-agent context overrides top-level context', () => {
@@ -493,12 +516,14 @@ test('per-agent context overrides top-level context', () => {
     context: {
       globalReadOnly: ['context.md'],
       workspaceReadWrite: ['state.json'],
+      allowRuntimeStateChanges: true,
     },
     agents: [
       {
         ...baseCustomConfig().agents[0],
         context: {
           globalReadOnly: ['feedback.md'],
+          allowRuntimeStateChanges: false,
         },
       },
     ],
@@ -517,6 +542,7 @@ test('per-agent context overrides top-level context', () => {
   const runtimeContext = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
   assert.equal(runtimeContext.context.globalReadOnly[0].path, path.join(rootDir, 'feedback.md'));
   assert.deepEqual(runtimeContext.context.workspaceReadWrite, ['state.json']);
+  assert.equal(runtimeContext.context.allowRuntimeStateChanges, false);
 });
 
 test('declared custom-agent tools are passed into runtime context with env values', () => {
