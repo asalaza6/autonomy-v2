@@ -5129,11 +5129,12 @@
       "state": "done",
       "status": "done",
       "createdAt": "2026-05-19T22:51:20.325Z",
-      "updatedAt": "2026-05-19T23:02:21.056Z",
+      "updatedAt": "2026-05-19T23:02:21.131Z",
       "branch": "agent/multi-agent-mvp/architecture-agent/pressure-unblock-queue-promotion-stale-active-architecture-agent",
       "startedAt": "2026-05-19T22:51:39.862Z",
       "completedAt": "2026-05-19T23:02:21.056Z",
-      "completionMode": "code"
+      "completionMode": "code",
+      "commitSha": "e709c84a02fe1d4599d534698db98fe6c11809b6"
     }
   ]
 }
