@@ -302,6 +302,62 @@ test('sync archives stale completed active PRD before promoting one queued PRD',
   assert.match(pmStatus.detail, /2 PRDs awaiting planning/);
 });
 
+test('sync does not archive stale active PRD for a closed unmerged pull request', () => {
+  const rootDir = createStaleCompletedActivePrdRepo();
+  const taskId = 'prd-stale-active-001-architecture-agent-1';
+  writeJson(path.join(rootDir, '.autonomy', 'runtime', 'state', 'prs.json'), {
+    pullRequests: [
+      {
+        id: 'pr-prd-stale-active-001-architecture-agent',
+        taskId,
+        agentId: 'architecture-agent',
+        laneKey: 'prd-stale-active-001:architecture-agent',
+        prdId: 'prd-stale-active-001',
+        sprintId: 'multi-agent-mvp',
+        taskIds: [taskId],
+        completedTaskIds: [taskId],
+        pendingTaskIds: [],
+        headBranch: 'agent/multi-agent-mvp/architecture-agent/prd-stale-active-001-architecture-agent',
+        baseBranch: 'dev',
+        status: 'closed',
+        title: '[architecture-agent] Stale active PRD closed without merge',
+        createdAt: '2026-05-19T20:05:00.000Z',
+        updatedAt: '2026-05-19T20:10:00.000Z',
+        remote: {
+          number: 42,
+          url: 'https://github.com/example/repo/pull/42',
+          state: 'closed',
+        },
+      },
+    ],
+  });
+
+  const result = syncPrdSpecsFromIntegrationBranch(rootDir, 'dev');
+
+  assert.deepEqual(result.archivedCompletedPrds, []);
+  assert.equal(result.queuedPromotion, null);
+  assert.equal(
+    gitFileExists(rootDir, 'dev:prompts/autonomous/v2/specs/prds/prd-stale-active-001.json'),
+    true
+  );
+  assert.equal(
+    gitFileExists(rootDir, 'dev:prompts/autonomous/v2/specs/prds/archived/prd-stale-active-001.json'),
+    false
+  );
+  assert.equal(
+    gitFileExists(rootDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-stale-active-001.json'),
+    true
+  );
+  assert.equal(
+    gitFileExists(rootDir, 'dev:prompts/autonomous/v2/specs/prds/prd-next-queued-001.json'),
+    false
+  );
+  assert.equal(
+    gitFileExists(rootDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-next-queued-001.json'),
+    true
+  );
+});
+
 test('queued PRD promotion prefers highest priority before queue creation order', () => {
   const rootDir = createQueuePromotionOrderRepo();
   writeJson(path.join(rootDir, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'queue', 'prd-queue-promo-900.json'), {

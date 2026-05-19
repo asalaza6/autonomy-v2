@@ -16,7 +16,7 @@ import { buildPrdSpecRelativePath, buildPrdStateRelativePath, parsePrdSpec } fro
 import { commitTrackedFilesToIntegrationBranch, fetchIntegrationBranch } from './sync-git.js';
 import { listTreeFiles, readGit, readJsonFromGitRef, readTreeFile } from './git-shared.js';
 import { AGENT_ROLES, isImplementationRole, isReviewRole } from '../agents/role-catalog.js';
-import { isPullRequestResolved, reconcileReviewTaskRecord } from './review-reconciliation.js';
+import { reconcileReviewTaskRecord } from './review-reconciliation.js';
 
 function buildTrackedReviewQueueState(agent, tasks = []) {
   return {
@@ -194,6 +194,72 @@ function isTerminalTask(task) {
   return ['approved', 'merged', 'done'].includes(getTaskStatus(task));
 }
 
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+}
+
+function taskMatchesPullRequest(task, pr) {
+  if (!task || !pr || String(task.type || '') === AGENT_ROLES.REVIEW) {
+    return false;
+  }
+  const taskId = String(task.id || '').trim();
+  const prTaskIds = new Set(normalizeStringList(pr.taskIds));
+  const prId = String(pr.id || '').trim();
+  const laneKey = String(pr.laneKey || '').trim();
+  const prdId = String(pr.prdId || '').trim();
+  return Boolean(
+    (prId && String(task.prId || '').trim() === prId)
+      || (taskId && prTaskIds.has(taskId))
+      || (laneKey && String(task.laneKey || '').trim() === laneKey)
+      || (prdId && String(task.prdId || '').trim() === prdId && String(task.agentId || '').trim() === String(pr.agentId || '').trim())
+  );
+}
+
+function pullRequestHasMergedEvidence(pr) {
+  if (!pr) {
+    return false;
+  }
+  if (pr.remote && (pr.remote.mergedAt || pr.remote.merged_at)) {
+    return true;
+  }
+  if (pr.remote && ['open', 'closed'].includes(String(pr.remote.state || '').trim().toLowerCase())) {
+    return false;
+  }
+  return String(pr.status || '').trim().toLowerCase() === 'merged' || Boolean(pr.mergedAt);
+}
+
+function pullRequestHasKnownUnmergedRemoteState(pr) {
+  return Boolean(pr && pr.remote && ['open', 'closed'].includes(String(pr.remote.state || '').trim().toLowerCase()));
+}
+
+function pullRequestHasAppliedTaskEvidence(pr, implementationTasks: AnyRecord[]) {
+  const taskById = new Map((implementationTasks || [])
+    .filter((task) => task && task.id)
+    .map((task) => [String(task.id || '').trim(), task]));
+  const taskIds = normalizeStringList(pr && pr.taskIds);
+  if (taskIds.length > 0) {
+    return taskIds.every((taskId) => {
+      const task = taskById.get(taskId);
+      return Boolean(task && isTerminalTask(task));
+    });
+  }
+  const linkedTasks = (implementationTasks || []).filter((task) => taskMatchesPullRequest(task, pr));
+  return linkedTasks.length > 0 && linkedTasks.every(isTerminalTask);
+}
+
+function pullRequestHasCompletionEvidence(pr, implementationTasks: AnyRecord[]) {
+  if (pullRequestHasMergedEvidence(pr)) {
+    return true;
+  }
+  if (pullRequestHasKnownUnmergedRemoteState(pr)) {
+    return false;
+  }
+  return pullRequestHasAppliedTaskEvidence(pr, implementationTasks);
+}
+
 function activePrdHasTerminalTaskEvidence(prdId, queues) {
   const linkedTasks = listQueueTasks(queues).filter((task: AnyRecord) => {
     return task
@@ -213,7 +279,7 @@ function archiveCompletedActivePrdSpecs(rootDir: string, integrationBranch: stri
     }
     const linkedPullRequests = (prs || []).filter((pr) => String(pr && pr.prdId || '').trim() === prdId);
     if (linkedPullRequests.length > 0) {
-      return linkedPullRequests.every((pr) => isPullRequestResolved(pr, implementationTasks));
+      return linkedPullRequests.every((pr) => pullRequestHasCompletionEvidence(pr, implementationTasks));
     }
     const derivedPrd = derivedById.get(prdId);
     return String(derivedPrd && derivedPrd.status || '') === 'completed'
