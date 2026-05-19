@@ -5,6 +5,7 @@ import {
   createControlPlaneDeployJob,
   createControlPlaneJob,
   createControlPlanePackageUpdateJob,
+  createControlPlanePrdResetJob,
   enqueueJob,
   listDiscoveredRepos,
   listJobs,
@@ -14,6 +15,7 @@ import {
   validateDeploySubmission,
   validatePackageUpdateSubmission,
   validatePrdAddSubmission,
+  validatePrdResetSubmission,
 } from './control-plane-validation.js';
 
 type AgentToolRequest = {
@@ -88,6 +90,18 @@ function handleAgentToolRequest(rootDir: string, request: AgentToolRequest) {
         createdAt: new Date().toISOString(),
       },
     }));
+    return {
+      statusCode: 201,
+      payload: {
+        ok: true,
+        job,
+      },
+    };
+  }
+
+  if (method === 'POST' && pathname === '/prd/reset') {
+    const { payload } = validatePrdResetSubmission(listDiscoveredRepos(rootDir), body);
+    const job = enqueueJob(rootDir, createControlPlanePrdResetJob(payload));
     return {
       statusCode: 201,
       payload: {

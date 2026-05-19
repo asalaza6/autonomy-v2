@@ -24,6 +24,7 @@ Commands:
   deploy
   runtime:status
   update [--package-manager <npm|pnpm|yarn>] [--skip-init]
+  refresh
 
 Output:
   Use --json to print structured JSON for any command.

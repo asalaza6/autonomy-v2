@@ -124,6 +124,12 @@ From the target repository root:
 npx autonomy-v2 update --root .
 ```
 
+To refresh only the autonomy scaffold and local runtime bootstrap files without updating the package dependency:
+
+```bash
+npx autonomy-v2 refresh --root .
+```
+
 If Codex shows `refresh_token_reused` or says your access token could not be refreshed, reset the local session and sign in again:
 
 ```bash
@@ -143,7 +149,7 @@ Use `--force` to refresh and prune scaffolded artifacts:
 npx autonomy-v2 init --root . --force
 ```
 
-`autonomy-v2 update` detects `npm`, `pnpm`, or `yarn`, updates `@asalaza6/autonomy-v2` to `latest` as an optional dependency, and runs `init --force` automatically when the repo is already initialized. Use `--skip-init` if you only want the package dependency update.
+`autonomy-v2 update` detects `npm`, `pnpm`, or `yarn`, updates `@asalaza6/autonomy-v2` to `latest` as an optional dependency, and runs `init --force` automatically when the repo is already initialized. Use `--skip-init` if you only want the package dependency update. `autonomy-v2 refresh` runs only the `init --force` scaffold refresh.
 
 From a local monorepo path:
 

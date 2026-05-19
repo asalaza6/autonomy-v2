@@ -42,6 +42,7 @@ function isMutatingCommand(command: string) {
     'merge',
     'deploy',
     'update',
+    'refresh',
   ]).has(command);
 }
 
