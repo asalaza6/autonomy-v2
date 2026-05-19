@@ -1125,14 +1125,14 @@
         "The fix is implemented in `autonomy-v2` infrastructure code only and does not modify Moving Game product UI files or target `main`/`master` automation.",
         "Verification includes a focused reconciliation/status unit test or equivalent local simulation for the stale active merged PRD case, plus `npm run typecheck`."
       ],
-      "reviewRound": 1,
-      "status": "changes_requested",
+      "reviewRound": 2,
+      "status": "queued",
       "createdAt": "2026-05-19T23:02:22.366Z",
-      "updatedAt": "2026-05-19T23:04:14.825Z",
-      "dispatcher": "scheduler",
-      "dispatchedAt": "2026-05-19T23:02:26.434Z",
+      "updatedAt": "2026-05-19T23:04:43.799Z",
       "reviewedAt": "2026-05-19T23:04:14.825Z",
       "lastDecision": "changes_requested",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-05-19T23:02:26.434Z",
       "reviewedCommitCount": 2
     }
   ]
