@@ -229,6 +229,100 @@ test('polling uses the configured decision endpoint and auth header', () => {
   assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecisionReason, 'not due upstream');
 });
 
+test('decision mode always spawns without a remote decision endpoint or auth env', () => {
+  const baseAgent = baseCustomConfig().agents[0];
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        ...baseAgent,
+        authEnv: '',
+        spawn: {
+          ...baseAgent.spawn,
+          decision: {
+            mode: 'always',
+          },
+        },
+      },
+    ],
+  }));
+  const previous = process.env.STRATEGY_TOKEN;
+  delete process.env.STRATEGY_TOKEN;
+  const runtime: any = { workers: {} };
+  let decisionCalls = 0;
+
+  try {
+    const result = pollCustomAgents(rootDir, runtime as any, {
+      nowIso: '2026-01-01T00:00:00.000Z',
+      customAgentDecisionClient() {
+        decisionCalls += 1;
+        return { shouldRun: false };
+      },
+    });
+
+    assert.equal(decisionCalls, 0);
+    assert.equal(result.pendingSpawnStarts.length, 1);
+    assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecision, 'run');
+    assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecisionReason, 'decision mode always');
+    const runtimeContext = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+    assert.equal(runtimeContext.auth.envKey, '');
+    assert.equal(runtimeContext.auth.value, '');
+    assert.deepEqual(runtimeContext.decision, {
+      shouldRun: true,
+      reason: 'decision mode always',
+    });
+  } finally {
+    if (typeof previous === 'string') {
+      process.env.STRATEGY_TOKEN = previous;
+    }
+  }
+});
+
+test('local decision command controls custom-agent spawn without remote auth', () => {
+  const baseAgent = baseCustomConfig().agents[0];
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        ...baseAgent,
+        authEnv: '',
+        spawn: {
+          ...baseAgent.spawn,
+          decision: {
+            command: ['node', 'decision.js'],
+          },
+        },
+      },
+    ],
+  }));
+  fs.writeFileSync(
+    path.join(rootDir, 'decision.js'),
+    'console.log(JSON.stringify({ shouldRun: false, reason: "local quiet" }));\n',
+    'utf8',
+  );
+  const previous = process.env.STRATEGY_TOKEN;
+  delete process.env.STRATEGY_TOKEN;
+  const runtime: any = { workers: {} };
+  let decisionCalls = 0;
+
+  try {
+    const result = pollCustomAgents(rootDir, runtime as any, {
+      nowIso: '2026-01-01T00:00:00.000Z',
+      customAgentDecisionClient() {
+        decisionCalls += 1;
+        return { shouldRun: true };
+      },
+    });
+
+    assert.equal(decisionCalls, 0);
+    assert.equal(result.pendingSpawnStarts.length, 0);
+    assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecision, 'skip');
+    assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecisionReason, 'local quiet');
+  } finally {
+    if (typeof previous === 'string') {
+      process.env.STRATEGY_TOKEN = previous;
+    }
+  }
+});
+
 test('shouldRun false does not spawn a custom agent', () => {
   const rootDir = makeRepo(baseCustomConfig());
   process.env.STRATEGY_TOKEN = 'secret-token';

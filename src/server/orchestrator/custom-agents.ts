@@ -96,7 +96,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.lastError = null;
       return;
     }
-    const configError = normalizedAgent.offsetError || normalizedAgent.toolError;
+    const configError = normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError;
     if (configError) {
       status.status = 'blocked';
       status.running = false;
@@ -124,35 +124,55 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.lastPollWindowStart = pollEligibility.windowStart;
     }
     const envKey = normalizedAgent.authEnv;
-    const authValue = envKey ? process.env[envKey] : '';
-    if (!envKey || !authValue) {
-      status.status = 'blocked';
-      status.running = false;
-      status.lastDecision = 'blocked';
-      status.lastDecisionReason = envKey
-        ? `missing environment variable ${envKey}`
-        : 'missing agent authEnv';
-      status.lastError = status.lastDecisionReason;
-      return;
-    }
-
+    let authValue = envKey ? process.env[envKey] : '';
     let decision;
-    try {
-      decision = decisionClient({
-        url: joinUrl(controlPanel.baseUrl, normalizedAgent.decisionEndpoint),
-        headers: controlPanel.authHeader
-          ? { [controlPanel.authHeader]: authValue }
-          : {},
-        agent: normalizedAgent,
-        config,
-      });
-    } catch (error) {
-      status.status = 'idle';
-      status.running = false;
-      status.lastDecision = 'error';
-      status.lastDecisionReason = 'decision request failed';
-      status.lastError = error instanceof Error ? error.message : String(error || 'decision request failed');
-      return;
+    if (normalizedAgent.decisionSource === 'remote') {
+      if (!envKey || !authValue) {
+        status.status = 'blocked';
+        status.running = false;
+        status.lastDecision = 'blocked';
+        status.lastDecisionReason = envKey
+          ? `missing environment variable ${envKey}`
+          : 'missing agent authEnv';
+        status.lastError = status.lastDecisionReason;
+        return;
+      }
+
+      try {
+        decision = decisionClient({
+          url: joinUrl(controlPanel.baseUrl, normalizedAgent.decisionEndpoint),
+          headers: controlPanel.authHeader
+            ? { [controlPanel.authHeader]: authValue }
+            : {},
+          agent: normalizedAgent,
+          config,
+        });
+      } catch (error) {
+        status.status = 'idle';
+        status.running = false;
+        status.lastDecision = 'error';
+        status.lastDecisionReason = 'decision request failed';
+        status.lastError = error instanceof Error ? error.message : String(error || 'decision request failed');
+        return;
+      }
+    } else if (normalizedAgent.decisionSource === 'command') {
+      authValue = '';
+      try {
+        decision = runLocalDecisionCommandSync(rootDir, normalizedAgent);
+      } catch (error) {
+        status.status = 'idle';
+        status.running = false;
+        status.lastDecision = 'error';
+        status.lastDecisionReason = 'local decision command failed';
+        status.lastError = error instanceof Error ? error.message : String(error || 'local decision command failed');
+        return;
+      }
+    } else {
+      authValue = '';
+      decision = {
+        shouldRun: true,
+        reason: 'decision mode always',
+      };
     }
 
     const shouldRun = decision && decision.shouldRun === true;
@@ -328,6 +348,7 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
   const intervalSeconds = normalizePositiveNumber(agent && agent.spawn && agent.spawn.intervalSeconds, DEFAULT_INTERVAL_SECONDS);
   const offset = normalizeOffsetSeconds(agent && agent.spawn ? agent.spawn.offsetSeconds : undefined, intervalSeconds, agentId);
   const tools = normalizeGrantedTools(agent && agent.tools, options.agentTools || {});
+  const decision = normalizeDecisionConfig(rootDir, agent && agent.spawn && agent.spawn.decision, agentId);
   return {
     ...agent,
     agentId,
@@ -348,9 +369,12 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
     offsetError: offset.error,
     tools: tools.tools,
     toolError: tools.error,
+    decisionSource: decision.source,
+    decisionCommand: decision.command,
+    decisionError: decision.error,
     singletonKey,
     singletonValue,
-    decisionEndpoint: String(agent && agent.spawn && agent.spawn.decision && agent.spawn.decision.endpoint || '').trim(),
+    decisionEndpoint: decision.endpoint,
   };
 }
 
@@ -440,6 +464,68 @@ fetch(url, { method: 'GET', headers }).then(async (response) => {
     throw new Error(sanitizeDecisionRequestError(result.stderr || result.stdout || 'decision request failed'));
   }
   return JSON.parse(result.stdout || '{}');
+}
+
+function runLocalDecisionCommandSync(rootDir: string, agent: AnyRecord) {
+  const command = agent.decisionCommand;
+  if (!command || !command.command) {
+    throw new Error('local decision command is not configured');
+  }
+  const envContext = {
+    agentId: agent.agentId,
+    kind: agent.kind || '',
+    target: agent.target || {},
+    workspacePath: agent.workspacePath || '',
+    intervalSeconds: agent.intervalSeconds,
+    offsetSeconds: agent.offsetSeconds,
+  };
+  const result = spawnSync(command.command, command.args || [], {
+    cwd: command.cwd || rootDir,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      AUTONOMY_CUSTOM_AGENT_ID: String(agent.agentId || ''),
+      AUTONOMY_CUSTOM_AGENT_KIND: String(agent.kind || ''),
+      AUTONOMY_CUSTOM_AGENT_TARGET_ID: String(agent.target && agent.target.id || ''),
+      AUTONOMY_CUSTOM_AGENT_TARGET_TYPE: String(agent.target && agent.target.type || ''),
+      AUTONOMY_CUSTOM_AGENT_WORKSPACE: String(agent.workspacePath || ''),
+      AUTONOMY_CUSTOM_AGENT_DECISION_CONTEXT: JSON.stringify(envContext),
+      ...command.env,
+    },
+    shell: command.shell === true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: Number(command.timeoutMs || 30_000),
+  });
+  const output = collectCommandOutput(result.stdout, result.stderr);
+  if (result.error) {
+    throw new Error(`${command.displayCommand || command.command} failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const detail = output || result.signal || 'no output';
+    throw new Error(`${command.displayCommand || command.command} exited ${result.status}: ${detail}`);
+  }
+  const stdout = String(result.stdout || '').trim();
+  if (!stdout) {
+    return {
+      shouldRun: true,
+      reason: 'local decision command exited 0',
+    };
+  }
+  try {
+    const parsed = JSON.parse(stdout);
+    if (parsed && typeof parsed === 'object') {
+      return parsed;
+    }
+    if (parsed === true || parsed === false) {
+      return {
+        shouldRun: parsed,
+        reason: `local decision command returned ${parsed}`,
+      };
+    }
+  } catch (error) {
+    throw new Error(`local decision command must print JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  throw new Error('local decision command JSON must be an object or boolean');
 }
 
 function sanitizeDecisionRequestError(value: string) {
@@ -573,9 +659,122 @@ function normalizeStringArray(value: unknown) {
     : [];
 }
 
+function normalizeStringMap(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .map(([key, entry]) => [String(key || '').trim(), String(entry ?? '')])
+    .filter(([key]) => Boolean(key)));
+}
+
 function normalizePositiveNumber(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeDecisionConfig(rootDir: string, value: unknown, agentId: string) {
+  const decision = value && typeof value === 'object' ? value as AnyRecord : {};
+  const mode = String(decision.mode || '').trim().toLowerCase();
+  if (mode && !['remote', 'command', 'always'].includes(mode)) {
+    return {
+      source: 'remote',
+      endpoint: '',
+      command: null,
+      error: `invalid spawn.decision.mode for "${agentId}": expected remote, command, or always`,
+    };
+  }
+  if (mode === 'always' || decision.always === true) {
+    return {
+      source: 'always',
+      endpoint: '',
+      command: null,
+      error: null,
+    };
+  }
+  if (mode === 'command' || Object.prototype.hasOwnProperty.call(decision, 'command')) {
+    const command = normalizeDecisionCommandConfig(rootDir, decision);
+    return {
+      source: 'command',
+      endpoint: '',
+      command: command.config,
+      error: command.error
+        ? `invalid spawn.decision.command for "${agentId}": ${command.error}`
+        : null,
+    };
+  }
+  return {
+    source: 'remote',
+    endpoint: String(decision.endpoint || '').trim(),
+    command: null,
+    error: null,
+  };
+}
+
+function normalizeDecisionCommandConfig(rootDir: string, decision: AnyRecord) {
+  const rawCommand = Object.prototype.hasOwnProperty.call(decision, 'command')
+    ? decision.command
+    : decision;
+  if (typeof rawCommand === 'string') {
+    const command = rawCommand.trim();
+    return command
+      ? {
+        config: {
+          command,
+          args: [] as string[],
+          cwd: rootDir,
+          env: {} as Record<string, string>,
+          shell: true,
+          timeoutMs: 30_000,
+          displayCommand: command,
+        },
+        error: null,
+      }
+      : { config: null, error: 'command is empty' };
+  }
+  if (Array.isArray(rawCommand)) {
+    const [commandValue, ...argValues] = rawCommand;
+    const command = String(commandValue || '').trim();
+    const args = argValues.map((arg) => String(arg));
+    return command
+      ? {
+        config: {
+          command,
+          args,
+          cwd: rootDir,
+          env: {} as Record<string, string>,
+          shell: false,
+          timeoutMs: 30_000,
+          displayCommand: formatCommand(command, args),
+        },
+        error: null,
+      }
+      : { config: null, error: 'command array is empty' };
+  }
+  if (!rawCommand || typeof rawCommand !== 'object') {
+    return { config: null, error: 'command must be a string, array, or object' };
+  }
+  const command = String((rawCommand as AnyRecord).command || '').trim();
+  if (!command) {
+    return { config: null, error: 'command is empty' };
+  }
+  const args = Array.isArray((rawCommand as AnyRecord).args)
+    ? (rawCommand as AnyRecord).args.map((arg) => String(arg))
+    : [];
+  const cwdValue = String((rawCommand as AnyRecord).cwd || '').trim();
+  const timeoutMs = normalizePositiveNumber((rawCommand as AnyRecord).timeoutMs, 30_000);
+  return {
+    config: {
+      command,
+      args,
+      cwd: cwdValue ? resolvePathInside(rootDir, cwdValue, 'spawn.decision.command.cwd') : rootDir,
+      env: normalizeStringMap((rawCommand as AnyRecord).env),
+      shell: (rawCommand as AnyRecord).shell === true,
+      timeoutMs,
+      displayCommand: formatCommand(command, args),
+    },
+    error: null,
+  };
 }
 
 function normalizeOffsetSeconds(value: unknown, intervalSeconds: number, agentId: string) {
@@ -628,6 +827,19 @@ function pickRuntimeAgentFields(agent: AnyRecord) {
   const picked = { ...agent };
   delete picked.authEnv;
   return picked;
+}
+
+function collectCommandOutput(...parts: unknown[]) {
+  return parts
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function formatCommand(command: string, args: string[]) {
+  return [command, ...args].map((part) => {
+    return /\s/.test(part) ? JSON.stringify(part) : part;
+  }).join(' ');
 }
 
 function joinUrl(baseUrl: string, endpoint: string) {
