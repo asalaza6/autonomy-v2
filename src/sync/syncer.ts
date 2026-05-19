@@ -159,9 +159,31 @@ function promoteQueuedPrdSpec(rootDir: string, integrationBranch: string, queued
 }
 
 function compareQueuedPrdSpecsForPromotion(left: AnyRecord, right: AnyRecord) {
+  const priorityOrder = getQueuedPrdPromotionPriority(right) - getQueuedPrdPromotionPriority(left);
+  if (priorityOrder !== 0) {
+    return priorityOrder;
+  }
+
   const leftTimestamp = String(left && left.spec && (left.spec.createdAt || left.spec.updatedAt) || '');
   const rightTimestamp = String(right && right.spec && (right.spec.createdAt || right.spec.updatedAt) || '');
   return (Date.parse(leftTimestamp) || 0) - (Date.parse(rightTimestamp) || 0);
+}
+
+function getQueuedPrdPromotionPriority(entry: AnyRecord) {
+  const value = String(entry && entry.spec && entry.spec.priority || '').trim().toLowerCase();
+  if (['highest', 'critical', 'p0', '0'].includes(value)) {
+    return 400;
+  }
+  if (['high', 'p1', '1'].includes(value)) {
+    return 300;
+  }
+  if (['normal', 'medium', 'p2', '2'].includes(value)) {
+    return 200;
+  }
+  if (['low', 'p3', '3'].includes(value)) {
+    return 100;
+  }
+  return 200;
 }
 
 function syncPrdSpecsFromIntegrationBranch(rootDir: string, integrationBranch: string, options: AnyRecord = {}) {

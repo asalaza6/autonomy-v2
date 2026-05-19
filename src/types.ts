@@ -128,6 +128,7 @@ export interface PrdSpecPayload extends AnyRecord {
   createdAt: string;
   specification?: string;
   requirements?: string[];
+  priority?: string;
   archive?: PrdArchiveMetadata;
 }
 
@@ -168,6 +169,7 @@ export interface ControlPlanePrdAddPayload extends AnyRecord {
   requirements?: string[];
   taskSpecs?: PrdTaskSpec[];
   sprintId?: string;
+  priority?: string;
 }
 
 export interface ControlPlaneDeployPayload extends AnyRecord {

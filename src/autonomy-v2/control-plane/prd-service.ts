@@ -49,6 +49,7 @@ function executePrdAdd(rootDir, options = {}) {
   const now = new Date().toISOString();
   const specification = getStringOption(options, 'specification', '');
   const requirements = getListOption(options, 'requirement');
+  const priority = getStringOption(options, 'priority', '');
   const rawTaskSpecs = Object.prototype.hasOwnProperty.call(options, 'task-spec')
     ? (Array.isArray(options['task-spec']) ? options['task-spec'] : [options['task-spec']])
     : [];
@@ -76,6 +77,7 @@ function executePrdAdd(rootDir, options = {}) {
     createdAt: now,
     specification,
     requirements,
+    priority,
   });
   const pmAgent = getAgent(config, `${AGENT_ROLES.PM}-agent`);
   const commitResult = commitPrdSpecToIntegrationBranch(rootDir, config.integrationBranch, prdSpec, {
@@ -151,6 +153,9 @@ function buildPrdAddCliOptions(payload) {
   }
   if (payload.sprintId) {
     options['sprint-id'] = payload.sprintId;
+  }
+  if (payload.priority) {
+    options.priority = payload.priority;
   }
   return options;
 }

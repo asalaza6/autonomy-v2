@@ -155,7 +155,7 @@ From a local monorepo path:
 
 ```bash
 node packages/autonomy-v2/bin/autonomy-v2 init --root /path/to/repo
-node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> --specification <text>
+node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> --specification <text> [--priority highest]
 node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> ...
 node packages/autonomy-v2/bin/autonomy-v2-server serve --root /path/to/repo
 ```
@@ -164,7 +164,7 @@ From another folder using the installed package:
 
 ```bash
 npx autonomy-v2 init --root /path/to/consumer-repo
-npx autonomy-v2 prd:add --root /path/to/consumer-repo --id <id> --title <title> ...
+npx autonomy-v2 prd:add --root /path/to/consumer-repo --id <id> --title <title> ... [--priority highest]
 npx autonomy-v2-server serve --root /path/to/consumer-repo
 ```
 

@@ -129,6 +129,7 @@ function validatePrdAddSubmission(
       requirements,
       taskSpecs,
       sprintId: String(submission.sprintId || '').trim() || undefined,
+      priority: String(submission.priority || '').trim() || undefined,
     },
   };
 }

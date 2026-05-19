@@ -13,7 +13,7 @@ Commands:
   task:add --id <id> --title <title> --agent <agent-id> [--acceptance <text>]
   task:finish --task <task-id>
   task:list [--status <status>]
-  prd:add --id <id> --title <title> [--specification <text>] [--requirement <text>] [--task-spec <json>]
+  prd:add --id <id> --title <title> [--specification <text>] [--requirement <text>] [--task-spec <json>] [--priority highest]
   prd:list [--status <status>]
   prd:archive-completed
   worktree:prepare --task <task-id> [--create]

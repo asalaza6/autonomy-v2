@@ -110,3 +110,31 @@ test('queued PRD promotion follows queue creation order instead of path order', 
     false
   );
 });
+
+test('queued PRD promotion prefers highest priority before queue creation order', () => {
+  const rootDir = createQueuePromotionOrderRepo();
+  writeJson(path.join(rootDir, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'queue', 'prd-queue-promo-900.json'), {
+    id: 'prd-queue-promo-900',
+    title: 'Highest priority queued PRD',
+    createdAt: '2026-04-26T10:00:00.000Z',
+    priority: 'highest',
+    specification: 'This queued PRD should jump ahead of older normal priority PRDs.',
+  });
+  git(rootDir, ['add', 'prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-900.json']);
+  git(rootDir, ['commit', '-m', 'add highest priority queued prd']);
+  git(rootDir, ['branch', '-f', 'dev', 'HEAD']);
+
+  const result = syncPrdSpecsFromIntegrationBranch(rootDir, 'dev');
+
+  assert.equal(result.queuedPromotion.id, 'prd-queue-promo-900');
+  assert.equal(result.imported.length, 1);
+  assert.equal(result.imported[0], 'prd-queue-promo-900');
+  assert.equal(
+    gitFileExists(rootDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-900.json'),
+    true
+  );
+  assert.equal(
+    gitFileExists(rootDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-200.json'),
+    true
+  );
+});

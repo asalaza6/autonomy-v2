@@ -103,6 +103,7 @@ test('agent tool PRD propose queues the normal prd:add control-plane job', () =>
       repoId: 'frontend',
       id: 'prd-feedback-1',
       title: 'Feedback request',
+      priority: 'highest',
       specification: 'Turn the customer feedback into a scoped PRD.',
     },
   });
@@ -110,6 +111,7 @@ test('agent tool PRD propose queues the normal prd:add control-plane job', () =>
   assert.equal(result.statusCode, 201);
   assert.equal(result.payload.job.type, 'prd:add');
   assert.equal(result.payload.job.repoId, 'frontend');
+  assert.equal(result.payload.job.payload.priority, 'highest');
   assert.equal(listJobs(rootDir, { type: 'prd:add' as any }).length, 1);
 });
 

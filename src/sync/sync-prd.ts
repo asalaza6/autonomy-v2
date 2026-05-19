@@ -66,9 +66,10 @@ function normalizePrdArchiveMetadata(value: AnyRecord = {}) {
   };
 }
 
-function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requirements, archive }: AnyRecord): PrdSpecPayload {
+function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requirements, priority, archive }: AnyRecord): PrdSpecPayload {
   const normalizedSpecification = typeof specification === 'string' ? specification.trim() : '';
   const normalizedRequirements = normalizeStringList(requirements);
+  const normalizedPriority = typeof priority === 'string' ? priority.trim() : '';
   const normalizedTasks = Array.isArray(tasks) && tasks.length > 0
     ? normalizeTaskSpecs(tasks || [], {
         allowEmpty: Boolean(normalizedSpecification) || normalizedRequirements.length > 0,
@@ -82,6 +83,9 @@ function buildPrdSpecPayload({ id, title, tasks, createdAt, specification, requi
     specification: normalizedSpecification || undefined,
     requirements: normalizedRequirements.length > 0 ? normalizedRequirements : undefined,
   };
+  if (normalizedPriority) {
+    payload.priority = normalizedPriority;
+  }
   if (archive && typeof archive === 'object') {
     payload.archive = normalizePrdArchiveMetadata(archive);
   }
@@ -113,6 +117,7 @@ function parsePrdSpec(rawContent: string, sourcePath: string): PrdSpecPayload {
     createdAt: parsed.createdAt,
     specification: parsed.specification,
     requirements: parsed.requirements,
+    priority: parsed.priority,
     archive: parsed.archive,
   });
 }
