@@ -1115,10 +1115,6 @@
       "prId": "pr-pressure-unblock-queue-promotion-stale-active-architecture-agent",
       "sourceTaskId": "pressure-unblock-queue-promotion-stale-active-architecture-agent-1",
       "sourceAgentId": "architecture-agent",
-      "reviewRound": 1,
-      "status": "assigned",
-      "createdAt": "2026-05-19T23:02:22.366Z",
-      "updatedAt": "2026-05-19T23:02:22.366Z",
       "headBranch": "agent/multi-agent-mvp/architecture-agent/pressure-unblock-queue-promotion-stale-active-architecture-agent",
       "baseBranch": "dev",
       "acceptance": [
@@ -1129,9 +1125,12 @@
         "The fix is implemented in `autonomy-v2` infrastructure code only and does not modify Moving Game product UI files or target `main`/`master` automation.",
         "Verification includes a focused reconciliation/status unit test or equivalent local simulation for the stale active merged PRD case, plus `npm run typecheck`."
       ],
-      "scopeViolations": [],
-      "dispatchedAt": "2026-05-19T23:02:26.434Z",
-      "dispatcher": "scheduler"
+      "reviewRound": 1,
+      "status": "assigned",
+      "createdAt": "2026-05-19T23:02:22.366Z",
+      "updatedAt": "2026-05-19T23:02:40.321Z",
+      "dispatcher": "scheduler",
+      "dispatchedAt": "2026-05-19T23:02:26.434Z"
     }
   ]
 }
