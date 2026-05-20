@@ -101,6 +101,40 @@ test('packaged autonomy-v2 runs init, prd:add, and imports tracked task specs ag
   );
 });
 
+test('packaged autonomy-v2 legacyRosterEnabled false skips old sync and roster dispatch', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-legacy-roster-off-');
+  initAutonomyRepo(repoDir);
+
+  const controlPlanePath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'control-plane.json');
+  const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlanePath, 'utf8'));
+  fs.writeFileSync(
+    controlPlanePath,
+    `${JSON.stringify({ ...controlPlaneConfig, legacyRosterEnabled: false }, null, 2)}\n`,
+    'utf8',
+  );
+
+  addPrdWithTasks(repoDir, 'prd-legacy-off-001', 'Legacy roster disabled PRD', [
+    {
+      id: 'prd-legacy-off-001-architecture-agent-1',
+      title: 'Should not dispatch through legacy roster',
+      agentId: 'architecture-agent',
+      description: 'This task should remain untouched by the old scheduler path.',
+      acceptance: ['Legacy roster dispatch is disabled.'],
+      sprintId: 'multi-agent-mvp',
+    },
+  ]);
+
+  const tickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
+    env: {
+      AUTONOMY_CODEX_STUB: '1',
+    },
+  }));
+
+  assert.deepEqual(tickResult.sync.imported, []);
+  assert.deepEqual(tickResult.dueAgents, []);
+  assert.deepEqual(tickResult.started, []);
+});
+
 test('packaged autonomy-v2 queues PRD additions when one is already active', () => {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-queue-add-'));
 

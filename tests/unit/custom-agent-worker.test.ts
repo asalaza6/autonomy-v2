@@ -1,9 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 import {
   buildCustomAgentNetworkConfigOverrides,
   buildCustomAgentPrompt,
+  main,
 } from '../../src/server/custom-agents/custom-agent-worker.js';
 
 test('custom agent worker allowlists configured control hosts', () => {
@@ -144,4 +148,115 @@ test('custom agent prompt can allow explicit runtime-state recovery', () => {
   assert.match(prompt, /"allowRuntimeStateChanges": true/);
   assert.match(prompt, /Repository runtime state changes are allowed only when explicitly required for local recovery/);
   assert.doesNotMatch(prompt, /Do not commit, push, merge, or change repository runtime state/);
+});
+
+test('custom agent worker runs command lifecycle phases and records invocation state', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agent-worker-'));
+  const invocationDir = path.join(rootDir, '.autonomy', 'runtime', 'custom-agents', 'strategy-agent-target-1', 'start');
+  const workspacePath = path.join(rootDir, '.autonomy', 'workspace');
+  const contextPath = path.join(invocationDir, 'context.json');
+  const scriptsDir = path.join(rootDir, 'scripts');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.mkdirSync(path.join(rootDir, '.autonomy', 'runtime', 'state'), { recursive: true });
+  fs.mkdirSync(invocationDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(rootDir, '.autonomy', 'runtime', 'state', 'runtime.json'),
+    JSON.stringify({
+      workers: {},
+      customAgents: {
+        'strategy-agent:target-1': {
+          agentId: 'strategy-agent',
+          status: 'running',
+          running: true,
+          invocationId: 'inv-1',
+        },
+      },
+      customAgentInvocations: {
+        'inv-1': {
+          invocationId: 'inv-1',
+          agentId: 'strategy-agent',
+          status: 'running',
+        },
+      },
+    }, null, 2),
+    'utf8',
+  );
+
+  const environmentScript = path.join(scriptsDir, 'environment.js');
+  const promptScript = path.join(scriptsDir, 'prompt.js');
+  const finalizeScript = path.join(scriptsDir, 'finalize.js');
+  const codexScript = path.join(scriptsDir, 'codex.js');
+  fs.writeFileSync(environmentScript, `
+const fs = require('fs');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+fs.writeFileSync(${JSON.stringify(path.join(invocationDir, 'environment.input.json'))}, JSON.stringify(input, null, 2));
+process.stdout.write(JSON.stringify({ cwd: '.autonomy/prepared-workspace', environmentReady: true }));
+`, 'utf8');
+  fs.writeFileSync(promptScript, `
+const fs = require('fs');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+fs.writeFileSync(${JSON.stringify(path.join(invocationDir, 'prompt.input.json'))}, JSON.stringify(input, null, 2));
+process.stdout.write(JSON.stringify({ prompt: 'do the custom agent work' }));
+`, 'utf8');
+  fs.writeFileSync(finalizeScript, `
+const fs = require('fs');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+fs.writeFileSync(${JSON.stringify(path.join(invocationDir, 'finalize.input.json'))}, JSON.stringify(input, null, 2));
+process.stdout.write(JSON.stringify({ finalized: true, runStatus: input.run.status }));
+`, 'utf8');
+  fs.writeFileSync(codexScript, '#!/usr/bin/env node\nprocess.stdin.resume(); process.stdin.on("end", () => process.exit(0));\n', 'utf8');
+  fs.chmodSync(codexScript, 0o755);
+
+  fs.writeFileSync(contextPath, JSON.stringify({
+    schemaVersion: 1,
+    invocationId: 'inv-1',
+    runtimeKey: 'strategy-agent:target-1',
+    rootDir,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    kind: 'strategy-agents',
+    agent: { id: 'strategy-agent' },
+    target: { type: 'strategy', id: 'target-1' },
+    workspacePath,
+    paths: {
+      invocationDir,
+      contextPath,
+    },
+    controlPanel: {},
+    auth: {},
+    tools: {},
+    context: {},
+    lifecycle: {
+      environment: { command: 'node', args: [environmentScript], cwd: rootDir },
+      prompt: { command: 'node', args: [promptScript], cwd: rootDir },
+      finalize: { command: 'node', args: [finalizeScript], cwd: rootDir },
+    },
+    decision: { shouldRun: true, reason: 'test' },
+  }, null, 2), 'utf8');
+
+  const previousCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  process.env.AUTONOMY_CODEX_BIN = codexScript;
+  try {
+    await main(['run', '--context', contextPath]);
+  } finally {
+    if (typeof previousCodexBin === 'string') {
+      process.env.AUTONOMY_CODEX_BIN = previousCodexBin;
+    } else {
+      delete process.env.AUTONOMY_CODEX_BIN;
+    }
+  }
+
+  const environmentInput = JSON.parse(fs.readFileSync(path.join(invocationDir, 'environment.input.json'), 'utf8'));
+  const promptInput = JSON.parse(fs.readFileSync(path.join(invocationDir, 'prompt.input.json'), 'utf8'));
+  const finalizeInput = JSON.parse(fs.readFileSync(path.join(invocationDir, 'finalize.input.json'), 'utf8'));
+  const runtime = JSON.parse(fs.readFileSync(path.join(rootDir, '.autonomy', 'runtime', 'state', 'runtime.json'), 'utf8'));
+
+  assert.equal(environmentInput.phase, 'environment');
+  assert.equal(environmentInput.repoRoot, rootDir);
+  assert.equal(promptInput.previous.environment.environmentReady, true);
+  assert.equal(promptInput.workspace.cwd, path.join(rootDir, '.autonomy', 'prepared-workspace'));
+  assert.equal(finalizeInput.run.status, 'completed');
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].running, false);
+  assert.equal(runtime.customAgentInvocations['inv-1'].status, 'completed');
+  assert.equal(runtime.customAgentInvocations['inv-1'].lastResult.finalize.finalized, true);
+  assert.equal(fs.existsSync(path.join(invocationDir, 'environment.command.json')), true);
 });

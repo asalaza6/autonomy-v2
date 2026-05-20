@@ -60,6 +60,58 @@ The default integration and production branches are:
 - integration: `dev`
 - production: `main`
 
+## Legacy Roster Disable Flag
+
+The repo-level control-plane config can disable the built-in `agents.json` roster scheduler while leaving custom agents enabled:
+
+```json
+{
+  "legacyRosterEnabled": false,
+  "spawnCustomAgents": [
+    "../moving-game/agents/custom-agents.json"
+  ]
+}
+```
+
+When `legacyRosterEnabled` is `false`, the scheduler skips the old PRD sync, the old PM/implementation/reviewer dispatch path from `agents.json`, and the old approved-PR merge watchdog. It still loads repo status, refreshes runtime state, and polls `spawnCustomAgents`.
+
+## Command-Driven Custom Agent Lifecycle
+
+Custom agents can be configured as a generic command-driven lifecycle:
+
+```txt
+shouldRun -> environment -> prompt -> codex run -> finalize
+```
+
+`shouldRun` is the existing `spawn.decision.command`. Optional lifecycle commands are carried on each agent:
+
+```json
+{
+  "id": "architecture-agent",
+  "spawn": {
+    "mode": "poll",
+    "decision": {
+      "command": ["node", "../moving-game/agents/architecture/should-run.js"]
+    }
+  },
+  "environment": {
+    "command": ["node", "../moving-game/agents/architecture/prepare-env.js"]
+  },
+  "execution": {
+    "prompt": {
+      "command": ["node", "../moving-game/agents/architecture/build-prompt.js"]
+    }
+  },
+  "finalize": {
+    "command": ["node", "../moving-game/agents/architecture/finalize.js"]
+  }
+}
+```
+
+Autonomy only runs the configured commands, passes a small JSON envelope on stdin, parses JSON from stdout, runs Codex with the prepared prompt and cwd, and records invocation status. Agent-specific semantics such as task selection, worktree preparation, checks, commits, PR creation, review queues, and merges belong in the external command files.
+
+The command envelope includes `invocationId`, `agentId`, `repoRoot`, `phase`, `target`, `workspace.cwd`, `paths.invocationDir`, `paths.contextPath`, `decision`, `previous`, and `run`. Commands should print a JSON object. `environment` may return `cwd` or `workspacePath`; `prompt` must return `prompt` or `promptPath`; `finalize` may return any JSON object useful to the external workflow.
+
 ## How Runner Execution Works
 
 Implementation and review execution always uses the fixed packaged runner:

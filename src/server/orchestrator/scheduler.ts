@@ -1,3 +1,4 @@
+import path from 'path';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import type { AnyRecord, WorkerRuntime } from '../server-types.js';
 import { syncPrdSpecsFromIntegrationBranch } from '../../sync/syncer.js';
@@ -6,6 +7,7 @@ import { loadQueues } from './queues.js';
 import { findDueAgents, finalizePendingInlineWorkers, refreshRuntime, setWorkerState, spawnWorkerProcess, updateBacklogGrace } from './orchestrator-runtime.js';
 import { loadBranchLocks, loadConfig, loadPrds, loadRuntime, writeRuntime } from './orchestrator-state.js';
 import { runWorkerOnce } from './workers.js';
+import { getPaths, readJson } from './paths.js';
 import {
   markCustomAgentSpawnFailed,
   markCustomAgentSpawned,
@@ -37,22 +39,16 @@ function updateRuntimePromotion(runtime: AnyRecord, sync: AnyRecord) {
 
 function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   const { config: syncConfig } = loadConfig(rootDir);
+  const legacyRosterEnabled = isLegacyRosterEnabled(rootDir);
+  const skipLegacySync = options.skipSync === true || !legacyRosterEnabled;
   const syncStartedAt = Date.now();
   emitSchedulerProgress(options, 'sync:start', {
     integrationBranch: syncConfig.integrationBranch,
-    skipped: options.skipSync === true ? 'yes' : 'no',
+    skipped: skipLegacySync ? 'yes' : 'no',
+    legacyRosterEnabled: legacyRosterEnabled ? 'yes' : 'no',
   });
-  const sync = options.skipSync === true
-    ? {
-        integrationBranch: syncConfig.integrationBranch,
-        ref: null,
-        fetchedRef: null,
-        imported: [],
-        updated: [],
-        skipped: [],
-        invalid: [],
-        fetchMessage: '',
-      }
+  const sync = skipLegacySync
+    ? buildSkippedSyncResult(syncConfig.integrationBranch)
     : syncPrdSpecsFromIntegrationBranch(rootDir, syncConfig.integrationBranch, {
         onProgress: options.onProgress,
       });
@@ -75,19 +71,27 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
 
   try {
     emitSchedulerProgress(options, 'state-lock:acquired', { lock: 'state-lock' });
-    const watchdogStartedAt = Date.now();
-    const mergeWatchdog = runApprovedPrMergeWatchdog(rootDir, {
-      onProgress: options.onProgress,
-      stateLockHeld: true,
-    });
-    emitSchedulerProgress(options, 'merge-watchdog:done', {
-      durationMs: Date.now() - watchdogStartedAt,
-      checked: mergeWatchdog.checked || 0,
-      changed: mergeWatchdog.changed ? 'yes' : 'no',
-      merged: mergeWatchdog.merged ? 'yes' : 'no',
-      prId: mergeWatchdog.prId || '-',
-      reason: mergeWatchdog.reason || mergeWatchdog.diagnosis && mergeWatchdog.diagnosis.code || '-',
-    });
+    if (legacyRosterEnabled) {
+      const watchdogStartedAt = Date.now();
+      const mergeWatchdog = runApprovedPrMergeWatchdog(rootDir, {
+        onProgress: options.onProgress,
+        stateLockHeld: true,
+      });
+      emitSchedulerProgress(options, 'merge-watchdog:done', {
+        durationMs: Date.now() - watchdogStartedAt,
+        checked: mergeWatchdog.checked || 0,
+        changed: mergeWatchdog.changed ? 'yes' : 'no',
+        merged: mergeWatchdog.merged ? 'yes' : 'no',
+        prId: mergeWatchdog.prId || '-',
+        reason: mergeWatchdog.reason || mergeWatchdog.diagnosis && mergeWatchdog.diagnosis.code || '-',
+        legacyRosterEnabled: 'yes',
+      });
+    } else {
+      emitSchedulerProgress(options, 'merge-watchdog:done', {
+        skipped: 'yes',
+        legacyRosterEnabled: 'no',
+      });
+    }
     const { config } = loadConfig(rootDir);
     const queues = loadQueues(rootDir, config);
     const branchLocks = loadBranchLocks(rootDir);
@@ -107,14 +111,19 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
       customAgents: Object.keys((runtime && runtime.customAgents) || {}).length,
     });
 
-    const { pendingPrdWork, suppressNonPmDispatch } = updateBacklogGrace(rootDir, config, queues, branchLocks, prds, runtime, options);
-    dueAgents = findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, {
-      suppressNonPmDispatch,
-    });
+    const { pendingPrdWork, suppressNonPmDispatch } = legacyRosterEnabled
+      ? updateBacklogGrace(rootDir, config, queues, branchLocks, prds, runtime, options)
+      : { pendingPrdWork: false, suppressNonPmDispatch: false };
+    dueAgents = legacyRosterEnabled
+      ? findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, {
+          suppressNonPmDispatch,
+        })
+      : [];
     emitSchedulerProgress(options, 'due:computed', {
       due: dueAgents.length,
       pendingPrdWork: pendingPrdWork ? 'yes' : 'no',
       suppressNonPmDispatch: suppressNonPmDispatch ? 'yes' : 'no',
+      legacyRosterEnabled: legacyRosterEnabled ? 'yes' : 'no',
       dueAgents: dueAgents.map((entry) => `${entry.agentId}:${entry.reason}`).join(','),
     });
 
@@ -291,6 +300,26 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   };
 }
 
+function buildSkippedSyncResult(integrationBranch: string) {
+  return {
+    integrationBranch,
+    ref: null,
+    fetchedRef: null,
+    imported: [],
+    updated: [],
+    skipped: [],
+    invalid: [],
+    fetchMessage: '',
+    queuedPromotion: null,
+  };
+}
+
+function isLegacyRosterEnabled(rootDir: string) {
+  const controlPlanePath = path.join(getPaths(rootDir).configDir, 'control-plane.json');
+  const controlPlaneConfig = readJson(controlPlanePath, {}) as AnyRecord;
+  return controlPlaneConfig.legacyRosterEnabled !== false;
+}
+
 function updateCustomAgentSpawnedPid(rootDir: string, entry: AnyRecord, pid: number | null | undefined) {
   const release = acquireStateLock(rootDir);
   try {
@@ -368,4 +397,4 @@ function markSpawnDispatchSkipped(rootDir: string, agentId: string, startedAt: s
   }
 }
 
-export { runSchedulerTick };
+export { isLegacyRosterEnabled, runSchedulerTick };

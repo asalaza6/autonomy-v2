@@ -3,10 +3,11 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { spawnSync } from 'node:child_process';
 import { runCodexExec } from '../../codex/cli.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import { loadRuntime, writeRuntime } from '../orchestrator/orchestrator-state.js';
-import { ensureDir, readJson } from '../orchestrator/paths.js';
+import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 
 function parseCli(argv: string[]) {
   const options: Record<string, any> = {};
@@ -43,6 +44,10 @@ async function main(argv: string[] = process.argv.slice(2)) {
     throw new Error('Missing required option --context');
   }
   const runtimeContext: any = readJson(contextPath, {});
+  runtimeContext.paths = {
+    ...(runtimeContext.paths || {}),
+    contextPath,
+  };
   const rootDir = String(runtimeContext.rootDir || '').trim();
   const runtimeKey = String(runtimeContext.runtimeKey || '').trim();
   const workspacePath = String(runtimeContext.workspacePath || '').trim();
@@ -95,21 +100,231 @@ async function runCustomAgent(runtimeContext) {
     }
   });
 
+  markCustomAgentInvocationPhase(runtimeContext, 'environment', {
+    status: 'running',
+  });
+  const environmentResult = runLifecycleCommand(runtimeContext, 'environment', {
+    workspacePath,
+    env,
+  }) || {};
+  const preparedWorkspacePath = resolvePreparedWorkspacePath(runtimeContext.rootDir, workspacePath, environmentResult);
+  ensureWorkspaceInsideRoot(runtimeContext.rootDir, preparedWorkspacePath);
+  ensureDir(preparedWorkspacePath);
+
+  markCustomAgentInvocationPhase(runtimeContext, 'prompt', {
+    status: 'running',
+    workspace: { cwd: preparedWorkspacePath },
+  });
+  const promptResult = runLifecycleCommand(runtimeContext, 'prompt', {
+    workspacePath: preparedWorkspacePath,
+    env,
+    previous: {
+      environment: environmentResult,
+    },
+  });
+  const prompt = promptResult
+    ? normalizePromptResult(runtimeContext.rootDir, promptResult)
+    : buildCustomAgentPrompt({
+        ...runtimeContext,
+        workspacePath: preparedWorkspacePath,
+        environment: environmentResult,
+      });
+
+  markCustomAgentInvocationPhase(runtimeContext, 'run', {
+    status: 'running',
+    workspace: { cwd: preparedWorkspacePath },
+  });
   const result = await runCodexExec({
-    cwd: workspacePath,
-    prompt: buildCustomAgentPrompt(runtimeContext),
+    cwd: preparedWorkspacePath,
+    prompt,
     readOnly: false,
     sandboxMode: allowRuntimeStateChanges ? 'danger-full-access' : 'workspace-write',
     env,
     inheritHostEnv: true,
     configOverrides: buildCustomAgentNetworkConfigOverrides(runtimeContext, process.env),
   });
-
-  return {
+  const runResult = {
     ok: true,
     status: 'completed',
     conversationId: result.conversationId || '',
   };
+
+  markCustomAgentInvocationPhase(runtimeContext, 'finalize', {
+    status: 'running',
+    workspace: { cwd: preparedWorkspacePath },
+    run: runResult,
+  });
+  const finalizeResult = runLifecycleCommand(runtimeContext, 'finalize', {
+    workspacePath: preparedWorkspacePath,
+    env,
+    previous: {
+      environment: environmentResult,
+      prompt: summarizePromptResult(promptResult),
+    },
+    run: runResult,
+  });
+
+  return {
+    ok: true,
+    status: 'completed',
+    invocationId: String(runtimeContext.invocationId || ''),
+    conversationId: runResult.conversationId,
+    environment: environmentResult,
+    finalize: finalizeResult || null,
+  };
+}
+
+function runLifecycleCommand(runtimeContext, phase: string, options: any = {}) {
+  const commandConfig = runtimeContext.lifecycle && runtimeContext.lifecycle[phase];
+  if (!commandConfig) {
+    return null;
+  }
+  const workspacePath = String(options.workspacePath || runtimeContext.workspacePath || '');
+  const envelope = buildLifecycleEnvelope(runtimeContext, phase, {
+    workspacePath,
+    previous: options.previous || {},
+    run: options.run || null,
+  });
+  const result = spawnSync(commandConfig.command, commandConfig.args || [], {
+    cwd: commandConfig.cwd || runtimeContext.rootDir,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...(options.env || {}),
+      ...(commandConfig.env || {}),
+      AUTONOMY_CUSTOM_AGENT_PHASE: phase,
+      AUTONOMY_CUSTOM_AGENT_INVOCATION_ID: String(runtimeContext.invocationId || ''),
+      AUTONOMY_CUSTOM_AGENT_CONTEXT: String(runtimeContext.paths && runtimeContext.paths.contextPath || process.env.AUTONOMY_CUSTOM_AGENT_CONTEXT || ''),
+    },
+    input: `${JSON.stringify(envelope)}\n`,
+    shell: commandConfig.shell === true,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    timeout: Number(commandConfig.timeoutMs || 30_000),
+  });
+  writeLifecycleCommandArtifacts(runtimeContext, phase, {
+    command: commandConfig.displayCommand || commandConfig.command,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+    status: result.status,
+    signal: result.signal || null,
+  });
+  if (result.error) {
+    throw new Error(`${phase} command failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`${phase} command exited ${result.status}: ${collectCommandOutput(result.stderr, result.stdout, result.signal) || 'no output'}`);
+  }
+  const stdout = String(result.stdout || '').trim();
+  if (!stdout) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(stdout);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch (error) {
+    throw new Error(`${phase} command must print JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  throw new Error(`${phase} command JSON must be an object`);
+}
+
+function buildLifecycleEnvelope(runtimeContext, phase: string, options: any = {}) {
+  return {
+    invocationId: String(runtimeContext.invocationId || ''),
+    agentId: String(runtimeContext.agent && runtimeContext.agent.id || ''),
+    agentType: String(runtimeContext.kind || runtimeContext.agent && runtimeContext.agent.type || ''),
+    repoRoot: String(runtimeContext.rootDir || ''),
+    phase,
+    target: runtimeContext.target || {},
+    workspace: {
+      cwd: String(options.workspacePath || runtimeContext.workspacePath || ''),
+    },
+    paths: {
+      invocationDir: String(runtimeContext.paths && runtimeContext.paths.invocationDir || ''),
+      contextPath: String(runtimeContext.paths && runtimeContext.paths.contextPath || process.env.AUTONOMY_CUSTOM_AGENT_CONTEXT || ''),
+    },
+    decision: runtimeContext.decision || {},
+    previous: options.previous || {},
+    run: options.run || null,
+  };
+}
+
+function resolvePreparedWorkspacePath(rootDir: string, fallbackWorkspacePath: string, environmentResult) {
+  const raw = String(
+    environmentResult && (
+      environmentResult.cwd
+      || environmentResult.workspacePath
+      || environmentResult.workspace && environmentResult.workspace.cwd
+    ) || fallbackWorkspacePath
+  ).trim();
+  return path.isAbsolute(raw) ? raw : path.resolve(rootDir, raw);
+}
+
+function normalizePromptResult(rootDir: string, promptResult) {
+  const prompt = String(promptResult && promptResult.prompt || '').trim();
+  if (prompt) {
+    return prompt;
+  }
+  const promptPath = String(promptResult && promptResult.promptPath || '').trim();
+  if (promptPath) {
+    const resolvedPath = path.isAbsolute(promptPath) ? promptPath : path.resolve(rootDir, promptPath);
+    return fs.readFileSync(resolvedPath, 'utf8');
+  }
+  throw new Error('prompt command must return prompt or promptPath');
+}
+
+function summarizePromptResult(promptResult) {
+  if (!promptResult) {
+    return null;
+  }
+  return {
+    prompt: typeof promptResult.prompt === 'string' ? { length: promptResult.prompt.length } : undefined,
+    promptPath: promptResult.promptPath || undefined,
+  };
+}
+
+function writeLifecycleCommandArtifacts(runtimeContext, phase: string, payload) {
+  const invocationDir = String(runtimeContext.paths && runtimeContext.paths.invocationDir || '').trim();
+  if (!invocationDir) {
+    return;
+  }
+  ensureDir(invocationDir);
+  writeJson(path.join(invocationDir, `${phase}.command.json`), payload);
+}
+
+function markCustomAgentInvocationPhase(runtimeContext, phase: string, patch: any = {}) {
+  const rootDir = String(runtimeContext.rootDir || '');
+  const runtimeKey = String(runtimeContext.runtimeKey || '');
+  const invocationId = String(runtimeContext.invocationId || runtimeKey);
+  if (!rootDir || !runtimeKey || !invocationId) {
+    return;
+  }
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    runtime.customAgentInvocations = runtime.customAgentInvocations || {};
+    runtime.customAgentInvocations[invocationId] = {
+      invocationId,
+      agentId: String(runtimeContext.agent && runtimeContext.agent.id || runtimeKey),
+      runtimeKey,
+      status: 'running',
+      startedAt: String(runtimeContext.startedAt || runtimeContext.spawn && runtimeContext.spawn.startedAt || ''),
+      ...(runtime.customAgentInvocations[invocationId] || {}),
+      phase,
+      updatedAt: new Date().toISOString(),
+      target: runtimeContext.target || {},
+      paths: runtimeContext.paths || {},
+      ...patch,
+    };
+    runtime.customAgents = runtime.customAgents || {};
+    if (runtime.customAgents[runtimeKey]) {
+      runtime.customAgents[runtimeKey].phase = phase;
+    }
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
 }
 
 function buildCustomAgentNetworkConfigOverrides(runtimeContext, env: NodeJS.ProcessEnv = process.env) {
@@ -289,6 +504,20 @@ function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, result,
   try {
     const runtime = loadRuntime(rootDir);
     runtime.customAgents = runtime.customAgents || {};
+    const invocationId = String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].invocationId || result && result.invocationId || '');
+    if (invocationId) {
+      runtime.customAgentInvocations = runtime.customAgentInvocations || {};
+      runtime.customAgentInvocations[invocationId] = {
+        invocationId,
+        agentId: String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].agentId || runtimeKey),
+        ...(runtime.customAgentInvocations[invocationId] || {}),
+        status: error ? 'failed' : 'completed',
+        phase: error ? ((runtime.customAgentInvocations[invocationId] && runtime.customAgentInvocations[invocationId].phase) || 'failed') : 'completed',
+        finishedAt: new Date().toISOString(),
+        lastResult: result || null,
+        lastError: error ? extractError(error) : null,
+      };
+    }
     runtime.customAgents[runtimeKey] = {
       agentId: String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].agentId || runtimeKey),
       ...(runtime.customAgents[runtimeKey] || {}),
@@ -303,6 +532,13 @@ function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, result,
   } finally {
     release();
   }
+}
+
+function collectCommandOutput(...parts: unknown[]) {
+  return parts
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
 function extractError(error) {

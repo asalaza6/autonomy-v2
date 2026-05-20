@@ -96,7 +96,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.lastError = null;
       return;
     }
-    const configError = normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError;
+    const configError = normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError;
     if (configError) {
       status.status = 'blocked';
       status.running = false;
@@ -184,6 +184,9 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.running = false;
       return;
     }
+    const invocationTarget = decision && decision.target && typeof decision.target === 'object'
+      ? { ...normalizedAgent.target, ...decision.target }
+      : normalizedAgent.target;
     const missingTool = findMissingToolEnv(normalizedAgent.tools);
     if (missingTool) {
       status.status = 'blocked';
@@ -205,10 +208,14 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     }
 
     ensureDir(normalizedAgent.workspacePath);
+    const invocationId = buildCustomAgentInvocationId(statusKey, nowIso);
+    const invocationDir = getCustomAgentInvocationDir(rootDir, statusKey, nowIso);
     const runtimeContextPath = writeCustomAgentRuntimeContext(rootDir, statusKey, nowIso, {
       schemaVersion: 1,
+      invocationId,
       runtimeKey: statusKey,
       rootDir,
+      startedAt: nowIso,
       kind: String(config.kind || ''),
       configPath: config.configPath,
       configSource: config.configSource,
@@ -217,11 +224,15 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       agent: {
         ...pickRuntimeAgentFields(agent),
         id: normalizedAgent.agentId,
-        target: normalizedAgent.target,
+        target: invocationTarget,
         workspace: normalizedAgent.workspace,
       },
-      target: normalizedAgent.target,
+      target: invocationTarget,
       workspacePath: normalizedAgent.workspacePath,
+      paths: {
+        invocationDir,
+        contextPath: path.join(invocationDir, 'context.json'),
+      },
       spawn: {
         intervalSeconds: normalizedAgent.intervalSeconds,
         offsetSeconds: normalizedAgent.offsetSeconds,
@@ -236,6 +247,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
         value: authValue,
       },
       tools: buildRuntimeTools(normalizedAgent.tools),
+      lifecycle: normalizedAgent.lifecycle,
       context: {
         globalReadOnly: normalizedAgent.context.globalReadOnly,
         workspaceReadWrite: normalizedAgent.context.workspaceReadWrite,
@@ -248,16 +260,37 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     status.startedAt = nowIso;
     status.finishedAt = null;
     status.pid = null;
-    pendingSpawnStarts.push({
+    status.invocationId = invocationId;
+    runtime.customAgentInvocations = runtime.customAgentInvocations || {};
+    runtime.customAgentInvocations[invocationId] = {
+      invocationId,
       runtimeKey: statusKey,
       agentId: normalizedAgent.agentId,
-      target: normalizedAgent.target,
+      status: 'running',
+      phase: 'scheduled',
+      startedAt: nowIso,
+      updatedAt: nowIso,
+      target: invocationTarget,
+      workspace: {
+        cwd: normalizedAgent.workspacePath,
+      },
+      paths: {
+        invocationDir,
+        contextPath: runtimeContextPath,
+      },
+      lastError: null,
+    };
+    pendingSpawnStarts.push({
+      runtimeKey: statusKey,
+      invocationId,
+      agentId: normalizedAgent.agentId,
+      target: invocationTarget,
       startedAt: nowIso,
       runtimeContextPath,
     });
     started.push({
       agentId: normalizedAgent.agentId,
-      target: normalizedAgent.target,
+      target: invocationTarget,
       mode: 'custom-agent',
       reason: status.lastDecisionReason || 'decision shouldRun=true',
       pid: null,
@@ -351,6 +384,7 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
   const offset = normalizeOffsetSeconds(agent && agent.spawn ? agent.spawn.offsetSeconds : undefined, intervalSeconds, agentId);
   const tools = normalizeGrantedTools(agent && agent.tools, options.agentTools || {});
   const decision = normalizeDecisionConfig(rootDir, agent && agent.spawn && agent.spawn.decision, agentId);
+  const lifecycle = normalizeLifecycleConfig(rootDir, agent, agentId);
   return {
     ...agent,
     agentId,
@@ -374,6 +408,8 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
     decisionSource: decision.source,
     decisionCommand: decision.command,
     decisionError: decision.error,
+    lifecycle: lifecycle.config,
+    lifecycleError: lifecycle.error,
     singletonKey,
     singletonValue,
     decisionEndpoint: decision.endpoint,
@@ -494,8 +530,23 @@ function runLocalDecisionCommandSync(rootDir: string, agent: AnyRecord) {
       AUTONOMY_CUSTOM_AGENT_DECISION_CONTEXT: JSON.stringify(envContext),
       ...command.env,
     },
+    input: `${JSON.stringify({
+      invocationId: '',
+      agentId: String(agent.agentId || ''),
+      agentType: String(agent.kind || ''),
+      repoRoot: rootDir,
+      phase: 'shouldRun',
+      target: agent.target || {},
+      workspace: {
+        cwd: String(agent.workspacePath || ''),
+      },
+      paths: {},
+      decision: {},
+      previous: {},
+      run: null,
+    })}\n`,
     shell: command.shell === true,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['pipe', 'pipe', 'pipe'],
     timeout: Number(command.timeoutMs || 30_000),
   });
   const output = collectCommandOutput(result.stdout, result.stderr);
@@ -536,13 +587,19 @@ function sanitizeDecisionRequestError(value: string) {
 }
 
 function writeCustomAgentRuntimeContext(rootDir: string, statusKey: string, startedAt: string, payload: AnyRecord) {
-  const safeStatusKey = slugify(statusKey);
-  const safeStartedAt = slugify(startedAt);
-  const contextDir = path.join(getPaths(rootDir).runtimeAutonomyDir, 'custom-agents', safeStatusKey, safeStartedAt);
+  const contextDir = getCustomAgentInvocationDir(rootDir, statusKey, startedAt);
   ensureDir(contextDir);
   const contextPath = path.join(contextDir, 'context.json');
   writeJson(contextPath, payload);
   return contextPath;
+}
+
+function getCustomAgentInvocationDir(rootDir: string, statusKey: string, startedAt: string) {
+  return path.join(getPaths(rootDir).runtimeAutonomyDir, 'custom-agents', slugify(statusKey), slugify(startedAt));
+}
+
+function buildCustomAgentInvocationId(statusKey: string, startedAt: string) {
+  return `${slugify(statusKey)}-${slugify(startedAt)}`;
 }
 
 function normalizeCustomAgentConfigPaths(value: unknown) {
@@ -718,7 +775,7 @@ function normalizeDecisionConfig(rootDir: string, value: unknown, agentId: strin
 
 function normalizeDecisionCommandConfig(rootDir: string, decision: AnyRecord) {
   const rawCommand = Object.prototype.hasOwnProperty.call(decision, 'command')
-    ? decision.command
+    ? (hasCommandObjectOptions(decision) ? decision : decision.command)
     : decision;
   if (typeof rawCommand === 'string') {
     const command = rawCommand.trim();
@@ -772,13 +829,48 @@ function normalizeDecisionCommandConfig(rootDir: string, decision: AnyRecord) {
     config: {
       command,
       args,
-      cwd: cwdValue ? resolvePathInside(rootDir, cwdValue, 'spawn.decision.command.cwd') : rootDir,
+      cwd: cwdValue ? resolvePathInside(rootDir, cwdValue, 'command.cwd') : rootDir,
       env: normalizeStringMap((rawCommand as AnyRecord).env),
       shell: (rawCommand as AnyRecord).shell === true,
       timeoutMs,
       displayCommand: formatCommand(command, args),
     },
     error: null,
+  };
+}
+
+function hasCommandObjectOptions(value: AnyRecord) {
+  return ['args', 'cwd', 'env', 'shell', 'timeoutMs'].some((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function normalizeLifecycleConfig(rootDir: string, agent: AnyRecord, agentId: string) {
+  const phases = {
+    environment: normalizeOptionalCommandConfig(rootDir, agent && agent.environment, `${agentId}.environment`),
+    prompt: normalizeOptionalCommandConfig(rootDir, agent && agent.execution && agent.execution.prompt, `${agentId}.execution.prompt`),
+    finalize: normalizeOptionalCommandConfig(rootDir, agent && agent.finalize, `${agentId}.finalize`),
+  };
+  const error = Object.entries(phases)
+    .map(([phase, result]) => result.error ? `${phase}: ${result.error}` : '')
+    .filter(Boolean)
+    .join('; ');
+  return {
+    config: Object.fromEntries(Object.entries(phases).map(([phase, result]) => [phase, result.config])),
+    error: error || null,
+  };
+}
+
+function normalizeOptionalCommandConfig(rootDir: string, value: unknown, label: string) {
+  if (!value || typeof value !== 'object') {
+    return { config: null, error: null };
+  }
+  const record = value as AnyRecord;
+  if (!Object.prototype.hasOwnProperty.call(record, 'command')) {
+    return { config: null, error: null };
+  }
+  const command = normalizeDecisionCommandConfig(rootDir, record);
+  return {
+    config: command.config,
+    error: command.error ? `invalid ${label}.command: ${command.error}` : null,
   };
 }
 

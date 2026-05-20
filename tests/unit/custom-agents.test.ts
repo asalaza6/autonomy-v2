@@ -11,6 +11,7 @@ import {
   loadCustomAgentConfigs,
   pollCustomAgents,
 } from '../../src/server/orchestrator/custom-agents.js';
+import { isLegacyRosterEnabled } from '../../src/server/orchestrator/scheduler.js';
 
 function makeRepo(customConfig, controlPlane = {}) {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
@@ -119,6 +120,18 @@ test('missing spawnCustomAgents leaves existing repo-agent runtime untouched', (
       'pm-agent': { agentId: 'pm-agent', status: 'idle' },
     },
   });
+});
+
+test('legacy roster defaults on and can be disabled from control-plane config', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
+  const configDir = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config');
+  fs.mkdirSync(configDir, { recursive: true });
+
+  assert.equal(isLegacyRosterEnabled(rootDir), true);
+
+  fs.writeFileSync(path.join(configDir, 'control-plane.json'), '{"schemaVersion":1,"legacyRosterEnabled":false}\n', 'utf8');
+
+  assert.equal(isLegacyRosterEnabled(rootDir), false);
 });
 
 test('disabled custom-agent config is a no-op', () => {
@@ -487,6 +500,50 @@ test('shouldRun true spawns once and creates the configured workspace', () => {
   assert.equal(runtimeContext.context.globalReadOnly[0].path, path.join(rootDir, 'context.md'));
   assert.deepEqual(runtimeContext.context.workspaceReadWrite, ['state.json', 'notes.md']);
   assert.equal(runtimeContext.context.allowRuntimeStateChanges, false);
+});
+
+test('custom-agent lifecycle command config is carried into runtime context', () => {
+  const baseAgent = baseCustomConfig().agents[0];
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        ...baseAgent,
+        environment: {
+          command: ['node', '../agents/prepare-env.js'],
+        },
+        execution: {
+          prompt: {
+            command: {
+              command: 'node',
+              args: ['../agents/build-prompt.js'],
+            },
+          },
+        },
+        finalize: {
+          command: ['node', '../agents/finalize.js'],
+        },
+      },
+    ],
+  }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  const runtimeContext = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(runtimeContext.invocationId, 'strategy-agent-target-1-2026-01-01t00-00-00-000z');
+  assert.equal(runtimeContext.lifecycle.environment.command, 'node');
+  assert.deepEqual(runtimeContext.lifecycle.environment.args, ['../agents/prepare-env.js']);
+  assert.equal(runtimeContext.lifecycle.prompt.command, 'node');
+  assert.deepEqual(runtimeContext.lifecycle.prompt.args, ['../agents/build-prompt.js']);
+  assert.equal(runtimeContext.lifecycle.finalize.command, 'node');
+  assert.equal(runtime.customAgentInvocations[runtimeContext.invocationId].phase, 'scheduled');
+  assert.equal(runtime.customAgentInvocations[runtimeContext.invocationId].paths.contextPath, result.pendingSpawnStarts[0].runtimeContextPath);
 });
 
 test('custom-agent runtime context carries explicit runtime recovery permission', () => {
