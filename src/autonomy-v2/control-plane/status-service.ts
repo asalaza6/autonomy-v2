@@ -5,7 +5,7 @@ import { buildAgentStatusSummaries } from '../commands/shared-agent-status.js';
 import { buildPullRequestStatusSummaries } from '../commands/shared-pr-status.js';
 import { gitRefExists, resolveBaseRef, runGitRead } from '../commands/shared-repo.js';
 import { loadAllState, loadTrackedPrdHistory, loadTrackedPrds } from '../commands/shared-prds.js';
-import { getTaskQueue, listTasks } from '../commands/shared-queues.js';
+import { getTaskQueue, isTerminalTaskStatus, listTasks } from '../commands/shared-queues.js';
 import { buildDeploymentVersionSnapshot, buildUnavailableDeploymentVersionSnapshot } from '../commands/deploy-version.js';
 import { readAutonomyPackageStatus } from '../commands/update.js';
 import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../sync/review-reconciliation.js';
@@ -20,12 +20,15 @@ function buildStatusSnapshot(rootDir) {
     ? readJson(paths.runtimeState)
     : { workers: {} };
   const { config, sprint, taskQueues: loadedTaskQueues, prs: loadedPrs, branchLocks } = loadAllState(rootDir);
-  const taskQueues = reconcileTaskQueuesForStatus(loadedTaskQueues, loadedPrs);
-  const prs = reconcilePullRequestsForStatus(loadedPrs, taskQueues);
-  const prds = loadTrackedPrds(rootDir, config, {
+  const customLifecycle = loadCustomLifecycleStatusState(rootDir);
+  const rawTaskQueues = mergeCustomLifecycleTaskQueues(loadedTaskQueues, customLifecycle.taskQueues);
+  const rawPrs = mergeCustomLifecyclePullRequests(loadedPrs, customLifecycle.prs);
+  const taskQueues = reconcileTaskQueuesForStatus(rawTaskQueues, rawPrs);
+  const prs = reconcilePullRequestsForStatus(rawPrs, taskQueues);
+  const prds = applyCustomLifecyclePrdProjection(loadTrackedPrds(rootDir, config, {
     taskQueues,
     prs,
-  });
+  }), customLifecycle);
   const prdHistory = loadTrackedPrdHistory(rootDir, config, {
     prds,
     prs,
@@ -91,6 +94,227 @@ function buildStatusSnapshot(rootDir) {
     prds,
     prdHistory,
   };
+}
+
+function loadCustomLifecycleStatusState(rootDir) {
+  const lifecycleDir = path.join(rootDir, '.autonomy', 'runtime', 'custom-lifecycle');
+  const queuesDir = path.join(lifecycleDir, 'queues');
+  const prdStateDir = path.join(lifecycleDir, 'prd-state');
+  const prsPath = path.join(lifecycleDir, 'state', 'prs.json');
+  const taskQueues = {};
+  const prdStateById = new Map();
+
+  if (fs.existsSync(queuesDir)) {
+    for (const entry of fs.readdirSync(queuesDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) {
+        continue;
+      }
+      const queue = readJsonIfPresent(path.join(queuesDir, entry.name));
+      if (!queue || !Array.isArray(queue.tasks)) {
+        continue;
+      }
+      const agentId = String(queue.agentId || path.basename(entry.name, '.json')).trim();
+      if (!agentId) {
+        continue;
+      }
+      taskQueues[agentId] = {
+        schemaVersion: queue.schemaVersion || 1,
+        agentId,
+        role: queue.role || inferCustomQueueRole(agentId),
+        tasks: queue.tasks.map((task) => normalizeCustomLifecycleTask(task, agentId)),
+      };
+    }
+  }
+
+  if (fs.existsSync(prdStateDir)) {
+    for (const entry of fs.readdirSync(prdStateDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) {
+        continue;
+      }
+      const state = readJsonIfPresent(path.join(prdStateDir, entry.name));
+      const prdId = String(state && (state.prdId || state.id) || path.basename(entry.name, '.json')).trim();
+      if (prdId) {
+        prdStateById.set(prdId, state || {});
+      }
+    }
+  }
+
+  const prs = normalizeCustomLifecyclePrs(readJsonIfPresent(prsPath));
+  return {
+    taskQueues,
+    prdStateById,
+    prs,
+  };
+}
+
+function readJsonIfPresent(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  try {
+    return readJson(filePath);
+  } catch {
+    return null;
+  }
+}
+
+function inferCustomQueueRole(agentId) {
+  return String(agentId || '').includes('review') ? 'review' : 'implementation';
+}
+
+function normalizeCustomLifecycleTask(task, agentId) {
+  return {
+    ...(task || {}),
+    agentId: String(task && task.agentId || agentId || '').trim(),
+    status: String(task && (task.status || task.state) || 'pending').trim() || 'pending',
+  };
+}
+
+function normalizeCustomLifecyclePrs(prsState) {
+  const pullRequests = Array.isArray(prsState && prsState.pullRequests)
+    ? prsState.pullRequests
+    : [];
+  return {
+    ...(prsState || {}),
+    pullRequests: pullRequests.map((pr) => {
+      const remoteUrl = String(pr && (pr.remoteUrl || pr.url || pr.html_url) || '').trim();
+      const remote = {
+        ...((pr && pr.remote) || {}),
+        ...(remoteUrl && !(pr && pr.remote && pr.remote.url) ? { url: remoteUrl } : {}),
+      };
+      return {
+        ...(pr || {}),
+        remote,
+      };
+    }),
+  };
+}
+
+function mergeCustomLifecycleTaskQueues(taskQueues, customTaskQueues) {
+  const merged = { ...(taskQueues || {}) };
+  Object.entries(customTaskQueues || {}).forEach(([agentId, queue]) => {
+    merged[agentId] = queue;
+  });
+  return merged;
+}
+
+function mergeCustomLifecyclePullRequests(prs, customPrs) {
+  const byId = new Map();
+  (((prs && prs.pullRequests) || []) as any[]).forEach((pr) => {
+    if (pr && pr.id) {
+      byId.set(String(pr.id), pr);
+    }
+  });
+  (((customPrs && customPrs.pullRequests) || []) as any[]).forEach((pr) => {
+    if (pr && pr.id) {
+      byId.set(String(pr.id), pr);
+    }
+  });
+  return {
+    ...(prs || {}),
+    pullRequests: Array.from(byId.values()),
+  };
+}
+
+function applyCustomLifecyclePrdProjection(prds, customLifecycle) {
+  const tasksByPrdId = new Map();
+  Object.values(customLifecycle.taskQueues || {}).forEach((queue: any) => {
+    ((queue && queue.tasks) || []).forEach((task) => {
+      const prdId = String(task && task.prdId || '').trim();
+      if (!prdId) {
+        return;
+      }
+      const tasks = tasksByPrdId.get(prdId) || [];
+      tasks.push(task);
+      tasksByPrdId.set(prdId, tasks);
+    });
+  });
+
+  return {
+    ...(prds || {}),
+    prds: ((prds && prds.prds) || []).map((prd) => {
+      const prdId = String(prd && prd.id || '').trim();
+      const customState = customLifecycle.prdStateById.get(prdId) || null;
+      const customTasks = tasksByPrdId.get(prdId) || [];
+      if (!customState && customTasks.length === 0) {
+        return prd;
+      }
+
+      const plannedTaskIds = normalizeStringList(
+        customState && Array.isArray(customState.plannedTaskIds) && customState.plannedTaskIds.length > 0
+          ? customState.plannedTaskIds
+          : customTasks.map((task) => task.id)
+      );
+      const completedTaskSpecIds = plannedTaskIds.filter((taskId) => {
+        const task = customTasks.find((candidate) => String(candidate && candidate.id || '') === taskId);
+        return isTerminalTaskStatus(String(task && (task.status || task.state) || ''));
+      });
+      const hasOpenTask = customTasks.some((task) => !isTerminalTaskStatus(String(task && (task.status || task.state) || '')));
+      const stateStatus = String(customState && customState.status || '').trim();
+      const status = resolveCustomLifecyclePrdStatus(prd, {
+        stateStatus,
+        plannedTaskIds,
+        completedTaskSpecIds,
+        hasOpenTask,
+      });
+
+      return {
+        ...prd,
+        status,
+        statusSource: stateStatus ? 'custom-lifecycle' : prd.statusSource,
+        statusReason: describeCustomLifecyclePrdStatus(status, stateStatus, plannedTaskIds, completedTaskSpecIds, hasOpenTask),
+        plannedTaskIds: plannedTaskIds.length > 0 ? plannedTaskIds : prd.plannedTaskIds,
+        completedTaskSpecIds: completedTaskSpecIds.length > 0 ? completedTaskSpecIds : prd.completedTaskSpecIds,
+        tasks: customTasks.length > 0 ? customTasks : prd.tasks,
+        updatedAt: String(
+          customState && (customState.updatedAt || customState.archivedAt || customState.plannedAt)
+          || customTasks.map((task) => task && task.updatedAt).filter(Boolean).sort().pop()
+          || prd.updatedAt
+          || prd.createdAt
+          || ''
+        ),
+      };
+    }),
+  };
+}
+
+function normalizeStringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return Array.from(new Set(value.map((entry) => String(entry || '').trim()).filter(Boolean)));
+}
+
+function resolveCustomLifecyclePrdStatus(prd, { stateStatus, plannedTaskIds, completedTaskSpecIds, hasOpenTask }) {
+  if (stateStatus === 'archived' || stateStatus === 'completed') {
+    return 'completed';
+  }
+  if (stateStatus === 'planning' || stateStatus === 'failed') {
+    return stateStatus;
+  }
+  if (plannedTaskIds.length > 0 && completedTaskSpecIds.length >= plannedTaskIds.length && !hasOpenTask) {
+    return 'completed';
+  }
+  if (stateStatus === 'planned' || plannedTaskIds.length > 0) {
+    return 'planned';
+  }
+  return String(prd && prd.status || 'queued');
+}
+
+function describeCustomLifecyclePrdStatus(status, stateStatus, plannedTaskIds, completedTaskSpecIds, hasOpenTask) {
+  if (stateStatus === 'archived') {
+    return 'custom lifecycle runtime marks this PRD archived';
+  }
+  if (status === 'completed') {
+    return 'custom lifecycle runtime shows all planned tasks complete';
+  }
+  if (status === 'planned' && hasOpenTask) {
+    return `custom lifecycle runtime shows ${completedTaskSpecIds.length}/${plannedTaskIds.length} planned tasks complete`;
+  }
+  if (status === 'planned') {
+    return 'custom lifecycle runtime marks this PRD planned';
+  }
+  return 'custom lifecycle runtime state projected into control plane';
 }
 
 function buildManagedProcessSnapshot(rootDir) {

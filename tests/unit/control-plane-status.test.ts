@@ -50,6 +50,107 @@ test('status snapshots include the current runtime and PRD state', () => {
   assert.match(output, /Active PRD:/);
 });
 
+test('status snapshots project custom lifecycle PRD task progress', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-status-custom-lifecycle-');
+  initAutonomyRepo(repoDir);
+
+  runNode(CLI_BIN, [
+    'prd:add',
+    '--root',
+    repoDir,
+    '--id',
+    'prd-custom-lifecycle-001',
+    '--title',
+    'Custom lifecycle PRD',
+    '--specification',
+    'Validate custom lifecycle status projection.',
+  ]);
+
+  const lifecycleDir = path.join(repoDir, '.autonomy', 'runtime', 'custom-lifecycle');
+  fs.mkdirSync(path.join(lifecycleDir, 'queues'), { recursive: true });
+  fs.mkdirSync(path.join(lifecycleDir, 'prd-state'), { recursive: true });
+  fs.mkdirSync(path.join(lifecycleDir, 'state'), { recursive: true });
+  fs.writeFileSync(path.join(lifecycleDir, 'queues', 'shadow-architecture-agent.json'), `${JSON.stringify({
+    schemaVersion: 1,
+    agentId: 'shadow-architecture-agent',
+    role: 'implementation',
+    tasks: [
+      {
+        id: 'task-custom-lifecycle-001',
+        title: 'Finished custom task',
+        agentId: 'shadow-architecture-agent',
+        prdId: 'prd-custom-lifecycle-001',
+        type: 'implementation',
+        status: 'merged',
+        updatedAt: '2026-05-21T05:00:00.000Z',
+      },
+      {
+        id: 'task-custom-lifecycle-002',
+        title: 'Running custom task',
+        agentId: 'shadow-architecture-agent',
+        prdId: 'prd-custom-lifecycle-001',
+        type: 'implementation',
+        status: 'in_progress',
+        updatedAt: '2026-05-21T05:05:00.000Z',
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(path.join(lifecycleDir, 'prd-state', 'prd-custom-lifecycle-001.json'), `${JSON.stringify({
+    prdId: 'prd-custom-lifecycle-001',
+    status: 'planned',
+    plannedTaskIds: [
+      'task-custom-lifecycle-001',
+      'task-custom-lifecycle-002',
+    ],
+    updatedAt: '2026-05-21T05:06:00.000Z',
+  }, null, 2)}\n`, 'utf8');
+  fs.writeFileSync(path.join(lifecycleDir, 'state', 'prs.json'), `${JSON.stringify({
+    pullRequests: [
+      {
+        id: 'pr-task-custom-lifecycle-001',
+        taskId: 'task-custom-lifecycle-001',
+        prdId: 'prd-custom-lifecycle-001',
+        agentId: 'shadow-architecture-agent',
+        status: 'merged',
+        remoteUrl: 'https://github.com/example/repo/pull/101',
+      },
+    ],
+  }, null, 2)}\n`, 'utf8');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  const prd = snapshot.prds.prds.find((candidate) => candidate.id === 'prd-custom-lifecycle-001');
+
+  assert.ok(prd);
+  assert.equal(prd.status, 'planned');
+  assert.equal(prd.statusSource, 'custom-lifecycle');
+  assert.deepEqual(prd.plannedTaskIds, [
+    'task-custom-lifecycle-001',
+    'task-custom-lifecycle-002',
+  ]);
+  assert.deepEqual(prd.completedTaskSpecIds, ['task-custom-lifecycle-001']);
+  assert.equal(prd.tasks.length, 2);
+
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {},
+    jobs: [],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: '2026-05-21T05:07:00.000Z',
+        snapshot,
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.activePrdCount, 1);
+  assert.equal(dashboard.repos[0].activePrd.id, 'prd-custom-lifecycle-001');
+  assert.equal(dashboard.repos[0].activePrd.plannedTaskCount, 2);
+  assert.equal(dashboard.repos[0].activePrd.completedTaskCount, 1);
+  assert.equal(dashboard.repos[0].prdRun.currentStepId, 'implementing');
+});
+
 test('status snapshots do not perform live GitHub validation during repeated refreshes', () => {
   const repoDir = createFixtureRepo('autonomy-v2-status-github-lightweight-');
   const originalGithubToken = process.env.GITHUB_TOKEN;
