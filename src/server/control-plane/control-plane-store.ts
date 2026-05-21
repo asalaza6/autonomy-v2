@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 import type {
+  AnyRecord,
   ControlPlaneManagedProcessRecord,
   ControlPlaneRepoRecord,
   ControlPlaneRepoControlAccess,
@@ -204,6 +205,7 @@ function normalizeHeartbeats(heartbeats: Record<string, ControlPlaneHeartbeatRec
       kind: normalizedKind,
       updatedAt: String(heartbeat.updatedAt || new Date().toISOString()),
       note: normalizeOptionalString(heartbeat.note),
+      repoIds: normalizeStringArray((heartbeat as AnyRecord).repoIds),
     };
   });
   return normalized;
@@ -235,6 +237,7 @@ function normalizeRepoStatuses(repoStatuses: Record<string, ControlPlaneRepoStat
       deploymentLabel: repo?.deploymentLabel,
       exclusiveControl: repo?.exclusiveControl,
       controlTakeover: repo?.controlTakeover,
+      bridgeHeartbeat: (statusRecord as AnyRecord).bridgeHeartbeat || undefined,
       snapshot: statusRecord.snapshot || {},
     };
   });
@@ -354,6 +357,14 @@ function normalizeJobPayload(
 function normalizeOptionalString(value: unknown) {
   const text = String(value || '').trim();
   return text || undefined;
+}
+
+function normalizeStringArray(value: unknown) {
+  return Array.from(new Set(
+    (Array.isArray(value) ? value : [])
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean)
+  ));
 }
 
 function normalizeOptionalNumber(value: unknown) {
@@ -674,9 +685,34 @@ function touchHeartbeat(rootDir: string, kind: 'server' | 'bridge', patch: Parti
     kind,
     updatedAt: new Date().toISOString(),
     note: normalizeOptionalString(patch.note),
+    repoIds: normalizeStringArray((patch as AnyRecord).repoIds),
   };
   saveControlPlaneState(rootDir, state);
   return state.heartbeats[kind];
+}
+
+function touchRepoBridgeHeartbeat(rootDir: string, repoId: string, patch: Partial<ControlPlaneHeartbeatRecord> = {}) {
+  const state = loadControlPlaneState(rootDir);
+  const normalizedRepoId = String(repoId || '').trim();
+  if (!normalizedRepoId) {
+    throw new Error('Missing repoId.');
+  }
+  const existing = state.repoStatuses[normalizedRepoId];
+  if (!existing) {
+    return null;
+  }
+  const heartbeat = {
+    kind: 'bridge' as const,
+    updatedAt: new Date().toISOString(),
+    note: normalizeOptionalString(patch.note),
+    repoIds: normalizeStringArray((patch as AnyRecord).repoIds),
+  };
+  state.repoStatuses[normalizedRepoId] = {
+    ...existing,
+    bridgeHeartbeat: heartbeat,
+  } as ControlPlaneRepoStatusRecord;
+  saveControlPlaneState(rootDir, state);
+  return heartbeat;
 }
 
 function setRepoStatus(
@@ -1242,5 +1278,6 @@ export {
   setManagedProcess,
   setRepoStatus,
   touchHeartbeat,
+  touchRepoBridgeHeartbeat,
   shouldPersistControlPlaneState,
 };

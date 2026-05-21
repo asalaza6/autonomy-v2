@@ -561,6 +561,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
     method: 'POST',
     body: {
       note: 'bridge poll completed',
+      repoIds: registeredRepoIds,
     },
   }).catch(() => null);
 

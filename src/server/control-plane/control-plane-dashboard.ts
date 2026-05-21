@@ -2,6 +2,7 @@ import type { AnyRecord, ControlPlaneRepoRecord, ControlPlaneState } from '../..
 import { normalizeRepoRecord } from './control-plane-validation.js';
 import { describeRepoControlAccess } from './control-plane-store.js';
 import {
+  buildHeartbeatSummary,
   buildControlPlaneHeartbeatSummary,
   summarizeControlPlaneJob,
   summarizeRepoStatus,
@@ -126,6 +127,10 @@ function buildRepoDashboard(
     && repoStatus.snapshot.controlPlane.managedProcesses
       ? repoStatus.snapshot.controlPlane.managedProcesses
       : {};
+  const bridgeHeartbeat = buildHeartbeatSummary(
+    repoStatus && repoStatus.bridgeHeartbeat && repoStatus.bridgeHeartbeat.updatedAt,
+    `${label} bridge`
+  );
 
   return {
     ...summary,
@@ -139,6 +144,7 @@ function buildRepoDashboard(
     prdResetJob: prdResetJob ? summarizeControlPlaneJob(prdResetJob, label) : null,
     packageUpdateJob: packageUpdateJob ? summarizeControlPlaneJob(packageUpdateJob, label) : null,
     restartJob: restartJob ? summarizeControlPlaneJob(restartJob, label) : null,
+    bridgeHeartbeat,
     managedProcesses,
     controlAccess,
     controlOwner: controlAccess && controlAccess.owner ? controlAccess.owner : null,

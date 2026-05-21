@@ -351,6 +351,7 @@ export interface ControlPlaneHeartbeatRecord extends AnyRecord {
   kind: 'server' | 'bridge';
   updatedAt: string;
   note?: string;
+  repoIds?: string[];
 }
 
 export interface PrdStateRecord extends AnyRecord {

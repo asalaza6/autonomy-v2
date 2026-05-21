@@ -54,6 +54,47 @@ test('bridge loads repo env during its startup cycle', async (t) => {
   assert.equal(heartbeatCount, 1);
 });
 
+test('bridge heartbeat identifies the repo ids served by the bridge', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-bridge-heartbeat-');
+  initAutonomyRepo(repoDir);
+  let heartbeatBody: any = null;
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ job: null }));
+      return;
+    }
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      heartbeatBody = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+  });
+
+  await runControlPlaneBridgeOnce(repoDir, {
+    serverUrl,
+    repoRoots: {
+      default: repoDir,
+    },
+  });
+
+  assert.deepEqual(heartbeatBody.repoIds, ['default']);
+});
+
 test('bridge executes deploy jobs for mapped repos', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-deploy-bridge-');
   initAutonomyRepo(repoDir);

@@ -35,6 +35,7 @@ import {
   queueAgentChatMessage,
   setRepoStatus,
   touchHeartbeat,
+  touchRepoBridgeHeartbeat,
 } from './control-plane-store.js';
 import { runControlPlaneBridgeLoop } from './control-plane-bridge.js';
 import {
@@ -298,8 +299,16 @@ async function handleRequest(
   if (url.pathname === '/api/heartbeats/bridge' && req.method === 'POST') {
     try {
       const body = await readJsonBody(req);
+      const repoIds = parseBodyRepoIds(body);
       const heartbeat = touchHeartbeat(rootDir, 'bridge', {
         note: String(body && body.note || 'bridge poll complete').trim() || 'bridge poll complete',
+        repoIds,
+      });
+      repoIds.forEach((repoId) => {
+        touchRepoBridgeHeartbeat(rootDir, repoId, {
+          note: heartbeat.note,
+          repoIds,
+        });
       });
       sendJson(res, 200, { heartbeat });
     } catch (error) {

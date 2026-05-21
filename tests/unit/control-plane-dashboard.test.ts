@@ -273,6 +273,41 @@ Created: 2026-04-01T11:59:00.000Z`,
   assert.match(dashboard.jobs[0].detail, /created/);
 });
 
+test('control plane dashboard surfaces per-repo bridge freshness', () => {
+  const dashboard = buildControlPlaneDashboard('/tmp/hosted-control-plane', {
+    schemaVersion: 1,
+    heartbeats: {
+      bridge: {
+        kind: 'bridge',
+        updatedAt: new Date().toISOString(),
+        repoIds: ['other-repo'],
+      },
+    },
+    jobs: [],
+    repoStatuses: {
+      alpha: {
+        repoId: 'alpha',
+        label: 'Alpha',
+        updatedAt: new Date().toISOString(),
+        bridgeHeartbeat: {
+          kind: 'bridge',
+          updatedAt: new Date(Date.now() - 30 * 1000).toISOString(),
+          repoIds: ['alpha'],
+        },
+        snapshot: {
+          prds: {
+            prds: [],
+          },
+        },
+      },
+    },
+  } as any);
+
+  assert.equal(dashboard.bridgeHeartbeat.status, 'online');
+  assert.equal(dashboard.repos[0].bridgeHeartbeat.status, 'stale');
+  assert.match(dashboard.repos[0].bridgeHeartbeat.label, /Alpha bridge/);
+});
+
 test('status-view summaries normalize source chat metadata for PRD history', () => {
   const summary = summarizeRepoStatus({
     repoId: 'alpha',
