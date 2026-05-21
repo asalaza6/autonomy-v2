@@ -140,6 +140,7 @@ function commitPrdSpecToIntegrationBranch(rootDir: string, integrationBranch: st
       runGit(controlWorktree, pushArgs);
       pushed = true;
       pushMessage = `pushed to origin/${integrationBranch}`;
+      updateLocalIntegrationBranchRef(rootDir, integrationBranch, commitSha);
     } catch (error) {
       pushMessage = extractExecError(error);
       throw new Error(`Failed to push PRD spec to origin/${integrationBranch}: ${pushMessage}`);
@@ -254,6 +255,7 @@ function commitTrackedFilesToIntegrationBranch(rootDir: string, integrationBranc
       runGit(controlWorktree, pushArgs);
       pushed = true;
       pushMessage = `pushed to origin/${integrationBranch}`;
+      updateLocalIntegrationBranchRef(rootDir, integrationBranch, commitSha);
     } catch (error) {
       pushMessage = extractExecError(error);
       throw new Error(`Failed to push tracked files to origin/${integrationBranch}: ${pushMessage}`);

@@ -95,6 +95,80 @@ test('bridge heartbeat identifies the repo ids served by the bridge', async (t) 
   assert.deepEqual(heartbeatBody.repoIds, ['default']);
 });
 
+test('bridge prd:add keeps local dev aligned after pushing to origin', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-prd-bridge-');
+  initAutonomyRepo(repoDir);
+  const originDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-control-plane-prd-origin-'));
+  git(originDir, ['init', '--bare']);
+  git(repoDir, ['remote', 'add', 'origin', originDir]);
+  git(repoDir, ['push', '-u', 'origin', 'main']);
+  git(repoDir, ['push', '-u', 'origin', 'dev']);
+  git(repoDir, ['switch', 'dev']);
+  let jobClaimed = false;
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
+      res.end(JSON.stringify({
+        job: {
+          id: 'job-prd-add-1',
+          type: 'prd:add',
+          repoId: 'default',
+          payload: {
+            repoId: 'default',
+            id: 'prd-bridge-aligns-dev',
+            title: 'Bridge aligns dev',
+            specification: 'Add a PRD through the bridge and keep local dev aligned.',
+            requirements: [],
+            taskSpecs: [],
+          },
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      return;
+    }
+    if (req.url === '/api/jobs/job-prd-add-1/complete' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-prd-add-1', status: 'completed' }));
+      return;
+    }
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+  });
+
+  await runControlPlaneBridgeOnce(repoDir, {
+    serverUrl,
+    repoRoots: {
+      default: repoDir,
+    },
+  });
+
+  assert.equal(git(repoDir, ['rev-parse', 'dev']), git(repoDir, ['rev-parse', 'origin/dev']));
+  assert.equal(git(repoDir, ['status', '--short', '--branch']).split('\n')[0], '## dev...origin/dev');
+});
+
 test('bridge executes deploy jobs for mapped repos', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-deploy-bridge-');
   initAutonomyRepo(repoDir);
