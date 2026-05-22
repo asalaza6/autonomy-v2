@@ -301,11 +301,14 @@ npm run autonomy:v2:init -- --force
 Useful places to inspect:
 
 - server stdout
+- `.autonomy/runtime/agents/<agent>/stream.log`
 - `.autonomy/runtime/agents/<agent>/log.md`
 - `.autonomy/runtime/state/prs.json`
 - `.autonomy/runtime/state/runtime.json`
 - `prompts/autonomous/v2/queues/*.json`
 - `prompts/autonomous/v2/specs/prd-state/*.json`
+
+Worker stream logs are size-bounded by default. Override with `AUTONOMY_TRACE_LOG_MAX_BYTES`, `AUTONOMY_TRACE_LOG_TRIM_BYTES`, or `AUTONOMY_TRACE_LINE_MAX_BYTES` when deeper local retention is needed.
 
 The per-agent logs are the fastest way to see:
 

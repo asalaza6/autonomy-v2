@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawn, type ChildProcess } from 'child_process';
 import { fileURLToPath } from 'url';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { runSchedulerTick } from '../orchestrator/scheduler.js';
@@ -55,8 +56,19 @@ Options:
   --inline            Run workers inline for tick command
   --control-plane-url <url>
                      Optional control-plane server to report scheduler heartbeats to
+  --no-control-plane Do not start a local control plane alongside serve
+  --control-plane-host <host>
+                     Host for the companion control plane (default: 127.0.0.1)
+  --control-plane-port <port>
+                     Port for the companion control plane (default: AUTONOMY_CONTROL_PLANE_PORT or 3333)
   --poll-ms <ms>     Poll interval in milliseconds (serve only, default: 2000)
   --sync-ms <ms>     Sync interval in milliseconds (serve only, default: 30000)
+  --trace-log-max-bytes <bytes>
+                     Max bytes to keep per worker stream log (default: 5242880)
+  --trace-log-trim-bytes <bytes>
+                     Bytes retained after a stream log crosses the max (default: 2097152)
+  --trace-line-max-bytes <bytes>
+                     Max bytes retained from a single stream log line (default: 65536)
 `);
 }
 
@@ -68,7 +80,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
   loadAutonomyEnv(rootDir);
-  const controlPlaneUrl = String(
+  let controlPlaneUrl = String(
     options['control-plane-url'] ||
     process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL ||
     ''
@@ -105,6 +117,10 @@ async function main(argv: string[] = process.argv.slice(2)) {
     throw new Error('--sync-ms must be a positive number.');
   }
   const traceOptions = buildTraceOptions(rootDir, options);
+  const companionControlPlane = buildCompanionControlPlaneLaunch(rootDir, options);
+  if (!controlPlaneUrl && companionControlPlane.enabled) {
+    controlPlaneUrl = companionControlPlane.url;
+  }
 
   const releaseServerLock = acquireServerLock(rootDir);
   let released = false;
@@ -112,11 +128,20 @@ async function main(argv: string[] = process.argv.slice(2)) {
   let tickCount = 0;
   let consecutiveTickFailures = 0;
   const attachedWorkers = new Map();
+  let controlPlaneChild: ChildProcess | null = null;
   const cleanup = () => {
     if (released) {
       return;
     }
     released = true;
+    if (controlPlaneChild && !controlPlaneChild.killed) {
+      try {
+        controlPlaneChild.kill('SIGTERM');
+      } catch (_) {
+        // Best effort shutdown for the companion control-plane child.
+      }
+    }
+    controlPlaneChild = null;
     attachedWorkers.forEach((child) => {
       try {
         child.kill('SIGTERM');
@@ -136,6 +161,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
     console.log(formatServerEventLine('server:shutdown', {
       exitCode,
       attachedWorkers: attachedWorkers.size,
+      controlPlane: controlPlaneChild ? 'stopping' : '',
     }));
     cleanup();
     process.exit(exitCode);
@@ -155,6 +181,9 @@ async function main(argv: string[] = process.argv.slice(2)) {
     syncMs,
   }));
   console.log(formatServerEventLine('server:lock-acquired', { root: rootDir }));
+  if (companionControlPlane.enabled) {
+    controlPlaneChild = startCompanionControlPlane(rootDir, companionControlPlane);
+  }
   void reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler started');
 
   const runTick = () => {
@@ -212,6 +241,84 @@ async function main(argv: string[] = process.argv.slice(2)) {
   setInterval(runTick, pollMs);
 }
 
+function buildCompanionControlPlaneLaunch(rootDir: string, options: CliOptions) {
+  const enabled = shouldStartCompanionControlPlane(options, process.env);
+  const host = String(
+    options['control-plane-host'] ||
+    process.env.AUTONOMY_SERVER_CONTROL_PLANE_HOST ||
+    process.env.AUTONOMY_CONTROL_PLANE_HOST ||
+    process.env.HOST ||
+    (process.env.DYNO ? '0.0.0.0' : '') ||
+    '127.0.0.1'
+  ).trim();
+  const port = Number(
+    options['control-plane-port'] ||
+    process.env.AUTONOMY_SERVER_CONTROL_PLANE_PORT ||
+    process.env.AUTONOMY_CONTROL_PLANE_PORT ||
+    process.env.PORT ||
+    '3333'
+  );
+  if (enabled && (!Number.isFinite(port) || port <= 0)) {
+    throw new Error('--control-plane-port must be a positive number.');
+  }
+  const controlMainPath = fileURLToPath(new URL('../control-plane/control-plane-main.js', import.meta.url));
+  return {
+    enabled,
+    command: process.execPath,
+    args: [
+      controlMainPath,
+      'serve',
+      '--root',
+      rootDir,
+      '--host',
+      host,
+      '--port',
+      String(port),
+    ],
+    host,
+    port,
+    url: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`,
+  };
+}
+
+function shouldStartCompanionControlPlane(options: CliOptions, env: NodeJS.ProcessEnv = process.env) {
+  if (options['no-control-plane'] === true || options['control-plane'] === false) {
+    return false;
+  }
+  const setting = String(env.AUTONOMY_SERVER_CONTROL_PLANE || env.AUTONOMY_START_CONTROL_PLANE || '').trim().toLowerCase();
+  if (['0', 'false', 'no', 'off', 'disabled'].includes(setting)) {
+    return false;
+  }
+  return true;
+}
+
+function startCompanionControlPlane(rootDir: string, launch: ReturnType<typeof buildCompanionControlPlaneLaunch>) {
+  console.log(formatServerEventLine('control-plane:start', {
+    root: rootDir,
+    url: launch.url,
+  }));
+  const child = spawn(launch.command, launch.args, {
+    cwd: rootDir,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      AUTONOMY_CONTROL_PLANE_COMPANION: '1',
+    },
+  });
+  child.on('error', (error) => {
+    console.error(formatServerEventLine('control-plane:error', {
+      message: error.message,
+    }));
+  });
+  child.on('exit', (code, signal) => {
+    console.log(formatServerEventLine('control-plane:exit', {
+      code: typeof code === 'number' ? code : '',
+      signal: signal || '',
+    }));
+  });
+  return child;
+}
+
 async function reportControlPlaneHeartbeat(controlPlaneUrl: string, note: string) {
   const target = String(controlPlaneUrl || '').trim();
   if (!target) {
@@ -246,4 +353,8 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
   });
 }
 
-export { main };
+export {
+  buildCompanionControlPlaneLaunch,
+  main,
+  shouldStartCompanionControlPlane,
+};

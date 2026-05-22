@@ -34,7 +34,7 @@ function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord,
     agentId: entry.agentId,
     pid: entry.pid,
     reason: entry.reason || '',
-  }));
+  }), options);
 
   if (options.sameTerminalTrace !== true && options.autoOpenTraceWindows === true) {
     maybeOpenAgentTraceTerminal(entry.agentId, traceLogPath, options);
@@ -43,8 +43,9 @@ function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord,
   const contextState: TraceContext = {};
   const stdoutState = { buffer: '' };
   const stderrState = { buffer: '' };
+  const pendingBufferMaxBytes = Number(options.traceLineMaxBytes || 0);
   const writeTraceLine = (line) => {
-    appendTraceLine(traceLogPath, line);
+    appendTraceLine(traceLogPath, line, options);
     if (options.sameTerminalTrace === true) {
       console.log(line);
     }
@@ -60,7 +61,9 @@ function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord,
         stdoutState.buffer,
         chunk,
         contextState,
-        writeTraceLine
+        writeTraceLine,
+        () => new Date().toISOString(),
+        pendingBufferMaxBytes
       );
     });
   }
@@ -74,7 +77,9 @@ function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord,
         stderrState.buffer,
         chunk,
         contextState,
-        writeTraceLine
+        writeTraceLine,
+        () => new Date().toISOString(),
+        pendingBufferMaxBytes
       );
     });
   }
@@ -91,7 +96,7 @@ function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord,
       error: shouldIncludeWorkerExitError(code, contextState) ? contextState.errorSummary : null,
     });
     console.log(exitLine);
-    appendTraceLine(traceLogPath, exitLine);
+    appendTraceLine(traceLogPath, exitLine, options);
   });
 }
 
@@ -103,7 +108,8 @@ function writePrefixedChunks(
   chunk,
   contextState = {},
   writeLine = console.log,
-  timestampFactory = () => new Date().toISOString()
+  timestampFactory = () => new Date().toISOString(),
+  pendingBufferMaxBytes = 0
 ) {
   const joined = `${pendingBuffer}${String(chunk || '')}`;
   const lines = joined.split(/\r?\n/);
@@ -146,7 +152,60 @@ function writePrefixedChunks(
       timestamp
     ));
   });
-  return remainder;
+  return flushOversizedPendingBuffer(
+    agentId,
+    pid,
+    streamName,
+    remainder,
+    contextState,
+    writeLine,
+    timestampFactory,
+    pendingBufferMaxBytes
+  );
+}
+
+function flushOversizedPendingBuffer(
+  agentId,
+  pid,
+  streamName,
+  pendingBuffer,
+  contextState = {},
+  writeLine = console.log,
+  timestampFactory = () => new Date().toISOString(),
+  pendingBufferMaxBytes = 0
+) {
+  const maxBytes = Number(pendingBufferMaxBytes || 0);
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0) {
+    return pendingBuffer;
+  }
+  const text = String(pendingBuffer || '');
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) {
+    return text;
+  }
+
+  updateWorkerContext(contextState, text);
+  const classifiedStream = classifyWorkerStreamLine(streamName, text, contextState);
+  const timestamp = timestampFactory();
+  if (classifiedStream === 'trace') {
+    writeLine(formatWorkerStreamPrefix(
+      agentId,
+      pid,
+      classifiedStream,
+      contextState,
+      timestamp
+    ));
+    writeLine(text);
+  } else {
+    writeLine(formatWorkerStreamLine(
+      agentId,
+      pid,
+      classifiedStream,
+      text,
+      contextState,
+      timestamp
+    ));
+  }
+  return '';
 }
 
 function flushPrefixedChunks(
@@ -357,4 +416,4 @@ function formatWorkerStreamPrefixKey(agentId: string, pid: number, streamName: s
   return `${agentId} | pid=${pid}${contextSegment} | ${streamName}`;
 }
 
-export { attachWorkerOutput };
+export { attachWorkerOutput, writePrefixedChunks };
