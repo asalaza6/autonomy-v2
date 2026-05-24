@@ -22,6 +22,7 @@ import {
   createControlPlaneDeployJob,
   ensureRepoControlAccess,
   createControlPlanePackageUpdateJob,
+  createControlPlanePrdPriorityJob,
   createControlPlanePrdResetJob,
   createControlPlaneRestartJob,
   createControlPlaneJob,
@@ -43,6 +44,7 @@ import {
   validateDeploySubmission,
   validatePackageUpdateSubmission,
   validatePrdAddSubmission,
+  validatePrdPrioritySubmission,
   validatePrdResetSubmission,
   validateRestartSubmission,
 } from './control-plane-validation.js';
@@ -375,6 +377,38 @@ async function handleRequest(
         return;
       }
       const job = enqueueJob(rootDir, createControlPlanePrdResetJob(payload));
+      logControlPlaneEvent('control-plane:job:queued', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type,
+      });
+      sendJson(res, 201, job);
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+  const prdPriorityMatch = url.pathname.match(/^\/api\/repos\/([^/]+)\/prds\/([^/]+)\/priority$/);
+  if (prdPriorityMatch && req.method === 'POST') {
+    const repoId = decodeURIComponent(prdPriorityMatch[1] || '');
+    const prdId = decodeURIComponent(prdPriorityMatch[2] || '');
+    try {
+      const body = await readJsonBody(req);
+      const { repo, payload } = validatePrdPrioritySubmission(listDiscoveredRepos(rootDir), {
+        ...body,
+        repoId: String(body && body.repoId || repoId || '').trim(),
+        prdId: String(body && (body.prdId || body.id) || prdId || '').trim(),
+      });
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, readControlSession(req));
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session is read-only for lifecycle actions on this repo.',
+          controlAccess,
+        });
+        return;
+      }
+      const job = enqueueJob(rootDir, createControlPlanePrdPriorityJob(payload));
       logControlPlaneEvent('control-plane:job:queued', {
         jobId: job.id,
         repoId: job.repoId,

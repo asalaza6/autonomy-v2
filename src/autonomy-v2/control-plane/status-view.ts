@@ -32,7 +32,13 @@ function selectQueuedPrds(prds: any[] = []) {
   return (prds || [])
     .filter((prd) => prd && (prd.isQueued === true || String(prd.status || '') === 'queued'))
     .slice()
-    .sort((left, right) => compareTimestamps(left.createdAt || left.updatedAt || '', right.createdAt || right.updatedAt || ''));
+    .sort((left, right) => {
+      const priorityDelta = getPrdPriorityRank(right) - getPrdPriorityRank(left);
+      if (priorityDelta !== 0) {
+        return priorityDelta;
+      }
+      return compareTimestamps(left.createdAt || left.updatedAt || '', right.createdAt || right.updatedAt || '');
+    });
 }
 
 function selectPrdHistory(snapshot: any, prds: any[] = []) {
@@ -94,6 +100,9 @@ function describePrd(prd: any) {
   if (requirementCount > 0) {
     details.push(`${requirementCount} requirement${requirementCount === 1 ? '' : 's'}`);
   }
+  if (prd && prd.priority) {
+    details.push(`priority ${summarizeText(prd.priority)}`);
+  }
   if (prd && prd.lastError) {
     details.push(`last error: ${summarizeText(prd.lastError)}`);
   }
@@ -136,6 +145,7 @@ function describePrd(prd: any) {
     remainingTaskCount,
     progressPercent,
     requirementCount,
+    priority: prd && prd.priority ? String(prd.priority) : '',
     statusSource: prd && prd.statusSource ? String(prd.statusSource) : null,
     statusReason: prd && prd.statusReason ? String(prd.statusReason) : null,
     reconciliationStatus: prd && prd.reconciliationStatus ? String(prd.reconciliationStatus) : null,
@@ -158,6 +168,23 @@ function describePrd(prd: any) {
     ...(pullRequest ? { pullRequest } : {}),
     ...(sourceChat ? { sourceChat } : {}),
   };
+}
+
+function getPrdPriorityRank(prd: any) {
+  const value = String(prd && prd.priority || '').trim().toLowerCase();
+  if (['highest', 'critical', 'p0', '0'].includes(value)) {
+    return 400;
+  }
+  if (['high', 'p1', '1'].includes(value)) {
+    return 300;
+  }
+  if (['normal', 'medium', 'p2', '2'].includes(value)) {
+    return 200;
+  }
+  if (['low', 'p3', '3'].includes(value)) {
+    return 100;
+  }
+  return 200;
 }
 
 function normalizeLinkedPullRequest(value: unknown): PrdLinkedPullRequestSummary | null {
@@ -540,6 +567,8 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
         details.push(`reason: ${summarizeText(job.result.reason)}`);
       }
     }
+  } else if (status === 'completed' && jobType === 'prd:priority' && job && job.result) {
+    details.push(`PRD ${job.result.prdId || 'unknown'} priority ${job.result.priority || 'updated'}`);
   } else if (status === 'completed' && job && job.result && job.result.prdId) {
     details.push(`PRD ${job.result.prdId} committed`);
   } else if (job && job.claimedAt) {
@@ -598,6 +627,15 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
       running: 'Resetting PRD state',
       completed: 'PRD reset recorded',
       failed: 'Reset failed',
+    };
+  }
+  if (jobType === 'prd:priority') {
+    return {
+      queued: 'Waiting to update priority',
+      claimed: 'Priority update claimed by bridge',
+      running: 'Updating priority',
+      completed: 'Priority updated',
+      failed: 'Priority update failed',
     };
   }
   return {
@@ -741,7 +779,10 @@ function formatControlPlaneJobTitle(job: any, jobType: string) {
     return 'Restart Autonomy v2 services';
   }
   if (jobType === 'prd:reset') {
-    return 'Reset active PRD state';
+    return 'Reset PRD state';
+  }
+  if (jobType === 'prd:priority') {
+    return `Update PRD priority: ${String(job && job.payload && (job.payload.prdId || job.payload.id) || job && job.id || 'queued PRD')}`;
   }
   if (jobType === 'agent:chat') {
     return `Repo chat: ${summarizeText(job && job.payload && job.payload.prompt || job && job.id || 'message')}`;

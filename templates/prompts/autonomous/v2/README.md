@@ -23,7 +23,7 @@ From there, the system is expected to:
 
 V2 still uses a polling scheduler for repo-local execution. The hosted control plane is a separate shared browser/API app, and the local bridge registers this repo and submits browser PRDs into it.
 
-The control plane is separate from the scheduler:
+The hosted control plane is separate from the scheduler:
 
 - hosted control-plane server: browser/API queue and live status
 - `autonomy-v2-control bridge`: runs on the local machine and executes queued PRDs against allowed repos
@@ -123,13 +123,13 @@ What is true on `dev` today:
 
 ## Workflow
 
-### 1. Start the scheduler
+### 1. Start the scheduler and bridge
 
 ```bash
 npm run autonomy:v2:server
 ```
 
-The scheduler begins polling immediately.
+The scheduler begins polling immediately and starts the local bridge companion for browser/API queue jobs.
 
 ### 2. Add a PRD
 

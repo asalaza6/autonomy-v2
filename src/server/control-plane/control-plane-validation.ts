@@ -4,6 +4,7 @@ import type {
   ControlPlaneDeployPayload,
   ControlPlanePackageUpdatePayload,
   ControlPlanePrdAddPayload,
+  ControlPlanePrdPriorityPayload,
   ControlPlanePrdResetPayload,
   ControlPlaneRestartPayload,
   ControlPlaneRepoRecord,
@@ -166,6 +167,30 @@ function validatePrdResetSubmission(
   };
 }
 
+function validatePrdPrioritySubmission(
+  repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
+  submission: Partial<ControlPlanePrdPriorityPayload> = {}
+) {
+  const repo = resolveRepoById(repos, submission.repoId || '');
+  const prdId = String(submission.prdId || (submission as Record<string, unknown>).id || '').trim();
+  const priority = String(submission.priority || '').trim();
+  if (!prdId) {
+    throw new Error('Provide prdId for the queued PRD being reprioritized.');
+  }
+  if (!priority) {
+    throw new Error('Provide priority for the queued PRD.');
+  }
+  return {
+    repo,
+    payload: {
+      repoId: repo.repoId,
+      prdId,
+      priority,
+      reason: String(submission.reason || '').trim() || undefined,
+    },
+  };
+}
+
 function validatePackageUpdateSubmission(
   repos: ControlPlaneRepoRecord[] | Record<string, ControlPlaneRepoRecord>,
   submission: Partial<ControlPlanePackageUpdatePayload> = {}
@@ -286,6 +311,7 @@ export {
   validateDeploySubmission,
   validatePackageUpdateSubmission,
   validatePrdAddSubmission,
+  validatePrdPrioritySubmission,
   validatePrdResetSubmission,
   validateRestartSubmission,
 };

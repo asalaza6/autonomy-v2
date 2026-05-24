@@ -182,6 +182,13 @@ export interface ControlPlanePrdResetPayload extends AnyRecord {
   reason?: string;
 }
 
+export interface ControlPlanePrdPriorityPayload extends AnyRecord {
+  repoId: string;
+  prdId: string;
+  priority: string;
+  reason?: string;
+}
+
 export interface ControlPlanePackageUpdatePayload extends AnyRecord {
   repoId: string;
 }
@@ -312,9 +319,9 @@ export interface ControlPlaneConversationRecord extends AnyRecord {
 
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add' | 'prd:reset' | 'deploy' | 'agent:chat' | 'package:update' | 'restart';
+  type: 'prd:add' | 'prd:reset' | 'prd:priority' | 'deploy' | 'agent:chat' | 'package:update' | 'restart';
   repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload;
+  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlanePrdPriorityPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;

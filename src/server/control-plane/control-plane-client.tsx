@@ -49,6 +49,7 @@ type PrdSummary = {
   completedTaskCount?: number;
   remainingTaskCount?: number;
   progressPercent?: number;
+  priority?: string;
   createdAt?: string | null;
   updatedAt?: string | null;
   archived?: boolean;
@@ -426,6 +427,7 @@ let latestDashboard: DashboardSummary = {};
 let latestConversations: ChatConversationSummary[] = [];
 let deployingRepoIds = new Set<string>();
 let resettingPrdRepoIds = new Set<string>();
+let prioritizingPrdKeys = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
 let restartingRepoIds = new Set<string>();
 const CONTROL_SESSION_STORAGE_KEY = 'autonomy.control.session';
@@ -610,6 +612,37 @@ function mountControlPlane() {
         return;
       }
       handlePrdReset(repoId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
+    const resetQueuedPrdButton = target ? target.closest<HTMLButtonElement>('[data-action="reset-queued-prd"]') : null;
+    if (resetQueuedPrdButton) {
+      const repoId = String(resetQueuedPrdButton.dataset.repoId || entranceContext.repoId || '').trim();
+      const prdId = String(resetQueuedPrdButton.dataset.prdId || '').trim();
+      if (!repoId || !prdId) {
+        return;
+      }
+      handlePrdReset(repoId, prdId).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
+      return;
+    }
+
+    const priorityButton = target ? target.closest<HTMLButtonElement>('[data-action="set-queued-prd-priority"]') : null;
+    if (priorityButton) {
+      const repoId = String(priorityButton.dataset.repoId || entranceContext.repoId || '').trim();
+      const prdId = String(priorityButton.dataset.prdId || '').trim();
+      const priority = String(priorityButton.dataset.priority || '').trim();
+      if (!repoId || !prdId || !priority) {
+        return;
+      }
+      handleQueuedPrdPriority(repoId, prdId, priority).catch((error: unknown) => {
         if (messageEl) {
           messageEl.textContent = getErrorMessage(error);
         }
@@ -1396,28 +1429,36 @@ async function handleTakeover(repoId: string) {
   }
 }
 
-async function handlePrdReset(repoId: string) {
+async function handlePrdReset(repoId: string, prdId = '') {
   if (!repoId || resettingPrdRepoIds.has(repoId)) {
     return;
   }
 
   const repo = findRepoSummary(repoId);
+  const requestedPrdId = String(prdId || '').trim();
   const activePrd = repo && repo.activePrd ? repo.activePrd : null;
-  const activePrdId = String(activePrd && activePrd.id || '').trim();
-  if (!activePrdId) {
-    throw new Error(`No active PRD to reset for ${repoId}.`);
+  const queuedPrd = requestedPrdId && repo && Array.isArray(repo.queuedPrds)
+    ? repo.queuedPrds.find((candidate) => String(candidate.id || '').trim() === requestedPrdId) || null
+    : null;
+  const targetPrd = queuedPrd || activePrd;
+  const targetPrdId = String(targetPrd && targetPrd.id || requestedPrdId || '').trim();
+  const targetKind = queuedPrd ? 'queued' : 'active';
+  if (!targetPrdId) {
+    throw new Error(`No PRD to reset for ${repoId}.`);
   }
 
   const repoLabel = String(repo && (repo.label || repo.repoId) || repoId);
   const confirmed = window.confirm(
-    `Reset active PRD ${activePrdId} for ${repoLabel}? This clears repo-local autonomy state and moves the PRD into history.`
+    targetKind === 'queued'
+      ? `Reset queued PRD ${targetPrdId} for ${repoLabel}? This removes it from the queue and moves it into history.`
+      : `Reset active PRD ${targetPrdId} for ${repoLabel}? This clears repo-local autonomy state and moves the PRD into history.`
   );
   if (!confirmed) {
     return;
   }
 
   resettingPrdRepoIds = new Set(resettingPrdRepoIds).add(repoId);
-  preferredHistoryPrdId = activePrdId;
+  preferredHistoryPrdId = targetPrdId;
   if (messageEl) {
     messageEl.textContent = `Queueing PRD reset for ${repoId}...`;
   }
@@ -1427,7 +1468,7 @@ async function handlePrdReset(repoId: string) {
       method: 'POST',
       body: JSON.stringify({
         repoId,
-        confirmPrdId: activePrdId,
+        confirmPrdId: targetPrdId,
       }),
     });
     await refresh();
@@ -1438,6 +1479,37 @@ async function handlePrdReset(repoId: string) {
     const next = new Set(resettingPrdRepoIds);
     next.delete(repoId);
     resettingPrdRepoIds = next;
+  }
+}
+
+async function handleQueuedPrdPriority(repoId: string, prdId: string, priority: string) {
+  const key = `${repoId}:${prdId}`;
+  if (!repoId || !prdId || !priority || prioritizingPrdKeys.has(key)) {
+    return;
+  }
+
+  prioritizingPrdKeys = new Set(prioritizingPrdKeys).add(key);
+  if (messageEl) {
+    messageEl.textContent = `Queueing priority update for ${prdId}...`;
+  }
+
+  try {
+    await requestJson(`/api/repos/${encodeURIComponent(repoId)}/prds/${encodeURIComponent(prdId)}/priority`, {
+      method: 'POST',
+      body: JSON.stringify({
+        repoId,
+        prdId,
+        priority,
+      }),
+    });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `Priority update queued for ${prdId}.`;
+    }
+  } finally {
+    const next = new Set(prioritizingPrdKeys);
+    next.delete(key);
+    prioritizingPrdKeys = next;
   }
 }
 
@@ -2478,6 +2550,7 @@ function QueuedPrdList({ queuedPrds, selectedPrdId }: { queuedPrds: PrdSummary[]
             <span className="history-item-title">{prd.title || prd.id || 'Untitled PRD'}</span>
             <span className="history-item-meta">
               {prd.stateLabel || prd.status || 'Queued PRD'}
+              {prd.priority ? ` · Priority ${prd.priority}` : ''}
               {prd.updatedAt || prd.createdAt ? ` · ${formatTimestamp(prd.updatedAt || prd.createdAt)}` : ''}
             </span>
           </button>
@@ -2611,6 +2684,10 @@ function QueuedPrdDetail({ prd }: { prd: PrdSummary | null }) {
     prd.createdAt ? `Created ${formatTimestamp(prd.createdAt)}` : '',
     prd.updatedAt ? `Updated ${formatTimestamp(prd.updatedAt)}` : '',
   ].filter(Boolean).join(' | ');
+  const priorityOptions = ['highest', 'high', 'normal', 'low'];
+  const prdId = String(prd.id || '').trim();
+  const priorityKey = `${entranceContext.repoId}:${prdId}`;
+  const priorityBusy = prioritizingPrdKeys.has(priorityKey);
 
   return (
     <div className="history-detail-card">
@@ -2621,7 +2698,38 @@ function QueuedPrdDetail({ prd }: { prd: PrdSummary | null }) {
         </div>
         {prd.updatedAt ? <span className="pill">{formatTimestamp(prd.updatedAt)}</span> : null}
       </div>
-      <div className="queue-detail">{prd.id || 'unknown PRD'}{timestamps ? ` | ${timestamps}` : ''}</div>
+      <div className="queue-detail">
+        {prd.id || 'unknown PRD'}
+        {prd.priority ? ` | priority ${prd.priority}` : ''}
+        {timestamps ? ` | ${timestamps}` : ''}
+      </div>
+      {prdId ? (
+        <div className="history-actions">
+          {priorityOptions.map((priority) => (
+            <button
+              key={priority}
+              type="button"
+              className="secondary"
+              data-action="set-queued-prd-priority"
+              data-repo-id={entranceContext.repoId}
+              data-prd-id={prdId}
+              data-priority={priority}
+              disabled={priorityBusy || String(prd.priority || '').toLowerCase() === priority}
+            >
+              {priority}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="secondary"
+            data-action="reset-queued-prd"
+            data-repo-id={entranceContext.repoId}
+            data-prd-id={prdId}
+          >
+            Reset queued PRD
+          </button>
+        </div>
+      ) : null}
       {sourceChat ? (
         <div className="history-block source-chat-block">
           <h4>Source Chat</h4>

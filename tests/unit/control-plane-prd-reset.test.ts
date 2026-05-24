@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { executePrdReset } from '../../src/autonomy-v2/control-plane/prd-service.js';
+import { executePrdPriorityUpdate, executePrdReset } from '../../src/autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../src/autonomy-v2/control-plane/status-service.js';
 import {
   addPrdWithTasks,
@@ -101,7 +101,7 @@ test('reset archives the active PRD and clears repo-local autonomy state', () =>
     },
   }, null, 2)}\n`, 'utf8');
 
-  const result = executePrdReset(repoDir, {
+  const result: any = executePrdReset(repoDir, {
     'confirm-prd-id': 'prd-reset-001',
     reason: 'Manager aborted the run.',
   });
@@ -143,12 +143,90 @@ test('reset returns a no-op result when no active PRD exists', () => {
   const repoDir = createFixtureRepo('autonomy-v2-prd-reset-noop-');
   initAutonomyRepo(repoDir);
 
-  const result = executePrdReset(repoDir, {
+  const result: any = executePrdReset(repoDir, {
     'confirm-prd-id': 'prd-missing',
   });
 
   assert.equal(result.noop, true);
   assert.match(result.message, /No active PRD exists/);
+});
+
+test('reset can remove and archive a queued PRD', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-prd-reset-queued-');
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'init autonomy fixture']);
+  git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
+  git(repoDir, ['checkout', 'dev']);
+
+  const queuedPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'queue', 'prd-queued-reset.json');
+  fs.mkdirSync(path.dirname(queuedPath), { recursive: true });
+  fs.writeFileSync(queuedPath, `${JSON.stringify({
+    schemaVersion: 2,
+    id: 'prd-queued-reset',
+    title: 'Queued reset PRD',
+    createdAt: '2026-04-26T08:00:00.000Z',
+    priority: 'high',
+    requirements: ['Queue reset can archive this PRD.'],
+  }, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', 'prompts/autonomous/v2/specs/prds/queue/prd-queued-reset.json']);
+  git(repoDir, ['commit', '-m', 'add queued prd']);
+
+  const result: any = executePrdReset(repoDir, {
+    'confirm-prd-id': 'prd-queued-reset',
+    reason: 'No longer needed.',
+  });
+
+  assert.equal(result.noop, false);
+  assert.equal(result.queued, true);
+  assert.equal(result.prdId, 'prd-queued-reset');
+  assert.throws(() => git(repoDir, ['show', 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queued-reset.json']));
+  const archivedPrd = readGitJson(repoDir, 'dev:prompts/autonomous/v2/specs/prds/archived/prd-queued-reset.json');
+  assert.equal(archivedPrd.archive.kind, 'reset');
+  assert.equal(archivedPrd.archive.fromStatus, 'queued');
+  assert.equal(archivedPrd.archive.reason, 'No longer needed.');
+
+  const snapshot = buildStatusSnapshot(repoDir);
+  assert.equal(snapshot.prds.prds.some((prd: any) => prd.id === 'prd-queued-reset'), false);
+  assert.equal(snapshot.prdHistory.prds[0].id, 'prd-queued-reset');
+  assert.equal(snapshot.prdHistory.prds[0].status, 'reset');
+});
+
+test('priority update changes a queued PRD priority', () => {
+  const repoDir = createFixtureRepo('autonomy-v2-prd-priority-queued-');
+  initAutonomyRepo(repoDir);
+  git(repoDir, ['add', '.']);
+  git(repoDir, ['commit', '-m', 'init autonomy fixture']);
+  git(repoDir, ['branch', '-f', 'dev', 'HEAD']);
+  git(repoDir, ['checkout', 'dev']);
+
+  const queuedPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'queue', 'prd-priority-update.json');
+  fs.mkdirSync(path.dirname(queuedPath), { recursive: true });
+  fs.writeFileSync(queuedPath, `${JSON.stringify({
+    schemaVersion: 2,
+    id: 'prd-priority-update',
+    title: 'Priority update PRD',
+    createdAt: '2026-04-26T08:00:00.000Z',
+    priority: 'low',
+    requirements: ['Queue priority can change.'],
+  }, null, 2)}\n`, 'utf8');
+  git(repoDir, ['add', 'prompts/autonomous/v2/specs/prds/queue/prd-priority-update.json']);
+  git(repoDir, ['commit', '-m', 'add queued prd']);
+
+  const result = executePrdPriorityUpdate(repoDir, {
+    'prd-id': 'prd-priority-update',
+    priority: 'highest',
+    reason: 'Customer escalation.',
+  });
+
+  assert.equal(result.prdId, 'prd-priority-update');
+  assert.equal(result.previousPriority, 'low');
+  assert.equal(result.priority, 'highest');
+  const queuedPrd = readGitJson(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-priority-update.json');
+  assert.equal(queuedPrd.priority, 'highest');
+  const snapshot = buildStatusSnapshot(repoDir);
+  const summarized = snapshot.prds.prds.find((prd: any) => prd.id === 'prd-priority-update');
+  assert.equal(summarized.priority, 'highest');
 });
 
 test('reset targets the same planned PRD the manager shows when a newer failed PRD also exists', () => {

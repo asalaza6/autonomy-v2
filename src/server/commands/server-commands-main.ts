@@ -48,7 +48,7 @@ Usage:
   autonomy-v2-server <command> [options]
 
 Commands:
-  serve              Start the polling scheduler
+  serve              Start the polling scheduler and companion control bridge
   tick               Run a single scheduler tick
 
 Options:
@@ -56,12 +56,14 @@ Options:
   --json              Print JSON output for tick command
   --inline            Run workers inline for tick command
   --control-plane-url <url>
-                     Optional control-plane server to report scheduler heartbeats to
-  --no-control-plane Do not start a local control plane alongside serve
-  --control-plane-host <host>
-                     Host for the companion control plane (default: 127.0.0.1)
-  --control-plane-port <port>
-                     Port for the companion control plane (default: AUTONOMY_CONTROL_PLANE_PORT or 3333)
+                     Control-plane server URL for scheduler heartbeats and bridge jobs
+  --no-control-bridge
+                     Do not start the companion control bridge alongside serve
+  --no-control-plane Legacy alias for --no-control-bridge
+  --control-bridge-repo-map <map>
+                     Repo roots for the companion bridge, same format as autonomy-v2-control bridge --repo-map
+  --control-bridge-poll-ms <ms>
+                     Bridge poll interval in milliseconds (default: AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS or 2000)
   --poll-ms <ms>     Poll interval in milliseconds (serve only, default: 2000)
   --sync-ms <ms>     Sync interval in milliseconds (serve only, default: 30000)
   --trace-log-max-bytes <bytes>
@@ -118,9 +120,9 @@ async function main(argv: string[] = process.argv.slice(2)) {
     throw new Error('--sync-ms must be a positive number.');
   }
   const traceOptions = buildTraceOptions(rootDir, options);
-  const companionControlPlane = buildCompanionControlPlaneLaunch(rootDir, options);
-  if (!controlPlaneUrl && companionControlPlane.enabled) {
-    controlPlaneUrl = companionControlPlane.url;
+  const companionControlBridge = buildCompanionControlBridgeLaunch(rootDir, options, controlPlaneUrl);
+  if (!controlPlaneUrl && companionControlBridge.enabled) {
+    controlPlaneUrl = companionControlBridge.serverUrl;
   }
 
   const releaseServerLock = acquireServerLock(rootDir);
@@ -129,20 +131,20 @@ async function main(argv: string[] = process.argv.slice(2)) {
   let tickCount = 0;
   let consecutiveTickFailures = 0;
   const attachedWorkers = new Map();
-  let controlPlaneChild: ChildProcess | null = null;
+  let controlBridgeChild: ChildProcess | null = null;
   const cleanup = () => {
     if (released) {
       return;
     }
     released = true;
-    if (controlPlaneChild && !controlPlaneChild.killed) {
+    if (controlBridgeChild && !controlBridgeChild.killed) {
       try {
-        controlPlaneChild.kill('SIGTERM');
+        controlBridgeChild.kill('SIGTERM');
       } catch (_) {
-        // Best effort shutdown for the companion control-plane child.
+        // Best effort shutdown for the companion control-bridge child.
       }
     }
-    controlPlaneChild = null;
+    controlBridgeChild = null;
     attachedWorkers.forEach((child) => {
       try {
         child.kill('SIGTERM');
@@ -162,7 +164,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
     console.log(formatServerEventLine('server:shutdown', {
       exitCode,
       attachedWorkers: attachedWorkers.size,
-      controlPlane: controlPlaneChild ? 'stopping' : '',
+      controlBridge: controlBridgeChild ? 'stopping' : '',
     }));
     cleanup();
     process.exit(exitCode);
@@ -184,8 +186,8 @@ async function main(argv: string[] = process.argv.slice(2)) {
     serverInstanceId,
   }));
   console.log(formatServerEventLine('server:lock-acquired', { root: rootDir }));
-  if (companionControlPlane.enabled) {
-    controlPlaneChild = startCompanionControlPlane(rootDir, companionControlPlane);
+  if (companionControlBridge.enabled) {
+    controlBridgeChild = startCompanionControlBridge(rootDir, companionControlBridge);
   }
   void reportControlPlaneHeartbeat(controlPlaneUrl, 'scheduler started');
 
@@ -249,77 +251,93 @@ function buildServerInstanceId() {
   return `srv-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
 }
 
-function buildCompanionControlPlaneLaunch(rootDir: string, options: CliOptions) {
-  const enabled = shouldStartCompanionControlPlane(options, process.env);
-  const host = String(
-    options['control-plane-host'] ||
-    process.env.AUTONOMY_SERVER_CONTROL_PLANE_HOST ||
-    process.env.AUTONOMY_CONTROL_PLANE_HOST ||
-    process.env.HOST ||
-    (process.env.DYNO ? '0.0.0.0' : '') ||
-    '127.0.0.1'
+function buildCompanionControlBridgeLaunch(rootDir: string, options: CliOptions, controlPlaneUrl = '') {
+  const enabled = shouldStartCompanionControlBridge(options, process.env);
+  const serverUrl = String(
+    controlPlaneUrl ||
+    process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL ||
+    'http://127.0.0.1:3333'
   ).trim();
-  const port = Number(
-    options['control-plane-port'] ||
-    process.env.AUTONOMY_SERVER_CONTROL_PLANE_PORT ||
-    process.env.AUTONOMY_CONTROL_PLANE_PORT ||
-    process.env.PORT ||
-    '3333'
+  const pollMs = Number(
+    options['control-bridge-poll-ms'] ||
+    process.env.AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS ||
+    '2000'
   );
-  if (enabled && (!Number.isFinite(port) || port <= 0)) {
-    throw new Error('--control-plane-port must be a positive number.');
+  if (enabled && (!Number.isFinite(pollMs) || pollMs <= 0)) {
+    throw new Error('--control-bridge-poll-ms must be a positive number.');
   }
+  const repoMap = String(
+    options['control-bridge-repo-map'] ||
+    process.env.AUTONOMY_CONTROL_PLANE_REPO_MAP ||
+    ''
+  ).trim();
   const controlMainPath = fileURLToPath(new URL('../control-plane/control-plane-main.js', import.meta.url));
+  const args = [
+    controlMainPath,
+    'bridge',
+    '--root',
+    rootDir,
+    '--server-url',
+    serverUrl,
+    '--poll-ms',
+    String(pollMs),
+  ];
+  if (repoMap) {
+    args.push('--repo-map', repoMap);
+  }
   return {
     enabled,
     command: process.execPath,
-    args: [
-      controlMainPath,
-      'serve',
-      '--root',
-      rootDir,
-      '--host',
-      host,
-      '--port',
-      String(port),
-    ],
-    host,
-    port,
-    url: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}`,
+    args,
+    serverUrl,
+    pollMs,
+    repoMap,
   };
 }
 
-function shouldStartCompanionControlPlane(options: CliOptions, env: NodeJS.ProcessEnv = process.env) {
-  if (options['no-control-plane'] === true || options['control-plane'] === false) {
+function shouldStartCompanionControlBridge(options: CliOptions, env: NodeJS.ProcessEnv = process.env) {
+  if (
+    options['no-control-bridge'] === true ||
+    options['no-control-plane'] === true ||
+    options['control-bridge'] === false ||
+    options['control-plane'] === false
+  ) {
     return false;
   }
-  const setting = String(env.AUTONOMY_SERVER_CONTROL_PLANE || env.AUTONOMY_START_CONTROL_PLANE || '').trim().toLowerCase();
+  const setting = String(
+    env.AUTONOMY_SERVER_CONTROL_BRIDGE ||
+    env.AUTONOMY_START_CONTROL_BRIDGE ||
+    env.AUTONOMY_SERVER_CONTROL_PLANE ||
+    env.AUTONOMY_START_CONTROL_PLANE ||
+    ''
+  ).trim().toLowerCase();
   if (['0', 'false', 'no', 'off', 'disabled'].includes(setting)) {
     return false;
   }
   return true;
 }
 
-function startCompanionControlPlane(rootDir: string, launch: ReturnType<typeof buildCompanionControlPlaneLaunch>) {
-  console.log(formatServerEventLine('control-plane:start', {
+function startCompanionControlBridge(rootDir: string, launch: ReturnType<typeof buildCompanionControlBridgeLaunch>) {
+  console.log(formatServerEventLine('control-bridge:start', {
     root: rootDir,
-    url: launch.url,
+    serverUrl: launch.serverUrl,
+    repoMap: launch.repoMap,
   }));
   const child = spawn(launch.command, launch.args, {
     cwd: rootDir,
     stdio: 'inherit',
     env: {
       ...process.env,
-      AUTONOMY_CONTROL_PLANE_COMPANION: '1',
+      AUTONOMY_CONTROL_BRIDGE_COMPANION: '1',
     },
   });
   child.on('error', (error) => {
-    console.error(formatServerEventLine('control-plane:error', {
+    console.error(formatServerEventLine('control-bridge:error', {
       message: error.message,
     }));
   });
   child.on('exit', (code, signal) => {
-    console.log(formatServerEventLine('control-plane:exit', {
+    console.log(formatServerEventLine('control-bridge:exit', {
       code: typeof code === 'number' ? code : '',
       signal: signal || '',
     }));
@@ -362,7 +380,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
 }
 
 export {
-  buildCompanionControlPlaneLaunch,
+  buildCompanionControlBridgeLaunch,
   main,
-  shouldStartCompanionControlPlane,
+  shouldStartCompanionControlBridge,
 };

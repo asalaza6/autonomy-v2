@@ -4,8 +4,8 @@ import http from 'http';
 
 import { main as serverMain } from '../../src/server/commands/server-commands-main.js';
 import {
-  buildCompanionControlPlaneLaunch,
-  shouldStartCompanionControlPlane,
+  buildCompanionControlBridgeLaunch,
+  shouldStartCompanionControlBridge,
 } from '../../src/server/commands/server-commands-main.js';
 import { createFixtureRepo, initAutonomyRepo } from '../smoke/package-smoke.helpers.js';
 
@@ -48,60 +48,117 @@ test('autonomy-v2-server reports a scheduler heartbeat to the control plane', as
   assert.equal(heartbeatCount, 1);
 });
 
-test('autonomy-v2-server serve enables a companion control plane by default', () => {
-  const launch = buildCompanionControlPlaneLaunch('/tmp/example-repo', {});
+test('autonomy-v2-server serve enables a companion control bridge by default', () => {
+  const launch = buildCompanionControlBridgeLaunch('/tmp/example-repo', {});
 
   assert.equal(launch.enabled, true);
-  assert.equal(launch.url, 'http://127.0.0.1:3333');
+  assert.equal(launch.serverUrl, 'http://127.0.0.1:3333');
+  assert.equal(launch.pollMs, 2000);
   assert.deepEqual(launch.args.slice(1), [
-    'serve',
+    'bridge',
     '--root',
     '/tmp/example-repo',
-    '--host',
-    '127.0.0.1',
-    '--port',
-    '3333',
+    '--server-url',
+    'http://127.0.0.1:3333',
+    '--poll-ms',
+    '2000',
   ]);
 });
 
-test('autonomy-v2-server companion control plane can be disabled', () => {
-  assert.equal(shouldStartCompanionControlPlane({ 'no-control-plane': true }, {} as NodeJS.ProcessEnv), false);
-  assert.equal(shouldStartCompanionControlPlane({}, {
+test('autonomy-v2-server companion control bridge can be disabled', () => {
+  assert.equal(shouldStartCompanionControlBridge({ 'no-control-bridge': true }, {} as NodeJS.ProcessEnv), false);
+  assert.equal(shouldStartCompanionControlBridge({ 'no-control-plane': true }, {} as NodeJS.ProcessEnv), false);
+  assert.equal(shouldStartCompanionControlBridge({}, {
+    AUTONOMY_SERVER_CONTROL_BRIDGE: '0',
+  } as NodeJS.ProcessEnv), false);
+});
+
+test('autonomy-v2-server companion control bridge accepts configured server url, repo map, and poll interval', () => {
+  const launch = buildCompanionControlBridgeLaunch('/tmp/example-repo', {
+    'control-bridge-repo-map': 'example=/tmp/example-repo',
+    'control-bridge-poll-ms': '4444',
+  }, 'https://control.example.test');
+
+  assert.equal(launch.enabled, true);
+  assert.equal(launch.serverUrl, 'https://control.example.test');
+  assert.equal(launch.pollMs, 4444);
+  assert.equal(launch.repoMap, 'example=/tmp/example-repo');
+  assert.deepEqual(launch.args.slice(1), [
+    'bridge',
+    '--root',
+    '/tmp/example-repo',
+    '--server-url',
+    'https://control.example.test',
+    '--poll-ms',
+    '4444',
+    '--repo-map',
+    'example=/tmp/example-repo',
+  ]);
+});
+
+test('autonomy-v2-server companion control bridge accepts configured env defaults', () => {
+  const previousServerUrl = process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL;
+  const previousPollMs = process.env.AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS;
+  const previousRepoMap = process.env.AUTONOMY_CONTROL_PLANE_REPO_MAP;
+  process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL = 'https://env-control.example.test';
+  process.env.AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS = '5555';
+  process.env.AUTONOMY_CONTROL_PLANE_REPO_MAP = 'env=/tmp/example-repo';
+
+  try {
+    const launch = buildCompanionControlBridgeLaunch('/tmp/example-repo', {});
+
+    assert.equal(launch.serverUrl, 'https://env-control.example.test');
+    assert.equal(launch.pollMs, 5555);
+    assert.equal(launch.repoMap, 'env=/tmp/example-repo');
+  } finally {
+    restoreEnv('AUTONOMY_CONTROL_PLANE_SERVER_URL', previousServerUrl);
+    restoreEnv('AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS', previousPollMs);
+    restoreEnv('AUTONOMY_CONTROL_PLANE_REPO_MAP', previousRepoMap);
+  }
+});
+
+test('autonomy-v2-server companion control bridge accepts legacy disable env', () => {
+  assert.equal(shouldStartCompanionControlBridge({}, {
     AUTONOMY_SERVER_CONTROL_PLANE: '0',
   } as NodeJS.ProcessEnv), false);
 });
 
-test('autonomy-v2-server companion control plane accepts configured host and port', () => {
-  const launch = buildCompanionControlPlaneLaunch('/tmp/example-repo', {
+test('autonomy-v2-server companion control bridge rejects invalid poll interval', () => {
+  assert.throws(() => buildCompanionControlBridgeLaunch('/tmp/example-repo', {
+    'control-bridge-poll-ms': '0',
+  }), /--control-bridge-poll-ms/);
+});
+
+test('autonomy-v2-server companion control bridge uses local control-plane url fallback', () => {
+  const previousServerUrl = process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL;
+  const previousPollMs = process.env.AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS;
+  const previousRepoMap = process.env.AUTONOMY_CONTROL_PLANE_REPO_MAP;
+  delete process.env.AUTONOMY_CONTROL_PLANE_SERVER_URL;
+  delete process.env.AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS;
+  delete process.env.AUTONOMY_CONTROL_PLANE_REPO_MAP;
+
+  try {
+    const launch = buildCompanionControlBridgeLaunch('/tmp/example-repo', {});
+
+    assert.equal(launch.serverUrl, 'http://127.0.0.1:3333');
+    assert.equal(launch.pollMs, 2000);
+    assert.equal(launch.repoMap, '');
+  } finally {
+    restoreEnv('AUTONOMY_CONTROL_PLANE_SERVER_URL', previousServerUrl);
+    restoreEnv('AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS', previousPollMs);
+    restoreEnv('AUTONOMY_CONTROL_PLANE_REPO_MAP', previousRepoMap);
+  }
+});
+
+test('autonomy-v2-server companion control bridge ignores legacy host and port options', () => {
+  const launch = buildCompanionControlBridgeLaunch('/tmp/example-repo', {
     'control-plane-host': '0.0.0.0',
     'control-plane-port': '4444',
   });
 
   assert.equal(launch.enabled, true);
-  assert.equal(launch.host, '0.0.0.0');
-  assert.equal(launch.port, 4444);
-  assert.equal(launch.url, 'http://127.0.0.1:4444');
-});
-
-test('autonomy-v2-server companion control plane can use dyno host and port env', () => {
-  const previousDyno = process.env.DYNO;
-  const previousHost = process.env.HOST;
-  const previousPort = process.env.PORT;
-  delete process.env.HOST;
-  process.env.DYNO = 'web.1';
-  process.env.PORT = '5555';
-
-  try {
-    const launch = buildCompanionControlPlaneLaunch('/tmp/example-repo', {});
-
-    assert.equal(launch.host, '0.0.0.0');
-    assert.equal(launch.port, 5555);
-    assert.equal(launch.url, 'http://127.0.0.1:5555');
-  } finally {
-    restoreEnv('DYNO', previousDyno);
-    restoreEnv('HOST', previousHost);
-    restoreEnv('PORT', previousPort);
-  }
+  assert.equal(launch.serverUrl, 'http://127.0.0.1:3333');
+  assert.doesNotMatch(launch.args.join(' '), /0\.0\.0\.0|4444/);
 });
 
 function listen(server: http.Server): Promise<string> {

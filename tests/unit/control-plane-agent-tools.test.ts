@@ -140,6 +140,33 @@ test('agent tool PRD reset queues the normal prd:reset control-plane job', () =>
   assert.equal(listJobs(rootDir, { type: 'prd:reset' as any }).length, 1);
 });
 
+test('agent tool PRD priority queues the normal prd:priority control-plane job', () => {
+  const rootDir = makeRoot();
+  const env = {
+    AUTONOMY_AGENT_TOOLS_TOKEN: 'tool-token',
+  } as NodeJS.ProcessEnv;
+
+  const result = handleAgentToolRequest(rootDir, {
+    method: 'POST',
+    pathname: '/api/agent-tools/prd/priority',
+    headers: authorizedHeaders(),
+    env,
+    body: {
+      repoId: 'frontend',
+      prdId: 'prd-queued-1',
+      priority: 'highest',
+      reason: 'Escalated feedback.',
+    },
+  });
+
+  assert.equal(result.statusCode, 201);
+  assert.equal(result.payload.job.type, 'prd:priority');
+  assert.equal(result.payload.job.repoId, 'frontend');
+  assert.equal(result.payload.job.payload.prdId, 'prd-queued-1');
+  assert.equal(result.payload.job.payload.priority, 'highest');
+  assert.equal(listJobs(rootDir, { type: 'prd:priority' as any }).length, 1);
+});
+
 test('agent tool deploy queues the normal deploy control-plane job', () => {
   const rootDir = makeRoot();
   const env = {

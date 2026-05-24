@@ -173,8 +173,19 @@ function executePrdReset(rootDir, options = {}) {
     prs: state.prs,
   });
   const activePrd = selectActivePrd(trackedPrds.prds || []);
+  const specEntries = listTrackedPrdSpecs(rootDir, config.integrationBranch);
+  const queuedSpecEntry = specEntries.find((entry) => entry.spec && entry.spec.id === confirmPrdId && entry.isQueued === true) || null;
 
   if (!activePrd) {
+    if (queuedSpecEntry) {
+      return executeQueuedPrdReset(rootDir, {
+        config,
+        confirmPrdId,
+        reason,
+        specEntry: queuedSpecEntry,
+        now,
+      });
+    }
     return {
       noop: true,
       message: 'No active PRD exists to reset.',
@@ -184,10 +195,18 @@ function executePrdReset(rootDir, options = {}) {
     };
   }
   if (confirmPrdId !== activePrd.id) {
+    if (queuedSpecEntry) {
+      return executeQueuedPrdReset(rootDir, {
+        config,
+        confirmPrdId,
+        reason,
+        specEntry: queuedSpecEntry,
+        now,
+      });
+    }
     throw new Error(`Confirmation must match the active PRD id "${activePrd.id}".`);
   }
 
-  const specEntries = listTrackedPrdSpecs(rootDir, config.integrationBranch);
   const activeSpecEntry = specEntries.find((entry) => entry.spec && entry.spec.id === activePrd.id && entry.isQueued !== true) || null;
   if (!activeSpecEntry) {
     throw new Error(`Could not locate the active PRD spec for "${activePrd.id}" on ${config.integrationBranch}.`);
@@ -416,6 +435,126 @@ function executePrdReset(rootDir, options = {}) {
   };
 }
 
+function executeQueuedPrdReset(rootDir, options) {
+  const { config, confirmPrdId, reason, specEntry, now } = options;
+  const archivedSpecPath = path.posix.join(
+    path.posix.dirname(buildPrdSpecRelativePath(confirmPrdId)),
+    'archived',
+    path.posix.basename(specEntry.relativePath)
+  );
+  const pmAgent = getAgent(config, `${AGENT_ROLES.PM}-agent`);
+  const commitResult = commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, [
+    {
+      relativePath: archivedSpecPath,
+      content: buildPrdSpecPayload({
+        ...specEntry.spec,
+        archive: {
+          kind: 'reset',
+          status: 'abandoned',
+          archivedAt: now,
+          reason: reason || undefined,
+          fromStatus: 'queued',
+          actor: 'manager',
+        },
+      }),
+    },
+    {
+      relativePath: specEntry.relativePath,
+      delete: true,
+    },
+  ], {
+    commitMessage: `autonomy(prd): reset queued ${confirmPrdId}`,
+    gitIdentity: pmAgent.gitIdentity,
+  });
+
+  appendAgentLog(rootDir, config, pmAgent.id, 'prd:reset:queued', {
+    input: {
+      prdId: confirmPrdId,
+      reason: reason || null,
+      integrationBranch: config.integrationBranch,
+      queuedPath: specEntry.relativePath,
+    },
+    output: {
+      commitSha: commitResult.commitSha,
+      archivedSpecPath,
+    },
+  });
+
+  return {
+    noop: false,
+    prdId: confirmPrdId,
+    title: specEntry.spec.title,
+    reason: reason || null,
+    resetAt: now,
+    archivedPath: archivedSpecPath,
+    commitSha: commitResult.commitSha || null,
+    pushMessage: commitResult.pushMessage || null,
+    clearedTaskCount: 0,
+    clearedPullRequestCount: 0,
+    detachedWorkers: [],
+    queued: true,
+  };
+}
+
+function executePrdPriorityUpdate(rootDir, options = {}) {
+  ensureInitialized(rootDir);
+  const paths = getAutonomyPaths(rootDir);
+  const config = readJson(paths.agentsConfig);
+  const now = new Date().toISOString();
+  const prdId = requireOption(options, 'prd-id');
+  const priority = requireOption(options, 'priority');
+  const reason = getStringOption(options, 'reason', '').trim();
+  const specEntries = listTrackedPrdSpecs(rootDir, config.integrationBranch);
+  const queuedSpecEntry = specEntries.find((entry) => entry.spec && entry.spec.id === prdId && entry.isQueued === true) || null;
+  if (!queuedSpecEntry) {
+    throw new Error(`Could not locate queued PRD "${prdId}" on ${config.integrationBranch}.`);
+  }
+
+  const previousPriority = String(queuedSpecEntry.spec.priority || '').trim();
+  const nextSpec = buildPrdSpecPayload({
+    ...queuedSpecEntry.spec,
+    priority,
+  });
+  const pmAgent = getAgent(config, `${AGENT_ROLES.PM}-agent`);
+  const commitResult = commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, [
+    {
+      relativePath: queuedSpecEntry.relativePath,
+      content: nextSpec,
+    },
+  ], {
+    commitMessage: `autonomy(prd): reprioritize ${prdId}`,
+    gitIdentity: pmAgent.gitIdentity,
+  });
+
+  appendAgentLog(rootDir, config, pmAgent.id, 'prd:priority', {
+    input: {
+      prdId,
+      previousPriority: previousPriority || null,
+      priority,
+      reason: reason || null,
+      integrationBranch: config.integrationBranch,
+      queuedPath: queuedSpecEntry.relativePath,
+    },
+    output: {
+      commitSha: commitResult.commitSha,
+      pushed: commitResult.pushed,
+      pushMessage: commitResult.pushMessage || null,
+    },
+  });
+
+  return {
+    prdId,
+    title: queuedSpecEntry.spec.title,
+    previousPriority: previousPriority || null,
+    priority,
+    reason: reason || null,
+    updatedAt: now,
+    queuedPath: queuedSpecEntry.relativePath,
+    commitSha: commitResult.commitSha || null,
+    pushMessage: commitResult.pushMessage || null,
+  };
+}
+
 function applyLocalQueueUpdates(rootDir, queueFileUpdates) {
   (queueFileUpdates || []).forEach((entry) => {
     const relativePath = String(entry && entry.relativePath || '').trim();
@@ -453,6 +592,7 @@ function loadValidatedAutonomyConfig(rootDir) {
 export {
   buildPrdAddCliOptions,
   executePrdAdd,
+  executePrdPriorityUpdate,
   executePrdReset,
   loadValidatedAutonomyConfig,
 };

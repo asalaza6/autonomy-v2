@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { loadAutonomyEnv } from '../../env/env-main.js';
-import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord, ControlPlanePrdResetPayload } from '../../types.js';
-import { executePrdAdd, buildPrdAddCliOptions, executePrdReset } from '../../autonomy-v2/control-plane/prd-service.js';
+import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord, ControlPlanePrdPriorityPayload, ControlPlanePrdResetPayload } from '../../types.js';
+import { executePrdAdd, buildPrdAddCliOptions, executePrdPriorityUpdate, executePrdReset } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
@@ -448,6 +448,33 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           prdId: execution.prdId || '',
           noop: execution.noop ? 'yes' : 'no',
+          commitSha: execution.commitSha || '',
+        });
+        result = execution;
+      } else if (job.type === 'prd:priority') {
+        logBridgeEvent('bridge:prd:priority:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          root: repoRoot,
+        });
+        const execution = executePrdPriorityUpdate(repoRoot, {
+          'prd-id': (job.payload as ControlPlanePrdPriorityPayload).prdId,
+          priority: (job.payload as ControlPlanePrdPriorityPayload).priority,
+          reason: (job.payload as ControlPlanePrdPriorityPayload).reason || '',
+        });
+        const snapshot = buildStatusSnapshot(repoRoot);
+        await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+          method: 'POST',
+          body: {
+            repo: registration.repo,
+            snapshot,
+          },
+        });
+        logBridgeEvent('bridge:prd:priority:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          prdId: execution.prdId || '',
+          priority: execution.priority || '',
           commitSha: execution.commitSha || '',
         });
         result = execution;

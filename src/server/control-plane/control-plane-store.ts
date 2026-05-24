@@ -9,6 +9,7 @@ import type {
   ControlPlaneRepoControlOwner,
   ControlPlanePrdAddPayload,
   ControlPlaneDeployPayload,
+  ControlPlanePrdPriorityPayload,
   ControlPlanePrdResetPayload,
   ControlPlanePackageUpdatePayload,
   ControlPlaneRestartPayload,
@@ -274,6 +275,9 @@ function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null
   if (normalized === 'prd:reset') {
     return 'prd:reset' as const;
   }
+  if (normalized === 'prd:priority') {
+    return 'prd:priority' as const;
+  }
   if (normalized === 'agent:chat') {
     return 'agent:chat' as const;
   }
@@ -303,6 +307,15 @@ function normalizeJobPayload(
       confirmPrdId: String((payload as ControlPlanePrdResetPayload).confirmPrdId || '').trim(),
       reason: String((payload as ControlPlanePrdResetPayload).reason || '').trim() || undefined,
     } as ControlPlanePrdResetPayload;
+  }
+
+  if (type === 'prd:priority') {
+    return {
+      repoId: String((payload as ControlPlanePrdPriorityPayload).repoId || repoId).trim() || repoId,
+      prdId: String((payload as ControlPlanePrdPriorityPayload).prdId || '').trim(),
+      priority: String((payload as ControlPlanePrdPriorityPayload).priority || '').trim(),
+      reason: String((payload as ControlPlanePrdPriorityPayload).reason || '').trim() || undefined,
+    } as ControlPlanePrdPriorityPayload;
   }
 
   if (type === 'package:update') {
@@ -351,6 +364,7 @@ function normalizeJobPayload(
       ? (payload as ControlPlanePrdAddPayload).taskSpecs
       : [],
     sprintId: String((payload as ControlPlanePrdAddPayload).sprintId || '').trim() || undefined,
+    priority: String((payload as ControlPlanePrdAddPayload).priority || '').trim() || undefined,
   } as ControlPlanePrdAddPayload;
 }
 
@@ -1068,6 +1082,24 @@ function createControlPlanePrdResetJob(payload: ControlPlanePrdResetPayload): Co
   return job;
 }
 
+function createControlPlanePrdPriorityJob(payload: ControlPlanePrdPriorityPayload): ControlPlaneJobRecord {
+  const job: ControlPlaneJobRecord = {
+    id: createControlPlaneRecordId('job'),
+    type: 'prd:priority' as const,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+      prdId: payload.prdId,
+      priority: payload.priority,
+      reason: payload.reason,
+    },
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
 function createControlPlanePackageUpdateJob(payload: ControlPlanePackageUpdatePayload): ControlPlaneJobRecord {
   const job: ControlPlaneJobRecord = {
     id: createControlPlaneRecordId('job'),
@@ -1262,6 +1294,7 @@ export {
   createControlPlaneJob,
   createControlPlaneDeployJob,
   createControlPlanePackageUpdateJob,
+  createControlPlanePrdPriorityJob,
   createControlPlanePrdResetJob,
   createControlPlaneRestartJob,
   ensureControlPlaneDataDir,
