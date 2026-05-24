@@ -554,10 +554,10 @@ test('custom-agent default conversation scope reuses only the same day', () => {
     customAgents: {
       'strategy-agent:target-1': {
         agentId: 'strategy-agent',
-        conversationKey: 'strategy-agent:target-1:2026-01-01',
+        conversationKey: 'server-a:strategy-agent:target-1:2026-01-01',
         conversationId: 'session-existing',
         conversations: {
-          'strategy-agent:target-1:2026-01-01': {
+          'server-a:strategy-agent:target-1:2026-01-01': {
             conversationId: 'session-existing',
           },
         },
@@ -567,6 +567,7 @@ test('custom-agent default conversation scope reuses only the same day', () => {
 
   const sameDay = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T12:00:00.000Z',
+    serverInstanceId: 'server-a',
     customAgentDecisionClient() {
       return { shouldRun: true };
     },
@@ -574,21 +575,52 @@ test('custom-agent default conversation scope reuses only the same day', () => {
 
   const sameDayContext = JSON.parse(fs.readFileSync(sameDay.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
   assert.equal(sameDayContext.conversation.resumeSessionId, 'session-existing');
-  assert.equal(sameDayContext.conversation.key, 'strategy-agent:target-1:2026-01-01');
-  assert.deepEqual(sameDayContext.conversation.scope, ['agent.id', 'target.id', 'date.local']);
+  assert.equal(sameDayContext.conversation.key, 'server-a:strategy-agent:target-1:2026-01-01');
+  assert.deepEqual(sameDayContext.conversation.scope, ['server.instanceId', 'agent.id', 'target.id', 'date.local']);
 
   runtime.customAgents['strategy-agent:target-1'].running = false;
   runtime.customAgents['strategy-agent:target-1'].status = 'idle';
   const nextDay = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-02T12:00:00.000Z',
+    serverInstanceId: 'server-a',
     customAgentDecisionClient() {
       return { shouldRun: true };
     },
   });
 
   const nextDayContext = JSON.parse(fs.readFileSync(nextDay.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
-  assert.equal(nextDayContext.conversation.key, 'strategy-agent:target-1:2026-01-02');
+  assert.equal(nextDayContext.conversation.key, 'server-a:strategy-agent:target-1:2026-01-02');
   assert.equal(nextDayContext.conversation.resumeSessionId, '');
+});
+
+test('custom-agent default conversation scope starts fresh for a new server instance', () => {
+  process.env.STRATEGY_TOKEN = 'secret';
+  const rootDir = makeRepo(baseCustomConfig());
+  const runtime: any = {
+    workers: {},
+    customAgents: {
+      'strategy-agent:target-1': {
+        agentId: 'strategy-agent',
+        conversations: {
+          'server-a:strategy-agent:target-1:2026-01-01': {
+            conversationId: 'session-server-a',
+          },
+        },
+      },
+    },
+  };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T12:00:00.000Z',
+    serverInstanceId: 'server-b',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  const context = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(context.conversation.key, 'server-b:strategy-agent:target-1:2026-01-01');
+  assert.equal(context.conversation.resumeSessionId, '');
 });
 
 test('custom-agent conversation scope can rotate by UTC day', () => {

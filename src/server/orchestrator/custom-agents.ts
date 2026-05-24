@@ -5,7 +5,7 @@ import { CUSTOM_AGENT_WORKER_PATH } from './orchestrator-constants.js';
 import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
 
 const DEFAULT_INTERVAL_SECONDS = 60;
-const DEFAULT_CONVERSATION_SCOPE = ['agent.id', 'target.id', 'date.local'];
+const DEFAULT_CONVERSATION_SCOPE = ['server.instanceId', 'agent.id', 'target.id', 'date.local'];
 
 function loadCustomAgentConfig(rootDir: string): AnyRecord | null {
   const configs = loadCustomAgentConfigs(rootDir);
@@ -209,7 +209,10 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     }
 
     ensureDir(normalizedAgent.workspacePath);
-    const conversation = buildCustomAgentConversationContext(status, normalizedAgent, invocationTarget, decision, nowIso);
+    const conversation = buildCustomAgentConversationContext(status, normalizedAgent, invocationTarget, decision, {
+      nowIso,
+      serverInstanceId: options.serverInstanceId,
+    });
     status.conversationMode = conversation.mode;
     status.conversationKey = conversation.key;
     status.conversationScope = conversation.scope;
@@ -445,8 +448,9 @@ function buildCustomAgentConversationContext(
   agent: AnyRecord,
   target: AnyRecord,
   decision: AnyRecord,
-  nowIso: string
+  options: AnyRecord = {}
 ) {
+  const nowIso = String(options.nowIso || '').trim();
   const config = agent.conversation || {};
   if (config.mode === 'fresh' || config.mode === 'none' || config.reuse === false) {
     return {
@@ -467,6 +471,9 @@ function buildCustomAgentConversationContext(
     decision,
     kind: agent.kind,
     workspace: agent.workspacePath,
+    server: {
+      instanceId: String(options.serverInstanceId || 'standalone').trim() || 'standalone',
+    },
     nowIso,
     timeZone: config.timeZone || config.timezone,
   });

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawn, type ChildProcess } from 'child_process';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { resolveRootDir } from '../orchestrator/paths.js';
 import { runSchedulerTick } from '../orchestrator/scheduler.js';
@@ -175,10 +176,12 @@ async function main(argv: string[] = process.argv.slice(2)) {
   let lastSyncAt = 0;
   let tickRunning = false;
   let rerunRequested = false;
+  const serverInstanceId = buildServerInstanceId();
   console.log(formatServerEventLine('server:start', {
     root: rootDir,
     pollMs,
     syncMs,
+    serverInstanceId,
   }));
   console.log(formatServerEventLine('server:lock-acquired', { root: rootDir }));
   if (companionControlPlane.enabled) {
@@ -203,6 +206,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
         inline: false,
         skipSync: !shouldSync,
         streamWorkerOutput: true,
+        serverInstanceId,
         onWorkerSpawn(entry) {
           attachWorkerOutput(attachedWorkers, entry, traceOptions);
         },
@@ -239,6 +243,10 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   runTick();
   setInterval(runTick, pollMs);
+}
+
+function buildServerInstanceId() {
+  return `srv-${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}`;
 }
 
 function buildCompanionControlPlaneLaunch(rootDir: string, options: CliOptions) {
