@@ -5,6 +5,7 @@ import { CUSTOM_AGENT_WORKER_PATH } from './orchestrator-constants.js';
 import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
 
 const DEFAULT_INTERVAL_SECONDS = 60;
+const DEFAULT_CONVERSATION_SCOPE = ['agent.id', 'target.id', 'date.local'];
 
 function loadCustomAgentConfig(rootDir: string): AnyRecord | null {
   const configs = loadCustomAgentConfigs(rootDir);
@@ -208,6 +209,10 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     }
 
     ensureDir(normalizedAgent.workspacePath);
+    const conversation = buildCustomAgentConversationContext(status, normalizedAgent, invocationTarget, decision, nowIso);
+    status.conversationMode = conversation.mode;
+    status.conversationKey = conversation.key;
+    status.conversationScope = conversation.scope;
     const invocationId = buildCustomAgentInvocationId(statusKey, nowIso);
     const invocationDir = getCustomAgentInvocationDir(rootDir, statusKey, nowIso);
     const runtimeContextPath = writeCustomAgentRuntimeContext(rootDir, statusKey, nowIso, {
@@ -242,6 +247,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
         baseUrl: controlPanel.baseUrl,
         authHeader: controlPanel.authHeader,
       },
+      conversation,
       auth: {
         envKey,
         value: authValue,
@@ -274,6 +280,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       workspace: {
         cwd: normalizedAgent.workspacePath,
       },
+      conversation,
       paths: {
         invocationDir,
         contextPath: runtimeContextPath,
@@ -385,6 +392,7 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
   const tools = normalizeGrantedTools(agent && agent.tools, options.agentTools || {});
   const decision = normalizeDecisionConfig(rootDir, agent && agent.spawn && agent.spawn.decision, agentId);
   const lifecycle = normalizeLifecycleConfig(rootDir, agent, agentId);
+  const conversation = normalizeConversationConfig(agent && agent.conversation);
   return {
     ...agent,
     agentId,
@@ -410,6 +418,7 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
     decisionError: decision.error,
     lifecycle: lifecycle.config,
     lifecycleError: lifecycle.error,
+    conversation,
     singletonKey,
     singletonValue,
     decisionEndpoint: decision.endpoint,
@@ -429,6 +438,114 @@ function ensureCustomAgentStatus(runtime: RuntimeState, statusKey: string, agent
     ...(runtime.customAgents[statusKey] || {}),
   };
   return runtime.customAgents[statusKey];
+}
+
+function buildCustomAgentConversationContext(
+  status: AnyRecord,
+  agent: AnyRecord,
+  target: AnyRecord,
+  decision: AnyRecord,
+  nowIso: string
+) {
+  const config = agent.conversation || {};
+  if (config.mode === 'fresh' || config.mode === 'none' || config.reuse === false) {
+    return {
+      mode: config.mode || 'fresh',
+      key: '',
+      scope: config.scope || [],
+      resumeSessionId: '',
+      persist: false,
+    };
+  }
+
+  const scope = Array.isArray(config.scope) && config.scope.length > 0
+    ? config.scope
+    : DEFAULT_CONVERSATION_SCOPE;
+  const key = buildConversationKey(scope, {
+    agent,
+    target,
+    decision,
+    kind: agent.kind,
+    workspace: agent.workspacePath,
+    nowIso,
+    timeZone: config.timeZone || config.timezone,
+  });
+  return {
+    mode: config.mode || 'scoped',
+    key,
+    scope,
+    resumeSessionId: getCustomAgentConversationId(status, key),
+    persist: true,
+  };
+}
+
+function getCustomAgentConversationId(status: AnyRecord, conversationKey = '') {
+  const scopedId = conversationKey && status.conversations && status.conversations[conversationKey]
+    ? status.conversations[conversationKey].conversationId || status.conversations[conversationKey]
+    : '';
+  const sameConversationKey = status.conversationKey && status.conversationKey === conversationKey;
+  const currentConversationId = sameConversationKey
+    ? status.conversationId
+    : '';
+  const currentLastConversationId = sameConversationKey
+    ? status.lastConversationId || status.lastResult && status.lastResult.conversationId
+    : '';
+  return String(
+    scopedId
+      || currentConversationId
+      || currentLastConversationId
+      || ''
+  ).trim();
+}
+
+function buildConversationKey(scope: unknown[], context: AnyRecord) {
+  return scope
+    .map((entry) => resolveConversationScopeValue(String(entry || '').trim(), context))
+    .map((entry) => slugify(String(entry || 'missing')))
+    .join(':') || 'custom';
+}
+
+function resolveConversationScopeValue(token: string, context: AnyRecord) {
+  if (!token) {
+    return '';
+  }
+  if (token.startsWith('literal:')) {
+    return token.slice('literal:'.length);
+  }
+  if (token === 'date' || token === 'date.utc') {
+    return formatConversationDate(context.nowIso, 'UTC');
+  }
+  if (token === 'date.local') {
+    return formatConversationDate(context.nowIso, String(context.timeZone || process.env.TZ || 'UTC'));
+  }
+  if (token === 'workspace') {
+    return context.workspace;
+  }
+  return readPath(context, token);
+}
+
+function formatConversationDate(nowIso: string, timeZone: string) {
+  const date = new Date(nowIso);
+  if (!Number.isFinite(date.getTime())) {
+    return '';
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
+
+function readPath(value: AnyRecord, dottedPath: string) {
+  return dottedPath.split('.').reduce((current, segment) => {
+    if (!current || typeof current !== 'object') {
+      return '';
+    }
+    return current[segment];
+  }, value);
 }
 
 function findActiveSingleton(runtime: RuntimeState, singletonKey: string, singletonValue: string, currentStatusKey: string) {
@@ -634,6 +751,18 @@ function normalizeAgentTools(agentTools: AnyRecord) {
       authHeader: String(tool.authHeader || '').trim(),
     }];
   }));
+}
+
+function normalizeConversationConfig(value: unknown) {
+  const raw = value && typeof value === 'object' ? value as AnyRecord : {};
+  const mode = String(raw.mode || '').trim().toLowerCase();
+  const scope = normalizeStringArray(raw.scope || raw.key);
+  return {
+    mode: ['fresh', 'none', 'scoped'].includes(mode) ? mode : 'scoped',
+    scope,
+    timeZone: String(raw.timeZone || raw.timezone || '').trim(),
+    reuse: raw.reuse !== false,
+  };
 }
 
 function normalizeGrantedTools(agentToolGrants: AnyRecord, configuredTools: AnyRecord) {

@@ -546,6 +546,138 @@ test('custom-agent lifecycle command config is carried into runtime context', ()
   assert.equal(runtime.customAgentInvocations[runtimeContext.invocationId].paths.contextPath, result.pendingSpawnStarts[0].runtimeContextPath);
 });
 
+test('custom-agent default conversation scope reuses only the same day', () => {
+  process.env.STRATEGY_TOKEN = 'secret';
+  const rootDir = makeRepo(baseCustomConfig());
+  const runtime: any = {
+    workers: {},
+    customAgents: {
+      'strategy-agent:target-1': {
+        agentId: 'strategy-agent',
+        conversationKey: 'strategy-agent:target-1:2026-01-01',
+        conversationId: 'session-existing',
+        conversations: {
+          'strategy-agent:target-1:2026-01-01': {
+            conversationId: 'session-existing',
+          },
+        },
+      },
+    },
+  };
+
+  const sameDay = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T12:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  const sameDayContext = JSON.parse(fs.readFileSync(sameDay.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(sameDayContext.conversation.resumeSessionId, 'session-existing');
+  assert.equal(sameDayContext.conversation.key, 'strategy-agent:target-1:2026-01-01');
+  assert.deepEqual(sameDayContext.conversation.scope, ['agent.id', 'target.id', 'date.local']);
+
+  runtime.customAgents['strategy-agent:target-1'].running = false;
+  runtime.customAgents['strategy-agent:target-1'].status = 'idle';
+  const nextDay = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-02T12:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+
+  const nextDayContext = JSON.parse(fs.readFileSync(nextDay.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(nextDayContext.conversation.key, 'strategy-agent:target-1:2026-01-02');
+  assert.equal(nextDayContext.conversation.resumeSessionId, '');
+});
+
+test('custom-agent conversation scope can rotate by UTC day', () => {
+  process.env.STRATEGY_TOKEN = 'secret';
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        ...baseCustomConfig().agents[0],
+        conversation: {
+          scope: ['agent.id', 'target.id', 'date.utc'],
+        },
+      },
+    ],
+  }));
+  const runtime: any = {
+    workers: {},
+    customAgents: {
+      'strategy-agent:target-1': {
+        agentId: 'strategy-agent',
+        conversations: {
+          'strategy-agent:target-1:2026-01-01': {
+            conversationId: 'session-day-1',
+          },
+        },
+      },
+    },
+  };
+
+  const sameDay = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T12:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+  const sameDayContext = JSON.parse(fs.readFileSync(sameDay.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(sameDayContext.conversation.key, 'strategy-agent:target-1:2026-01-01');
+  assert.equal(sameDayContext.conversation.resumeSessionId, 'session-day-1');
+
+  runtime.customAgents['strategy-agent:target-1'].running = false;
+  runtime.customAgents['strategy-agent:target-1'].status = 'idle';
+  const nextDay = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-02T12:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true };
+    },
+  });
+  const nextDayContext = JSON.parse(fs.readFileSync(nextDay.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(nextDayContext.conversation.key, 'strategy-agent:target-1:2026-01-02');
+  assert.equal(nextDayContext.conversation.resumeSessionId, '');
+});
+
+test('custom-agent conversation scope can follow a decision task id', () => {
+  process.env.STRATEGY_TOKEN = 'secret';
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        ...baseCustomConfig().agents[0],
+        conversation: {
+          scope: ['agent.id', 'decision.taskId'],
+        },
+      },
+    ],
+  }));
+  const runtime: any = {
+    workers: {},
+    customAgents: {
+      'strategy-agent:target-1': {
+        agentId: 'strategy-agent',
+        conversations: {
+          'strategy-agent:task-7': {
+            conversationId: 'session-task-7',
+          },
+        },
+      },
+    },
+  };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      return { shouldRun: true, taskId: 'task-7' };
+    },
+  });
+
+  const context = JSON.parse(fs.readFileSync(result.pendingSpawnStarts[0].runtimeContextPath, 'utf8'));
+  assert.equal(context.conversation.key, 'strategy-agent:task-7');
+  assert.equal(context.conversation.resumeSessionId, 'session-task-7');
+});
+
 test('custom-agent runtime context carries explicit runtime recovery permission', () => {
   const rootDir = makeRepo(baseCustomConfig({
     context: {

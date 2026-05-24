@@ -134,13 +134,11 @@ async function runCustomAgent(runtimeContext) {
     status: 'running',
     workspace: { cwd: preparedWorkspacePath },
   });
-  const result = await runCodexExec({
+  const result = await runCustomAgentCodex(runtimeContext, {
     cwd: preparedWorkspacePath,
     prompt,
-    readOnly: false,
-    sandboxMode: allowRuntimeStateChanges ? 'danger-full-access' : 'workspace-write',
     env,
-    inheritHostEnv: true,
+    sandboxMode: allowRuntimeStateChanges ? 'danger-full-access' : 'workspace-write',
     configOverrides: buildCustomAgentNetworkConfigOverrides(runtimeContext, process.env),
   });
   const runResult = {
@@ -169,9 +167,50 @@ async function runCustomAgent(runtimeContext) {
     status: 'completed',
     invocationId: String(runtimeContext.invocationId || ''),
     conversationId: runResult.conversationId,
+    conversation: runtimeContext.conversation || null,
     environment: environmentResult,
     finalize: finalizeResult || null,
   };
+}
+
+async function runCustomAgentCodex(runtimeContext, options) {
+  const conversation = runtimeContext.conversation || {};
+  const persistConversation = conversation.persist !== false;
+  const resumeSessionId = normalizeConversationId(
+    persistConversation && (
+      conversation.resumeSessionId
+      || conversation.conversationId
+    )
+  );
+  const runOptions = {
+    cwd: options.cwd,
+    prompt: options.prompt,
+    readOnly: false,
+    captureConversationId: persistConversation,
+    sandboxMode: options.sandboxMode,
+    env: options.env,
+    inheritHostEnv: true,
+    configOverrides: options.configOverrides,
+  };
+  if (!resumeSessionId) {
+    return runCodexExec(runOptions);
+  }
+
+  try {
+    return await runCodexExec({
+      ...runOptions,
+      resumeSessionId,
+    });
+  } catch (error) {
+    markCustomAgentInvocationPhase(runtimeContext, 'run', {
+      status: 'running',
+      resumeFallback: {
+        resumeSessionId,
+        reason: extractError(error),
+      },
+    });
+    return runCodexExec(runOptions);
+  }
 }
 
 function runLifecycleCommand(runtimeContext, phase: string, options: any = {}) {
@@ -504,28 +543,55 @@ function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, result,
   try {
     const runtime = loadRuntime(rootDir);
     runtime.customAgents = runtime.customAgents || {};
+    const conversation = result && result.conversation && typeof result.conversation === 'object'
+      ? result.conversation
+      : {};
+    const shouldPersistConversation = conversation.persist !== false;
+    const conversationId = shouldPersistConversation
+      ? normalizeConversationId(result && result.conversationId)
+      : '';
+    const conversationKey = normalizeConversationId(conversation.key);
     const invocationId = String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].invocationId || result && result.invocationId || '');
     if (invocationId) {
+      const previousInvocation: any = runtime.customAgentInvocations && runtime.customAgentInvocations[invocationId] || {};
       runtime.customAgentInvocations = runtime.customAgentInvocations || {};
       runtime.customAgentInvocations[invocationId] = {
         invocationId,
         agentId: String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].agentId || runtimeKey),
-        ...(runtime.customAgentInvocations[invocationId] || {}),
+        ...previousInvocation,
         status: error ? 'failed' : 'completed',
-        phase: error ? ((runtime.customAgentInvocations[invocationId] && runtime.customAgentInvocations[invocationId].phase) || 'failed') : 'completed',
+        phase: error ? (previousInvocation.phase || 'failed') : 'completed',
         finishedAt: new Date().toISOString(),
         lastResult: result || null,
+        conversationKey: conversationKey || previousInvocation.conversationKey || '',
+        conversationId: conversationId || previousInvocation.conversationId || '',
         lastError: error ? extractError(error) : null,
       };
     }
+    const previousStatus: any = runtime.customAgents[runtimeKey] || {};
+    const conversations = {
+      ...(previousStatus.conversations || {}),
+    };
+    if (conversationId && conversationKey) {
+      conversations[conversationKey] = {
+        conversationId,
+        mode: String(conversation.mode || 'scoped'),
+        scope: Array.isArray(conversation.scope) ? conversation.scope : [],
+        updatedAt: new Date().toISOString(),
+      };
+    }
     runtime.customAgents[runtimeKey] = {
-      agentId: String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].agentId || runtimeKey),
-      ...(runtime.customAgents[runtimeKey] || {}),
+      agentId: String(previousStatus.agentId || runtimeKey),
+      ...previousStatus,
       status: 'idle',
       running: false,
       finishedAt: new Date().toISOString(),
       pid: null,
       lastResult: result || null,
+      conversations,
+      conversationKey: conversationKey || previousStatus.conversationKey || '',
+      conversationId: conversationId || previousStatus.conversationId || '',
+      lastConversationId: conversationId || previousStatus.lastConversationId || '',
       lastError: error ? extractError(error) : null,
     };
     writeRuntime(rootDir, runtime);
@@ -556,7 +622,11 @@ function extractError(error) {
   return String(error || 'custom agent failed');
 }
 
-export { buildCustomAgentNetworkConfigOverrides, buildCustomAgentPrompt, main };
+function normalizeConversationId(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export { buildCustomAgentNetworkConfigOverrides, buildCustomAgentPrompt, main, runCustomAgentCodex };
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {

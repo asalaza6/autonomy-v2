@@ -336,6 +336,12 @@ function buildCustomAgentStatuses(runtime) {
     if (typeof status.offsetSeconds === 'number') {
       detailParts.push(`offset=${status.offsetSeconds}s`);
     }
+    if (status.conversationKey) {
+      detailParts.push(`conversationKey=${status.conversationKey}`);
+    }
+    if (status.conversationId || status.lastConversationId) {
+      detailParts.push(`conversation=${status.conversationId || status.lastConversationId}`);
+    }
     const toolNames = Object.keys(status.tools || {}).filter(Boolean);
     if (toolNames.length > 0) {
       detailParts.push(`tools=${toolNames.join(',')}`);
@@ -357,6 +363,10 @@ function buildCustomAgentStatuses(runtime) {
       lastPollAt: status.lastPollAt || null,
       lastDecision: status.lastDecision || null,
       lastDecisionReason: status.lastDecisionReason || null,
+      conversationMode: status.conversationMode || null,
+      conversationKey: status.conversationKey || null,
+      conversationScope: status.conversationScope || null,
+      conversationId: status.conversationId || status.lastConversationId || null,
       workspacePath: status.workspacePath || null,
       intervalSeconds: typeof status.intervalSeconds === 'number' ? status.intervalSeconds : null,
       offsetSeconds: typeof status.offsetSeconds === 'number' ? status.offsetSeconds : null,

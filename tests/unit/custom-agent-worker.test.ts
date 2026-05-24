@@ -204,7 +204,7 @@ const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 fs.writeFileSync(${JSON.stringify(path.join(invocationDir, 'finalize.input.json'))}, JSON.stringify(input, null, 2));
 process.stdout.write(JSON.stringify({ finalized: true, runStatus: input.run.status }));
 `, 'utf8');
-  fs.writeFileSync(codexScript, '#!/usr/bin/env node\nprocess.stdin.resume(); process.stdin.on("end", () => process.exit(0));\n', 'utf8');
+  fs.writeFileSync(codexScript, '#!/usr/bin/env node\nprocess.stdin.resume(); process.stdin.on("end", () => { process.stdout.write(JSON.stringify({ session_id: "custom-session-1" }) + "\\n"); process.exit(0); });\n', 'utf8');
   fs.chmodSync(codexScript, 0o755);
 
   fs.writeFileSync(contextPath, JSON.stringify({
@@ -225,6 +225,12 @@ process.stdout.write(JSON.stringify({ finalized: true, runStatus: input.run.stat
     auth: {},
     tools: {},
     context: {},
+    conversation: {
+      mode: 'scoped',
+      key: 'strategy-agent:target-1',
+      scope: ['agent.id', 'target.id'],
+      persist: true,
+    },
     lifecycle: {
       environment: { command: 'node', args: [environmentScript], cwd: rootDir },
       prompt: { command: 'node', args: [promptScript], cwd: rootDir },
@@ -256,7 +262,106 @@ process.stdout.write(JSON.stringify({ finalized: true, runStatus: input.run.stat
   assert.equal(promptInput.workspace.cwd, path.join(rootDir, '.autonomy', 'prepared-workspace'));
   assert.equal(finalizeInput.run.status, 'completed');
   assert.equal(runtime.customAgents['strategy-agent:target-1'].running, false);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].conversationId, 'custom-session-1');
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].conversationKey, 'strategy-agent:target-1');
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].conversations['strategy-agent:target-1'].conversationId, 'custom-session-1');
+  assert.equal(runtime.customAgentInvocations['inv-1'].conversationKey, 'strategy-agent:target-1');
+  assert.equal(runtime.customAgentInvocations['inv-1'].conversationId, 'custom-session-1');
   assert.equal(runtime.customAgentInvocations['inv-1'].status, 'completed');
   assert.equal(runtime.customAgentInvocations['inv-1'].lastResult.finalize.finalized, true);
   assert.equal(fs.existsSync(path.join(invocationDir, 'environment.command.json')), true);
+});
+
+test('custom agent worker resumes the previous Codex conversation', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agent-worker-resume-'));
+  const invocationDir = path.join(rootDir, '.autonomy', 'runtime', 'custom-agents', 'feedback-bot-project', 'start');
+  const workspacePath = path.join(rootDir, '.autonomy', 'workspace');
+  const contextPath = path.join(invocationDir, 'context.json');
+  const scriptsDir = path.join(rootDir, 'scripts');
+  const argsPath = path.join(invocationDir, 'codex.args.json');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.mkdirSync(path.join(rootDir, '.autonomy', 'runtime', 'state'), { recursive: true });
+  fs.mkdirSync(invocationDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(rootDir, '.autonomy', 'runtime', 'state', 'runtime.json'),
+    JSON.stringify({
+      workers: {},
+      customAgents: {
+        'feedback-bot:project': {
+          agentId: 'feedback-bot',
+          status: 'running',
+          running: true,
+          invocationId: 'inv-resume',
+          conversationId: 'session-existing',
+        },
+      },
+      customAgentInvocations: {
+        'inv-resume': {
+          invocationId: 'inv-resume',
+          agentId: 'feedback-bot',
+          status: 'running',
+        },
+      },
+    }, null, 2),
+    'utf8',
+  );
+
+  const codexScript = path.join(scriptsDir, 'codex.js');
+  fs.writeFileSync(codexScript, `#!/usr/bin/env node
+const fs = require('fs');
+fs.writeFileSync(${JSON.stringify(argsPath)}, JSON.stringify(process.argv.slice(2), null, 2));
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stdout.write(JSON.stringify({ session_id: 'session-existing' }) + '\\n');
+});
+`, 'utf8');
+  fs.chmodSync(codexScript, 0o755);
+
+  fs.writeFileSync(contextPath, JSON.stringify({
+    schemaVersion: 1,
+    invocationId: 'inv-resume',
+    runtimeKey: 'feedback-bot:project',
+    rootDir,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    kind: 'feedback-bots',
+    agent: { id: 'feedback-bot' },
+    target: { type: 'project', id: 'project' },
+    workspacePath,
+    paths: {
+      invocationDir,
+      contextPath,
+    },
+    controlPanel: {},
+    auth: {},
+    tools: {},
+    context: {},
+    conversation: {
+      mode: 'scoped',
+      key: 'feedback-bot:project:task-123',
+      scope: ['agent.id', 'target.id', 'decision.taskId'],
+      resumeSessionId: 'session-existing',
+      persist: true,
+    },
+    decision: { shouldRun: true, reason: 'test' },
+  }, null, 2), 'utf8');
+
+  const previousCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  process.env.AUTONOMY_CODEX_BIN = codexScript;
+  try {
+    await main(['run', '--context', contextPath]);
+  } finally {
+    if (typeof previousCodexBin === 'string') {
+      process.env.AUTONOMY_CODEX_BIN = previousCodexBin;
+    } else {
+      delete process.env.AUTONOMY_CODEX_BIN;
+    }
+  }
+
+  const args = JSON.parse(fs.readFileSync(argsPath, 'utf8'));
+  const runtime = JSON.parse(fs.readFileSync(path.join(rootDir, '.autonomy', 'runtime', 'state', 'runtime.json'), 'utf8'));
+  assert.equal(args.includes('resume'), true);
+  assert.equal(args.includes('session-existing'), true);
+  assert.equal(args.includes('--ephemeral'), false);
+  assert.equal(runtime.customAgents['feedback-bot:project'].conversationId, 'session-existing');
+  assert.equal(runtime.customAgents['feedback-bot:project'].conversations['feedback-bot:project:task-123'].conversationId, 'session-existing');
 });

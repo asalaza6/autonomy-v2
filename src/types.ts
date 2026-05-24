@@ -472,6 +472,12 @@ export interface CustomAgentRuntime extends AnyRecord {
   lastPollAt?: string;
   lastDecision?: string | null;
   lastDecisionReason?: string | null;
+  conversationMode?: string | null;
+  conversationKey?: string | null;
+  conversationScope?: string[] | null;
+  conversationId?: string | null;
+  lastConversationId?: string | null;
+  conversations?: Record<string, AnyRecord>;
   workspacePath?: string | null;
   singletonKey?: string | null;
   singletonValue?: string | null;
