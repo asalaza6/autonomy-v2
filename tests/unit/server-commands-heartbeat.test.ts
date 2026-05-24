@@ -67,7 +67,6 @@ test('autonomy-v2-server serve enables a companion control bridge by default', (
 
 test('autonomy-v2-server companion control bridge can be disabled', () => {
   assert.equal(shouldStartCompanionControlBridge({ 'no-control-bridge': true }, {} as NodeJS.ProcessEnv), false);
-  assert.equal(shouldStartCompanionControlBridge({ 'no-control-plane': true }, {} as NodeJS.ProcessEnv), false);
   assert.equal(shouldStartCompanionControlBridge({}, {
     AUTONOMY_SERVER_CONTROL_BRIDGE: '0',
   } as NodeJS.ProcessEnv), false);
@@ -117,12 +116,6 @@ test('autonomy-v2-server companion control bridge accepts configured env default
   }
 });
 
-test('autonomy-v2-server companion control bridge accepts legacy disable env', () => {
-  assert.equal(shouldStartCompanionControlBridge({}, {
-    AUTONOMY_SERVER_CONTROL_PLANE: '0',
-  } as NodeJS.ProcessEnv), false);
-});
-
 test('autonomy-v2-server companion control bridge rejects invalid poll interval', () => {
   assert.throws(() => buildCompanionControlBridgeLaunch('/tmp/example-repo', {
     'control-bridge-poll-ms': '0',
@@ -148,17 +141,6 @@ test('autonomy-v2-server companion control bridge uses local control-plane url f
     restoreEnv('AUTONOMY_CONTROL_PLANE_BRIDGE_POLL_MS', previousPollMs);
     restoreEnv('AUTONOMY_CONTROL_PLANE_REPO_MAP', previousRepoMap);
   }
-});
-
-test('autonomy-v2-server companion control bridge ignores legacy host and port options', () => {
-  const launch = buildCompanionControlBridgeLaunch('/tmp/example-repo', {
-    'control-plane-host': '0.0.0.0',
-    'control-plane-port': '4444',
-  });
-
-  assert.equal(launch.enabled, true);
-  assert.equal(launch.serverUrl, 'http://127.0.0.1:3333');
-  assert.doesNotMatch(launch.args.join(' '), /0\.0\.0\.0|4444/);
 });
 
 function listen(server: http.Server): Promise<string> {

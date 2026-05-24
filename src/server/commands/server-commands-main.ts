@@ -59,7 +59,6 @@ Options:
                      Control-plane server URL for scheduler heartbeats and bridge jobs
   --no-control-bridge
                      Do not start the companion control bridge alongside serve
-  --no-control-plane Legacy alias for --no-control-bridge
   --control-bridge-repo-map <map>
                      Repo roots for the companion bridge, same format as autonomy-v2-control bridge --repo-map
   --control-bridge-poll-ms <ms>
@@ -298,17 +297,13 @@ function buildCompanionControlBridgeLaunch(rootDir: string, options: CliOptions,
 function shouldStartCompanionControlBridge(options: CliOptions, env: NodeJS.ProcessEnv = process.env) {
   if (
     options['no-control-bridge'] === true ||
-    options['no-control-plane'] === true ||
-    options['control-bridge'] === false ||
-    options['control-plane'] === false
+    options['control-bridge'] === false
   ) {
     return false;
   }
   const setting = String(
     env.AUTONOMY_SERVER_CONTROL_BRIDGE ||
     env.AUTONOMY_START_CONTROL_BRIDGE ||
-    env.AUTONOMY_SERVER_CONTROL_PLANE ||
-    env.AUTONOMY_START_CONTROL_PLANE ||
     ''
   ).trim().toLowerCase();
   if (['0', 'false', 'no', 'off', 'disabled'].includes(setting)) {
