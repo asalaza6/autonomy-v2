@@ -425,6 +425,7 @@ const CHAT_NEAR_BOTTOM_THRESHOLD_PX = 96;
 let latestRepos: RepoRecord[] = [];
 let latestDashboard: DashboardSummary = {};
 let latestConversations: ChatConversationSummary[] = [];
+let activeTabName = entranceContext.entrance === 'project' ? 'main' : 'dashboard';
 let deployingRepoIds = new Set<string>();
 let resettingPrdRepoIds = new Set<string>();
 let prioritizingPrdKeys = new Set<string>();
@@ -447,6 +448,9 @@ let lastRenderedChatFingerprint = '';
 let latestProcessOutputByKey: Record<string, ProcessOutputSummary> = {};
 let activeProcessTargetsByRepo: Record<string, 'server' | 'controlBridge'> = {};
 let pendingProcessPanelFocus: { repoId: string; target: 'server' | 'controlBridge' } | null = null;
+let refreshInFlight: Promise<void> | null = null;
+let refreshQueued = false;
+let advancedRefreshInFlight: Promise<void> | null = null;
 
 function mountControlPlane() {
   if (
@@ -725,7 +729,7 @@ function mountControlPlane() {
     }
   });
 
-  window.setInterval(() => refresh().catch(() => {}), 5000);
+  window.setInterval(() => refresh({ queueIfRunning: false }).catch(() => {}), 5000);
   if (window.__AUTONOMY_CONTROL_PLANE_DEV__ === true) {
     window.setInterval(() => checkForUiReload().catch(() => {}), 1000);
   }
@@ -826,13 +830,36 @@ async function handleChatSubmit(event: SubmitEvent) {
   }
 }
 
-async function refresh() {
+async function refresh(options: { queueIfRunning?: boolean } = {}) {
+  if (refreshInFlight) {
+    if (options.queueIfRunning !== false) {
+      refreshQueued = true;
+    }
+    return refreshInFlight;
+  }
+
+  refreshInFlight = drainRefreshQueue();
+  try {
+    await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function drainRefreshQueue() {
+  do {
+    refreshQueued = false;
+    await runRefresh();
+  } while (refreshQueued);
+}
+
+async function runRefresh() {
   const reposRequestUrl = entranceContext.entrance === 'project' && entranceContext.repoId
     ? `/api/repos?repoId=${encodeURIComponent(entranceContext.repoId)}`
     : '/api/repos';
-  const stateRequestUrl = entranceContext.entrance === 'project' && entranceContext.repoId
-    ? `/api/state?repoId=${encodeURIComponent(entranceContext.repoId)}`
-    : '/api/state';
+  const stateRequestUrl = buildStateRequestUrl({
+    include: entranceContext.entrance === 'project' ? ['details', 'conversations'] : ['details'],
+  });
   const [repos, state] = await Promise.all([
     requestJson<{ repos?: RepoRecord[] }>(reposRequestUrl),
     requestJson<StateSnapshot>(stateRequestUrl),
@@ -844,11 +871,27 @@ async function refresh() {
   renderProjectMain(state.dashboard || {});
   renderChat(extractRepoConversations(state));
   renderAdvanced(state);
+  if (activeTabName === 'advanced') {
+    await refreshAdvancedState();
+  }
   await refreshManagedProcessOutputs(state.dashboard || {});
 
   if (lastUpdatedEl) {
     lastUpdatedEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
+}
+
+function buildStateRequestUrl(options: { include?: string[] } = {}) {
+  const params = new URLSearchParams();
+  if (entranceContext.entrance === 'project' && entranceContext.repoId) {
+    params.set('repoId', entranceContext.repoId);
+  }
+  (options.include || [])
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean)
+    .forEach((entry) => params.append('include', entry));
+  const query = params.toString();
+  return query ? `/api/state?${query}` : '/api/state';
 }
 
 async function refreshManagedProcessOutputs(dashboard: DashboardSummary) {
@@ -2174,7 +2217,29 @@ function renderAdvanced(state: StateSnapshot) {
   );
 }
 
+async function refreshAdvancedState() {
+  if (!rawStateEl || !rawDashboardEl || !rawJobsEl) {
+    return;
+  }
+  if (advancedRefreshInFlight) {
+    return advancedRefreshInFlight;
+  }
+  rawStateEl.textContent = 'Loading raw state...';
+  advancedRefreshInFlight = (async () => {
+    const state = await requestJson<StateSnapshot>(buildStateRequestUrl({ include: ['state'] }));
+    renderAdvanced(state);
+  })();
+  try {
+    await advancedRefreshInFlight;
+  } catch (error) {
+    rawStateEl.textContent = getErrorMessage(error);
+  } finally {
+    advancedRefreshInFlight = null;
+  }
+}
+
 function setActiveTab(tabName: string) {
+  activeTabName = tabName;
   tabs.forEach((tab) => {
     const isActive = tab.dataset.tab === tabName;
     tab.classList.toggle('active', isActive);
@@ -2186,6 +2251,9 @@ function setActiveTab(tabName: string) {
       panel.classList.toggle('active', name === tabName);
     }
   });
+  if (activeTabName === 'advanced') {
+    refreshAdvancedState().catch(() => {});
+  }
 }
 
 function resolveProjectProgress(repo: RepoSummary | null) {

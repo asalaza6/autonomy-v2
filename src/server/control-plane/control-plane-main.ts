@@ -9,8 +9,8 @@ import { fileURLToPath } from 'url';
 import type { ControlPlaneState } from '../../types.js';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { resolveRootDir } from '../orchestrator/paths.js';
-import { buildControlPlaneDashboard } from './control-plane-dashboard.js';
 import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './control-plane-browser.js';
+import { buildStateApiResponse } from './control-plane-state-response.js';
 import { handleAgentToolRequest } from './control-plane-agent-tools.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
@@ -238,10 +238,7 @@ async function handleRequest(
     const repoId = String(url.searchParams.get('repoId') || '').trim();
     const state = filterControlPlaneState(loadControlPlaneState(rootDir), repoId);
     const controlSession = readControlSession(req);
-    sendJson(res, 200, {
-      ...state,
-      dashboard: buildControlPlaneDashboard(rootDir, state, controlSession),
-    });
+    sendJson(res, 200, buildStateApiResponse(rootDir, state, controlSession, url.searchParams));
     return;
   }
 
@@ -690,7 +687,7 @@ function filterControlPlaneState(state: ControlPlaneState, repoId: string) {
     repoStatuses: normalizedRepoId && state.repoStatuses[normalizedRepoId]
       ? { [normalizedRepoId]: state.repoStatuses[normalizedRepoId] }
       : {},
-    conversations: normalizedRepoId && state.conversations[normalizedRepoId]
+    conversations: normalizedRepoId && state.conversations && state.conversations[normalizedRepoId]
       ? { [normalizedRepoId]: state.conversations[normalizedRepoId] }
       : {},
     managedProcesses: normalizedRepoId && state.managedProcesses && state.managedProcesses[normalizedRepoId]

@@ -115,11 +115,16 @@ test('control plane queues a browser PRD and the bridge executes it on the local
     ]);
 
     const stateAfterQueue = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state`);
-    assert.equal(stateAfterQueue.jobs.length, 1);
-    assert.equal(stateAfterQueue.jobs[0].status, 'queued');
+    assert.equal(stateAfterQueue.jobs, undefined);
+    assert.equal(stateAfterQueue.repoStatuses, undefined);
     assert.equal(stateAfterQueue.dashboard.repoCount, 1);
+    assert.equal(stateAfterQueue.dashboard.jobs[0].status, 'queued');
+    assert.equal(stateAfterQueue.dashboard.repos[0].prdHistory, undefined);
     assert.equal(stateAfterQueue.dashboard.serverHeartbeat.status, 'online');
     assert.notEqual(stateAfterQueue.dashboard.bridgeHeartbeat.status, 'offline');
+    const rawStateAfterQueue = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state?include=jobs`);
+    assert.equal(rawStateAfterQueue.jobs.length, 1);
+    assert.equal(rawStateAfterQueue.jobs[0].status, 'queued');
 
     const projectHtml = await (await fetch(`http://127.0.0.1:${port}/project/default`)).text();
     assert.match(projectHtml, />Main</);
@@ -155,7 +160,7 @@ test('control plane queues a browser PRD and the bridge executes it on the local
       '--once',
     ]);
 
-    const stateAfterBridge = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state`);
+    const stateAfterBridge = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state?include=state`);
     assert.equal(stateAfterBridge.jobs[0].status, 'completed');
     assert.equal(stateAfterBridge.repoStatuses.default.repoId, 'default');
     assert.equal(stateAfterBridge.repoStatuses.default.snapshot.integrationBranch, 'dev');
@@ -427,7 +432,7 @@ test('control plane reset endpoint validates confirmation and clears active PRD 
       '--once',
     ]);
 
-    const state = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state`);
+    const state = await fetchJsonWithRetry(`http://127.0.0.1:${port}/api/state?include=state`);
     assert.equal(state.jobs.length, 1);
     assert.equal(state.jobs[0].type, 'prd:reset');
     assert.equal(state.jobs[0].status, 'completed');
