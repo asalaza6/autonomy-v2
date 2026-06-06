@@ -422,6 +422,7 @@ const mainProcessPanelEl = document.getElementById('main-process-panel');
 const mainQueuedPrdSummaryEl = document.getElementById('main-queued-prd-summary');
 const mainQueuedPrdListEl = document.getElementById('main-queued-prd-list');
 const mainQueuedPrdDetailEl = document.getElementById('main-queued-prd-detail');
+const agentsPanelContentEl = document.getElementById('agents-panel-content');
 const prdHistorySummaryEl = document.getElementById('prd-history-summary');
 const prdHistoryListEl = document.getElementById('prd-history-list');
 const prdHistoryDetailEl = document.getElementById('prd-history-detail');
@@ -442,6 +443,7 @@ const chatMessageEl = document.getElementById('chat-message');
 const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-tab]'));
 const panels: Record<string, HTMLElement | null> = {
   main: document.getElementById('main-panel'),
+  agents: document.getElementById('agents-panel'),
   chat: document.getElementById('chat-panel'),
   history: document.getElementById('history-panel'),
   dashboard: document.getElementById('dashboard-panel'),
@@ -1797,6 +1799,7 @@ function renderDashboard(dashboard: DashboardSummary) {
   if (dashboardJobsEl) {
     dashboardJobsEl.innerHTML = renderToHtml(<JobStack jobs={dashboard.jobs || []} />);
   }
+  renderAgentsPanel(dashboard);
   renderPrdHistory(dashboard);
 }
 
@@ -1875,6 +1878,14 @@ function renderProjectMain(dashboard: DashboardSummary) {
       <QueuedPrdDetail prd={selectedPrd} />
     );
   }
+}
+
+function renderAgentsPanel(dashboard: DashboardSummary) {
+  if (entranceContext.entrance !== 'project' || !agentsPanelContentEl) {
+    return;
+  }
+  const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
+  agentsPanelContentEl.innerHTML = renderToHtml(<ProjectAgentsPanel repo={repo} />);
 }
 
 function renderPrdHistory(dashboard: DashboardSummary) {
@@ -3484,6 +3495,27 @@ function shouldShowManagerDeployButton(repo: RepoSummary | null) {
   return !access || access.canManage !== false;
 }
 
+function ProjectAgentsPanel({ repo }: { repo: RepoSummary | null }) {
+  if (!repo) {
+    return <div className="list-note">This repo has not registered agent status yet.</div>;
+  }
+
+  return (
+    <>
+      <RepoSection title="Custom Agents">
+        {repo.customAgents && repo.customAgents.length > 0
+          ? repo.customAgents.map((agent) => <CustomAgentCard repo={repo} agent={agent} />)
+          : <div className="list-note">No custom agents configured.</div>}
+      </RepoSection>
+      <RepoSection title="Packaged Agents">
+        {repo.agentStatuses && repo.agentStatuses.length > 0
+          ? repo.agentStatuses.map((agent) => <AgentCard agent={agent} />)
+          : <div className="list-note">No packaged agent status yet.</div>}
+      </RepoSection>
+    </>
+  );
+}
+
 function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
   const updated = repo.updatedAt ? `Updated ${formatTimestamp(repo.updatedAt)}` : 'No status snapshot yet';
   const deployment = repo.deployment || null;
@@ -3546,16 +3578,6 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
             {repo.pullRequestStatuses && repo.pullRequestStatuses.length > 0
               ? repo.pullRequestStatuses.map((pullRequest) => <PullRequestCard pullRequest={pullRequest} />)
               : <div className="list-note">No pull requests awaiting action.</div>}
-          </RepoSection>
-          <RepoSection title="Agents">
-            {repo.agentStatuses && repo.agentStatuses.length > 0
-              ? repo.agentStatuses.map((agent) => <AgentCard agent={agent} />)
-              : <div className="list-note">No agent status yet.</div>}
-          </RepoSection>
-          <RepoSection title="Custom Agents">
-            {repo.customAgents && repo.customAgents.length > 0
-              ? repo.customAgents.map((agent) => <CustomAgentCard repo={repo} agent={agent} />)
-              : <div className="list-note">No custom agents configured.</div>}
           </RepoSection>
         </RepoDisclosure>
         <RepoDisclosure title="Operational diagnostics and controls">
@@ -4672,6 +4694,7 @@ export {
   ManagerRepoCard,
   ChatPrdProposalCard,
   PackageUpdateButton,
+  ProjectAgentsPanel,
   ProjectMainDeployActions,
   ProjectMainProgressActions,
   PrdHistoryDetail,

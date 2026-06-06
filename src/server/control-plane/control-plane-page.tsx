@@ -1222,6 +1222,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
           {isManager ? null : (
             <nav className="tabs" role="tablist" aria-label="Control plane views">
               <button type="button" className="tab-button active" data-tab="main" role="tab" aria-selected="true">Main</button>
+              <button type="button" className="tab-button" data-tab="agents" role="tab" aria-selected="false">Agents</button>
               <button type="button" className="tab-button" data-tab="chat" role="tab" aria-selected="false">Chat</button>
               <button type="button" className="tab-button" data-tab="history" role="tab" aria-selected="false">History</button>
               <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
@@ -1292,6 +1293,18 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                     </div>
                   </article>
                 </div>
+              </section>
+
+              <section id="agents-panel" className="tabs-panel" role="tabpanel">
+                <article className="surface">
+                  <div className="surface-head">
+                    <div>
+                      <h2>Agents</h2>
+                      <p className="muted">Configured custom agents and packaged agent status for this repo.</p>
+                    </div>
+                  </div>
+                  <div id="agents-panel-content" className="section-row" />
+                </article>
               </section>
 
               <section id="chat-panel" className="tabs-panel" role="tabpanel">

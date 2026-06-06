@@ -151,6 +151,20 @@ test('project deploy actions stay hidden for aligned repos without pending chang
   assert.doesNotMatch(projectMainHtml, /Deploy dev to main/);
 });
 
+test('project shell exposes a dedicated agents tab and panel', async () => {
+  const page = await import(`../../src/server/control-plane/control-plane-page.js?project-agents-tab=${Date.now()}`);
+
+  const html = renderToHtml(h(page.ControlPlanePage as any, {
+    entrance: 'project',
+    repoId: 'alpha',
+  }));
+
+  assert.match(html, /data-tab="agents"/);
+  assert.match(html, />Agents</);
+  assert.match(html, /id="agents-panel"/);
+  assert.match(html, /id="agents-panel-content"/);
+});
+
 test('project repo card hides operational diagnostics behind labeled disclosures', async () => {
   installBrowserStubs();
   const client = await import(`../../src/server/control-plane/control-plane-client.js?project-summary=${Date.now()}`);
@@ -158,8 +172,7 @@ test('project repo card hides operational diagnostics behind labeled disclosures
     outputs: {},
   });
 
-  const html = renderToHtml(h(client.ProjectRepoCard as any, {
-    repo: {
+  const repo = {
       repoId: 'alpha',
       label: 'Alpha',
       activePrd: {
@@ -260,8 +273,9 @@ test('project repo card hides operational diagnostics behind labeled disclosures
           },
         },
       ],
-    },
-  }));
+    };
+  const html = renderToHtml(h(client.ProjectRepoCard as any, { repo }));
+  const agentsHtml = renderToHtml(h(client.ProjectAgentsPanel as any, { repo }));
 
   assert.match(html, /Current Work/);
   assert.match(html, /Open pull request #42/);
@@ -271,12 +285,16 @@ test('project repo card hides operational diagnostics behind labeled disclosures
   assert.match(html, /GitHub repo access denied/);
   assert.match(html, /Update package/);
   assert.match(html, /Restart failed/);
-  assert.match(html, /Custom Agents/);
-  assert.match(html, /feedback-bot/);
-  assert.match(html, /enabled from UI override/);
-  assert.match(html, /data-action="custom-agent-toggle"/);
-  assert.match(html, /data-runtime-key="feedback-bot:project"/);
-  assert.match(html, />Enable</);
+  assert.doesNotMatch(html, /Custom Agents/);
+  assert.doesNotMatch(html, /feedback-bot/);
+  assert.match(agentsHtml, /Custom Agents/);
+  assert.match(agentsHtml, /Packaged Agents/);
+  assert.match(agentsHtml, /feedback-bot/);
+  assert.match(agentsHtml, /architecture-agent/);
+  assert.match(agentsHtml, /enabled from UI override/);
+  assert.match(agentsHtml, /data-action="custom-agent-toggle"/);
+  assert.match(agentsHtml, /data-runtime-key="feedback-bot:project"/);
+  assert.match(agentsHtml, />Enable</);
 });
 
 function installBrowserStubs() {
