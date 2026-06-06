@@ -8,6 +8,13 @@
     "Repair Autonomy queue/PRD reconciliation so merged active PRDs do not block queued PRD promotion.",
     "Keep the fix in autonomy-v2 infrastructure; do not change moving-game product UI behavior."
   ],
+  "archive": {
+    "kind": "reset",
+    "status": "abandoned",
+    "archivedAt": "2026-06-06T13:50:44.094Z",
+    "fromStatus": "planned",
+    "actor": "manager"
+  },
   "tasks": [
     {
       "id": "pressure-unblock-queue-promotion-stale-active-architecture-agent-1",

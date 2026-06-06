@@ -5103,33 +5103,6 @@
       },
       "implementationConversationId": "019df6d9-b0ee-7b51-87f0-b10ffb0c51ce",
       "commitSha": "7a3bbd68284bdb542338fae3e0d8fd36038a3ecd"
-    },
-    {
-      "id": "pressure-unblock-queue-promotion-stale-active-architecture-agent-1",
-      "title": "Repair stale active PRD reconciliation and queued PRD promotion",
-      "description": "Fix the Autonomy V2 scheduler/reconciler path that derives active PRD state from repo-local PRD specs, PRD state files, implementation/review queues, merged task records, and git/GitHub evidence. A PRD whose implementation/review work has merged into the configured integration branch `dev` must not remain exposed as planned/active solely because `prompts/autonomous/v2/specs/prd-state/<prd>.json` is stale. After reconciling the completed active PRD, the system should archive or mark it complete using existing conventions and allow the next queued PRD to be promoted into the normal PM planning flow. Likely touch points include `src/sync/`, `src/autonomy-v2/commands/`, `src/autonomy-v2/control-plane/`, and scheduler/status code that reads `prompts/autonomous/v2/specs/prds`, `prompts/autonomous/v2/specs/prd-state`, `prompts/autonomous/v2/queues`, review queues, and merged task records.",
-      "agentId": "architecture-agent",
-      "prdId": "pressure-unblock-queue-promotion-stale-active",
-      "laneKey": "pressure-unblock-queue-promotion-stale-active:architecture-agent",
-      "type": "implementation",
-      "source": "planned",
-      "sprintId": "multi-agent-mvp",
-      "baseBranch": "dev",
-      "checks": [
-        "npm run typecheck"
-      ],
-      "acceptance": [
-        "A focused stale-active fixture or simulation with an active PRD spec, stale `prd-state` value `planned`, evidence that the associated implementation/review work has merged into `dev`, empty PM/implementation/reviewer queues, and at least one queued PRD no longer reports the merged PRD as the sole planned active PRD after reconciliation.",
-        "The reconciliation path archives the merged active PRD or marks it complete using the repo's existing durable conventions, and it does so idempotently across repeated scheduler/status evaluations.",
-        "After the stale merged PRD is completed, the next queued PRD is promoted or PM planning is queued through the existing normal path; later queued PRDs are not skipped or duplicated in the same evaluation cycle.",
-        "Control-plane status for the stale-active condition no longer shows idle PM, implementation, and reviewer lanes while queued PRDs exist and no queue work is present.",
-        "The fix is implemented in `autonomy-v2` infrastructure code only and does not modify Moving Game product UI files or target `main`/`master` automation.",
-        "Verification includes a focused reconciliation/status unit test or equivalent local simulation for the stale active merged PRD case, plus `npm run typecheck`."
-      ],
-      "state": "queued",
-      "status": "queued",
-      "createdAt": "2026-05-19T22:51:20.325Z",
-      "updatedAt": "2026-05-19T22:51:20.325Z"
     }
   ]
 }
