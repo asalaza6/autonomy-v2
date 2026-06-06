@@ -5126,10 +5126,41 @@
         "The fix is implemented in `autonomy-v2` infrastructure code only and does not modify Moving Game product UI files or target `main`/`master` automation.",
         "Verification includes a focused reconciliation/status unit test or equivalent local simulation for the stale active merged PRD case, plus `npm run typecheck`."
       ],
-      "state": "queued",
-      "status": "queued",
+      "state": "done",
+      "status": "done",
       "createdAt": "2026-05-19T22:51:20.325Z",
-      "updatedAt": "2026-05-19T22:51:20.325Z"
+      "updatedAt": "2026-05-19T23:02:21.131Z",
+      "branch": "agent/multi-agent-mvp/architecture-agent/pressure-unblock-queue-promotion-stale-active-architecture-agent",
+      "startedAt": "2026-05-19T22:51:39.862Z",
+      "completedAt": "2026-05-19T23:02:21.056Z",
+      "completionMode": "code",
+      "commitSha": "e709c84a02fe1d4599d534698db98fe6c11809b6"
+    },
+    {
+      "id": "architecture-agent-followup-pr-pressure-unblock-queue-promotion-stale-active-architecture-agent-1",
+      "title": "Address review for [architecture-agent] Repair stale active PRD reconciliation and queued PRD promotion",
+      "description": "Required wrapper checks passed (`npm run typecheck`, `npm run lint`) and the merge-tree against `origin/dev` is clean, but the new archive gate can complete an active PRD without merged-into-dev evidence.\nBlocking correctness issue in src/sync/syncer.ts:214-217: `archiveCompletedActivePrdSpecs` treats every linked PR satisfying `isPullRequestResolved` as completion evidence. `isPullRequestResolved` returns true for both `merged` and plain `closed` PRs (src/sync/review-reconciliation.ts:129-131), so a stale active PRD with a closed-unmerged implementation PR would be archived and unblock queued PRD promotion even though the work did not merge into `dev`. Tighten this gate to require merged/applied evidence for PR-linked active PRDs, and add a focused negative test covering closed-unmerged PR evidence so the stale-active path only archives merged/completed work.",
+      "agentId": "architecture-agent",
+      "prdId": "pressure-unblock-queue-promotion-stale-active",
+      "laneKey": "pressure-unblock-queue-promotion-stale-active:architecture-agent",
+      "type": "review_followup",
+      "source": "review_followup",
+      "sprintId": "multi-agent-mvp",
+      "baseBranch": "dev",
+      "checks": [],
+      "acceptance": [
+        "Required wrapper checks passed (`npm run typecheck`, `npm run lint`) and the merge-tree against `origin/dev` is clean, but the new archive gate can complete an active PRD without merged-into-dev evidence.\nBlocking correctness issue in src/sync/syncer.ts:214-217: `archiveCompletedActivePrdSpecs` treats every linked PR satisfying `isPullRequestResolved` as completion evidence. `isPullRequestResolved` returns true for both `merged` and plain `closed` PRs (src/sync/review-reconciliation.ts:129-131), so a stale active PRD with a closed-unmerged implementation PR would be archived and unblock queued PRD promotion even though the work did not merge into `dev`. Tighten this gate to require merged/applied evidence for PR-linked active PRDs, and add a focused negative test covering closed-unmerged PR evidence so the stale-active path only archives merged/completed work."
+      ],
+      "state": "done",
+      "status": "done",
+      "branch": "agent/multi-agent-mvp/architecture-agent/pressure-unblock-queue-promotion-stale-active-architecture-agent",
+      "createdAt": "2026-05-19T23:04:14.825Z",
+      "updatedAt": "2026-05-19T23:08:43.716Z",
+      "startedAt": "2026-05-19T23:04:14.825Z",
+      "prId": "pr-pressure-unblock-queue-promotion-stale-active-architecture-agent",
+      "completedAt": "2026-05-19T23:08:43.643Z",
+      "completionMode": "code",
+      "commitSha": "6a620ce94b7f9b4437ab585657401d5fa0fca758"
     }
   ]
 }
