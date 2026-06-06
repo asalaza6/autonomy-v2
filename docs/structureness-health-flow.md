@@ -43,37 +43,36 @@ After one targeted refactor pass, the score moved to:
 - `metrics.layerFlow.skipRatio = 0.6211`
 - `metrics.layerFlow.skipEdges = 177` from `186`
 - `metrics.layerFlow.skipSeverityTotal = 564` from `623`
-- `metrics.hubPressure.bridgeSuspectCount = 29` from `33`
 - `metrics.layerFlow.wrongWayEdges = 0` unchanged
 
-The improvement was real but incremental. That is normal for this analyzer. Large gains usually come from removing repeated skip patterns or collapsing SCCs, not from cosmetic file movement.
+The improvement was real but incremental. That is normal for this analyzer. Large gains usually come from removing wrong-way imports or shrinking SCCs, not from cosmetic file movement.
 
 ## What the score rewards
 
-The weighted score is built from:
+When real files can be measured, the weighted score is built from:
 
-- `layerFlow` at `0.3`
+- `fileSize` at `0.35`
+- `layerFlow` at `0.25`
 - `cycleBurden` at `0.25`
-- `depthBalance` at `0.15`
-- `rootClarity` at `0.1`
-- `hubPressure` at `0.1`
+- `depthBalance` at `0.05`
 - `directoryCoherence` at `0.1`
+
+If the analyzer is reading a saved map whose file paths are not available on disk, `fileSize` gets weight `0` and the older graph-only weights are used.
 
 In practice, the fastest ways to move the score are:
 
+- split files over 800 lines into smaller modules
 - reduce `wrongWayEdges`
-- reduce `skipRatio`
 - reduce `filesInCycles`
 - reduce `largestSccSize`
-- reduce bridge-like modules that connect many directories across many depth bands
-- reduce directory spread where one directory spans multiple depth bands
 
 The analyzer is especially sensitive to:
 
 - wrong-way imports that climb to shallower layers
-- imports that skip one or more depth bands
+- files over 800 lines
+- downward imports that skip one or more depth bands, as an informational signal
 - files that sit inside SCCs
-- bridge suspects with high total degree and wide cross-directory reach
+- same-level imports between peers
 
 ## The loop
 
@@ -92,23 +91,20 @@ Do not optimize blind. The analyzer is already telling you where the graph is ex
 
 Use this order.
 
-1. `wrongWayEdges`
-2. Large SCCs
-3. Repeated skip-heavy bridge modules
+1. Files over 800 lines
+2. `wrongWayEdges`
+3. Large SCCs
 4. Same-level tangles
-5. Directory smearing
 
 If `wrongWayEdges > 0`, fix those first. They are heavily penalized and usually indicate a real architectural regression.
 
 If `wrongWayEdges = 0`, the next highest leverage target is usually one of:
 
 - a large SCC in `topSccs`
-- a bridge module in `topOffenders`
-- a directory with high `depthSpread` in `topDirectories`
 
 ## Patterns that worked in this repo
 
-### 1. Hoist deep dependencies behind local hubs
+### 1. Hoist repeated deep dependencies behind clear boundaries
 
 The first useful pass in this repo was not breaking the biggest SCC directly. It was reducing repeated deep imports from command and runner entrypoints.
 
@@ -117,7 +113,7 @@ That pass introduced:
 - [command-dependencies.ts](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/command-dependencies.ts)
 - [runner-dependencies.ts](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/runner/runner-dependencies.ts)
 
-Then these files were updated to depend on those local hubs instead of directly importing deep modules:
+Then these files were updated to depend on clearer local boundaries instead of directly importing deep modules:
 
 - [pr.ts](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/pr.ts)
 - [gate.ts](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/commands/gate.ts)
@@ -129,21 +125,9 @@ Then these files were updated to depend on those local hubs instead of directly 
 Why this helped:
 
 - it removed repeated layer-skipping imports from high-churn orchestration files
-- it cut bridge pressure in the command and runner surfaces
 - it improved score without introducing wrong-way imports
 
-### 2. Expect hotspot migration
-
-A hub can improve the overall graph while becoming a new local offender itself.
-
-That happened here:
-
-- the command and runner flow files became less expensive
-- [runner-dependencies.ts](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/runner/runner-dependencies.ts) showed up as a new bridge suspect
-
-This is not necessarily bad. It means the graph is becoming more explicit. The next step is to decide whether that hub represents a valid boundary or whether it should be split further.
-
-### 3. Entry-point cleanup is useful but not sufficient
+### 2. Entry-point cleanup is useful but not sufficient
 
 This repo still has a large SCC containing:
 
@@ -173,17 +157,16 @@ Avoid these changes:
 - adding re-export barrels that create new cycles
 - flattening everything into a giant utility module
 - increasing `wrongWayEdges` to reduce skips
-- hiding complexity in a bridge module that now imports half the repo
 
 ## How to read the report
 
-Use `topOffenders` to find individual files that are skip-heavy, cyclic, or bridge-like.
+Use `topOffenders` to find individual files that are cyclic, same-level tangled, or importing upward.
 
 Use `topSccs` to find structural knots. If the same subsystem keeps appearing there, that is often the real architectural constraint.
 
-Use `topDirectories` to find smeared directories. If one directory spans many depth bands, it likely mixes orchestration, state access, and domain logic.
+Use `topDirectories` as diagnostic context only. Directory depth spread is not score drag because shared folders such as `util`, `types`, and `components` may reasonably be used across many levels.
 
-Use `score.components` to see which category is holding the total score down. In this repo, `layerFlow`, `cycleBurden`, and `hubPressure` were the main drag.
+Use `score.components` to see which category is holding the total score down.
 
 ## Plain-English glossary
 
@@ -191,41 +174,27 @@ Use `score.components` to see which category is holding the total score down. In
 
 A file depends on another file several layers away instead of a nearby layer. In general, this means modules are reaching too far across the architecture.
 
+Downward layer-skipping imports are informational rather than direct score drag. They are often normal from screens into shared utilities, constants, API clients, or types. They become more interesting when combined with same-level tangles or wrong-way imports.
+
 `files in cycles`
 
 Files are part of circular dependencies where one module eventually depends back on itself through other modules. In general, this means those files are tangled and harder to separate safely.
-
-`bridge-module behavior`
-
-A module connects many parts of the system that would otherwise be more separate. In general, this means the file is acting like a traffic hub or glue layer.
 
 `largest SCC size`
 
 The size of the biggest circular dependency cluster. In general, this means how large the single worst dependency knot is.
 
-`high max module degree`
-
-One file has a very large number of dependency connections. In general, this means too much architectural traffic is concentrated in one place.
-
-`directory smearing`
-
-Files in the same directory live across very different architecture levels. In general, this means the directory mixes responsibilities instead of representing one coherent layer.
-
-`too many roots for the scope size`
-
-There are many top-level starting points relative to the size of the codebase. In general, this means the system may be fragmented or have too many independent entry surfaces.
-
 `same-level imports`
 
 Files at the same layer depend on each other a lot. In general, this means peer modules are coupled instead of being cleanly separated.
 
-`average directory depth spread`
+`files over 800 lines`
 
-On average, directories cover multiple architecture levels. In general, this means directories are not tightly aligned to a single abstraction level.
+A file is large enough that it should usually be split into smaller modules and imported through clearer boundaries. In general, this means one file is carrying too much responsibility.
 
 ## Guardrails
 
-Do not regress `metrics.layerFlow.wrongWayEdges` just to reduce skip edges.
+Do not regress `metrics.layerFlow.wrongWayEdges` just to reduce skip edges. Downward skips are allowed unless they come with real coupling symptoms.
 
 Do not treat the score as the architecture. A refactor only counts if the code boundary becomes clearer.
 

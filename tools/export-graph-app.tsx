@@ -1,3 +1,4 @@
+/** @jsxRuntime automatic */
 /** @jsxImportSource preact */
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -1444,13 +1445,13 @@ function App({ payload }: { payload: GraphPayload }) {
                       ["file", "File", "The file name for each visible node in the tree."],
                       [
                         "negativeImports",
-                        "NI",
-                        "Negative imports. Counts this file's imports to files at a higher depth number.",
+                        "DI",
+                        "Deep imports. Counts this file's imports to files at a higher depth number.",
                       ],
                       [
                         "negativeExports",
-                        "NE",
-                        "Negative exports. Counts lower-depth files that import this file from above.",
+                        "SI",
+                        "Shallow importers. Counts lower-depth files that import this file from above.",
                       ],
                       ["balance", "B", "Balanced links. Counts imports from files at the same depth."],
                     ] as const

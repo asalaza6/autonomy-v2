@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -112,7 +113,7 @@ test('overloaded depth graph surfaces a wide band and directory spread', async (
   assert.equal(sharedDirectory.depthSpread, 2);
 });
 
-test('bridge hub graph raises skip ratio and bridge suspicion', async () => {
+test('broad connectivity is informational instead of score drag', async () => {
   const { buildStructuralHealthReport } = await loadAnalyzer();
   const report = buildStructuralHealthReport(loadTreeFixture('bridge-hub'), {
     rootFileId: 'all',
@@ -121,9 +122,26 @@ test('bridge hub graph raises skip ratio and bridge suspicion', async () => {
 
   assert.equal(report.metrics.layerFlow.skipEdges, 1);
   assert.ok(report.metrics.layerFlow.skipRatio > 0);
-  assert.equal(report.metrics.hubPressure.bridgeSuspectCount, 1);
-  assert.equal(report.topOffenders[0].file, 'src/feature/hub.ts');
-  assert.match(report.topOffenders[0].reasons.join(' '), /bridges 5 directories/);
+  assert.equal('hubPressure' in report.metrics, false);
+  assert.equal('hubPressure' in report.score.components, false);
+  assert.equal(report.topOffenders.length, 0);
+});
+
+test('downward layer skips are informational instead of score drag', async () => {
+  const { buildStructuralHealthReport } = await loadAnalyzer();
+  const report = buildStructuralHealthReport(loadTreeFixture('downward-skip'), {
+    rootFileId: 'all',
+    top: 5,
+  });
+
+  assert.equal(report.metrics.layerFlow.wrongWayEdges, 0);
+  assert.equal(report.metrics.layerFlow.skipEdges, 1);
+  assert.equal(report.score.components.layerFlow, 100);
+  assert.equal(
+    report.score.drag.byCause.some((entry: { key: string }) => entry.key === 'layerFlow.skipImports'),
+    false
+  );
+  assert.equal(report.topOffenders.length, 0);
 });
 
 test('wrong-way imports are counted only when imports climb to shallower layers', async () => {
@@ -137,6 +155,61 @@ test('wrong-way imports are counted only when imports climb to shallower layers'
   assert.equal(report.metrics.layerFlow.wrongWaySeverityTotal, 2);
   assert.equal(report.metrics.layerFlow.skipEdges, 0);
   assert.equal(report.topOffenders[0].file, 'src/domain/model.ts');
+});
+
+test('files over the line limit reduce the health score', async () => {
+  const { buildStructuralHealthReport } = await loadAnalyzer();
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'structureness-lines-'));
+  try {
+    const smallFile = path.join(tempRoot, 'index.ts');
+    const largeFile = path.join(tempRoot, 'large.ts');
+    fs.writeFileSync(smallFile, 'import "./large";\n');
+    fs.writeFileSync(largeFile, 'a\nb\nc\nd\ne\nf\n');
+
+    const report = buildStructuralHealthReport(
+      {
+        files: [
+          {
+            id: 'node_1',
+            path: smallFile,
+            label: 'index.ts',
+            relative: 'src/index.ts',
+            directory: 'src',
+            imports: [largeFile],
+          },
+          {
+            id: 'node_2',
+            path: largeFile,
+            label: 'large.ts',
+            relative: 'src/large.ts',
+            directory: 'src',
+            imports: [],
+          },
+        ],
+        edges: [{ source: 'node_1', target: 'node_2' }],
+        roots: ['node_1'],
+      },
+      {
+        rootFileId: 'all',
+        maxLines: 5,
+        top: 5,
+      }
+    );
+
+    assert.equal(report.metrics.fileSize.maxLines, 5);
+    assert.equal(report.metrics.fileSize.measuredFiles, 2);
+    assert.equal(report.metrics.fileSize.oversizedFileCount, 1);
+    assert.equal(report.metrics.fileSize.maxLineCount, 6);
+    assert.equal(report.topLargeFiles[0].file, 'src/large.ts');
+    assert.equal(report.topLargeFiles[0].lineOverage, 1);
+    assert.ok(report.score.components.fileSize < 100);
+    assert.equal(report.score.weights.fileSize, 0.35);
+    assert.ok(report.score.drag.byCause.some(
+      (entry: { key: string }) => entry.key === 'fileSize.oversizedFiles'
+    ));
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('health text output is stable for a small cyclic export-map fixture', () => {
@@ -155,24 +228,21 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
 
   assert.equal(output, [
     'Structureness Health (all)',
-    'Score: 65.75/100',
+    'Score: 70.63/100',
     '4 files, 4 graph edges, 4 import edges',
     '1 SCCs, max depth 2, 1 roots',
     '',
     'Strengths',
     '- Layer direction is mostly consistent across imports.',
-    '- Directories stay within tight depth bands.',
     '',
     'Penalties',
     '- 50.0% of files sit inside SCCs.',
     '',
     'Score Drag',
-    '- Total points lost vs 100: 34.25',
+    '- Total points lost vs 100: 29.37',
     '- files in cycles: -15 points (Cycle burden; 2 files, ratio 50.0%)',
     '- largest SCC size: -10 points (Cycle burden; largest SCC 2, ratio 50.0%)',
-    '- high max module degree: -3.75 points (Hub pressure; max total degree 3)',
-    '- same-level imports: -3.75 points (Layer flow; 2 edges, ratio 50.0%)',
-    '- too many roots for the scope size: -1.75 points (Root clarity; 1 roots across 4 files)',
+    '- same-level imports: -4.375 points (Layer flow; 2 edges, ratio 50.0%)',
     '',
     'Top Offenders',
     '- src/domain/a.ts (D1, severity 3.5): cycle cluster of 2 files',
@@ -192,10 +262,9 @@ test('health text output is stable for a small cyclic export-map fixture', () =>
     '- src/shared: 1 files, depth 2-2, median 2, spread 0, cross-dir wrong-way 0.0%',
     '',
     'Metric Summary',
-    '- Layer flow: 0 wrong-way, 0 skips, 2 same-level',
+    '- Layer flow: 0 wrong-way, 0 downward skips, 2 same-level',
     '- Cycle burden: 2 files in cycles, largest SCC 2',
     '- Root clarity: 1 roots',
-    '- Hub pressure: 0 bridge suspects',
   ].join('\n'));
 });
 
@@ -215,8 +284,8 @@ test('health threshold emits an explicit fail message when the score misses the 
     '3',
   ]);
 
-  assert.match(output, /Score: 65.75\/100/);
-  assert.match(output, /FAIL: score 65.75 is below threshold 80\./);
+  assert.match(output, /Score: 70.63\/100/);
+  assert.match(output, /FAIL: score 70.63 is below threshold 80\./);
 });
 
 test('health score-only text output prints only score and status', () => {
@@ -232,8 +301,8 @@ test('health score-only text output prints only score and status', () => {
 
   assert.equal(output, [
     'Structureness Health (all)',
-    'Score: 65.75/100',
-    'FAIL: score 65.75 is below threshold 80.',
+    'Score: 70.63/100',
+    'FAIL: score 70.63 is below threshold 80.',
   ].join('\n'));
 });
 
@@ -251,10 +320,10 @@ test('health score-only json output prints only score fields', () => {
   ]));
 
   assert.deepEqual(output, {
-    score: 65.75,
+    score: 70.63,
     threshold: 80,
     passed: false,
-    message: 'FAIL: score 65.75 is below threshold 80.',
+    message: 'FAIL: score 70.63 is below threshold 80.',
   });
 });
 
@@ -274,21 +343,27 @@ test('health json output matches the report shape', () => {
   const report = JSON.parse(output);
 
   assert.equal(report.scope.fileCount, 4);
-  assert.equal(report.score.value, 65.75);
+  assert.equal(report.score.value, 70.63);
   assert.equal(report.score.threshold, null);
   assert.equal(report.score.passed, null);
   assert.equal(report.score.message, null);
-  assert.equal(report.score.drag.totalPointsLost, 34.25);
+  assert.equal(report.score.drag.totalPointsLost, 29.37);
   assert.equal(report.score.drag.byComponent[0].key, 'cycleBurden');
   assert.equal(report.score.drag.byComponent[0].pointsLost, 25);
   assert.equal(report.score.drag.byCause[0].key, 'cycleBurden.filesInCycles');
   assert.equal(report.score.drag.byCause[0].pointsLost, 15);
+  assert.equal(report.score.components.fileSize, 100);
+  assert.equal(report.score.weights.fileSize, 0);
   assert.equal(report.score.components.layerFlow, 87.5);
   assert.equal(report.score.components.depthBalance, 100);
+  assert.ok(report.metrics.fileSize);
+  assert.equal(report.metrics.fileSize.maxLines, 800);
+  assert.equal(report.metrics.fileSize.measuredFiles, 0);
   assert.ok(report.metrics.layerFlow);
   assert.ok(report.metrics.cycleBurden);
   assert.ok(Array.isArray(report.findings.strengths));
   assert.ok(Array.isArray(report.topOffenders));
+  assert.ok(Array.isArray(report.topLargeFiles));
   assert.ok(Array.isArray(report.topDirectories));
   assert.ok(Array.isArray(report.topSccs));
   assert.ok(Array.isArray(report.histograms.depth));

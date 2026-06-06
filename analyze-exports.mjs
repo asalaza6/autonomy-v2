@@ -1,3 +1,4 @@
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -5,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { Project } from "ts-morph";
 
 const DEFAULT_TSCONFIG = "tsconfig.json";
+const DEFAULT_MAX_LINES = 800;
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const EXPORT_GRAPH_FRONTEND_ENTRY = path.join(
   SCRIPT_DIR,
@@ -29,6 +31,7 @@ function parseArgs(argv) {
     focus: null,
     layout: "LR",
     top: 10,
+    maxLines: DEFAULT_MAX_LINES,
     tree: false,
   };
 
@@ -85,6 +88,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (arg === "--max-lines") {
+      options.maxLines = Number.parseInt(requireValue(argv, ++index, arg), 10);
+      continue;
+    }
+
     if (arg === "--relative-to") {
       options.relativeTo = requireValue(argv, ++index, arg);
       continue;
@@ -124,6 +132,10 @@ function parseArgs(argv) {
 
   if (!Number.isInteger(options.top) || options.top <= 0) {
     throw new Error("--top must be a positive integer");
+  }
+
+  if (!Number.isInteger(options.maxLines) || options.maxLines <= 0) {
+    throw new Error("--max-lines must be a positive integer");
   }
 
   if (
@@ -172,6 +184,7 @@ Options:
   --root <fileId|all>               Scope tree/health analysis to one root. Default: all
   --threshold <0-100>               Optional health score threshold for pass/fail messaging
   --top <n>                         Number of offenders/SCCs/directories to print. Default: 10
+  --max-lines <n>                   Max lines per file for health scoring. Default: 800
   --tsconfig <file>                 tsconfig to analyze when --input is not used
   --relative-to <dir>               Base directory for graph labels. Default: cwd
   --focus <text>                    Keep only exports matching the symbol or path substring
@@ -866,6 +879,63 @@ function compareHealthSccs(left, right) {
   );
 }
 
+function isBinaryBuffer(buffer) {
+  for (let index = 0; index < buffer.length; index += 1) {
+    if (buffer[index] === 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function countLines(buffer) {
+  if (buffer.length === 0) {
+    return 0;
+  }
+
+  let lines = 0;
+
+  for (let index = 0; index < buffer.length; index += 1) {
+    const byte = buffer[index];
+    const nextByte = buffer[index + 1];
+
+    if (byte === 10) {
+      lines += 1;
+      continue;
+    }
+
+    if (byte === 13 && nextByte !== 10) {
+      lines += 1;
+    }
+  }
+
+  const lastByte = buffer[buffer.length - 1];
+  if (lastByte !== 10 && lastByte !== 13) {
+    lines += 1;
+  }
+
+  return lines;
+}
+
+function measureFileLineCount(filePath) {
+  try {
+    const stats = fsSync.statSync(filePath, { throwIfNoEntry: false });
+    if (!stats?.isFile()) {
+      return null;
+    }
+
+    const buffer = fsSync.readFileSync(filePath);
+    if (isBinaryBuffer(buffer)) {
+      return null;
+    }
+
+    return countLines(buffer);
+  } catch {
+    return null;
+  }
+}
+
 function buildStructuralHealthReport(treePayload, options = {}) {
   if (!treePayload) {
     throw new Error("Tree payload is required for health analysis.");
@@ -873,6 +943,10 @@ function buildStructuralHealthReport(treePayload, options = {}) {
 
   const rootFileId = options.rootFileId ?? "all";
   const top = Number.isInteger(options.top) && options.top > 0 ? options.top : 10;
+  const maxLines =
+    Number.isInteger(options.maxLines) && options.maxLines > 0
+      ? options.maxLines
+      : DEFAULT_MAX_LINES;
   const threshold = Number.isFinite(options.threshold) ? options.threshold : null;
   const { fileById, filteredEdges, selectedRootId, visibleFiles } = buildVisibleTreeGraph(
     treePayload.files,
@@ -885,6 +959,17 @@ function buildStructuralHealthReport(treePayload, options = {}) {
   const visibleFileEntries = Array.from(visibleFiles)
     .map((fileId) => fileById.get(fileId))
     .filter(Boolean);
+  const lineStatsByFile = new Map();
+  visibleFileEntries.forEach((file) => {
+    const lineCount = measureFileLineCount(file.path);
+    if (lineCount === null) {
+      return;
+    }
+    lineStatsByFile.set(file.id, {
+      lineCount,
+      lineOverage: Math.max(0, lineCount - maxLines),
+    });
+  });
   const fileStats = new Map();
   const directoryStats = new Map();
   const componentSizeByFile = new Map();
@@ -896,12 +981,18 @@ function buildStructuralHealthReport(treePayload, options = {}) {
 
   visibleFileEntries.forEach((file) => {
     const depth = condensed.levelByFile.get(file.id) ?? 0;
+    const lineStats = lineStatsByFile.get(file.id) ?? {
+      lineCount: null,
+      lineOverage: 0,
+    };
     fileStats.set(file.id, {
       id: file.id,
       path: file.path,
       file: file.relative,
       directory: file.directory,
       depth,
+      lineCount: lineStats.lineCount,
+      lineOverage: lineStats.lineOverage,
       inDegree: 0,
       outDegree: 0,
       totalDegree: 0,
@@ -911,8 +1002,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       skipOutgoing: 0,
       skipSeverity: 0,
       sameLevelEdges: 0,
-      neighborDepths: new Set(),
-      neighborDirectories: new Set(),
       cycleSize: componentSizeByFile.get(file.id) ?? 1,
       foundationalPurityViolations: 0,
     });
@@ -936,10 +1025,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
 
     sourceStats.outDegree += 1;
     targetStats.inDegree += 1;
-    sourceStats.neighborDepths.add(targetStats.depth);
-    targetStats.neighborDepths.add(sourceStats.depth);
-    sourceStats.neighborDirectories.add(targetStats.directory);
-    targetStats.neighborDirectories.add(sourceStats.directory);
 
     const delta = targetStats.depth - sourceStats.depth;
     if (delta < 0) {
@@ -965,16 +1050,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
 
   fileStats.forEach((entry) => {
     entry.totalDegree = entry.inDegree + entry.outDegree;
-    const depthNeighbors = Array.from(entry.neighborDepths);
-    const neighborDepthSpan =
-      depthNeighbors.length > 0
-        ? Math.max(...depthNeighbors) - Math.min(...depthNeighbors)
-        : 0;
-    const bridgeSuspicion =
-      entry.totalDegree >= 4 && neighborDepthSpan >= 2 && entry.neighborDirectories.size >= 3;
-    entry.bridgeSuspicion = bridgeSuspicion;
-    entry.bridgeSpan = neighborDepthSpan;
-    entry.neighborDirectoryCount = entry.neighborDirectories.size;
 
     const foundationalHint = /(^|\/)(shared|types|constants|core|util|utils)(\/|\.|$)/i.test(
       entry.file
@@ -986,11 +1061,8 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     entry.severity =
       entry.wrongWayOutgoing * 4 +
       entry.wrongWayIncoming * 2 +
-      entry.skipSeverity * 2 +
       entry.sameLevelEdges * 0.5 +
-      Math.max(0, entry.totalDegree - 3) * 0.5 +
       (entry.cycleSize > 1 ? entry.cycleSize * 1.5 : 0) +
-      (entry.bridgeSuspicion ? 4 + entry.bridgeSpan + entry.neighborDirectoryCount * 0.5 : 0) +
       entry.foundationalPurityViolations * 2;
 
     const directoryEntry =
@@ -1077,18 +1149,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     0
   );
 
-  const topHubs = Array.from(fileStats.values())
-    .slice()
-    .sort((left, right) => right.totalDegree - left.totalDegree || left.path.localeCompare(right.path))
-    .slice(0, top)
-    .map((entry) => ({
-      path: entry.path,
-      file: entry.file,
-      totalDegree: entry.totalDegree,
-      inDegree: entry.inDegree,
-      outDegree: entry.outDegree,
-    }));
-
   const directorySummaries = Array.from(directoryStats.values())
     .map((entry) => {
       const minDepth = Math.min(...entry.depths);
@@ -1125,12 +1185,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       if (entry.wrongWayOutgoing > 0) {
         reasons.push(`${entry.wrongWayOutgoing} wrong-way imports`);
       }
-      if (entry.skipOutgoing > 0) {
-        reasons.push(`${entry.skipOutgoing} layer-skipping imports`);
-      }
-      if (entry.bridgeSuspicion) {
-        reasons.push(`bridges ${entry.neighborDirectoryCount} directories across ${entry.bridgeSpan} depth bands`);
-      }
       if (entry.foundationalPurityViolations > 0) {
         reasons.push("foundational purity violation");
       }
@@ -1152,9 +1206,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
           sameLevelEdges: entry.sameLevelEdges,
           totalDegree: entry.totalDegree,
           cycleSize: entry.cycleSize,
-          bridgeSuspicion: entry.bridgeSuspicion,
-          neighborDirectoryCount: entry.neighborDirectoryCount,
-          bridgeSpan: entry.bridgeSpan,
         },
       };
     })
@@ -1177,7 +1228,55 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     .sort(compareHealthSccs)
     .slice(0, top);
 
+  const measuredLineStats = Array.from(fileStats.values()).filter(
+    (entry) => entry.lineCount !== null
+  );
+  const oversizedLineStats = measuredLineStats.filter((entry) => entry.lineOverage > 0);
+  const maxLineCount = measuredLineStats.reduce(
+    (max, entry) => Math.max(max, entry.lineCount ?? 0),
+    0
+  );
+  const maxLineOverage = Math.max(0, maxLineCount - maxLines);
+  const totalLineOverage = oversizedLineStats.reduce(
+    (sum, entry) => sum + entry.lineOverage,
+    0
+  );
+  const topLargeFiles = oversizedLineStats
+    .slice()
+    .sort(
+      (left, right) =>
+        right.lineCount - left.lineCount ||
+        right.lineOverage - left.lineOverage ||
+        left.file.localeCompare(right.file)
+    )
+    .slice(0, top)
+    .map((entry) => ({
+      path: entry.path,
+      file: entry.file,
+      directory: entry.directory,
+      depth: entry.depth,
+      lineCount: entry.lineCount,
+      lineOverage: entry.lineOverage,
+    }));
+
   const metrics = {
+    fileSize: {
+      maxLines,
+      measuredFiles: measuredLineStats.length,
+      unmeasuredFiles: visibleFileEntries.length - measuredLineStats.length,
+      oversizedFileCount: oversizedLineStats.length,
+      oversizedFileRatio: roundMetric(
+        ratio(oversizedLineStats.length, measuredLineStats.length)
+      ),
+      maxLineCount,
+      maxLineOverage,
+      maxLineOverageRatio: roundMetric(ratio(maxLineOverage, maxLines)),
+      totalLineOverage,
+      averageLineOverage: roundMetric(ratio(totalLineOverage, measuredLineStats.length)),
+      averageLineOverageRatio: roundMetric(
+        ratio(totalLineOverage, measuredLineStats.length * maxLines)
+      ),
+    },
     layerFlow: {
       totalEdges: visibleImportEdges.length,
       wrongWayEdges: repoMetrics.wrongWayEdges,
@@ -1219,12 +1318,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       topRootFanoutRatio: roundMetric(ratio(topRootFanout, totalRootFanout)),
       totalRootFanout,
     },
-    hubPressure: {
-      maxInDegree: topHubs[0]?.inDegree ?? 0,
-      maxOutDegree: topHubs[0]?.outDegree ?? 0,
-      maxTotalDegree: topHubs[0]?.totalDegree ?? 0,
-      bridgeSuspectCount: Array.from(fileStats.values()).filter((entry) => entry.bridgeSuspicion).length,
-    },
     directoryCoherence: {
       directoryCount: directorySummaries.length,
       averageDepthSpread: roundMetric(averageDirectoryDepthSpread),
@@ -1242,28 +1335,17 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     },
   };
 
-  const rootShare = ratio(metrics.rootClarity.rootCount, Math.max(1, visibleFileEntries.length));
-  const bridgeSuspectRatio = ratio(
-    metrics.hubPressure.bridgeSuspectCount,
-    Math.max(1, visibleFileEntries.length)
+  const fileSizeScore = clampMetricScore(
+    metrics.fileSize.measuredFiles === 0
+      ? 100
+      : 100 -
+          metrics.fileSize.oversizedFileRatio * 100 * 1.2 -
+          Math.min(1, metrics.fileSize.averageLineOverageRatio) * 100 * 1.2 -
+          Math.min(1, metrics.fileSize.maxLineOverageRatio) * 100 * 0.8
   );
-  const maxDegreeRatio = ratio(
-    metrics.hubPressure.maxTotalDegree,
-    Math.max(1, visibleFileEntries.length)
-  );
-  const smearedDirectoryRatio = ratio(
-    metrics.directoryCoherence.smearedDirectoryCount,
-    Math.max(1, metrics.directoryCoherence.directoryCount)
-  );
-  const averageDirectorySpreadRatio = ratio(
-    metrics.directoryCoherence.averageDepthSpread,
-    Math.max(1, metrics.depthBalance.maxDepth)
-  );
-
   const layerFlowScore = clampMetricScore(
     100 -
       metrics.layerFlow.wrongWayRatio * 100 * 1.2 -
-      metrics.layerFlow.skipRatio * 100 * 0.6 -
       metrics.layerFlow.sameLevelRatio * 100 * 0.25
   );
   const cycleBurdenScore = clampMetricScore(
@@ -1274,26 +1356,36 @@ function buildStructuralHealthReport(treePayload, options = {}) {
   const depthBalanceScore = clampMetricScore(
     100
   );
-  const rootClarityScore = clampMetricScore(
-    100 - rootShare * 100 * 0.7
-  );
-  const hubPressureScore = clampMetricScore(
-    100 - bridgeSuspectRatio * 100 * 0.8 - maxDegreeRatio * 100 * 0.5
-  );
+  const rootClarityScore = clampMetricScore(100);
   const directoryCoherenceScore = clampMetricScore(
-    100 -
-      smearedDirectoryRatio * 100 * 0.6 -
-      averageDirectorySpreadRatio * 100 * 0.3 -
-      metrics.directoryCoherence.crossDirectoryWrongWayRatio * 100 * 0.5
+    100 - metrics.directoryCoherence.crossDirectoryWrongWayRatio * 100 * 0.5
   );
+  const scoreWeights =
+    metrics.fileSize.measuredFiles > 0
+      ? {
+          fileSize: 0.35,
+          layerFlow: 0.25,
+          cycleBurden: 0.25,
+          depthBalance: 0.05,
+          rootClarity: 0,
+          directoryCoherence: 0.1,
+        }
+      : {
+          fileSize: 0,
+          layerFlow: 0.35,
+          cycleBurden: 0.25,
+          depthBalance: 0.15,
+          rootClarity: 0.1,
+          directoryCoherence: 0.15,
+        };
 
   const weightedScore = clampMetricScore(
-    layerFlowScore * 0.3 +
-      cycleBurdenScore * 0.25 +
-      depthBalanceScore * 0.15 +
-      rootClarityScore * 0.1 +
-      hubPressureScore * 0.1 +
-      directoryCoherenceScore * 0.1
+    fileSizeScore * scoreWeights.fileSize +
+      layerFlowScore * scoreWeights.layerFlow +
+      cycleBurdenScore * scoreWeights.cycleBurden +
+      depthBalanceScore * scoreWeights.depthBalance +
+      rootClarityScore * scoreWeights.rootClarity +
+      directoryCoherenceScore * scoreWeights.directoryCoherence
   );
   const thresholdPassed = threshold === null ? null : weightedScore >= threshold;
   const thresholdMessage =
@@ -1305,9 +1397,35 @@ function buildStructuralHealthReport(treePayload, options = {}) {
 
   const componentDefinitions = [
     {
+      key: "fileSize",
+      label: "File size",
+      weight: scoreWeights.fileSize,
+      score: fileSizeScore,
+      causes: [
+        {
+          key: "oversizedFiles",
+          label: "files over line limit",
+          rawLoss: metrics.fileSize.oversizedFileRatio * 100 * 1.2,
+          signal: `${metrics.fileSize.oversizedFileCount} files over ${metrics.fileSize.maxLines} lines, ratio ${formatPercent(metrics.fileSize.oversizedFileRatio)}`,
+        },
+        {
+          key: "averageLineOverage",
+          label: "average line overage",
+          rawLoss: Math.min(1, metrics.fileSize.averageLineOverageRatio) * 100 * 1.2,
+          signal: `${metrics.fileSize.averageLineOverage} average excess lines per measured file`,
+        },
+        {
+          key: "maxLineOverage",
+          label: "largest file overage",
+          rawLoss: Math.min(1, metrics.fileSize.maxLineOverageRatio) * 100 * 0.8,
+          signal: `${metrics.fileSize.maxLineCount} max lines, ${metrics.fileSize.maxLineOverage} over limit`,
+        },
+      ],
+    },
+    {
       key: "layerFlow",
       label: "Layer flow",
-      weight: 0.3,
+      weight: scoreWeights.layerFlow,
       score: layerFlowScore,
       causes: [
         {
@@ -1315,12 +1433,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
           label: "wrong-way imports",
           rawLoss: metrics.layerFlow.wrongWayRatio * 100 * 1.2,
           signal: `${metrics.layerFlow.wrongWayEdges} edges, ratio ${formatPercent(metrics.layerFlow.wrongWayRatio)}`,
-        },
-        {
-          key: "skipImports",
-          label: "layer-skipping imports",
-          rawLoss: metrics.layerFlow.skipRatio * 100 * 0.6,
-          signal: `${metrics.layerFlow.skipEdges} edges, ratio ${formatPercent(metrics.layerFlow.skipRatio)}`,
         },
         {
           key: "sameLevelImports",
@@ -1333,7 +1445,7 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     {
       key: "cycleBurden",
       label: "Cycle burden",
-      weight: 0.25,
+      weight: scoreWeights.cycleBurden,
       score: cycleBurdenScore,
       causes: [
         {
@@ -1353,62 +1465,23 @@ function buildStructuralHealthReport(treePayload, options = {}) {
     {
       key: "depthBalance",
       label: "Depth balance",
-      weight: 0.15,
+      weight: scoreWeights.depthBalance,
       score: depthBalanceScore,
       causes: [],
     },
     {
       key: "rootClarity",
       label: "Root clarity",
-      weight: 0.1,
+      weight: scoreWeights.rootClarity,
       score: rootClarityScore,
-      causes: [
-        {
-          key: "rootCount",
-          label: "too many roots for the scope size",
-          rawLoss: rootShare * 100 * 0.7,
-          signal: `${metrics.rootClarity.rootCount} roots across ${visibleFileEntries.length} files`,
-        },
-      ],
-    },
-    {
-      key: "hubPressure",
-      label: "Hub pressure",
-      weight: 0.1,
-      score: hubPressureScore,
-      causes: [
-        {
-          key: "bridgeSuspects",
-          label: "bridge-module behavior",
-          rawLoss: bridgeSuspectRatio * 100 * 0.8,
-          signal: `${metrics.hubPressure.bridgeSuspectCount} bridge suspects`,
-        },
-        {
-          key: "maxDegree",
-          label: "high max module degree",
-          rawLoss: maxDegreeRatio * 100 * 0.5,
-          signal: `max total degree ${metrics.hubPressure.maxTotalDegree}`,
-        },
-      ],
+      causes: [],
     },
     {
       key: "directoryCoherence",
       label: "Directory coherence",
-      weight: 0.1,
+      weight: scoreWeights.directoryCoherence,
       score: directoryCoherenceScore,
       causes: [
-        {
-          key: "smearedDirectories",
-          label: "directory smearing",
-          rawLoss: smearedDirectoryRatio * 100 * 0.6,
-          signal: `${metrics.directoryCoherence.smearedDirectoryCount} smeared directories`,
-        },
-        {
-          key: "averageSpread",
-          label: "average directory depth spread",
-          rawLoss: averageDirectorySpreadRatio * 100 * 0.3,
-          signal: `average spread ${metrics.directoryCoherence.averageDepthSpread}`,
-        },
         {
           key: "crossDirectoryWrongWay",
           label: "cross-directory wrong-way imports",
@@ -1461,11 +1534,16 @@ function buildStructuralHealthReport(treePayload, options = {}) {
   if (metrics.depthBalance.activeDepthCount >= 4 && metrics.depthBalance.dominantDepthShare <= 0.35) {
     strengths.push("Depth bands are spread out enough to keep the map readable.");
   }
-  if (metrics.directoryCoherence.smearedDirectoryCount === 0) {
-    strengths.push("Directories stay within tight depth bands.");
+  if (metrics.fileSize.measuredFiles > 0 && metrics.fileSize.oversizedFileCount === 0) {
+    strengths.push(`All measured files are within ${metrics.fileSize.maxLines} lines.`);
   }
 
   const penalties = [];
+  if (metrics.fileSize.oversizedFileCount > 0) {
+    penalties.push(
+      `${metrics.fileSize.oversizedFileCount} files exceed ${metrics.fileSize.maxLines} lines.`
+    );
+  }
   if (metrics.cycleBurden.filesInCyclesRatio > 0.15) {
     penalties.push(
       `${formatPercent(metrics.cycleBurden.filesInCyclesRatio)} of files sit inside SCCs.`
@@ -1474,16 +1552,6 @@ function buildStructuralHealthReport(treePayload, options = {}) {
   if (metrics.layerFlow.wrongWayEdges > 0) {
     penalties.push(
       `${metrics.layerFlow.wrongWayEdges} imports climb back toward shallower layers.`
-    );
-  }
-  if (metrics.layerFlow.skipRatio > 0.15) {
-    penalties.push(
-      `${formatPercent(metrics.layerFlow.skipRatio)} of imports skip one or more depth bands.`
-    );
-  }
-  if (metrics.directoryCoherence.smearedDirectoryCount > 0) {
-    penalties.push(
-      `${metrics.directoryCoherence.smearedDirectoryCount} directories smear across 3+ depth bands.`
     );
   }
   if (
@@ -1524,21 +1592,14 @@ function buildStructuralHealthReport(treePayload, options = {}) {
         byCause: scoreDragByCause,
       },
       components: {
+        fileSize: fileSizeScore,
         layerFlow: layerFlowScore,
         cycleBurden: cycleBurdenScore,
         depthBalance: depthBalanceScore,
         rootClarity: rootClarityScore,
-        hubPressure: hubPressureScore,
         directoryCoherence: directoryCoherenceScore,
       },
-      weights: {
-        layerFlow: 0.3,
-        cycleBurden: 0.25,
-        depthBalance: 0.15,
-        rootClarity: 0.1,
-        hubPressure: 0.1,
-        directoryCoherence: 0.1,
-      },
+      weights: scoreWeights,
     },
     metrics,
     findings: {
@@ -1546,6 +1607,7 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       penalties,
     },
     topOffenders,
+    topLargeFiles,
     topDirectories: directorySummaries.slice(0, top),
     topSccs,
     histograms: {
@@ -1615,6 +1677,16 @@ function formatHealthReportText(report) {
     });
   }
 
+  if (report.topLargeFiles.length > 0) {
+    lines.push("");
+    lines.push("Top Large Files");
+    report.topLargeFiles.forEach((entry) => {
+      lines.push(
+        `- ${entry.file} (D${entry.depth}): ${entry.lineCount} lines, ${entry.lineOverage} over ${report.metrics.fileSize.maxLines}`
+      );
+    });
+  }
+
   lines.push("");
   lines.push("Top SCCs");
   if (report.topSccs.length === 0) {
@@ -1647,17 +1719,19 @@ function formatHealthReportText(report) {
 
   lines.push("");
   lines.push("Metric Summary");
+  if (report.metrics.fileSize.measuredFiles > 0) {
+    lines.push(
+      `- File size: ${report.metrics.fileSize.oversizedFileCount} over ${report.metrics.fileSize.maxLines} lines, max ${report.metrics.fileSize.maxLineCount} lines`
+    );
+  }
   lines.push(
-    `- Layer flow: ${report.metrics.layerFlow.wrongWayEdges} wrong-way, ${report.metrics.layerFlow.skipEdges} skips, ${report.metrics.layerFlow.sameLevelEdges} same-level`
+    `- Layer flow: ${report.metrics.layerFlow.wrongWayEdges} wrong-way, ${report.metrics.layerFlow.skipEdges} downward skips, ${report.metrics.layerFlow.sameLevelEdges} same-level`
   );
   lines.push(
     `- Cycle burden: ${report.metrics.cycleBurden.filesInCycles} files in cycles, largest SCC ${report.metrics.cycleBurden.largestSccSize}`
   );
   lines.push(
     `- Root clarity: ${report.metrics.rootClarity.rootCount} roots`
-  );
-  lines.push(
-    `- Hub pressure: ${report.metrics.hubPressure.bridgeSuspectCount} bridge suspects`
   );
 
   return `${lines.join("\n")}\n`;
@@ -1929,8 +2003,8 @@ function buildReadableGridExport(treePayload, rootFileId = null) {
     columns: [
       { key: "depth", label: "D", name: "Depth" },
       { key: "file", label: "File", name: "File" },
-      { key: "negativeImports", label: "NI", name: "Negative imports" },
-      { key: "negativeExports", label: "NE", name: "Negative exports" },
+      { key: "negativeImports", label: "DI", name: "Deep imports" },
+      { key: "negativeExports", label: "SI", name: "Shallow importers" },
       { key: "balance", label: "B", name: "Balance" },
     ],
     root: rootFile
@@ -2226,11 +2300,12 @@ async function main() {
       : null;
   const healthReport =
     treeGridData && options.format === "health"
-      ? buildStructuralHealthReport(treeGridData, {
-          rootFileId: options.root,
-          threshold: options.threshold,
-          top: options.top,
-        })
+        ? buildStructuralHealthReport(treeGridData, {
+            rootFileId: options.root,
+            threshold: options.threshold,
+            top: options.top,
+            maxLines: options.maxLines,
+          })
       : null;
   const treeGridDataOutputPath =
     options.format === "html" && options.tree && options.output
