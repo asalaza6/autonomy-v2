@@ -16,6 +16,7 @@ import { run as runtimeRun } from './runtime-command.js';
 import { run as deployRun } from './deploy.js';
 import { run as updateRun } from './update.js';
 import { run as refreshRun } from './refresh.js';
+import { run as serverCommandRun } from './server-command.js';
 import type { CliOptions } from '../autonomy-types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
@@ -38,6 +39,10 @@ const COMMAND_HANDLERS = new Map([
   ['runtime:status', runtimeRun],
   ['update', updateRun],
   ['refresh', refreshRun],
+  ['server:start', serverCommandRun],
+  ['server:kill', serverCommandRun],
+  ['server:restart', serverCommandRun],
+  ['server:status', serverCommandRun],
 ]);
 
 async function main(argv: string[] = process.argv.slice(2)) {

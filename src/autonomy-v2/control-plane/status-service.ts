@@ -12,6 +12,7 @@ import { reconcilePullRequestRecord, reconcileReviewTaskRecord } from '../../syn
 import { resolveRepoAssistantGithubCapabilityStatus } from '../../server/control-plane/control-plane-github.js';
 import { loadControlPlaneConfig, readControlPlaneConfig } from '../../server/control-plane/control-plane-config.js';
 import { getManagedProcesses } from '../../server/control-plane/control-plane-store.js';
+import { listConfiguredCustomAgents } from '../../server/orchestrator/custom-agents.js';
 
 function buildStatusSnapshot(rootDir) {
   ensureInitialized(rootDir);
@@ -59,6 +60,7 @@ function buildStatusSnapshot(rootDir) {
     runtime,
     branchLocks,
   });
+  const customAgents = listConfiguredCustomAgents(rootDir, runtime);
   const controlPlaneConfig = readControlPlaneConfig(rootDir);
   const repoAssistant = {
     github: resolveRepoAssistantGithubCapabilityStatus(rootDir, {
@@ -78,6 +80,7 @@ function buildStatusSnapshot(rootDir) {
     blockedBranches: config.blockedBranches || [],
     sprint,
     agents: config.agents || [],
+    customAgents,
     agentStatuses,
     queues,
     taskCounts,

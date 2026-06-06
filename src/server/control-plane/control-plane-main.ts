@@ -19,6 +19,7 @@ import {
   claimJob,
   claimNextJob,
   completeJob,
+  createControlPlaneCustomAgentToggleJob,
   createControlPlaneDeployJob,
   ensureRepoControlAccess,
   createControlPlanePackageUpdateJob,
@@ -473,6 +474,45 @@ async function handleRequest(
         jobId: job.id,
         repoId: job.repoId,
         type: job.type,
+      });
+      sendJson(res, 201, job);
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/custom-agents/toggle') && req.method === 'POST') {
+    const repoId = decodeURIComponent(url.pathname.split('/')[3] || '');
+    try {
+      const body = await readJsonBody(req);
+      const repo = listDiscoveredRepos(rootDir).find((candidate) => String(candidate.repoId || '') === String(body && body.repoId || repoId || '').trim());
+      if (!repo) {
+        throw new Error(`Unknown repo "${String(body && body.repoId || repoId || '').trim()}".`);
+      }
+      const controlAccess = ensureRepoControlAccess(rootDir, repo, readControlSession(req, body));
+      if (!controlAccess.canManage) {
+        sendJson(res, 409, {
+          error: 'This control-panel session is read-only for lifecycle actions on this repo.',
+          controlAccess,
+        });
+        return;
+      }
+      const runtimeKey = String(body && body.runtimeKey || '').trim();
+      if (!runtimeKey) {
+        throw new Error('Missing custom agent runtimeKey.');
+      }
+      const job = enqueueJob(rootDir, createControlPlaneCustomAgentToggleJob({
+        repoId: repo.repoId,
+        runtimeKey,
+        enabled: body && body.enabled === true,
+      }));
+      logControlPlaneEvent('control-plane:job:queued', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type,
+        runtimeKey,
+        enabled: body && body.enabled === true ? 'true' : 'false',
       });
       sendJson(res, 201, job);
     } catch (error) {

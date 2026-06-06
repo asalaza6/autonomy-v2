@@ -92,6 +92,37 @@ type AgentSummary = {
   pid?: number;
 };
 
+type CustomAgentSummary = {
+  runtimeKey?: string;
+  agentId?: string;
+  kind?: string;
+  configSource?: string;
+  configEnabled?: boolean;
+  defaultEnabled?: boolean;
+  enabledOverride?: boolean | null;
+  enabledSource?: string;
+  enabled?: boolean;
+  status?: string;
+  running?: boolean;
+  pid?: number | null;
+  phase?: string | null;
+  target?: Record<string, unknown> | null;
+  workspacePath?: string | null;
+  intervalSeconds?: number | null;
+  offsetSeconds?: number | null;
+  lastPollAt?: string | null;
+  lastDecision?: string | null;
+  lastDecisionReason?: string | null;
+  lastError?: string | null;
+  conversationMode?: string | null;
+  conversationKey?: string | null;
+  conversationId?: string | null;
+  tools?: Record<string, { envPresent?: boolean; authEnv?: string; baseUrl?: string }>;
+  decisionSource?: string | null;
+  lifecycle?: Record<string, unknown>;
+  detail?: string;
+};
+
 type PullRequestSummary = {
   title?: string;
   prId?: string;
@@ -219,6 +250,7 @@ type RepoSummary = {
   queuedPrds?: PrdSummary[];
   prdRun?: PrdRunSummary | null;
   prdHistory?: PrdSummary[];
+  customAgents?: CustomAgentSummary[];
   agentStatuses?: AgentSummary[];
   pullRequestStatuses?: PullRequestSummary[];
   managedProcesses?: Record<string, {
@@ -431,6 +463,7 @@ let resettingPrdRepoIds = new Set<string>();
 let prioritizingPrdKeys = new Set<string>();
 let updatingPackageRepoIds = new Set<string>();
 let restartingRepoIds = new Set<string>();
+let togglingCustomAgentKeys = new Set<string>();
 const CONTROL_SESSION_STORAGE_KEY = 'autonomy.control.session';
 let devUiToken = String(window.__AUTONOMY_CONTROL_PLANE_DEV_TOKEN__ || '');
 let selectedQueuedPrdId = '';
@@ -606,6 +639,22 @@ function mountControlPlane() {
       };
       renderDashboard(latestDashboard);
       renderProjectMain(latestDashboard);
+      return;
+    }
+
+    const customAgentToggleButton = target ? target.closest<HTMLButtonElement>('[data-action="custom-agent-toggle"]') : null;
+    if (customAgentToggleButton) {
+      const repoId = String(customAgentToggleButton.dataset.repoId || entranceContext.repoId || '').trim();
+      const runtimeKey = String(customAgentToggleButton.dataset.runtimeKey || '').trim();
+      const enabled = customAgentToggleButton.dataset.enabled === 'true';
+      if (!repoId || !runtimeKey) {
+        return;
+      }
+      handleCustomAgentToggle(repoId, runtimeKey, enabled).catch((error: unknown) => {
+        if (messageEl) {
+          messageEl.textContent = getErrorMessage(error);
+        }
+      });
       return;
     }
 
@@ -1469,6 +1518,37 @@ async function handleTakeover(repoId: string) {
     const next = new Set(restartingRepoIds);
     next.delete(repoId);
     restartingRepoIds = next;
+  }
+}
+
+async function handleCustomAgentToggle(repoId: string, runtimeKey: string, enabled: boolean) {
+  const key = `${repoId}:${runtimeKey}`;
+  if (!repoId || !runtimeKey || togglingCustomAgentKeys.has(key)) {
+    return;
+  }
+
+  togglingCustomAgentKeys = new Set(togglingCustomAgentKeys).add(key);
+  if (messageEl) {
+    messageEl.textContent = `${enabled ? 'Enabling' : 'Disabling'} custom agent ${runtimeKey} for ${repoId}...`;
+  }
+
+  try {
+    await requestControlAction(`/api/repos/${encodeURIComponent(repoId)}/custom-agents/toggle`, {
+      repoId,
+      runtimeKey,
+      enabled,
+    });
+    await refresh();
+    if (messageEl) {
+      messageEl.textContent = `Custom agent ${runtimeKey} ${enabled ? 'enable' : 'disable'} queued for ${repoId}.`;
+    }
+  } catch (error) {
+    await refresh().catch(() => {});
+    throw error;
+  } finally {
+    const next = new Set(togglingCustomAgentKeys);
+    next.delete(key);
+    togglingCustomAgentKeys = next;
   }
 }
 
@@ -3472,6 +3552,11 @@ function ProjectRepoCard({ repo }: { repo: RepoSummary }) {
               ? repo.agentStatuses.map((agent) => <AgentCard agent={agent} />)
               : <div className="list-note">No agent status yet.</div>}
           </RepoSection>
+          <RepoSection title="Custom Agents">
+            {repo.customAgents && repo.customAgents.length > 0
+              ? repo.customAgents.map((agent) => <CustomAgentCard repo={repo} agent={agent} />)
+              : <div className="list-note">No custom agents configured.</div>}
+          </RepoSection>
         </RepoDisclosure>
         <RepoDisclosure title="Operational diagnostics and controls">
           <RepoSection title="Autonomy v2">
@@ -4187,6 +4272,99 @@ function AgentCard({ agent }: { agent: AgentSummary }) {
       {details ? <div className="agent-detail">{details}</div> : null}
     </div>
   );
+}
+
+function CustomAgentCard({ repo, agent }: { repo: RepoSummary; agent: CustomAgentSummary }) {
+  const repoId = String(repo.repoId || '').trim();
+  const runtimeKey = String(agent.runtimeKey || '').trim();
+  const enabled = agent.enabled !== false;
+  const running = agent.running === true || String(agent.status || '') === 'running';
+  const busy = togglingCustomAgentKeys.has(`${repoId}:${runtimeKey}`);
+  const nextEnabled = !enabled;
+  const statusLabel = running
+    ? 'Running'
+    : enabled
+      ? String(agent.status || 'idle')
+      : 'Disabled';
+  const target = formatCustomAgentTarget(agent.target);
+  const configDetail = [
+    agent.kind ? `kind ${agent.kind}` : '',
+    agent.configSource ? `config ${agent.configSource}` : '',
+    agent.enabledSource === 'runtime' ? 'enabled from UI override' : 'enabled from config default',
+    typeof agent.defaultEnabled === 'boolean' ? `default ${agent.defaultEnabled ? 'enabled' : 'disabled'}` : '',
+  ].filter(Boolean).join(' | ');
+  const runtimeDetail = [
+    target ? `target ${target}` : '',
+    typeof agent.intervalSeconds === 'number' ? `poll ${agent.intervalSeconds}s` : '',
+    typeof agent.offsetSeconds === 'number' ? `offset ${agent.offsetSeconds}s` : '',
+    agent.lastPollAt ? `last poll ${formatTimestamp(agent.lastPollAt)}` : '',
+    agent.pid ? `pid ${agent.pid}` : '',
+    agent.phase ? `phase ${agent.phase}` : '',
+  ].filter(Boolean).join(' | ');
+  const decisionDetail = [
+    agent.decisionSource ? `decision ${agent.decisionSource}` : '',
+    agent.lastDecision ? `last ${agent.lastDecision}` : '',
+    agent.lastDecisionReason || '',
+  ].filter(Boolean).join(' | ');
+  const conversationDetail = [
+    agent.conversationMode ? `conversation ${agent.conversationMode}` : '',
+    agent.conversationKey ? `key ${agent.conversationKey}` : '',
+    agent.conversationId ? `session ${agent.conversationId}` : '',
+  ].filter(Boolean).join(' | ');
+  const toolNames = Object.keys(agent.tools || {}).filter(Boolean);
+  const toolDetail = toolNames.length > 0
+    ? `tools ${toolNames.map((name) => {
+      const tool = agent.tools?.[name] || {};
+      return `${name}${tool.envPresent === false ? ' missing env' : ''}`;
+    }).join(', ')}`
+    : '';
+
+  return (
+    <div className="agent">
+      <div className="agent-head">
+        <div>
+          <div className={`status-chip ${statusClass(enabled ? (running ? 'running' : agent.status || 'idle') : 'disabled')}`}>
+            <span className="status-dot" />
+            <span>{statusLabel}</span>
+          </div>
+          <div className="agent-title">{agent.agentId || runtimeKey || 'custom agent'}</div>
+        </div>
+        <button
+          type="button"
+          className={`secondary deploy-button${busy ? ' is-loading' : ''}`}
+          data-action="custom-agent-toggle"
+          data-repo-id={repoId}
+          data-runtime-key={runtimeKey}
+          data-enabled={nextEnabled ? 'true' : 'false'}
+          disabled={!repoId || !runtimeKey || busy}
+          aria-busy={busy}
+        >
+          {busy ? <span className="deploy-spinner" aria-hidden="true" /> : null}
+          <span>{busy ? 'Queueing...' : enabled ? 'Disable' : 'Enable'}</span>
+        </button>
+      </div>
+      {configDetail ? <div className="agent-detail">{configDetail}</div> : null}
+      {runtimeDetail ? <div className="agent-detail" style={{ marginTop: '6px' }}>{runtimeDetail}</div> : null}
+      {decisionDetail ? <div className="agent-detail" style={{ marginTop: '6px' }}>{decisionDetail}</div> : null}
+      {agent.workspacePath ? <div className="agent-detail" style={{ marginTop: '6px' }}>workspace {agent.workspacePath}</div> : null}
+      {conversationDetail ? <div className="agent-detail" style={{ marginTop: '6px' }}>{conversationDetail}</div> : null}
+      {toolDetail ? <div className="agent-detail" style={{ marginTop: '6px' }}>{toolDetail}</div> : null}
+      {agent.lastError ? <div className="agent-detail" style={{ marginTop: '6px' }}>last error: {agent.lastError}</div> : null}
+      {agent.detail && agent.detail !== decisionDetail ? <div className="agent-detail" style={{ marginTop: '6px' }}>{agent.detail}</div> : null}
+    </div>
+  );
+}
+
+function formatCustomAgentTarget(target: CustomAgentSummary['target']) {
+  if (!target || typeof target !== 'object') {
+    return '';
+  }
+  const type = String(target.type || '').trim();
+  const id = String(target.id || '').trim();
+  if (type && id) {
+    return `${type}:${id}`;
+  }
+  return id || type || JSON.stringify(target);
 }
 
 function PullRequestCard({ pullRequest }: { pullRequest: PullRequestSummary }) {

@@ -216,13 +216,24 @@ cd ../jsvpoolsinc && npm run autonomy:v2:control:dev
 That watch mode runs the sibling `../autonomy-v2/dist` control-plane entrypoint directly, so rebuilding this repo restarts the local control-plane server with your latest changes.
 In `--dev` mode, the browser UI also auto-reloads when the watched control-plane process restarts after a local rebuild.
 
+Server process controls are package-owned, so consumer repos can delegate the tested local restart flow to this package:
+
+```bash
+npx autonomy-v2 server:status
+npx autonomy-v2 server:kill
+npx autonomy-v2 server:start
+npx autonomy-v2 server:restart
+```
+
+These commands use the repo root as their operating directory, track ownership through `.autonomy/server-lock/owner.json`, write restart diagnostics to `.autonomy/runtime/restart-server.log`, and clean up related macOS Terminal tabs when available. The default start command is `npm run autonomy:v2:server`; consumers can override it with `AUTONOMY_RESTART_COMMAND` and `AUTONOMY_RESTART_ARGS`.
+
 ## Happy-path consumer repo setup
 
 For a brand-new consumer repo, the functional happy path is:
 
 1. Install `@asalaza6/autonomy-v2` in the consumer repo.
 2. Run `npx autonomy-v2 init --root .` to scaffold prompts, queues, specs, and runtime bootstrap files.
-3. Add repo-level scripts that wrap `npx autonomy-v2`, `npx autonomy-v2-server`, and `npx autonomy-v2-control`.
+3. Add repo-level scripts that wrap `npx autonomy-v2`, `npx autonomy-v2 server:*`, `npx autonomy-v2-server`, and `npx autonomy-v2-control`.
 4. Commit the tracked `prompts/autonomous/v2/` scaffold into the consumer repo.
 5. Add `.npmrc` when the package is installed from GitHub Packages.
 6. Add `.env.autonomy` with `AUTONOMY_INITIALIZED=1`, `GITHUB_TOKEN`, and `AUTONOMY_CONTROL_PLANE_SERVER_URL`.

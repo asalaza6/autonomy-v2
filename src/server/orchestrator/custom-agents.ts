@@ -1,11 +1,29 @@
 import path from 'path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import type { AnyRecord, RuntimeState } from '../server-types.js';
+import { acquireStateLock } from '../../lock/lock-main.js';
+import { loadRuntime, writeRuntime } from './orchestrator-state.js';
 import { CUSTOM_AGENT_WORKER_PATH } from './orchestrator-constants.js';
 import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
 
 const DEFAULT_INTERVAL_SECONDS = 60;
 const DEFAULT_CONVERSATION_SCOPE = ['server.instanceId', 'agent.id', 'target.id', 'date.local'];
+const DEFAULT_CUSTOM_AGENT_CONTEXT = {
+  globalReadOnly: [
+    'prompts/autonomous/v2/project-context.md',
+    'prompts/autonomous/v2/config/agents.json',
+    'prompts/autonomous/v2/config/control-plane.json',
+    'prompts/autonomous/v2/config/sprint.json',
+    'package.json',
+  ],
+  workspaceReadWrite: [
+    '.autonomy/runtime/custom-lifecycle',
+    '.autonomy/worktrees/shadow-architecture-agent',
+    '.autonomy/worktrees/shadow-reviewer-agent',
+    'prompts/autonomous/v2/specs',
+  ],
+  allowRuntimeStateChanges: true,
+};
 
 function loadCustomAgentConfig(rootDir: string): AnyRecord | null {
   const configs = loadCustomAgentConfigs(rootDir);
@@ -21,13 +39,13 @@ function loadCustomAgentConfigs(rootDir: string): AnyRecord[] {
   }
   return customConfigPaths.map((customConfigPath, index) => {
     const resolvedPath = resolvePathInside(rootDir, customConfigPath, 'spawnCustomAgents');
-    return {
-      ...readJson(resolvedPath, {}),
+    return expandCustomAgentConfig(rootDir, readJson(resolvedPath, {}), {
+      controlPlaneConfig,
       configPath: resolvedPath,
       configSource: customConfigPath,
       configIndex: index,
       configCount: customConfigPaths.length,
-    };
+    });
   });
 }
 
@@ -75,10 +93,17 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
         includeConfigInStatusKey: configs.length > 1,
       });
       const statusKey = getCustomAgentStatusKey(normalizedAgent);
+      const enabledOverride = getCustomAgentEnabledOverride(runtime, statusKey);
+      const agentEnabled = enabledOverride ?? normalizedAgent.enabled;
       const status = ensureCustomAgentStatus(runtime, statusKey, normalizedAgent, enabled);
-      status.enabled = enabled && normalizedAgent.enabled;
+      status.configEnabled = enabled;
+      status.defaultEnabled = normalizedAgent.enabled;
+      status.enabledOverride = enabledOverride;
+      status.enabledSource = typeof enabledOverride === 'boolean' ? 'runtime' : 'config';
+      status.enabled = enabled && agentEnabled;
       status.kind = normalizedAgent.kind;
       status.configPath = normalizedAgent.configPath;
+      status.configSource = normalizedAgent.configSource;
       status.target = normalizedAgent.target;
       status.workspacePath = normalizedAgent.workspacePath;
       status.singletonKey = normalizedAgent.singletonKey;
@@ -87,17 +112,19 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.offsetSeconds = normalizedAgent.offsetSeconds;
       status.tools = buildRuntimeToolStatus(normalizedAgent.tools);
 
-    if (!enabled || !normalizedAgent.enabled) {
+    if (!enabled || !agentEnabled) {
       status.status = 'disabled';
       status.running = false;
       status.lastDecision = 'disabled';
       status.lastDecisionReason = enabled
-        ? 'agent disabled by custom-agent config'
+        ? typeof enabledOverride === 'boolean'
+          ? 'agent disabled by control-plane override'
+          : 'agent disabled by custom-agent config'
         : 'custom-agent config disabled';
       status.lastError = null;
       return;
     }
-    const configError = normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError;
+    const configError = normalizedAgent.presetError || normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError;
     if (configError) {
       status.status = 'blocked';
       status.running = false;
@@ -312,6 +339,159 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
   return { started, pendingSpawnStarts, config: configs[0] || null, configs };
 }
 
+function listConfiguredCustomAgents(rootDir: string, runtime: RuntimeState | null | undefined = null) {
+  const configs = loadCustomAgentConfigs(rootDir);
+  const runtimeState = runtime || { workers: {} };
+  return configs.flatMap((config) => {
+    const enabled = config.enabled !== false;
+    const agents = Array.isArray(config.agents) ? config.agents : [];
+    const context = normalizeContext(rootDir, config.context || {});
+    const agentTools = normalizeAgentTools(config.agentTools || {});
+    return agents.map((agent) => {
+      const normalizedAgent = normalizeAgent(rootDir, agent, context, {
+        config,
+        agentTools,
+        includeConfigInStatusKey: configs.length > 1,
+      });
+      const runtimeKey = getCustomAgentStatusKey(normalizedAgent);
+      const status: AnyRecord = runtimeState.customAgents && runtimeState.customAgents[runtimeKey]
+        ? runtimeState.customAgents[runtimeKey]
+        : {};
+      const enabledOverride = getCustomAgentEnabledOverride(runtimeState, runtimeKey);
+      const agentEnabled = enabledOverride ?? normalizedAgent.enabled;
+      const configError = normalizedAgent.presetError || normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError || null;
+      return {
+        runtimeKey,
+        agentId: normalizedAgent.agentId,
+        kind: normalizedAgent.kind,
+        configPath: normalizedAgent.configPath,
+        configSource: normalizedAgent.configSource,
+        configIndex: config.configIndex,
+        configCount: config.configCount,
+        configEnabled: enabled,
+        defaultEnabled: normalizedAgent.enabled,
+        enabledOverride,
+        enabledSource: typeof enabledOverride === 'boolean' ? 'runtime' : 'config',
+        enabled: enabled && agentEnabled,
+        status: status.status || (enabled && agentEnabled ? 'idle' : 'disabled'),
+        running: status.running === true,
+        pid: status.pid ?? null,
+        phase: status.phase || null,
+        target: normalizedAgent.target,
+        workspacePath: normalizedAgent.workspacePath,
+        singletonKey: normalizedAgent.singletonKey,
+        singletonValue: normalizedAgent.singletonValue,
+        intervalSeconds: normalizedAgent.intervalSeconds,
+        offsetSeconds: normalizedAgent.offsetSeconds,
+        lastPollAt: status.lastPollAt || null,
+        lastDecision: status.lastDecision || null,
+        lastDecisionReason: status.lastDecisionReason || null,
+        lastError: status.lastError || configError,
+        conversationMode: status.conversationMode || normalizedAgent.conversation.mode || null,
+        conversationKey: status.conversationKey || null,
+        conversationScope: status.conversationScope || normalizedAgent.conversation.scope || null,
+        conversationId: status.conversationId || status.lastConversationId || null,
+        tools: status.tools || buildRuntimeToolStatus(normalizedAgent.tools),
+        decisionSource: normalizedAgent.decisionSource,
+        lifecycle: Object.fromEntries(Object.entries(normalizedAgent.lifecycle || {})
+          .filter(([, command]) => Boolean(command))
+          .map(([phase, command]) => [phase, {
+            command: command && typeof command === 'object' ? (command as AnyRecord).displayCommand || (command as AnyRecord).command || true : true,
+          }])),
+        detail: describeConfiguredCustomAgent({
+          status,
+          normalizedAgent,
+          enabled,
+          agentEnabled,
+          enabledOverride,
+          configError,
+        }),
+      };
+    });
+  });
+}
+
+function setCustomAgentEnabledOverride(rootDir: string, runtimeKey: string, enabled: boolean) {
+  const normalizedRuntimeKey = String(runtimeKey || '').trim();
+  if (!normalizedRuntimeKey) {
+    throw new Error('Missing custom agent runtimeKey.');
+  }
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    const knownAgents = listConfiguredCustomAgents(rootDir, runtime);
+    const knownAgent = knownAgents.find((agent) => agent.runtimeKey === normalizedRuntimeKey);
+    if (!knownAgent) {
+      throw new Error(`Unknown custom agent runtimeKey "${normalizedRuntimeKey}".`);
+    }
+    runtime.customAgentEnabledOverrides = {
+      ...(runtime.customAgentEnabledOverrides || {}),
+      [normalizedRuntimeKey]: enabled === true,
+    };
+    runtime.customAgents = runtime.customAgents || {};
+    const previousStatus: AnyRecord = runtime.customAgents[normalizedRuntimeKey] || {};
+    runtime.customAgents[normalizedRuntimeKey] = {
+      agentId: knownAgent.agentId,
+      ...previousStatus,
+      enabledOverride: enabled === true,
+      enabledSource: 'runtime',
+      enabled: knownAgent.configEnabled !== false && enabled === true,
+      status: enabled === true && knownAgent.configEnabled !== false
+        ? previousStatus.running === true ? previousStatus.status || 'running' : 'idle'
+        : 'disabled',
+      running: enabled === true ? previousStatus.running === true : false,
+      updatedAt: new Date().toISOString(),
+      lastDecision: enabled === true ? previousStatus.lastDecision || null : 'disabled',
+      lastDecisionReason: enabled === true
+        ? previousStatus.lastDecisionReason || null
+        : 'agent disabled by control-plane override',
+    };
+    if (enabled !== true) {
+      runtime.customAgents[normalizedRuntimeKey].pid = null;
+    }
+    writeRuntime(rootDir, runtime);
+    return listConfiguredCustomAgents(rootDir, runtime).find((agent) => agent.runtimeKey === normalizedRuntimeKey) || null;
+  } finally {
+    release();
+  }
+}
+
+function getCustomAgentEnabledOverride(runtime: AnyRecord | null | undefined, runtimeKey: string) {
+  const overrides = runtime && runtime.customAgentEnabledOverrides && typeof runtime.customAgentEnabledOverrides === 'object'
+    ? runtime.customAgentEnabledOverrides
+    : {};
+  return typeof overrides[runtimeKey] === 'boolean' ? overrides[runtimeKey] : undefined;
+}
+
+function describeConfiguredCustomAgent(input: AnyRecord) {
+  const parts = [];
+  const status = input.status || {};
+  const agent = input.normalizedAgent || {};
+  if (input.configError) {
+    parts.push(input.configError);
+  }
+  if (input.enabled === false) {
+    parts.push('custom-agent config disabled');
+  } else if (input.agentEnabled === false) {
+    parts.push(typeof input.enabledOverride === 'boolean'
+      ? 'disabled by control-plane override'
+      : 'disabled by custom-agent config');
+  }
+  if (agent.target && agent.target.id) {
+    parts.push(`target=${agent.target.id}`);
+  }
+  if (status.lastDecision) {
+    parts.push(`decision=${status.lastDecision}`);
+  }
+  if (status.lastDecisionReason) {
+    parts.push(String(status.lastDecisionReason).split('\n')[0]);
+  }
+  if (status.workspacePath || agent.workspacePath) {
+    parts.push(`workspace=${status.workspacePath || agent.workspacePath}`);
+  }
+  return parts.join(' | ') || 'custom agent configured';
+}
+
 function spawnCustomAgentProcess(rootDir: string, entry: AnyRecord, options: AnyRecord = {}) {
   if (typeof options.customAgentSpawner === 'function') {
     return options.customAgentSpawner(rootDir, entry);
@@ -414,6 +594,7 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
     intervalSeconds,
     offsetSeconds: offset.value,
     offsetError: offset.error,
+    presetError: String(agent && agent.presetError || '').trim(),
     tools: tools.tools,
     toolError: tools.error,
     decisionSource: decision.source,
@@ -732,6 +913,226 @@ function normalizeCustomAgentConfigPaths(value: unknown) {
   }
   const normalized = String(value || '').trim();
   return normalized ? [normalized] : [];
+}
+
+function expandCustomAgentConfig(rootDir: string, config: AnyRecord, metadata: AnyRecord) {
+  const rawConfig = config && typeof config === 'object' ? config : {};
+  const rawAgents = Array.isArray(rawConfig.agents) ? rawConfig.agents : [];
+  const hasPresetAgents = rawAgents.some((agent) => getPresetAgentId(agent));
+  const defaultConfig = hasPresetAgents
+    ? buildDefaultCustomLifecycleConfig(metadata.controlPlaneConfig || {})
+    : {};
+  const expandedConfig = mergePlainRecords(defaultConfig, rawConfig);
+  const agents = rawAgents.map((agent) => expandCustomAgentPreset(agent, {
+    controlPlaneConfig: metadata.controlPlaneConfig || {},
+    configContext: rawConfig.context,
+  }));
+  return {
+    ...expandedConfig,
+    agents,
+    configPath: metadata.configPath,
+    configSource: metadata.configSource,
+    configIndex: metadata.configIndex,
+    configCount: metadata.configCount,
+  };
+}
+
+function buildDefaultCustomLifecycleConfig(controlPlaneConfig: AnyRecord) {
+  const label = String(controlPlaneConfig && (controlPlaneConfig.label || controlPlaneConfig.repoId) || 'Autonomy').trim();
+  const repoId = String(controlPlaneConfig && controlPlaneConfig.repoId || '').trim();
+  return {
+    kind: repoId ? `${repoId}-lifecycle-agents` : 'custom-lifecycle-agents',
+    enabled: true,
+    promptRole: `${label} command-driven autonomy agent`,
+  };
+}
+
+function expandCustomAgentPreset(agent: unknown, options: AnyRecord) {
+  const override = agent && typeof agent === 'object' ? agent as AnyRecord : {};
+  const presetAgentId = getPresetAgentId(override);
+  if (!presetAgentId) {
+    return override;
+  }
+  const preset = getDefaultCustomAgentPreset(presetAgentId, options.controlPlaneConfig || {});
+  if (!preset) {
+    return {
+      ...override,
+      id: String(override.id || presetAgentId).trim(),
+      presetAgentId,
+      presetError: `unknown custom-agent presetAgentId "${presetAgentId}"`,
+    };
+  }
+  const presetWithContext = {
+    ...preset,
+    context: mergePlainRecords(DEFAULT_CUSTOM_AGENT_CONTEXT, options.configContext || {}),
+  };
+  return mergePlainRecords(presetWithContext, override);
+}
+
+function getPresetAgentId(agent: unknown) {
+  if (!agent || typeof agent !== 'object') {
+    return '';
+  }
+  const record = agent as AnyRecord;
+  return String(record.presetAgentId || record.presetId || '').trim();
+}
+
+function getDefaultCustomAgentPreset(presetAgentId: string, controlPlaneConfig: AnyRecord) {
+  const repoId = String(controlPlaneConfig && controlPlaneConfig.repoId || '').trim() || 'repo';
+  const presets = {
+    'shadow-pm-agent': {
+      presetAgentId: 'shadow-pm-agent',
+      id: 'shadow-pm-agent',
+      type: 'pm',
+      enabled: true,
+      target: {
+        type: 'prd-backlog',
+        id: repoId,
+      },
+      context: DEFAULT_CUSTOM_AGENT_CONTEXT,
+      workspace: '.',
+      spawn: {
+        mode: 'poll',
+        intervalSeconds: 60,
+        offsetSeconds: 10,
+        singletonKey: 'agent.id',
+        decision: {
+          command: [
+            'node',
+            'agents/pm/should-run.mjs',
+          ],
+        },
+      },
+      environment: {
+        command: [
+          'node',
+          'agents/pm/prepare-env.mjs',
+        ],
+      },
+      execution: {
+        prompt: {
+          command: [
+            'node',
+            'agents/pm/build-prompt.mjs',
+          ],
+        },
+      },
+      finalize: {
+        command: [
+          'node',
+          'agents/pm/finalize.mjs',
+        ],
+      },
+    },
+    'shadow-architecture-agent': {
+      presetAgentId: 'shadow-architecture-agent',
+      id: 'shadow-architecture-agent',
+      type: 'implementation',
+      enabled: true,
+      target: {
+        type: 'task-queue',
+        id: 'shadow-architecture-agent',
+      },
+      context: DEFAULT_CUSTOM_AGENT_CONTEXT,
+      workspace: '.',
+      spawn: {
+        mode: 'poll',
+        intervalSeconds: 60,
+        offsetSeconds: 20,
+        singletonKey: 'target.id',
+        decision: {
+          command: [
+            'node',
+            'agents/architecture/should-run.mjs',
+          ],
+        },
+      },
+      environment: {
+        command: [
+          'node',
+          'agents/architecture/prepare-env.mjs',
+        ],
+      },
+      execution: {
+        prompt: {
+          command: [
+            'node',
+            'agents/architecture/build-prompt.mjs',
+          ],
+        },
+      },
+      finalize: {
+        command: [
+          'node',
+          'agents/architecture/finalize.mjs',
+        ],
+      },
+    },
+    'shadow-reviewer-agent': {
+      presetAgentId: 'shadow-reviewer-agent',
+      id: 'shadow-reviewer-agent',
+      type: 'review',
+      enabled: true,
+      target: {
+        type: 'review-queue',
+        id: 'shadow-reviewer-agent',
+      },
+      context: DEFAULT_CUSTOM_AGENT_CONTEXT,
+      workspace: '.',
+      spawn: {
+        mode: 'poll',
+        intervalSeconds: 60,
+        offsetSeconds: 30,
+        singletonKey: 'target.id',
+        decision: {
+          command: [
+            'node',
+            'agents/reviewer/should-run.mjs',
+          ],
+        },
+      },
+      environment: {
+        command: [
+          'node',
+          'agents/reviewer/prepare-env.mjs',
+        ],
+      },
+      execution: {
+        prompt: {
+          command: [
+            'node',
+            'agents/reviewer/build-prompt.mjs',
+          ],
+        },
+      },
+      finalize: {
+        command: [
+          'node',
+          'agents/reviewer/finalize.mjs',
+        ],
+      },
+    },
+  };
+  return presets[presetAgentId] || null;
+}
+
+function mergePlainRecords(base: unknown, override: unknown) {
+  const baseRecord = isPlainRecord(base) ? base as AnyRecord : {};
+  const overrideRecord = isPlainRecord(override) ? override as AnyRecord : {};
+  const merged: AnyRecord = { ...baseRecord };
+  for (const [key, value] of Object.entries(overrideRecord)) {
+    const baseValue = merged[key];
+    merged[key] = key === 'decision'
+      ? value
+      : isPlainRecord(baseValue) && isPlainRecord(value)
+      ? mergePlainRecords(baseValue, value)
+      : value;
+  }
+  return merged;
+}
+
+function isPlainRecord(value: unknown) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function mergeAgentContext(rootDir: string, defaultContext: AnyRecord, agentContext: AnyRecord | null | undefined) {
@@ -1116,9 +1517,11 @@ function isProcessAlive(pid) {
 export {
   loadCustomAgentConfig,
   loadCustomAgentConfigs,
+  listConfiguredCustomAgents,
   markCustomAgentSpawnFailed,
   markCustomAgentSpawned,
   pollCustomAgents,
   refreshCustomAgentRuntime,
+  setCustomAgentEnabledOverride,
   spawnCustomAgentProcess,
 };

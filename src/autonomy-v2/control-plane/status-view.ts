@@ -870,6 +870,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
   const prdHistory = selectPrdHistory(snapshot, prds).map(describePrd);
   const lastPrdPromotion = buildLastPrdPromotionSummary(snapshot.runtime && snapshot.runtime.lastPrdPromotion, prds);
   const agentStatuses = Array.isArray(snapshot.agentStatuses) ? snapshot.agentStatuses : [];
+  const customAgents = Array.isArray(snapshot.customAgents) ? snapshot.customAgents : [];
   const pullRequestStatuses = Array.isArray(snapshot.pullRequestStatuses) ? snapshot.pullRequestStatuses : [];
   const runningAgents = agentStatuses.filter((agent) => String(agent && agent.workerStatus || 'idle') === 'running').length;
   const freshness = buildHeartbeatSummary(repoStatus && repoStatus.updatedAt, repoLabel || 'Repository');
@@ -920,6 +921,7 @@ function summarizeRepoStatus(repoStatus: any, repoLabel = '') {
     lastPrdPromotion,
     prdRun: buildPrdRunSummary(activePrdSummary, queuedPrds, pullRequestStatuses),
     prdHistory,
+    customAgents,
     agentStatuses,
     pullRequestStatuses,
     deployment,

@@ -23,6 +23,10 @@ Commands:
   merge --pr <pr-id> --actor <agent-id> [--execute]
   deploy
   runtime:status
+  server:start
+  server:kill
+  server:restart [--detached] [--foreground] [--keep-old-terminal]
+  server:status
   update [--package-manager <npm|pnpm|yarn>] [--skip-init]
   refresh
 

@@ -13,6 +13,7 @@ import type {
   ControlPlanePrdResetPayload,
   ControlPlanePackageUpdatePayload,
   ControlPlaneRestartPayload,
+  ControlPlaneCustomAgentTogglePayload,
   ControlPlaneAgentChatMessagePayload,
   ControlPlaneConversationRecord,
   ControlPlaneChatMessageRecord,
@@ -287,6 +288,9 @@ function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null
   if (normalized === 'restart') {
     return 'restart' as const;
   }
+  if (normalized === 'custom-agent:toggle') {
+    return 'custom-agent:toggle' as const;
+  }
   return 'prd:add' as const;
 }
 
@@ -331,6 +335,14 @@ function normalizeJobPayload(
       controlSessionLabel: String((payload as ControlPlaneRestartPayload).controlSessionLabel || '').trim() || undefined,
       takeoverControl: (payload as ControlPlaneRestartPayload).takeoverControl === true,
     } as ControlPlaneRestartPayload;
+  }
+
+  if (type === 'custom-agent:toggle') {
+    return {
+      repoId: String((payload as ControlPlaneCustomAgentTogglePayload).repoId || repoId).trim() || repoId,
+      runtimeKey: String((payload as ControlPlaneCustomAgentTogglePayload).runtimeKey || '').trim(),
+      enabled: (payload as ControlPlaneCustomAgentTogglePayload).enabled === true,
+    } as ControlPlaneCustomAgentTogglePayload;
   }
 
   if (type === 'agent:chat') {
@@ -1153,6 +1165,23 @@ function createControlPlaneAgentChatJob(payload: ControlPlaneAgentChatMessagePay
   return job;
 }
 
+function createControlPlaneCustomAgentToggleJob(payload: ControlPlaneCustomAgentTogglePayload): ControlPlaneJobRecord {
+  const job: ControlPlaneJobRecord = {
+    id: createControlPlaneRecordId('job'),
+    type: 'custom-agent:toggle' as const,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+      runtimeKey: payload.runtimeKey,
+      enabled: payload.enabled === true,
+    },
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
 function applyAgentChatJobCompletion(state: ControlPlaneState, job: ControlPlaneJobRecord) {
   const now = job.updatedAt || new Date().toISOString();
   if (job.status === 'completed') {
@@ -1291,6 +1320,7 @@ export {
   claimNextJob,
   completeJob,
   createControlPlaneAgentChatJob,
+  createControlPlaneCustomAgentToggleJob,
   createControlPlaneJob,
   createControlPlaneDeployJob,
   createControlPlanePackageUpdateJob,

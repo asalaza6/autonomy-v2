@@ -69,6 +69,7 @@ function compactDashboardRepo(repo: AnyRecord) {
   const queuedPrds = Array.isArray(repo && repo.queuedPrds) ? repo.queuedPrds : [];
   const prdHistory = Array.isArray(repo && repo.prdHistory) ? repo.prdHistory : [];
   const agentStatuses = Array.isArray(repo && repo.agentStatuses) ? repo.agentStatuses : [];
+  const customAgents = Array.isArray(repo && repo.customAgents) ? repo.customAgents : [];
   const pullRequestStatuses = Array.isArray(repo && repo.pullRequestStatuses) ? repo.pullRequestStatuses : [];
   return {
     repoId: repo.repoId,
@@ -82,6 +83,7 @@ function compactDashboardRepo(repo: AnyRecord) {
     prdHistoryCount: prdHistory.length,
     lastPrdPromotion: compactLastPrdPromotion(repo.lastPrdPromotion),
     prdRun: repo.prdRun || null,
+    customAgents: customAgents.map(compactCustomAgent),
     agentStatuses: agentStatuses.map(compactAgentStatus),
     runningAgentCount: agentStatuses.filter((agent) => String(agent && agent.workerStatus || '') === 'running').length,
     pullRequestStatuses: pullRequestStatuses.map(compactPullRequestStatus),
@@ -105,6 +107,39 @@ function compactDashboardRepo(repo: AnyRecord) {
     freshnessStatusLabel: repo.freshnessStatusLabel,
     freshnessDetail: repo.freshnessDetail,
     freshnessUpdatedAt: repo.freshnessUpdatedAt,
+  };
+}
+
+function compactCustomAgent(agent: AnyRecord) {
+  return {
+    runtimeKey: agent.runtimeKey,
+    agentId: agent.agentId,
+    kind: agent.kind,
+    configSource: agent.configSource,
+    configEnabled: agent.configEnabled,
+    defaultEnabled: agent.defaultEnabled,
+    enabledOverride: typeof agent.enabledOverride === 'boolean' ? agent.enabledOverride : null,
+    enabledSource: agent.enabledSource,
+    enabled: agent.enabled !== false,
+    status: agent.status,
+    running: agent.running === true,
+    pid: agent.pid ?? null,
+    phase: agent.phase || null,
+    target: agent.target || null,
+    workspacePath: agent.workspacePath || null,
+    intervalSeconds: typeof agent.intervalSeconds === 'number' ? agent.intervalSeconds : null,
+    offsetSeconds: typeof agent.offsetSeconds === 'number' ? agent.offsetSeconds : null,
+    lastPollAt: agent.lastPollAt || null,
+    lastDecision: agent.lastDecision || null,
+    lastDecisionReason: agent.lastDecisionReason || null,
+    lastError: agent.lastError || null,
+    conversationMode: agent.conversationMode || null,
+    conversationKey: agent.conversationKey || null,
+    conversationId: agent.conversationId || null,
+    tools: agent.tools || {},
+    decisionSource: agent.decisionSource || null,
+    lifecycle: agent.lifecycle || {},
+    detail: agent.detail,
   };
 }
 

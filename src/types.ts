@@ -200,6 +200,12 @@ export interface ControlPlaneRestartPayload extends AnyRecord {
   takeoverControl?: boolean;
 }
 
+export interface ControlPlaneCustomAgentTogglePayload extends AnyRecord {
+  repoId: string;
+  runtimeKey: string;
+  enabled: boolean;
+}
+
 export interface ControlPlaneManagedProcessRecord extends AnyRecord {
   repoId: string;
   target: 'server' | 'controlBridge';
@@ -319,9 +325,9 @@ export interface ControlPlaneConversationRecord extends AnyRecord {
 
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add' | 'prd:reset' | 'prd:priority' | 'deploy' | 'agent:chat' | 'package:update' | 'restart';
+  type: 'prd:add' | 'prd:reset' | 'prd:priority' | 'deploy' | 'agent:chat' | 'package:update' | 'restart' | 'custom-agent:toggle';
   repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlanePrdPriorityPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload;
+  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlanePrdPriorityPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload | ControlPlaneCustomAgentTogglePayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;
@@ -497,6 +503,7 @@ export interface CustomAgentRuntime extends AnyRecord {
 export interface RuntimeState extends AnyRecord {
   workers: Record<string, WorkerRuntime>;
   customAgents?: Record<string, CustomAgentRuntime>;
+  customAgentEnabledOverrides?: Record<string, boolean>;
   backlogGraceConsumed?: boolean;
   backlogGraceUntil?: string;
   lastPrdPromotion?: AnyRecord | null;

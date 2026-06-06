@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { loadAutonomyEnv } from '../../env/env-main.js';
-import type { ControlPlaneAgentChatMessagePayload, ControlPlaneJobRecord, ControlPlanePrdPriorityPayload, ControlPlanePrdResetPayload } from '../../types.js';
+import type { ControlPlaneAgentChatMessagePayload, ControlPlaneCustomAgentTogglePayload, ControlPlaneJobRecord, ControlPlanePrdPriorityPayload, ControlPlanePrdResetPayload } from '../../types.js';
 import { executePrdAdd, buildPrdAddCliOptions, executePrdPriorityUpdate, executePrdReset } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
@@ -8,6 +8,7 @@ import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import { completeJob, enqueueJob, getControlPlanePaths, loadControlPlaneState, setManagedProcess } from './control-plane-store.js';
+import { setCustomAgentEnabledOverride } from '../orchestrator/custom-agents.js';
 import {
   executeControlPlaneRestart,
   executeControlPlanePackageUpdate,
@@ -425,6 +426,34 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
         });
         deferredRestartCommandsForJob = execution.deferredRestartCommands;
         result = execution.result;
+      } else if (job.type === 'custom-agent:toggle') {
+        const payload = job.payload as ControlPlaneCustomAgentTogglePayload;
+        logBridgeEvent('bridge:custom-agent:toggle:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          runtimeKey: payload.runtimeKey,
+          enabled: payload.enabled === true ? 'true' : 'false',
+        });
+        const agent = setCustomAgentEnabledOverride(repoRoot, payload.runtimeKey, payload.enabled === true);
+        const snapshot = buildStatusSnapshot(repoRoot);
+        await requestJson(`${options.serverUrl}/api/repos/${encodeURIComponent(job.repoId)}/status`, {
+          method: 'POST',
+          body: {
+            repo: registration.repo,
+            snapshot,
+          },
+        });
+        logBridgeEvent('bridge:custom-agent:toggle:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          runtimeKey: payload.runtimeKey,
+          enabled: payload.enabled === true ? 'true' : 'false',
+        });
+        result = {
+          runtimeKey: payload.runtimeKey,
+          enabled: payload.enabled === true,
+          agent,
+        };
       } else if (job.type === 'prd:reset') {
         logBridgeEvent('bridge:prd:reset:start', {
           jobId: job.id,

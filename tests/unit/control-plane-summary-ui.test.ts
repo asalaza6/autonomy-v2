@@ -238,6 +238,28 @@ test('project repo card hides operational diagnostics behind labeled disclosures
           detail: 'Building the compact summary UI',
         },
       ],
+      customAgents: [
+        {
+          runtimeKey: 'feedback-bot:project',
+          agentId: 'feedback-bot',
+          kind: 'feedback-bots',
+          configSource: 'prompts/autonomous/v2/config/feedback-bots.json',
+          enabled: false,
+          enabledSource: 'runtime',
+          defaultEnabled: true,
+          status: 'disabled',
+          target: { type: 'project', id: 'alpha' },
+          workspacePath: '/tmp/alpha/.autonomy/custom/feedback',
+          intervalSeconds: 60,
+          lastDecision: 'disabled',
+          lastDecisionReason: 'agent disabled by control-plane override',
+          tools: {
+            autonomy: {
+              envPresent: true,
+            },
+          },
+        },
+      ],
     },
   }));
 
@@ -249,6 +271,12 @@ test('project repo card hides operational diagnostics behind labeled disclosures
   assert.match(html, /GitHub repo access denied/);
   assert.match(html, /Update package/);
   assert.match(html, /Restart failed/);
+  assert.match(html, /Custom Agents/);
+  assert.match(html, /feedback-bot/);
+  assert.match(html, /enabled from UI override/);
+  assert.match(html, /data-action="custom-agent-toggle"/);
+  assert.match(html, /data-runtime-key="feedback-bot:project"/);
+  assert.match(html, />Enable</);
 });
 
 function installBrowserStubs() {

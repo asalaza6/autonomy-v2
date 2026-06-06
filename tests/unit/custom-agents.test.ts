@@ -7,9 +7,11 @@ import path from 'path';
 import { AGENT_ROLES } from '../../src/agents/role-catalog.js';
 import { findDueAgents } from '../../src/server/orchestrator/orchestrator-runtime-core.js';
 import {
+  listConfiguredCustomAgents,
   loadCustomAgentConfig,
   loadCustomAgentConfigs,
   pollCustomAgents,
+  setCustomAgentEnabledOverride,
 } from '../../src/server/orchestrator/custom-agents.js';
 import { isLegacyRosterEnabled } from '../../src/server/orchestrator/scheduler.js';
 
@@ -99,6 +101,123 @@ test('loads multiple spawnCustomAgents config files when configured as an array'
   assert.equal(configs[0].kind, 'strategy-agents');
   assert.equal(configs[1].kind, 'feedback-bots');
   assert.equal(loadCustomAgentConfig(rootDir)?.kind, 'strategy-agents');
+});
+
+test('presetAgentId expands default custom lifecycle agents from the tested consumer config shape', () => {
+  const rootDir = makeRepo({
+    schemaVersion: 1,
+    agents: [
+      { presetAgentId: 'shadow-pm-agent' },
+      { presetAgentId: 'shadow-architecture-agent' },
+      { presetAgentId: 'shadow-reviewer-agent' },
+    ],
+  }, {
+    repoId: 'moving-game',
+    label: 'Moving game',
+  });
+
+  const config = loadCustomAgentConfig(rootDir);
+  const configured = listConfiguredCustomAgents(rootDir);
+
+  assert.equal(config?.kind, 'moving-game-lifecycle-agents');
+  assert.equal(config?.promptRole, 'Moving game command-driven autonomy agent');
+  assert.equal(config?.agents[0].context.allowRuntimeStateChanges, true);
+  assert.deepEqual(config?.agents[0].context.workspaceReadWrite, [
+    '.autonomy/runtime/custom-lifecycle',
+    '.autonomy/worktrees/shadow-architecture-agent',
+    '.autonomy/worktrees/shadow-reviewer-agent',
+    'prompts/autonomous/v2/specs',
+  ]);
+  assert.deepEqual(config?.agents.map((agent) => agent.id), [
+    'shadow-pm-agent',
+    'shadow-architecture-agent',
+    'shadow-reviewer-agent',
+  ]);
+  assert.equal(config?.agents[0].target.id, 'moving-game');
+  assert.deepEqual(config?.agents[1].spawn.decision.command, ['node', 'agents/architecture/should-run.mjs']);
+  assert.deepEqual(config?.agents[2].finalize.command, ['node', 'agents/reviewer/finalize.mjs']);
+  assert.deepEqual(configured.map((agent) => agent.runtimeKey), [
+    'shadow-pm-agent:moving-game',
+    'shadow-architecture-agent:shadow-architecture-agent',
+    'shadow-reviewer-agent:shadow-reviewer-agent',
+  ]);
+});
+
+test('presetAgentId entries can override selected default custom-agent config fields', () => {
+  const rootDir = makeRepo({
+    schemaVersion: 1,
+    promptRole: 'Custom lifecycle role',
+    context: {
+      globalReadOnly: ['context.md'],
+    },
+    agents: [
+      {
+        presetAgentId: 'shadow-pm-agent',
+        enabled: false,
+        target: {
+          id: 'custom-backlog',
+        },
+        spawn: {
+          intervalSeconds: 120,
+          decision: {
+            mode: 'always',
+          },
+        },
+        finalize: {
+          command: ['node', 'custom/finalize.mjs'],
+        },
+      },
+    ],
+  }, {
+    repoId: 'fixture-repo',
+  });
+
+  const config = loadCustomAgentConfig(rootDir);
+  const agent = config?.agents[0];
+  const configured = listConfiguredCustomAgents(rootDir);
+
+  assert.equal(config?.promptRole, 'Custom lifecycle role');
+  assert.deepEqual(config?.context.globalReadOnly, ['context.md']);
+  assert.deepEqual(agent.context.globalReadOnly, ['context.md']);
+  assert.deepEqual(agent.context.workspaceReadWrite, [
+    '.autonomy/runtime/custom-lifecycle',
+    '.autonomy/worktrees/shadow-architecture-agent',
+    '.autonomy/worktrees/shadow-reviewer-agent',
+    'prompts/autonomous/v2/specs',
+  ]);
+  assert.equal(agent.id, 'shadow-pm-agent');
+  assert.equal(agent.type, 'pm');
+  assert.equal(agent.enabled, false);
+  assert.equal(agent.target.type, 'prd-backlog');
+  assert.equal(agent.target.id, 'custom-backlog');
+  assert.equal(agent.spawn.intervalSeconds, 120);
+  assert.equal(agent.spawn.offsetSeconds, 10);
+  assert.equal(agent.spawn.singletonKey, 'agent.id');
+  assert.deepEqual(agent.spawn.decision, { mode: 'always' });
+  assert.deepEqual(agent.finalize.command, ['node', 'custom/finalize.mjs']);
+  assert.equal(configured[0].runtimeKey, 'shadow-pm-agent:custom-backlog');
+  assert.equal(configured[0].enabled, false);
+  assert.equal(configured[0].decisionSource, 'always');
+});
+
+test('unknown presetAgentId is reported as invalid custom-agent config', () => {
+  const rootDir = makeRepo({
+    schemaVersion: 1,
+    agents: [
+      { presetAgentId: 'missing-agent-preset' },
+    ],
+  });
+  const runtime: any = { workers: {} };
+
+  pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+  });
+
+  const configured = listConfiguredCustomAgents(rootDir, runtime as any);
+  assert.equal(configured[0].runtimeKey, 'missing-agent-preset:missing-agent-preset');
+  assert.equal(configured[0].status, 'blocked');
+  assert.match(configured[0].lastError, /unknown custom-agent presetAgentId/);
+  assert.equal(runtime.customAgents['missing-agent-preset:missing-agent-preset'].lastDecision, 'invalid_config');
 });
 
 test('missing spawnCustomAgents leaves existing repo-agent runtime untouched', () => {
@@ -191,6 +310,59 @@ test('disabled individual custom agent is not polled or spawned', () => {
     runtime.customAgents['strategy-agent:target-1'].lastDecisionReason,
     'agent disabled by custom-agent config',
   );
+});
+
+test('runtime enable override disables configured custom agent before polling', () => {
+  const rootDir = makeRepo(baseCustomConfig());
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  let decisionCalls = 0;
+  const runtime: any = {
+    workers: {},
+    customAgentEnabledOverrides: {
+      'strategy-agent:target-1': false,
+    },
+  };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentDecisionClient() {
+      decisionCalls += 1;
+      return { shouldRun: true };
+    },
+  });
+
+  assert.equal(decisionCalls, 0);
+  assert.equal(result.pendingSpawnStarts.length, 0);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].enabled, false);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].enabledSource, 'runtime');
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecisionReason, 'agent disabled by control-plane override');
+
+  const configured = listConfiguredCustomAgents(rootDir, runtime as any);
+  assert.equal(configured.length, 1);
+  assert.equal(configured[0].runtimeKey, 'strategy-agent:target-1');
+  assert.equal(configured[0].enabled, false);
+  assert.equal(configured[0].enabledOverride, false);
+});
+
+test('setCustomAgentEnabledOverride persists a runtime source of truth', () => {
+  const rootDir = makeRepo(baseCustomConfig());
+
+  const disabled = setCustomAgentEnabledOverride(rootDir, 'strategy-agent:target-1', false);
+  const runtimePath = path.join(rootDir, '.autonomy', 'runtime', 'state', 'runtime.json');
+  const runtime = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+
+  assert.equal(disabled?.runtimeKey, 'strategy-agent:target-1');
+  assert.equal(disabled?.enabled, false);
+  assert.equal(runtime.customAgentEnabledOverrides['strategy-agent:target-1'], false);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].enabledSource, 'runtime');
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].status, 'disabled');
+
+  const enabled = setCustomAgentEnabledOverride(rootDir, 'strategy-agent:target-1', true);
+  const updated = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+
+  assert.equal(enabled?.enabled, true);
+  assert.equal(updated.customAgentEnabledOverrides['strategy-agent:target-1'], true);
+  assert.equal(updated.customAgents['strategy-agent:target-1'].enabled, true);
 });
 
 test('missing auth env key blocks spawn without calling the decision API', () => {

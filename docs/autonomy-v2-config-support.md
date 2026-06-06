@@ -112,6 +112,58 @@ Autonomy only runs the configured commands, passes a small JSON envelope on stdi
 
 The command envelope includes `invocationId`, `agentId`, `repoRoot`, `phase`, `target`, `workspace.cwd`, `paths.invocationDir`, `paths.contextPath`, `decision`, `previous`, and `run`. Commands should print a JSON object. `environment` may return `cwd` or `workspacePath`; `prompt` must return `prompt` or `promptPath`; `finalize` may return any JSON object useful to the external workflow.
 
+Repos can opt into the tested command-driven lifecycle defaults with `presetAgentId` instead of copying the full agent objects. Supported preset IDs are:
+
+- `shadow-pm-agent`
+- `shadow-architecture-agent`
+- `shadow-reviewer-agent`
+
+Example:
+
+```json
+{
+  "schemaVersion": 1,
+  "agents": [
+    { "presetAgentId": "shadow-pm-agent" },
+    { "presetAgentId": "shadow-architecture-agent" },
+    { "presetAgentId": "shadow-reviewer-agent" }
+  ]
+}
+```
+
+Those presets expand to the same PM, architecture, and reviewer command layout used by `darwinexzero-frontend` and `moving-game`: `agents/pm/*`, `agents/architecture/*`, and `agents/reviewer/*`, with the default custom lifecycle runtime paths under `.autonomy/runtime/custom-lifecycle` and worktrees under `.autonomy/worktrees/`.
+
+Every preset entry is still a normal custom-agent object after expansion. Repos can override selected fields locally:
+
+```json
+{
+  "presetAgentId": "shadow-pm-agent",
+  "target": {
+    "id": "my-repo"
+  },
+  "spawn": {
+    "intervalSeconds": 120
+  },
+  "finalize": {
+    "command": ["node", "agents/pm/custom-finalize.mjs"]
+  }
+}
+```
+
+Object overrides are merged recursively, while arrays and command lists replace the preset value. `spawn.decision` is replaced as a block so mutually exclusive modes such as `{"mode":"always"}` do not retain the preset command.
+
+The control-plane UI exposes configured custom agents, including agents that have
+not run yet. It shows runtime status, target, workspace, decision metadata,
+conversation metadata, tool env presence, and last error when available.
+
+Each individual custom agent can be enabled or disabled from that UI. The
+`enabled` value in the custom-agent config remains the default, but once a UI
+choice is made the repo-local runtime override in
+`.autonomy/runtime/state/runtime.json` is the source of truth for that agent's
+runtime key. The override is applied by the bridge through a
+`custom-agent:toggle` job, so remote manager pages and repo-local control pages
+use the same mutation path.
+
 ## How Runner Execution Works
 
 Implementation and review execution always uses the fixed packaged runner:
