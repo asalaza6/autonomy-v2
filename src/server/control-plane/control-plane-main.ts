@@ -13,6 +13,7 @@ import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './c
 import { buildStateApiResponse } from './control-plane-state-response.js';
 import { handleAgentToolRequest } from './control-plane-agent-tools.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
+import { calculateControlPlaneHealthScore } from './control-plane-health-score.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import { readManagedProcessOutput } from './control-plane-process-output.js';
 import {
@@ -563,6 +564,29 @@ async function handleRequest(
     return;
   }
 
+  if (url.pathname.startsWith('/api/repos/') && url.pathname.endsWith('/health-score') && req.method === 'POST') {
+    const repoId = decodeURIComponent(url.pathname.split('/')[3] || '');
+    try {
+      const body = await readJsonBody(req);
+      const requestedRepoId = String(body && body.repoId || repoId || '').trim();
+      const repo = listDiscoveredRepos(rootDir).find((entry) => String(entry.repoId || '').trim() === requestedRepoId);
+      const localRepoId = String(loadControlPlaneConfig(rootDir).repoId || '').trim();
+      if (!repo && requestedRepoId !== localRepoId) {
+        sendJson(res, 404, { error: 'Unknown repo.' });
+        return;
+      }
+      const result = calculateControlPlaneHealthScore(rootDir, requestedRepoId, {
+        maxLines: Number(body && body.maxLines),
+        threshold: Number(body && body.threshold),
+        top: Number(body && body.top),
+      });
+      sendJson(res, 200, result);
+    } catch (error) {
+      sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return;
+  }
+
   if (url.pathname.startsWith('/api/jobs/') && url.pathname.endsWith('/claim') && req.method === 'POST') {
     const jobId = url.pathname.split('/')[3];
     const body = await readJsonBody(req);
@@ -974,6 +998,14 @@ async function hasKnownControlPlaneRepo(
   const localRepo = listDiscoveredRepos(rootDir).some((repo) => String(repo.repoId || '').trim() === normalizedRepoId);
   if (localRepo) {
     return true;
+  }
+
+  try {
+    if (String(loadControlPlaneConfig(rootDir).repoId || '').trim() === normalizedRepoId) {
+      return true;
+    }
+  } catch {
+    // Keep checking remote registry if local config is unavailable.
   }
 
   const remoteBaseUrl = String(options.proxyUrl || options.apiBaseUrl || '').trim();

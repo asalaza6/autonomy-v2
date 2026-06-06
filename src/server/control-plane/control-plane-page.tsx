@@ -621,6 +621,141 @@ const styles = `
     box-shadow: var(--shadow);
   }
 
+  .health-layout {
+    display: grid;
+    gap: 16px;
+  }
+
+  .health-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .health-empty {
+    display: grid;
+    gap: 8px;
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    background: rgba(255, 255, 255, 0.76);
+  }
+
+  .health-empty.warning {
+    border-color: rgba(141, 58, 67, 0.24);
+    background: rgba(141, 58, 67, 0.06);
+  }
+
+  .health-result {
+    display: grid;
+    gap: 16px;
+  }
+
+  .health-score-card {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(31, 26, 21, 0.1);
+  }
+
+  .health-score-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .health-score-number {
+    font-size: 3rem;
+    font-weight: 780;
+    line-height: 1;
+  }
+
+  .health-score-number.pass { color: #23704d; }
+  .health-score-number.fail { color: #8d3a43; }
+
+  .health-score-track,
+  .health-component-track {
+    height: 12px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(31, 26, 21, 0.08);
+  }
+
+  .health-score-fill,
+  .health-component-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #8d3a43, #c98b42 45%, #23704d);
+  }
+
+  .health-score-meta,
+  .health-component-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  .health-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+  }
+
+  .health-metric {
+    display: grid;
+    gap: 5px;
+    min-height: 78px;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    background: rgba(255, 255, 255, 0.76);
+  }
+
+  .health-metric span {
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .health-metric strong {
+    font-size: 1.25rem;
+  }
+
+  .health-section {
+    display: grid;
+    gap: 10px;
+  }
+
+  .health-component-stack,
+  .health-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .health-component,
+  .health-list-item {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(31, 26, 21, 0.1);
+    background: rgba(255, 255, 255, 0.76);
+  }
+
+  .health-list-item span {
+    color: var(--muted);
+    line-height: 1.35;
+  }
+
   .main-queue-layout {
     display: grid;
     grid-template-columns: minmax(240px, 0.36fr) minmax(0, 1fr);
@@ -1223,6 +1358,7 @@ function ControlPlanePage(props: ControlPlanePageProps) {
             <nav className="tabs" role="tablist" aria-label="Control plane views">
               <button type="button" className="tab-button active" data-tab="main" role="tab" aria-selected="true">Main</button>
               <button type="button" className="tab-button" data-tab="agents" role="tab" aria-selected="false">Agents</button>
+              <button type="button" className="tab-button" data-tab="health" role="tab" aria-selected="false">Health</button>
               <button type="button" className="tab-button" data-tab="chat" role="tab" aria-selected="false">Chat</button>
               <button type="button" className="tab-button" data-tab="history" role="tab" aria-selected="false">History</button>
               <button type="button" className="tab-button" data-tab="advanced" role="tab" aria-selected="false">Advanced</button>
@@ -1304,6 +1440,18 @@ function ControlPlanePage(props: ControlPlanePageProps) {
                     </div>
                   </div>
                   <div id="agents-panel-content" className="section-row" />
+                </article>
+              </section>
+
+              <section id="health-panel" className="tabs-panel" role="tabpanel">
+                <article className="surface">
+                  <div className="surface-head">
+                    <div>
+                      <h2>Health Score</h2>
+                      <p className="muted">Calculate structure and file-size health on demand for this repo.</p>
+                    </div>
+                  </div>
+                  <div id="health-panel-content" />
                 </article>
               </section>
 

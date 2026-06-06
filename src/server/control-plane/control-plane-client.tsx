@@ -236,6 +236,68 @@ type ProcessOutputSummary = {
   content?: string;
 };
 
+type HealthScoreSummary = {
+  fileCount?: number;
+  importEdgeCount?: number;
+  cyclicComponentCount?: number;
+  filesInCycles?: number;
+  largestSccSize?: number;
+  wrongWayEdges?: number;
+  sameLevelEdges?: number;
+  oversizedFileCount?: number;
+  measuredFiles?: number;
+  maxLineCount?: number;
+};
+
+type HealthScoreTopFile = {
+  file?: string;
+  path?: string;
+  directory?: string;
+  depth?: number;
+  lineCount?: number;
+  lineOverage?: number;
+};
+
+type HealthScoreCause = {
+  key?: string;
+  label?: string;
+  pointsLost?: number;
+  signal?: string;
+  componentLabel?: string;
+};
+
+type HealthScoreResult = {
+  repoId?: string;
+  repoRoot?: string;
+  calculatedAt?: string;
+  status?: string;
+  mode?: string;
+  score?: number | null;
+  threshold?: number;
+  passed?: boolean | null;
+  maxLines?: number;
+  message?: string;
+  analyzerError?: string;
+  summary?: HealthScoreSummary;
+  components?: Record<string, number>;
+  scoreDrag?: {
+    totalPointsLost?: number;
+    byCause?: HealthScoreCause[];
+  } | null;
+  topLargeFiles?: HealthScoreTopFile[];
+  topOffenders?: Array<{
+    file?: string;
+    depth?: number;
+    severity?: number;
+    reasons?: string[];
+  }>;
+  topSccs?: Array<{
+    size?: number;
+    depth?: number;
+    members?: string[];
+  }>;
+};
+
 type RepoSummary = {
   repoId?: string;
   label?: string;
@@ -422,6 +484,7 @@ const mainProcessPanelEl = document.getElementById('main-process-panel');
 const mainQueuedPrdSummaryEl = document.getElementById('main-queued-prd-summary');
 const mainQueuedPrdListEl = document.getElementById('main-queued-prd-list');
 const mainQueuedPrdDetailEl = document.getElementById('main-queued-prd-detail');
+const healthPanelContentEl = document.getElementById('health-panel-content');
 const agentsPanelContentEl = document.getElementById('agents-panel-content');
 const prdHistorySummaryEl = document.getElementById('prd-history-summary');
 const prdHistoryListEl = document.getElementById('prd-history-list');
@@ -445,6 +508,7 @@ const panels: Record<string, HTMLElement | null> = {
   main: document.getElementById('main-panel'),
   agents: document.getElementById('agents-panel'),
   chat: document.getElementById('chat-panel'),
+  health: document.getElementById('health-panel'),
   history: document.getElementById('history-panel'),
   dashboard: document.getElementById('dashboard-panel'),
   submit: document.getElementById('submit-panel'),
@@ -481,6 +545,8 @@ let chatJumpLatestVisible = false;
 let lastRenderedChatConversationId = '';
 let lastRenderedChatFingerprint = '';
 let latestProcessOutputByKey: Record<string, ProcessOutputSummary> = {};
+let latestHealthScoreByRepo: Record<string, HealthScoreResult> = {};
+let calculatingHealthRepoIds = new Set<string>();
 let activeProcessTargetsByRepo: Record<string, 'server' | 'controlBridge'> = {};
 let pendingProcessPanelFocus: { repoId: string; target: 'server' | 'controlBridge' } | null = null;
 let refreshInFlight: Promise<void> | null = null;
@@ -596,6 +662,26 @@ function mountControlPlane() {
         if (messageEl) {
           messageEl.textContent = getErrorMessage(error);
         }
+      });
+      return;
+    }
+
+    const healthScoreButton = target ? target.closest<HTMLButtonElement>('[data-action="calculate-health-score"]') : null;
+    if (healthScoreButton) {
+      const repoId = String(healthScoreButton.dataset.repoId || '').trim();
+      if (!repoId) {
+        return;
+      }
+      calculateHealthScore(repoId).catch((error: unknown) => {
+        latestHealthScoreByRepo = {
+          ...latestHealthScoreByRepo,
+          [repoId]: {
+            repoId,
+            status: 'failed',
+            message: getErrorMessage(error),
+          },
+        };
+        renderHealthPanel(latestDashboard);
       });
       return;
     }
@@ -920,6 +1006,7 @@ async function runRefresh() {
   renderDashboard(state.dashboard || {});
   renderControlPlaneHeartbeats(state.dashboard || {});
   renderProjectMain(state.dashboard || {});
+  renderHealthPanel(state.dashboard || {});
   renderChat(extractRepoConversations(state));
   renderAdvanced(state);
   if (activeTabName === 'advanced') {
@@ -977,6 +1064,7 @@ async function refreshManagedProcessOutputs(dashboard: DashboardSummary) {
   latestProcessOutputByKey = Object.fromEntries(nextEntries.flat());
   renderDashboard(latestDashboard);
   renderProjectMain(latestDashboard);
+  renderHealthPanel(latestDashboard);
   focusPendingProcessPanel();
 }
 
@@ -1886,6 +1974,49 @@ function renderAgentsPanel(dashboard: DashboardSummary) {
   }
   const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
   agentsPanelContentEl.innerHTML = renderToHtml(<ProjectAgentsPanel repo={repo} />);
+}
+
+function renderHealthPanel(dashboard: DashboardSummary) {
+  if (entranceContext.entrance !== 'project' || !healthPanelContentEl) {
+    return;
+  }
+  const repo = (dashboard.repos || []).find((entry) => String(entry && entry.repoId || '') === entranceContext.repoId) || null;
+  const repoId = String(repo && repo.repoId || entranceContext.repoId || '').trim();
+  healthPanelContentEl.innerHTML = renderToHtml(
+    <ProjectHealthPanel
+      repo={repo}
+      result={repoId ? latestHealthScoreByRepo[repoId] || null : null}
+      calculating={repoId ? calculatingHealthRepoIds.has(repoId) : false}
+    />
+  );
+}
+
+async function calculateHealthScore(repoId: string) {
+  if (!repoId || calculatingHealthRepoIds.has(repoId)) {
+    return;
+  }
+  calculatingHealthRepoIds = new Set(calculatingHealthRepoIds).add(repoId);
+  renderHealthPanel(latestDashboard);
+  try {
+    const result = await requestJson<HealthScoreResult>(
+      `/api/repos/${encodeURIComponent(repoId)}/health-score`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          repoId,
+        }),
+      }
+    );
+    latestHealthScoreByRepo = {
+      ...latestHealthScoreByRepo,
+      [repoId]: result,
+    };
+  } finally {
+    const next = new Set(calculatingHealthRepoIds);
+    next.delete(repoId);
+    calculatingHealthRepoIds = next;
+    renderHealthPanel(latestDashboard);
+  }
 }
 
 function renderPrdHistory(dashboard: DashboardSummary) {
@@ -3350,6 +3481,196 @@ function countDeployableRepos(repos: RepoSummary[]) {
   return repos.filter((repo) => Boolean(repo && repo.deployment && (repo.deployment.hasChanges || repo.deployment.deployable))).length;
 }
 
+function ProjectHealthPanel({
+  repo,
+  result,
+  calculating,
+}: {
+  repo: RepoSummary | null;
+  result: HealthScoreResult | null;
+  calculating: boolean;
+}) {
+  const repoId = String(repo && repo.repoId || entranceContext.repoId || '').trim();
+  const repoLabel = String(repo && (repo.label || repo.repoId) || repoId || 'this repo');
+  return (
+    <div className="health-layout">
+      <div className="health-action-row">
+        <div>
+          <h3>{repoLabel}</h3>
+          <p className="muted">Run the repository health analyzer when you want a fresh score.</p>
+        </div>
+        <button
+          type="button"
+          className={`primary${calculating ? ' is-loading' : ''}`}
+          data-action="calculate-health-score"
+          data-repo-id={repoId}
+          disabled={!repoId || calculating}
+          aria-busy={calculating ? 'true' : 'false'}
+        >
+          {calculating ? 'Calculating...' : result ? 'Recalculate' : 'Calculate'}
+        </button>
+      </div>
+      {calculating ? (
+        <div className="subtle-box">Calculating health score. Large repos can take a bit.</div>
+      ) : null}
+      {!result && !calculating ? (
+        <div className="health-empty">
+          <div className="pill">Manual check</div>
+          <h3>No score calculated yet</h3>
+          <p className="muted">The health score is intentionally not refreshed in the background.</p>
+        </div>
+      ) : null}
+      {result ? <HealthScoreResultView result={result} /> : null}
+    </div>
+  );
+}
+
+function HealthScoreResultView({ result }: { result: HealthScoreResult }) {
+  if (result.status === 'unavailable' || result.status === 'failed') {
+    return (
+      <div className="health-empty warning">
+        <div className="pill">{result.status === 'failed' ? 'Failed' : 'Unavailable'}</div>
+        <h3>Health score unavailable</h3>
+        <p className="muted">{result.message || 'The repo could not be analyzed from this control-plane server.'}</p>
+      </div>
+    );
+  }
+  const score = Number(result.score);
+  const normalizedScore = Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0;
+  const threshold = Number(result.threshold || 80);
+  const summary = result.summary || {};
+  const components = Object.entries(result.components || {})
+    .filter(([, value]) => Number.isFinite(Number(value)))
+    .sort((left, right) => Number(left[1]) - Number(right[1]));
+  const causes = Array.isArray(result.scoreDrag && result.scoreDrag.byCause)
+    ? result.scoreDrag.byCause.slice(0, 5)
+    : [];
+  const topLargeFiles = Array.isArray(result.topLargeFiles) ? result.topLargeFiles.slice(0, 6) : [];
+  const modeLabel = result.mode === 'file-size-only'
+    ? 'File size only'
+    : result.mode === 'rust-graph'
+      ? 'Rust graph'
+      : result.mode === 'mixed-graph'
+        ? 'TypeScript + Rust graph'
+        : 'TypeScript graph';
+
+  return (
+    <div className="health-result">
+      <div className="health-score-card">
+        <div className="health-score-main">
+          <div className={`health-score-number ${normalizedScore >= threshold ? 'pass' : 'fail'}`}>
+            {Number.isFinite(score) ? normalizedScore.toFixed(2) : 'n/a'}
+          </div>
+          <div>
+            <div className={`status-chip ${normalizedScore >= threshold ? 'online' : 'stale'}`}>
+              <span className="status-dot" />
+              <span>{normalizedScore >= threshold ? 'Pass' : 'Needs work'}</span>
+            </div>
+            <div className="queue-detail">
+              {modeLabel}
+              {result.calculatedAt ? ` | ${formatTimestamp(result.calculatedAt)}` : ''}
+            </div>
+          </div>
+        </div>
+        <div className="health-score-track" aria-hidden="true">
+          <div className="health-score-fill" style={{ width: `${normalizedScore}%` }} />
+        </div>
+        <div className="health-score-meta">
+          <span>Threshold {threshold}</span>
+          <span>{Number(result.maxLines || 800)} lines max</span>
+        </div>
+      </div>
+
+      <div className="health-metrics-grid">
+        <HealthMetric label="Files" value={summary.fileCount || summary.measuredFiles || 0} />
+        <HealthMetric label="Oversized" value={summary.oversizedFileCount || 0} />
+        <HealthMetric label="Max lines" value={summary.maxLineCount || 0} />
+        <HealthMetric label="Cycles" value={summary.filesInCycles || 0} />
+        <HealthMetric label="Wrong-way" value={summary.wrongWayEdges || 0} />
+        <HealthMetric label="Imports" value={summary.importEdgeCount || 0} />
+      </div>
+
+      {components.length > 0 ? (
+        <div className="health-section">
+          <h3>Score Components</h3>
+          <div className="health-component-stack">
+            {components.map(([key, value]) => (
+              <HealthComponentBar label={formatHealthComponentLabel(key)} value={Number(value)} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {causes.length > 0 ? (
+        <div className="health-section">
+          <h3>Main Score Drag</h3>
+          <div className="health-list">
+            {causes.map((cause) => (
+              <div className="health-list-item">
+                <strong>{cause.label || 'Score drag'}</strong>
+                <span>{formatHealthPoints(cause.pointsLost)}{cause.signal ? ` | ${cause.signal}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {topLargeFiles.length > 0 ? (
+        <div className="health-section">
+          <h3>Top Large Files</h3>
+          <div className="health-list">
+            {topLargeFiles.map((file) => (
+              <div className="health-list-item">
+                <strong>{file.file || file.path || 'Unknown file'}</strong>
+                <span>{Number(file.lineCount || 0)} lines{file.lineOverage ? ` | ${file.lineOverage} over` : ''}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {result.analyzerError ? (
+        <div className="list-note">Full graph analyzer was unavailable, so this used file-size scoring. {result.analyzerError}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function HealthMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="health-metric">
+      <span>{label}</span>
+      <strong>{String(value)}</strong>
+    </div>
+  );
+}
+
+function HealthComponentBar({ label, value }: { label: string; value: number }) {
+  const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+  return (
+    <div className="health-component">
+      <div className="health-component-head">
+        <span>{label}</span>
+        <strong>{clamped.toFixed(2)}</strong>
+      </div>
+      <div className="health-component-track" aria-hidden="true">
+        <div className="health-component-fill" style={{ width: `${clamped}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function formatHealthComponentLabel(key: string) {
+  return String(key || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/^\w/, (match) => match.toUpperCase());
+}
+
+function formatHealthPoints(value: unknown) {
+  const points = Number(value);
+  return Number.isFinite(points) && points > 0 ? `-${points.toFixed(2)} points` : 'Score drag';
+}
+
 function resolveApiUrl(pathname: string) {
   const normalizedPath = String(pathname || '').trim();
   if (!normalizedPath) {
@@ -4695,6 +5016,7 @@ export {
   ChatPrdProposalCard,
   PackageUpdateButton,
   ProjectAgentsPanel,
+  ProjectHealthPanel,
   ProjectMainDeployActions,
   ProjectMainProgressActions,
   PrdHistoryDetail,

@@ -72,6 +72,7 @@ function buildStatusSnapshot(rootDir) {
   const managedProcesses = buildManagedProcessSnapshot(rootDir);
 
   return {
+    rootDir,
     configPath: pathRelative(rootDir, paths.agentsConfig),
     sprintPath: pathRelative(rootDir, paths.sprintConfig),
     configSchemaVersion: typeof config.schemaVersion === 'undefined' ? null : config.schemaVersion,

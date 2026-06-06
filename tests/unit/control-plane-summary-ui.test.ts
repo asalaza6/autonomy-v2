@@ -165,6 +165,77 @@ test('project shell exposes a dedicated agents tab and panel', async () => {
   assert.match(html, /id="agents-panel-content"/);
 });
 
+test('project shell exposes a dedicated health score tab and panel', async () => {
+  const page = await import(`../../src/server/control-plane/control-plane-page.js?project-health-tab=${Date.now()}`);
+
+  const html = renderToHtml(h(page.ControlPlanePage as any, {
+    entrance: 'project',
+    repoId: 'alpha',
+  }));
+
+  assert.match(html, /data-tab="health"/);
+  assert.match(html, />Health</);
+  assert.match(html, /id="health-panel"/);
+  assert.match(html, /id="health-panel-content"/);
+});
+
+test('project health panel renders manual calculation results', async () => {
+  installBrowserStubs();
+  const client = await import(`../../src/server/control-plane/control-plane-client.js?project-health-panel=${Date.now()}`);
+
+  const html = renderToHtml(h(client.ProjectHealthPanel as any, {
+    repo: {
+      repoId: 'alpha',
+      label: 'Alpha',
+    },
+    calculating: false,
+    result: {
+      repoId: 'alpha',
+      status: 'completed',
+      mode: 'mixed-graph',
+      score: 58.64,
+      threshold: 80,
+      maxLines: 800,
+      calculatedAt: '2026-06-06T12:00:00.000Z',
+      summary: {
+        fileCount: 178,
+        importEdgeCount: 489,
+        oversizedFileCount: 14,
+        maxLineCount: 4718,
+        filesInCycles: 28,
+        wrongWayEdges: 0,
+      },
+      components: {
+        fileSize: 0,
+        cycleBurden: 76.44,
+      },
+      scoreDrag: {
+        byCause: [
+          {
+            label: 'largest file overage',
+            pointsLost: 28,
+            signal: '4718 max lines, 3918 over limit',
+          },
+        ],
+      },
+      topLargeFiles: [
+        {
+          file: 'src/server/control-plane/control-plane-client.tsx',
+          lineCount: 4718,
+          lineOverage: 3918,
+        },
+      ],
+    },
+  }));
+
+  assert.match(html, /58.64/);
+  assert.match(html, /Needs work/);
+  assert.match(html, /TypeScript \+ Rust graph/);
+  assert.match(html, /Top Large Files/);
+  assert.match(html, /control-plane-client\.tsx/);
+  assert.match(html, /Recalculate/);
+});
+
 test('project repo card hides operational diagnostics behind labeled disclosures', async () => {
   installBrowserStubs();
   const client = await import(`../../src/server/control-plane/control-plane-client.js?project-summary=${Date.now()}`);
