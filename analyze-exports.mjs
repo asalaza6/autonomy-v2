@@ -853,6 +853,47 @@ function formatPercent(value, digits = 1) {
   return `${(value * 100).toFixed(digits)}%`;
 }
 
+function calculateExtremeLineSeverity(lineCount, maxLines) {
+  const multiple = ratio(lineCount, maxLines);
+  if (multiple < 2) {
+    return 0;
+  }
+  if (multiple < 5) {
+    return ((multiple - 2) / 3) * 1.5;
+  }
+  if (multiple < 10) {
+    return 1.5 + ((multiple - 5) / 5) * 1.5;
+  }
+  if (multiple < 50) {
+    return 3 + ((multiple - 10) / 40) * 2;
+  }
+  return 5 + Math.min(5, Math.log2(multiple / 50));
+}
+
+function describeExtremeLineTier(multiple) {
+  if (multiple >= 50) {
+    return "extreme";
+  }
+  if (multiple >= 10) {
+    return "severe";
+  }
+  if (multiple >= 5) {
+    return "very large";
+  }
+  if (multiple >= 2) {
+    return "large";
+  }
+  return "oversized";
+}
+
+function calculateExtremeFileSizePenalty(extremeSeverityTotal, measuredFileCount) {
+  if (!measuredFileCount || extremeSeverityTotal <= 0) {
+    return 0;
+  }
+  const averageSeverity = ratio(extremeSeverityTotal, measuredFileCount);
+  return roundMetric(Math.min(25, extremeSeverityTotal * 1.5 + averageSeverity * 5), 2);
+}
+
 function compareHealthOffenders(left, right) {
   return (
     right.severity - left.severity ||
@@ -1258,6 +1299,32 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       lineCount: entry.lineCount,
       lineOverage: entry.lineOverage,
     }));
+  const extremeLineStats = oversizedLineStats
+    .map((entry) => {
+      const lineMultiple = ratio(entry.lineCount, maxLines);
+      const severity = calculateExtremeLineSeverity(entry.lineCount, maxLines);
+      return {
+        ...entry,
+        lineMultiple,
+        extremeSeverity: severity,
+        extremeTier: describeExtremeLineTier(lineMultiple),
+      };
+    })
+    .filter((entry) => entry.extremeSeverity > 0)
+    .sort(
+      (left, right) =>
+        right.extremeSeverity - left.extremeSeverity ||
+        right.lineCount - left.lineCount ||
+        left.file.localeCompare(right.file)
+    );
+  const extremeSeverityTotal = extremeLineStats.reduce(
+    (sum, entry) => sum + entry.extremeSeverity,
+    0
+  );
+  const extremeFileSizePenaltyPoints = calculateExtremeFileSizePenalty(
+    extremeSeverityTotal,
+    measuredLineStats.length
+  );
 
   const metrics = {
     fileSize: {
@@ -1276,6 +1343,26 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       averageLineOverageRatio: roundMetric(
         ratio(totalLineOverage, measuredLineStats.length * maxLines)
       ),
+      extremeFileCount: extremeLineStats.length,
+      extremeFileRatio: roundMetric(ratio(extremeLineStats.length, measuredLineStats.length)),
+      extremeSeverityTotal: roundMetric(extremeSeverityTotal),
+      extremeSeverityAverage: roundMetric(ratio(extremeSeverityTotal, measuredLineStats.length)),
+      extremeFileSizePenaltyPoints,
+      worstLineMultiple: roundMetric(
+        extremeLineStats.length > 0 ? extremeLineStats[0].lineMultiple : 0,
+        2
+      ),
+      topExtremeFiles: extremeLineStats.slice(0, top).map((entry) => ({
+        path: entry.path,
+        file: entry.file,
+        directory: entry.directory,
+        depth: entry.depth,
+        lineCount: entry.lineCount,
+        lineOverage: entry.lineOverage,
+        lineMultiple: roundMetric(entry.lineMultiple, 2),
+        tier: entry.extremeTier,
+        severity: roundMetric(entry.extremeSeverity, 2),
+      })),
     },
     layerFlow: {
       totalEdges: visibleImportEdges.length,
@@ -1379,13 +1466,16 @@ function buildStructuralHealthReport(treePayload, options = {}) {
           directoryCoherence: 0.15,
         };
 
-  const weightedScore = clampMetricScore(
+  const weightedScoreBeforeExtremeFileSize = clampMetricScore(
     fileSizeScore * scoreWeights.fileSize +
       layerFlowScore * scoreWeights.layerFlow +
       cycleBurdenScore * scoreWeights.cycleBurden +
       depthBalanceScore * scoreWeights.depthBalance +
       rootClarityScore * scoreWeights.rootClarity +
       directoryCoherenceScore * scoreWeights.directoryCoherence
+  );
+  const weightedScore = clampMetricScore(
+    weightedScoreBeforeExtremeFileSize - metrics.fileSize.extremeFileSizePenaltyPoints
   );
   const thresholdPassed = threshold === null ? null : weightedScore >= threshold;
   const thresholdMessage =
@@ -1419,6 +1509,15 @@ function buildStructuralHealthReport(treePayload, options = {}) {
           label: "largest file overage",
           rawLoss: Math.min(1, metrics.fileSize.maxLineOverageRatio) * 100 * 0.8,
           signal: `${metrics.fileSize.maxLineCount} max lines, ${metrics.fileSize.maxLineOverage} over limit`,
+        },
+        {
+          key: "extremeFileSize",
+          label: "extreme file size",
+          rawLoss: metrics.fileSize.extremeSeverityTotal,
+          signal:
+            metrics.fileSize.topExtremeFiles.length > 0
+              ? `${metrics.fileSize.extremeFileCount} files at least 2x over ${metrics.fileSize.maxLines} lines; worst ${metrics.fileSize.topExtremeFiles[0].file} is ${metrics.fileSize.topExtremeFiles[0].lineMultiple}x the limit`
+              : "",
         },
       ],
     },
@@ -1518,6 +1617,25 @@ function buildStructuralHealthReport(treePayload, options = {}) {
       });
     });
   });
+  if (metrics.fileSize.extremeFileSizePenaltyPoints > 0) {
+    const fileSizeComponent = scoreDragByComponent.find((entry) => entry.key === "fileSize");
+    if (fileSizeComponent) {
+      fileSizeComponent.pointsLost = roundMetric(
+        fileSizeComponent.pointsLost + metrics.fileSize.extremeFileSizePenaltyPoints
+      );
+    }
+    scoreDragByCause.push({
+      key: "fileSize.extremeFileSizeBonus",
+      component: "fileSize",
+      componentLabel: "File size",
+      label: "extreme file size bonus deduction",
+      pointsLost: metrics.fileSize.extremeFileSizePenaltyPoints,
+      signal:
+        metrics.fileSize.topExtremeFiles.length > 0
+          ? `${metrics.fileSize.extremeFileCount} extreme files; worst ${metrics.fileSize.topExtremeFiles[0].file} is ${metrics.fileSize.topExtremeFiles[0].lineMultiple}x the ${metrics.fileSize.maxLines}-line limit`
+          : `${metrics.fileSize.extremeFileCount} extreme files`,
+    });
+  }
   scoreDragByComponent.sort((left, right) => right.pointsLost - left.pointsLost || left.label.localeCompare(right.label));
   scoreDragByCause.sort((left, right) => right.pointsLost - left.pointsLost || left.label.localeCompare(right.label));
   const totalPointsLost = roundMetric(100 - weightedScore);
@@ -1542,6 +1660,11 @@ function buildStructuralHealthReport(treePayload, options = {}) {
   if (metrics.fileSize.oversizedFileCount > 0) {
     penalties.push(
       `${metrics.fileSize.oversizedFileCount} files exceed ${metrics.fileSize.maxLines} lines.`
+    );
+  }
+  if (metrics.fileSize.extremeFileCount > 0 && metrics.fileSize.topExtremeFiles.length > 0) {
+    penalties.push(
+      `${metrics.fileSize.extremeFileCount} files are at least 2x over the line limit; worst is ${metrics.fileSize.topExtremeFiles[0].file} at ${metrics.fileSize.topExtremeFiles[0].lineMultiple}x.`
     );
   }
   if (metrics.cycleBurden.filesInCyclesRatio > 0.15) {

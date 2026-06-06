@@ -212,6 +212,74 @@ test('files over the line limit reduce the health score', async () => {
   }
 });
 
+test('extreme files add a separate bonus deduction', async () => {
+  const { buildStructuralHealthReport } = await loadAnalyzer();
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'structureness-extreme-lines-'));
+  try {
+    const indexFile = path.join(tempRoot, 'index.ts');
+    const largeFile = path.join(tempRoot, 'large.ts');
+    const extremeFile = path.join(tempRoot, 'extreme.ts');
+    fs.writeFileSync(indexFile, 'import "./large";\nimport "./extreme";\n');
+    fs.writeFileSync(largeFile, 'a\nb\nc\nd\ne\nf\n');
+    fs.writeFileSync(
+      extremeFile,
+      Array.from({ length: 300 }, (_, index) => `line${index}`).join('\n')
+    );
+
+    const report = buildStructuralHealthReport(
+      {
+        files: [
+          {
+            id: 'node_1',
+            path: indexFile,
+            label: 'index.ts',
+            relative: 'src/index.ts',
+            directory: 'src',
+            imports: [largeFile, extremeFile],
+          },
+          {
+            id: 'node_2',
+            path: largeFile,
+            label: 'large.ts',
+            relative: 'src/large.ts',
+            directory: 'src',
+            imports: [],
+          },
+          {
+            id: 'node_3',
+            path: extremeFile,
+            label: 'extreme.ts',
+            relative: 'src/extreme.ts',
+            directory: 'src',
+            imports: [],
+          },
+        ],
+        edges: [
+          { source: 'node_1', target: 'node_2' },
+          { source: 'node_1', target: 'node_3' },
+        ],
+        roots: ['node_1'],
+      },
+      {
+        rootFileId: 'all',
+        maxLines: 5,
+        top: 5,
+      }
+    );
+
+    assert.equal(report.metrics.fileSize.oversizedFileCount, 2);
+    assert.equal(report.metrics.fileSize.extremeFileCount, 1);
+    assert.equal(report.metrics.fileSize.topExtremeFiles[0].file, 'src/extreme.ts');
+    assert.equal(report.metrics.fileSize.topExtremeFiles[0].tier, 'extreme');
+    assert.ok(report.metrics.fileSize.extremeFileSizePenaltyPoints > 0);
+    assert.ok(report.score.drag.byCause.some(
+      (entry: { key: string }) => entry.key === 'fileSize.extremeFileSizeBonus'
+    ));
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('health text output is stable for a small cyclic export-map fixture', () => {
   const output = runAnalyzer([
     '--input',
