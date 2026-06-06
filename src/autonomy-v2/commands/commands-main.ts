@@ -17,6 +17,7 @@ import { run as deployRun } from './deploy.js';
 import { run as updateRun } from './update.js';
 import { run as refreshRun } from './refresh.js';
 import { run as serverCommandRun } from './server-command.js';
+import { run as healthRun } from './health-command.js';
 import type { CliOptions } from '../autonomy-types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
@@ -37,6 +38,9 @@ const COMMAND_HANDLERS = new Map([
   ['merge', mergeRun],
   ['deploy', deployRun],
   ['runtime:status', runtimeRun],
+  ['health:score', healthRun],
+  ['health:why', healthRun],
+  ['health:help', healthRun],
   ['update', updateRun],
   ['refresh', refreshRun],
   ['server:start', serverCommandRun],

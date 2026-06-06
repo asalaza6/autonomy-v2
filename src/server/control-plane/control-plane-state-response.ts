@@ -94,6 +94,8 @@ function compactDashboardRepo(repo: AnyRecord) {
     deployJob: compactDashboardJob(repo.deployJob),
     prdResetJob: compactDashboardJob(repo.prdResetJob),
     packageUpdateJob: compactDashboardJob(repo.packageUpdateJob),
+    healthScoreJob: compactDashboardJob(repo.healthScoreJob),
+    healthScore: repo.healthScore || null,
     restartJob: compactDashboardJob(repo.restartJob),
     bridgeHeartbeat: repo.bridgeHeartbeat || null,
     managedProcesses: repo.managedProcesses || {},
@@ -279,6 +281,7 @@ function compactDashboardJob(job: AnyRecord | null | undefined) {
     detail: job.detail,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
+    result: job.result || null,
   };
 }
 

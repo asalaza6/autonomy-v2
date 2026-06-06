@@ -117,6 +117,7 @@ function buildRepoDashboard(
   const deployJob = jobs.find((job) => job.repoId === repoId && job.type === 'deploy') || null;
   const prdResetJob = jobs.find((job) => job.repoId === repoId && job.type === 'prd:reset') || null;
   const packageUpdateJob = jobs.find((job) => job.repoId === repoId && job.type === 'package:update') || null;
+  const healthScoreJob = jobs.find((job) => job.repoId === repoId && job.type === 'health:score') || null;
   const restartJob = jobs.find((job) => job.repoId === repoId && job.type === 'restart') || null;
   const controlAccess = repoConfig
     ? describeRepoControlAccess(rootDir, repoConfig, viewerSession)
@@ -143,6 +144,10 @@ function buildRepoDashboard(
     deployJob: deployJob ? summarizeControlPlaneJob(deployJob, label) : null,
     prdResetJob: prdResetJob ? summarizeControlPlaneJob(prdResetJob, label) : null,
     packageUpdateJob: packageUpdateJob ? summarizeControlPlaneJob(packageUpdateJob, label) : null,
+    healthScoreJob: healthScoreJob ? summarizeControlPlaneJob(healthScoreJob, label) : null,
+    healthScore: healthScoreJob && healthScoreJob.status === 'completed' && healthScoreJob.result
+      ? healthScoreJob.result
+      : null,
     restartJob: restartJob ? summarizeControlPlaneJob(restartJob, label) : null,
     bridgeHeartbeat,
     managedProcesses,

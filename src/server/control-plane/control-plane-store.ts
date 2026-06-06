@@ -12,6 +12,7 @@ import type {
   ControlPlanePrdPriorityPayload,
   ControlPlanePrdResetPayload,
   ControlPlanePackageUpdatePayload,
+  ControlPlaneHealthScorePayload,
   ControlPlaneRestartPayload,
   ControlPlaneCustomAgentTogglePayload,
   ControlPlaneAgentChatMessagePayload,
@@ -285,6 +286,9 @@ function normalizeJobType(type: ControlPlaneJobRecord['type'] | undefined | null
   if (normalized === 'package:update') {
     return 'package:update' as const;
   }
+  if (normalized === 'health:score') {
+    return 'health:score' as const;
+  }
   if (normalized === 'restart') {
     return 'restart' as const;
   }
@@ -326,6 +330,16 @@ function normalizeJobPayload(
     return {
       repoId: String((payload as ControlPlanePackageUpdatePayload).repoId || repoId).trim() || repoId,
     } as ControlPlanePackageUpdatePayload;
+  }
+
+  if (type === 'health:score') {
+    const healthPayload = payload as ControlPlaneHealthScorePayload;
+    return {
+      repoId: String(healthPayload.repoId || repoId).trim() || repoId,
+      maxLines: normalizeOptionalNumber(healthPayload.maxLines),
+      threshold: normalizeOptionalNumber(healthPayload.threshold),
+      top: normalizeOptionalNumber(healthPayload.top),
+    } as ControlPlaneHealthScorePayload;
   }
 
   if (type === 'restart') {
@@ -1127,6 +1141,24 @@ function createControlPlanePackageUpdateJob(payload: ControlPlanePackageUpdatePa
   return job;
 }
 
+function createControlPlaneHealthScoreJob(payload: ControlPlaneHealthScorePayload): ControlPlaneJobRecord {
+  const job: ControlPlaneJobRecord = {
+    id: createControlPlaneRecordId('job'),
+    type: 'health:score' as const,
+    repoId: payload.repoId,
+    payload: {
+      repoId: payload.repoId,
+      maxLines: normalizeOptionalNumber(payload.maxLines),
+      threshold: normalizeOptionalNumber(payload.threshold),
+      top: normalizeOptionalNumber(payload.top),
+    },
+    status: 'queued' as const,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  return job;
+}
+
 function createControlPlaneRestartJob(payload: ControlPlaneRestartPayload): ControlPlaneJobRecord {
   const job: ControlPlaneJobRecord = {
     id: createControlPlaneRecordId('job'),
@@ -1323,6 +1355,7 @@ export {
   createControlPlaneCustomAgentToggleJob,
   createControlPlaneJob,
   createControlPlaneDeployJob,
+  createControlPlaneHealthScoreJob,
   createControlPlanePackageUpdateJob,
   createControlPlanePrdPriorityJob,
   createControlPlanePrdResetJob,

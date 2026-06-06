@@ -193,6 +193,13 @@ export interface ControlPlanePackageUpdatePayload extends AnyRecord {
   repoId: string;
 }
 
+export interface ControlPlaneHealthScorePayload extends AnyRecord {
+  repoId: string;
+  maxLines?: number;
+  threshold?: number;
+  top?: number;
+}
+
 export interface ControlPlaneRestartPayload extends AnyRecord {
   repoId: string;
   controlSessionId?: string;
@@ -325,9 +332,9 @@ export interface ControlPlaneConversationRecord extends AnyRecord {
 
 export interface ControlPlaneJobRecord extends AnyRecord {
   id: string;
-  type: 'prd:add' | 'prd:reset' | 'prd:priority' | 'deploy' | 'agent:chat' | 'package:update' | 'restart' | 'custom-agent:toggle';
+  type: 'prd:add' | 'prd:reset' | 'prd:priority' | 'deploy' | 'agent:chat' | 'package:update' | 'health:score' | 'restart' | 'custom-agent:toggle';
   repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlanePrdPriorityPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneRestartPayload | ControlPlaneCustomAgentTogglePayload;
+  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlanePrdPriorityPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneHealthScorePayload | ControlPlaneRestartPayload | ControlPlaneCustomAgentTogglePayload;
   status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
   createdAt: string;
   updatedAt: string;

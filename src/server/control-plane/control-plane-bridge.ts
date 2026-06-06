@@ -1,11 +1,12 @@
 import fs from 'fs';
 import { loadAutonomyEnv } from '../../env/env-main.js';
-import type { ControlPlaneAgentChatMessagePayload, ControlPlaneCustomAgentTogglePayload, ControlPlaneJobRecord, ControlPlanePrdPriorityPayload, ControlPlanePrdResetPayload } from '../../types.js';
+import type { ControlPlaneAgentChatMessagePayload, ControlPlaneCustomAgentTogglePayload, ControlPlaneHealthScorePayload, ControlPlaneJobRecord, ControlPlanePrdPriorityPayload, ControlPlanePrdResetPayload } from '../../types.js';
 import { executePrdAdd, buildPrdAddCliOptions, executePrdPriorityUpdate, executePrdReset } from '../../autonomy-v2/control-plane/prd-service.js';
 import { buildStatusSnapshot } from '../../autonomy-v2/control-plane/status-service.js';
 import { run as runDeploy } from '../../autonomy-v2/commands/deploy.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
 import { answerControlPlaneAgentChat } from './control-plane-chat.js';
+import { calculateControlPlaneHealthScoreForRepoRoot } from './control-plane-health-score.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import { completeJob, enqueueJob, getControlPlanePaths, loadControlPlaneState, setManagedProcess } from './control-plane-store.js';
 import { setCustomAgentEnabledOverride } from '../orchestrator/custom-agents.js';
@@ -400,6 +401,24 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           pushMessage: execution.result && execution.result.pushMessage || '',
         });
         result = execution.result;
+      } else if (job.type === 'health:score') {
+        const payload = job.payload as ControlPlaneHealthScorePayload;
+        logBridgeEvent('bridge:health:score:start', {
+          jobId: job.id,
+          repoId: job.repoId,
+          root: repoRoot,
+        });
+        result = calculateControlPlaneHealthScoreForRepoRoot(repoRoot, job.repoId, {
+          maxLines: payload.maxLines,
+          threshold: payload.threshold,
+          top: payload.top,
+        });
+        logBridgeEvent('bridge:health:score:done', {
+          jobId: job.id,
+          repoId: job.repoId,
+          mode: String(result && result.mode || ''),
+          score: String(result && result.score || ''),
+        });
       } else if (job.type === 'restart') {
         logBridgeEvent('bridge:restart:start', {
           jobId: job.id,

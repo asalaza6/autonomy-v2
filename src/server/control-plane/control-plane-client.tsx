@@ -153,6 +153,7 @@ type JobSummary = {
   action?: string;
   branch?: string;
   restartEvidence?: RestartEvidenceSummary | null;
+  result?: Record<string, unknown> | null;
 };
 
 type RestartEvidenceTargetSummary = {
@@ -393,6 +394,8 @@ type RepoSummary = {
   versionStatus?: VersionStatusSummary | null;
   packageStatus?: PackageStatusSummary | null;
   packageUpdateJob?: JobSummary | null;
+  healthScoreJob?: JobSummary | null;
+  healthScore?: HealthScoreResult | null;
 };
 
 type DashboardSummary = {
@@ -1003,6 +1006,7 @@ async function runRefresh() {
   ]);
 
   renderRepos(repos.repos || []);
+  syncHealthStateFromDashboard(state.dashboard || {});
   renderDashboard(state.dashboard || {});
   renderControlPlaneHeartbeats(state.dashboard || {});
   renderProjectMain(state.dashboard || {});
@@ -1066,6 +1070,39 @@ async function refreshManagedProcessOutputs(dashboard: DashboardSummary) {
   renderProjectMain(latestDashboard);
   renderHealthPanel(latestDashboard);
   focusPendingProcessPanel();
+}
+
+function syncHealthStateFromDashboard(dashboard: DashboardSummary) {
+  const repos = Array.isArray(dashboard.repos) ? dashboard.repos : [];
+  if (repos.length === 0) {
+    return;
+  }
+  const nextScores = { ...latestHealthScoreByRepo };
+  const nextCalculating = new Set(calculatingHealthRepoIds);
+  repos.forEach((repo) => {
+    const repoId = String(repo && repo.repoId || '').trim();
+    if (!repoId) {
+      return;
+    }
+    const job = repo.healthScoreJob || null;
+    const jobStatus = String(job && job.status || '').trim();
+    if (repo.healthScore) {
+      nextScores[repoId] = repo.healthScore;
+    } else if (jobStatus === 'failed') {
+      nextScores[repoId] = {
+        repoId,
+        status: 'failed',
+        message: String(job && (job.detail || job.statusLabel) || 'Health score job failed.'),
+      };
+    }
+    if (['queued', 'claimed', 'running'].includes(jobStatus)) {
+      nextCalculating.add(repoId);
+    } else if (jobStatus) {
+      nextCalculating.delete(repoId);
+    }
+  });
+  latestHealthScoreByRepo = nextScores;
+  calculatingHealthRepoIds = nextCalculating;
 }
 
 async function submitPrd({
@@ -1987,6 +2024,7 @@ function renderHealthPanel(dashboard: DashboardSummary) {
       repo={repo}
       result={repoId ? latestHealthScoreByRepo[repoId] || null : null}
       calculating={repoId ? calculatingHealthRepoIds.has(repoId) : false}
+      job={repo && repo.healthScoreJob ? repo.healthScoreJob : null}
     />
   );
 }
@@ -1998,7 +2036,7 @@ async function calculateHealthScore(repoId: string) {
   calculatingHealthRepoIds = new Set(calculatingHealthRepoIds).add(repoId);
   renderHealthPanel(latestDashboard);
   try {
-    const result = await requestJson<HealthScoreResult>(
+    await requestJson<{ job?: JobSummary }>(
       `/api/repos/${encodeURIComponent(repoId)}/health-score`,
       {
         method: 'POST',
@@ -2007,14 +2045,13 @@ async function calculateHealthScore(repoId: string) {
         }),
       }
     );
-    latestHealthScoreByRepo = {
-      ...latestHealthScoreByRepo,
-      [repoId]: result,
-    };
-  } finally {
+    await refresh({ queueIfRunning: true });
+  } catch (error) {
     const next = new Set(calculatingHealthRepoIds);
     next.delete(repoId);
     calculatingHealthRepoIds = next;
+    throw error;
+  } finally {
     renderHealthPanel(latestDashboard);
   }
 }
@@ -3485,10 +3522,12 @@ function ProjectHealthPanel({
   repo,
   result,
   calculating,
+  job,
 }: {
   repo: RepoSummary | null;
   result: HealthScoreResult | null;
   calculating: boolean;
+  job?: JobSummary | null;
 }) {
   const repoId = String(repo && repo.repoId || entranceContext.repoId || '').trim();
   const repoLabel = String(repo && (repo.label || repo.repoId) || repoId || 'this repo');
@@ -3511,7 +3550,10 @@ function ProjectHealthPanel({
         </button>
       </div>
       {calculating ? (
-        <div className="subtle-box">Calculating health score. Large repos can take a bit.</div>
+        <div className="subtle-box">
+          {job && job.statusLabel ? job.statusLabel : 'Waiting for bridge health check.'}
+          {job && job.detail ? ` ${job.detail}` : ' Large repos can take a bit.'}
+        </div>
       ) : null}
       {!result && !calculating ? (
         <div className="health-empty">

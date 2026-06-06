@@ -95,6 +95,88 @@ test('bridge heartbeat identifies the repo ids served by the bridge', async (t) 
   assert.deepEqual(heartbeatBody.repoIds, ['default']);
 });
 
+test('bridge executes health score jobs inside the mapped repo', async (t) => {
+  const repoDir = createFixtureRepo('autonomy-v2-control-plane-health-bridge-');
+  initAutonomyRepo(repoDir);
+  fs.mkdirSync(path.join(repoDir, 'src'), { recursive: true });
+  fs.writeFileSync(path.join(repoDir, 'src', 'small.txt'), 'one\n');
+  fs.writeFileSync(path.join(repoDir, 'src', 'large.txt'), Array.from({ length: 12 }, (_, index) => `line ${index}`).join('\n'));
+
+  let completedJob: any = null;
+  let jobClaimed = false;
+
+  const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/jobs/claim-next' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      if (jobClaimed) {
+        res.end(JSON.stringify({ job: null }));
+        return;
+      }
+      jobClaimed = true;
+      res.end(JSON.stringify({
+        job: {
+          id: 'job-health-1',
+          type: 'health:score',
+          repoId: 'default',
+          payload: {
+            repoId: 'default',
+            maxLines: 10,
+            threshold: 80,
+            top: 50,
+          },
+          status: 'claimed',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }));
+      return;
+    }
+
+    if (req.url === '/api/jobs/job-health-1/complete' && req.method === 'POST') {
+      completedJob = JSON.parse(await readRequestText(req));
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ id: 'job-health-1', status: 'completed' }));
+      return;
+    }
+
+    if (req.url === '/api/repos/default/status' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.url === '/api/heartbeats/bridge' && req.method === 'POST') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ heartbeat: { kind: 'bridge', updatedAt: new Date().toISOString() } }));
+      return;
+    }
+
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: 'not found' }));
+  });
+
+  const serverUrl = await listen(server);
+  t.after(async () => {
+    await closeServer(server);
+  });
+
+  const logs = await captureConsoleLogs(async () => {
+    await runControlPlaneBridgeOnce(repoDir, {
+      serverUrl,
+      repoRoots: {
+        default: repoDir,
+      },
+    });
+  });
+
+  assert.equal(completedJob.status, 'completed');
+  assert.equal(completedJob.result.mode, 'file-size-only');
+  assert.ok(completedJob.result.summary.oversizedFileCount >= 1);
+  assert.ok(completedJob.result.topLargeFiles.some((entry: any) => entry.file === path.join('src', 'large.txt')));
+  assert.match(logs.join('\n'), /bridge:health:score:start/);
+  assert.match(logs.join('\n'), /bridge:health:score:done/);
+});
+
 test('bridge prd:add keeps local dev aligned after pushing to origin', async (t) => {
   const repoDir = createFixtureRepo('autonomy-v2-control-plane-prd-bridge-');
   initAutonomyRepo(repoDir);

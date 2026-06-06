@@ -68,6 +68,7 @@
   },
   "files": [
     "README.md",
+    "analyze-exports.mjs",
     "dist",
     "templates",
     "docs"

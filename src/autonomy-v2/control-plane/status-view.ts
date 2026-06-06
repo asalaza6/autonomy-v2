@@ -549,6 +549,9 @@ function summarizeControlPlaneJob(job: any, repoLabel = '') {
     } else if (job.result.commit && job.result.commit.reason) {
       details.push(`commit ${String(job.result.commit.reason)}`);
     }
+  } else if (status === 'completed' && jobType === 'health:score' && job && job.result) {
+    details.push(`score ${Number(job.result.score).toFixed(2)}`);
+    details.push(String(job.result.mode || 'health check'));
   } else if (status === 'completed' && jobType === 'restart' && job && job.result) {
     const restartStatus = job.result.restartStatus && job.result.restartStatus.status
       ? job.result.restartStatus.status
@@ -609,6 +612,15 @@ function buildJobStatusLabelMap(jobType: string): Record<string, string> {
       running: 'Updating package',
       completed: 'Package updated',
       failed: 'Update failed',
+    };
+  }
+  if (jobType === 'health:score') {
+    return {
+      queued: 'Waiting for bridge health check',
+      claimed: 'Health check claimed by bridge',
+      running: 'Calculating health score',
+      completed: 'Health score calculated',
+      failed: 'Health check failed',
     };
   }
   if (jobType === 'restart') {
@@ -774,6 +786,9 @@ function formatControlPlaneJobTitle(job: any, jobType: string) {
   }
   if (jobType === 'package:update') {
     return 'Update Autonomy v2 package';
+  }
+  if (jobType === 'health:score') {
+    return 'Calculate health score';
   }
   if (jobType === 'restart') {
     return 'Restart Autonomy v2 services';

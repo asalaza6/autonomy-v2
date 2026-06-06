@@ -13,7 +13,6 @@ import { buildControlPlaneHtml, buildControlPlaneMissingEntranceHtml } from './c
 import { buildStateApiResponse } from './control-plane-state-response.js';
 import { handleAgentToolRequest } from './control-plane-agent-tools.js';
 import { loadControlPlaneConfig } from './control-plane-config.js';
-import { calculateControlPlaneHealthScore } from './control-plane-health-score.js';
 import { recordControlPlaneServiceLifecycle } from './control-plane-lifecycle.js';
 import { readManagedProcessOutput } from './control-plane-process-output.js';
 import {
@@ -24,6 +23,7 @@ import {
   createControlPlaneDeployJob,
   ensureRepoControlAccess,
   createControlPlanePackageUpdateJob,
+  createControlPlaneHealthScoreJob,
   createControlPlanePrdPriorityJob,
   createControlPlanePrdResetJob,
   createControlPlaneRestartJob,
@@ -575,12 +575,19 @@ async function handleRequest(
         sendJson(res, 404, { error: 'Unknown repo.' });
         return;
       }
-      const result = calculateControlPlaneHealthScore(rootDir, requestedRepoId, {
+      const job = createControlPlaneHealthScoreJob({
+        repoId: requestedRepoId,
         maxLines: Number(body && body.maxLines),
         threshold: Number(body && body.threshold),
         top: Number(body && body.top),
       });
-      sendJson(res, 200, result);
+      enqueueJob(rootDir, job);
+      logControlPlaneEvent('control-plane:job:queued', {
+        jobId: job.id,
+        repoId: job.repoId,
+        type: job.type,
+      });
+      sendJson(res, 202, { job });
     } catch (error) {
       sendJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
     }

@@ -28,26 +28,51 @@ function calculateControlPlaneHealthScore(
     throw new Error('Missing repoId.');
   }
 
-  const maxLines = normalizePositiveInteger(options.maxLines, DEFAULT_MAX_LINES);
-  const threshold = normalizePositiveNumber(options.threshold, DEFAULT_THRESHOLD);
-  const top = normalizePositiveInteger(options.top, 10);
   const repoRoot = resolveControlPlaneHealthRepoRoot(managerRootDir, normalizedRepoId);
-  const calculatedAt = new Date().toISOString();
   if (!repoRoot) {
     return {
       repoId: normalizedRepoId,
       status: 'unavailable',
       mode: 'unavailable',
-      calculatedAt,
-      threshold,
-      maxLines,
+      calculatedAt: new Date().toISOString(),
+      threshold: normalizePositiveNumber(options.threshold, DEFAULT_THRESHOLD),
+      maxLines: normalizePositiveInteger(options.maxLines, DEFAULT_MAX_LINES),
       message: 'Repo root is not available to this control-plane server.',
     };
   }
 
+  return calculateControlPlaneHealthScoreForRepoRoot(repoRoot, normalizedRepoId, options);
+}
+
+function calculateControlPlaneHealthScoreForRepoRoot(
+  repoRoot: string,
+  repoId: string,
+  options: HealthScoreOptions = {}
+) {
+  const normalizedRepoId = String(repoId || '').trim();
+  if (!normalizedRepoId) {
+    throw new Error('Missing repoId.');
+  }
+  const resolvedRepoRoot = path.resolve(repoRoot);
+  if (!fs.existsSync(resolvedRepoRoot)) {
+    return {
+      repoId: normalizedRepoId,
+      status: 'unavailable',
+      mode: 'unavailable',
+      calculatedAt: new Date().toISOString(),
+      threshold: normalizePositiveNumber(options.threshold, DEFAULT_THRESHOLD),
+      maxLines: normalizePositiveInteger(options.maxLines, DEFAULT_MAX_LINES),
+      message: 'Repo root is not available to the bridge.',
+    };
+  }
+
+  const maxLines = normalizePositiveInteger(options.maxLines, DEFAULT_MAX_LINES);
+  const threshold = normalizePositiveNumber(options.threshold, DEFAULT_THRESHOLD);
+  const top = normalizePositiveInteger(options.top, 10);
+  const calculatedAt = new Date().toISOString();
   const analyzerPath = findAnalyzerPath();
-  const tsconfigPath = path.join(repoRoot, 'tsconfig.json');
-  const cargoRoots = findCargoRoots(repoRoot);
+  const tsconfigPath = path.join(resolvedRepoRoot, 'tsconfig.json');
+  const cargoRoots = findCargoRoots(resolvedRepoRoot);
   const analyzerResults = [];
   const analyzerErrors: string[] = [];
 
@@ -55,14 +80,14 @@ function calculateControlPlaneHealthScore(
     try {
       analyzerResults.push(normalizeAnalyzerHealthReport({
         repoId: normalizedRepoId,
-        repoRoot,
+        repoRoot: resolvedRepoRoot,
         calculatedAt,
         threshold,
         maxLines,
         mode: 'typescript-graph',
         report: runTypeScriptHealthAnalyzer({
           analyzerPath,
-          repoRoot,
+          repoRoot: resolvedRepoRoot,
           tsconfigPath,
           threshold,
           maxLines,
@@ -78,14 +103,14 @@ function calculateControlPlaneHealthScore(
     try {
       analyzerResults.push(normalizeAnalyzerHealthReport({
         repoId: normalizedRepoId,
-        repoRoot,
+        repoRoot: resolvedRepoRoot,
         calculatedAt,
         threshold,
         maxLines,
         mode: 'rust-graph',
         report: runRustHealthAnalyzer({
           analyzerPath,
-          repoRoot,
+          repoRoot: resolvedRepoRoot,
           cargoRoots,
           threshold,
           maxLines,
@@ -100,7 +125,7 @@ function calculateControlPlaneHealthScore(
   if (analyzerResults.length > 1) {
     return combineAnalyzerHealthResults({
       repoId: normalizedRepoId,
-      repoRoot,
+      repoRoot: resolvedRepoRoot,
       calculatedAt,
       threshold,
       maxLines,
@@ -120,13 +145,13 @@ function calculateControlPlaneHealthScore(
   }
 
   return {
-    ...buildFileSizeOnlyHealthReport(repoRoot, {
+    ...buildFileSizeOnlyHealthReport(resolvedRepoRoot, {
       maxLines,
       threshold,
       top,
     }),
     repoId: normalizedRepoId,
-    repoRoot,
+    repoRoot: resolvedRepoRoot,
     calculatedAt,
     status: 'completed',
     mode: 'file-size-only',
@@ -1058,5 +1083,6 @@ function clampScore(value: number) {
 
 export {
   calculateControlPlaneHealthScore,
+  calculateControlPlaneHealthScoreForRepoRoot,
   resolveControlPlaneHealthRepoRoot,
 };

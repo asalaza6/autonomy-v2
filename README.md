@@ -53,6 +53,7 @@ repo.
 - [Autonomy V2 Config Support](./docs/autonomy-v2-config-support.md)
 - [Orchestrator Flow](./docs/orchestrator-flow.md)
 - [Control Plane Bridge](./docs/control-plane-bridge.md)
+- [Health Score](./docs/health-score.md)
 - [Orchestrator Failure Cases](./docs/orchestrator-failure-cases.md)
 - [Structureness Health Flow](./docs/structureness-health-flow.md)
 - [Git-backed Implementation Queues](./docs/git-backed-implementation-queues.md)
@@ -102,6 +103,14 @@ launcher renders it as `You are a ...`. For full control over the sentence, use
 
 The package itself is used through `npx autonomy-v2 ...` or by invoking the
 installed binaries directly from a consumer repo.
+
+Health score commands are available locally in each consumer repo:
+
+```bash
+npx autonomy-v2 health:score
+npx autonomy-v2 health:why
+npx autonomy-v2 health:help
+```
 
 ## Install + initialize in a new workspace
 
