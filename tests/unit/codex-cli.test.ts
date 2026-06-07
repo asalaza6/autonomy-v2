@@ -253,6 +253,34 @@ test('runCodexExec defaults to no wall-clock timeout when unset', async () => {
   }
 });
 
+test('runCodexExec captures an early conversation id before verbose output evicts stdout tail', async () => {
+  const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-async-verbose-'));
+  const fakeCodexPath = path.join(fixtureDir, 'fake-codex-async-verbose.mjs');
+  const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
+
+  fs.writeFileSync(fakeCodexPath, [
+    '#!/usr/bin/env node',
+    "process.stdout.write(JSON.stringify({ type: 'thread.started', thread_id: 'sess-async-early' }) + '\\n');",
+    "process.stdout.write('x'.repeat(128 * 1024) + '\\n');",
+  ].join('\n'), 'utf8');
+  fs.chmodSync(fakeCodexPath, 0o755);
+
+  process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
+
+  try {
+    const output: any = await runCodexExec({
+      cwd: fixtureDir,
+      prompt: 'Continue the task.',
+      readOnly: false,
+      captureConversationId: true,
+    });
+
+    assert.equal(output.conversationId, 'sess-async-early');
+  } finally {
+    restoreEnv('AUTONOMY_CODEX_BIN', originalCodexBin);
+  }
+});
+
 test('runCodexExecSync tolerates verbose Codex output', () => {
   const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-cli-sync-buffer-'));
   const fakeCodexPath = path.join(fixtureDir, 'fake-codex-verbose.mjs');

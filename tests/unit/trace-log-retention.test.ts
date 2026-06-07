@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { EventEmitter } from 'events';
+import { PassThrough } from 'stream';
 
 import { appendTraceLine } from '../../src/server/commands/trace.js';
-import { writePrefixedChunks } from '../../src/server/commands/worker-streams.js';
+import { attachWorkerOutput, writePrefixedChunks } from '../../src/server/commands/worker-streams.js';
 
 test('appendTraceLine trims old stream output when the trace log exceeds its max size', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-trace-retention-'));
@@ -60,4 +62,34 @@ test('writePrefixedChunks flushes oversized pending output without waiting for n
   assert.equal(lines.length, 1);
   assert.match(lines[0], /agent-a \| pid=123 \| stdout/);
   assert.match(lines[0], /x{80}/);
+});
+
+test('attachWorkerOutput logs custom-agent conversation resume metadata', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-trace-attach-conversation-'));
+  const child: any = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  const attachedWorkers = new Map();
+
+  attachWorkerOutput(attachedWorkers, {
+    agentId: 'shadow-architecture-agent',
+    pid: 1234,
+    reason: 'custom-agent',
+    child,
+    conversation: {
+      key: 'shadow-architecture-agent:prd-example',
+      resumeSessionId: 'session-existing',
+    },
+  }, {
+    rootDir,
+    autoOpenTraceWindows: false,
+  });
+
+  child.emit('exit', 0, null);
+
+  const tracePath = path.join(rootDir, '.autonomy', 'runtime', 'agents', 'shadow-architecture-agent', 'stream.log');
+  const contents = fs.readFileSync(tracePath, 'utf8');
+  assert.match(contents, /worker:attach/);
+  assert.match(contents, /conversationId=session-existing/);
+  assert.match(contents, /conversationKey=shadow-architecture-agent:prd-example/);
 });

@@ -86,7 +86,7 @@ async function runCodexStructured({
       ...buildCodexRuntimeOptions({ env, inheritHostEnv, configOverrides }),
     });
     const output = readCodexOutput(outputPath, streamOutput);
-    const conversationId = extractCodexConversationId(result.stdout);
+    const conversationId = result.conversationId || extractCodexConversationId(result.stdout);
     return captureConversationId === true || resumeSessionId
       ? { ...output, conversationId }
       : output;
@@ -134,7 +134,7 @@ async function runCodexExec({
       ...buildCodexRuntimeOptions({ env, inheritHostEnv, configOverrides }),
     });
     return {
-      conversationId: extractCodexConversationId(result.stdout),
+      conversationId: result.conversationId || extractCodexConversationId(result.stdout),
     };
   } catch (error) {
     logCodexFailure(error, streamOutput);
@@ -361,7 +361,7 @@ function runCodexCommandSync({ binary, args, cwd, input, streamOutput, env }) {
 }
 
 function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0, env }) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+  return new Promise<{ stdout: string; stderr: string; conversationId: string }>((resolve, reject) => {
     const child = spawn(binary, args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -370,6 +370,8 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
     let settled = false;
     let stdoutCapture = '';
     let stderrCapture = '';
+    let stdoutLineBuffer = '';
+    let conversationId = '';
     let killTimer = null;
     let forcedKillTimer = null;
 
@@ -391,6 +393,7 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
       resolve({
         stdout: stdoutCapture,
         stderr: stderrCapture,
+        conversationId,
       });
     };
 
@@ -416,6 +419,11 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
     const onData = (streamName, chunk) => {
       if (streamName === 'stdout') {
         stdoutCapture = appendCapture(stdoutCapture, chunk);
+        if (!conversationId) {
+          const parsed = captureCodexConversationIdFromChunk(stdoutLineBuffer, chunk);
+          stdoutLineBuffer = parsed.buffer;
+          conversationId = parsed.conversationId;
+        }
         if (streamOutput) {
           process.stdout.write(chunk);
         }
@@ -452,6 +460,7 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
       fail(error);
     });
     child.on('close', (code, signal) => {
+      conversationId = conversationId || extractCodexConversationId(stdoutLineBuffer);
       if (code !== 0) {
         const error = new Error(buildSpawnExitMessage({ code, signal, stdout: stdoutCapture, stderr: stderrCapture }));
         error.stdout = stdoutCapture;
@@ -464,6 +473,27 @@ function runCodexCommand({ binary, args, cwd, input, streamOutput, timeoutMs = 0
 
     child.stdin.end(input, 'utf8');
   });
+}
+
+function captureCodexConversationIdFromChunk(buffer, chunk) {
+  const text = `${String(buffer || '')}${String(chunk || '')}`;
+  const lines = text.split(/\r?\n/);
+  const nextBuffer = lines.pop() || '';
+  for (const line of lines) {
+    const conversationId = extractCodexConversationId(line);
+    if (conversationId) {
+      return {
+        buffer: nextBuffer,
+        conversationId,
+      };
+    }
+  }
+  return {
+    buffer: nextBuffer.length > DEFAULT_CAPTURE_LIMIT
+      ? nextBuffer.slice(nextBuffer.length - DEFAULT_CAPTURE_LIMIT)
+      : nextBuffer,
+    conversationId: '',
+  };
 }
 
 function extractCodexConversationId(stdout) {

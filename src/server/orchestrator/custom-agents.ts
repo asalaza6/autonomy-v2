@@ -324,6 +324,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       target: invocationTarget,
       startedAt: nowIso,
       runtimeContextPath,
+      conversation,
     });
     started.push({
       agentId: normalizedAgent.agentId,

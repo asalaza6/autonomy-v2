@@ -24,16 +24,19 @@ function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord,
   if (!fs.existsSync(traceLogPath)) {
     fs.writeFileSync(traceLogPath, '', 'utf8');
   }
+  const conversationFields = buildWorkerAttachConversationFields(entry);
   console.log(formatServerEventLine('worker:attach', {
     agentId: entry.agentId,
     pid: entry.pid,
     reason: entry.reason || '',
+    ...conversationFields,
     trace: traceLogPath,
   }));
   appendTraceLine(traceLogPath, formatServerEventLine('worker:attach', {
     agentId: entry.agentId,
     pid: entry.pid,
     reason: entry.reason || '',
+    ...conversationFields,
   }), options);
 
   if (options.sameTerminalTrace !== true && options.autoOpenTraceWindows === true) {
@@ -98,6 +101,29 @@ function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord,
     console.log(exitLine);
     appendTraceLine(traceLogPath, exitLine, options);
   });
+}
+
+function buildWorkerAttachConversationFields(entry: AnyRecord) {
+  const conversation = entry && entry.conversation && typeof entry.conversation === 'object'
+    ? entry.conversation
+    : {};
+  const conversationId = normalizeConversationId(
+    entry && (
+      entry.conversationId
+      || entry.resumeSessionId
+    )
+  ) || normalizeConversationId(
+    conversation.resumeSessionId
+      || conversation.conversationId
+  );
+  return {
+    conversationId: conversationId || 'new',
+    conversationKey: normalizeConversationId(conversation.key),
+  };
+}
+
+function normalizeConversationId(value) {
+  return String(value || '').trim();
 }
 
 function writePrefixedChunks(

@@ -250,6 +250,7 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
             reason: 'custom-agent',
             pid,
             child,
+            conversation: entry.conversation || null,
           });
         }
       } catch (error) {
