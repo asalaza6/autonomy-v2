@@ -137,6 +137,7 @@ test('custom-agent:run is registered and manually runs disabled agents through d
       rootDir,
       '--runtime-key',
       'cli-agent:target-1',
+      '--no-trace-window',
     ]);
   } finally {
     if (typeof originalCodexBin === 'string') {

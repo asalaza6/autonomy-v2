@@ -1,13 +1,15 @@
-import process from 'process';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import {
   listConfiguredCustomAgents,
+  markCustomAgentSpawnFailed,
   markCustomAgentSpawned,
   pollCustomAgents,
   setCustomAgentEnabledOverride,
+  spawnCustomAgentProcess,
 } from '../../server/orchestrator/custom-agents.js';
 import { loadRuntime, writeRuntime } from '../../server/orchestrator/orchestrator-state.js';
-import { main as runCustomAgentWorker } from '../../server/custom-agents/custom-agent-worker.js';
+import { buildTraceOptions } from '../../server/commands/trace.js';
+import { attachWorkerOutput } from '../../server/commands/worker-streams.js';
 import { ensureInitialized, printOutput, requireOption } from './shared-core.js';
 
 function run(rootDir, options = {}, command = 'custom-agent:run') {
@@ -79,8 +81,27 @@ async function handleCustomAgentRun(rootDir, options) {
     return payload;
   }
 
-  markInlineCustomAgentSpawned(rootDir, pendingStart);
-  await runCustomAgentWorker(['run', '--context', pendingStart.runtimeContextPath]);
+  let child;
+  try {
+    child = spawnCustomAgentProcess(rootDir, pendingStart, {
+      streamOutput: true,
+    });
+  } catch (error) {
+    markFailedCustomAgentSpawn(rootDir, pendingStart, error);
+    throw error;
+  }
+  const pid = child && typeof child === 'object' ? child.pid : null;
+  markSpawnedCustomAgent(rootDir, pendingStart, pid);
+  const attachedWorkers = new Map();
+  attachWorkerOutput(attachedWorkers, {
+    agentId: pendingStart.agentId,
+    mode: 'custom-agent',
+    reason: 'custom-agent',
+    pid,
+    child,
+    conversation: pendingStart.conversation || null,
+  }, buildTraceOptions(rootDir, options));
+  const exit = await waitForChildExit(child);
   const runtime = loadRuntime(rootDir);
   const status = runtime.customAgents && runtime.customAgents[runtimeKey] || null;
   const invocation = pendingStart.invocationId && runtime.customAgentInvocations
@@ -94,7 +115,11 @@ async function handleCustomAgentRun(rootDir, options) {
     conversationId: status && (status.conversationId || status.lastConversationId) || '',
     status,
     invocation,
+    exit,
   };
+  if (exit.code !== 0) {
+    throw new Error(`Custom agent ${runtimeKey} exited ${exit.code == null ? '-' : exit.code}${exit.signal ? ` (${exit.signal})` : ''}.`);
+  }
   printOutput(options, payload, () => {
     console.log(`Ran custom agent ${runtimeKey}`);
     if (payload.conversationKey) {
@@ -142,15 +167,39 @@ function pollSingleCustomAgent(rootDir, runtimeKey) {
   }
 }
 
-function markInlineCustomAgentSpawned(rootDir, entry) {
+function markSpawnedCustomAgent(rootDir, entry, pid) {
   const release = acquireStateLock(rootDir);
   try {
     const runtime = loadRuntime(rootDir);
-    markCustomAgentSpawned(runtime, entry, process.pid);
+    markCustomAgentSpawned(runtime, entry, pid);
     writeRuntime(rootDir, runtime);
   } finally {
     release();
   }
+}
+
+function markFailedCustomAgentSpawn(rootDir, entry, error) {
+  const release = acquireStateLock(rootDir);
+  try {
+    const runtime = loadRuntime(rootDir);
+    markCustomAgentSpawnFailed(runtime, entry, error);
+    writeRuntime(rootDir, runtime);
+  } finally {
+    release();
+  }
+}
+
+function waitForChildExit(child) {
+  return new Promise<{ code: number | null; signal: string | null }>((resolve, reject) => {
+    if (!child || typeof child !== 'object') {
+      resolve({ code: null, signal: null });
+      return;
+    }
+    child.once('error', reject);
+    child.once('exit', (code, signal) => {
+      resolve({ code, signal });
+    });
+  });
 }
 
 export { run };
