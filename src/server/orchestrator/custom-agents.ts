@@ -93,6 +93,10 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
         includeConfigInStatusKey: configs.length > 1,
       });
       const statusKey = getCustomAgentStatusKey(normalizedAgent);
+      const requestedRuntimeKey = String(options.customAgentRuntimeKey || '').trim();
+      if (requestedRuntimeKey && statusKey !== requestedRuntimeKey) {
+        return;
+      }
       const enabledOverride = getCustomAgentEnabledOverride(runtime, statusKey);
       const agentEnabled = enabledOverride ?? normalizedAgent.enabled;
       const status = ensureCustomAgentStatus(runtime, statusKey, normalizedAgent, enabled);
@@ -142,7 +146,9 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     if (status.running === true) {
       return;
     }
-    const pollEligibility = getPollEligibility(status, normalizedAgent.intervalSeconds, normalizedAgent.offsetSeconds, nowIso);
+    const pollEligibility = options.forceCustomAgentPoll === true
+      ? { due: true, windowStart: null }
+      : getPollEligibility(status, normalizedAgent.intervalSeconds, normalizedAgent.offsetSeconds, nowIso);
     if (!pollEligibility.due) {
       return;
     }

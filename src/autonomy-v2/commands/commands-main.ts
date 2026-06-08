@@ -18,6 +18,7 @@ import { run as updateRun } from './update.js';
 import { run as refreshRun } from './refresh.js';
 import { run as serverCommandRun } from './server-command.js';
 import { run as healthRun } from './health-command.js';
+import { run as customAgentRun } from './custom-agent-command.js';
 import type { CliOptions } from '../autonomy-types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
@@ -47,6 +48,8 @@ const COMMAND_HANDLERS = new Map([
   ['server:kill', serverCommandRun],
   ['server:restart', serverCommandRun],
   ['server:status', serverCommandRun],
+  ['custom-agent:toggle', customAgentRun],
+  ['custom-agent:run', customAgentRun],
 ]);
 
 async function main(argv: string[] = process.argv.slice(2)) {
