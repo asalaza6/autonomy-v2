@@ -116,7 +116,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.offsetSeconds = normalizedAgent.offsetSeconds;
       status.tools = buildRuntimeToolStatus(normalizedAgent.tools);
 
-    if (!enabled || !agentEnabled) {
+    if (options.ignoreCustomAgentEnabled !== true && (!enabled || !agentEnabled)) {
       status.status = 'disabled';
       status.running = false;
       status.lastDecision = 'disabled';

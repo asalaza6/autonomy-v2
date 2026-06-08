@@ -30,6 +30,7 @@ function makeCustomAgentRepo() {
     agents: [
       {
         id: 'cli-agent',
+        enabled: false,
         target: { type: 'fixture', id: 'target-1' },
         workspace: '.autonomy/custom/cli-agent-target-1',
         spawn: {
@@ -110,7 +111,21 @@ test('custom-agent:toggle is registered and persists an enabled override', async
   assert.equal(runtime.customAgents['cli-agent:target-1'].enabled, false);
 });
 
-test('custom-agent:run is registered and runs decision, lifecycle, Codex, and finalize', async () => {
+test('custom-agent:list is registered and prints configured runtime keys', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const output = await captureConsoleLog(async () => {
+    await main([
+      'custom-agent:list',
+      '--root',
+      rootDir,
+    ]);
+  });
+
+  assert.match(output, /cli-agent:target-1/);
+  assert.equal(fs.existsSync(path.join(rootDir, '.autonomy', 'runtime', 'state', 'runtime.json')), false);
+});
+
+test('custom-agent:run is registered and manually runs disabled agents through decision, lifecycle, Codex, and finalize', async () => {
   const { rootDir, fakeCodexPath } = makeCustomAgentRepo();
   const originalCodexBin = process.env.AUTONOMY_CODEX_BIN;
   process.env.AUTONOMY_CODEX_BIN = fakeCodexPath;
@@ -143,3 +158,17 @@ test('custom-agent:run is registered and runs decision, lifecycle, Codex, and fi
   assert.equal(status.conversationId, 'cli-session-1');
   assert.equal(status.lastResult.finalize.finalized, true);
 });
+
+async function captureConsoleLog(callback: () => Promise<void>) {
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map((arg) => String(arg)).join(' '));
+  };
+  try {
+    await callback();
+  } finally {
+    console.log = originalLog;
+  }
+  return lines.join('\n');
+}

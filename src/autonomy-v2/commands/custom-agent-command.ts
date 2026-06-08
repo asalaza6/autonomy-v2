@@ -12,10 +12,32 @@ import { ensureInitialized, printOutput, requireOption } from './shared-core.js'
 
 function run(rootDir, options = {}, command = 'custom-agent:run') {
   ensureInitialized(rootDir);
+  if (command === 'custom-agent:list') {
+    return handleCustomAgentList(rootDir, options);
+  }
   if (command === 'custom-agent:toggle') {
     return handleCustomAgentToggle(rootDir, options);
   }
   return handleCustomAgentRun(rootDir, options);
+}
+
+function handleCustomAgentList(rootDir, options) {
+  const runtime = loadRuntime(rootDir);
+  const agents = listConfiguredCustomAgents(rootDir, runtime);
+  const payload = {
+    runtimeKeys: agents.map((agent) => agent.runtimeKey),
+    agents,
+  };
+  printOutput(options, payload, () => {
+    if (agents.length === 0) {
+      console.log('No custom agents configured.');
+      return;
+    }
+    agents.forEach((agent) => {
+      console.log(agent.runtimeKey);
+    });
+  });
+  return payload;
 }
 
 function handleCustomAgentToggle(rootDir, options) {
@@ -111,6 +133,7 @@ function pollSingleCustomAgent(rootDir, runtimeKey) {
     const result = pollCustomAgents(rootDir, runtime, {
       customAgentRuntimeKey: runtimeKey,
       forceCustomAgentPoll: true,
+      ignoreCustomAgentEnabled: true,
     });
     writeRuntime(rootDir, runtime);
     return result;

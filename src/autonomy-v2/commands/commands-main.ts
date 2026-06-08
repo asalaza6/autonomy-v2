@@ -48,6 +48,7 @@ const COMMAND_HANDLERS = new Map([
   ['server:kill', serverCommandRun],
   ['server:restart', serverCommandRun],
   ['server:status', serverCommandRun],
+  ['custom-agent:list', customAgentRun],
   ['custom-agent:toggle', customAgentRun],
   ['custom-agent:run', customAgentRun],
 ]);

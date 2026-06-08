@@ -30,6 +30,7 @@ Commands:
   server:kill
   server:restart [--detached] [--foreground] [--keep-old-terminal]
   server:status
+  custom-agent:list
   custom-agent:toggle --runtime-key <runtime-key> (--enable|--disable|--enabled <true|false>)
   custom-agent:run --runtime-key <runtime-key>
   update [--package-manager <npm|pnpm|yarn>] [--skip-init]
