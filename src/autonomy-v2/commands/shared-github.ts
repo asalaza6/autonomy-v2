@@ -1,7 +1,7 @@
 import https from 'https';
 import path from 'path';
 import fs from 'fs';
-import { execFileSync, spawnSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import type { AnyRecord, DeployCommandConfig } from '../autonomy-types.js';
 import { buildMergeCommitTitle, ensureDir, slugify } from './shared-core.js';
 import { buildDeployCreatedVersionData } from './deploy-version.js';
@@ -10,6 +10,13 @@ import { gitAuthArgs, gitIsAncestor, gitRemoteExists, gitWorkingTreeClean } from
 
 const DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_DEPLOY_COMMAND_OUTPUT_LENGTH = 4000;
+
+type DeployCommandRunResult = {
+  command: string;
+  cwd: string;
+  exitCode: number | null;
+  output: string | null;
+};
 
 function resolveGithubRepo(rootDir) {
   const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
@@ -151,7 +158,9 @@ function performLocalMerge(rootDir, config, pr, actor) {
   }
 }
 
-function performLocalDeploy(rootDir, config) {
+async function performLocalDeploy(rootDir, config, options: {
+  streamDeployCommandOutput?: boolean;
+} = {}) {
   const sourceBranch = String(config.integrationBranch || 'dev').trim() || 'dev';
   const targetBranch = String(config.productionBranch || 'main').trim() || 'main';
   if (sourceBranch === targetBranch) {
@@ -201,11 +210,13 @@ function performLocalDeploy(rootDir, config) {
       }
     }
     const deployCommand = deployCommandConfig
-      ? runDeployCommand(deployCommandConfig, {
+      ? await runDeployCommand(deployCommandConfig, {
         rootDir,
         sourceBranch,
         targetBranch,
         sha,
+      }, {
+        streamOutput: options.streamDeployCommandOutput === true,
       })
       : null;
     return {
@@ -300,43 +311,81 @@ function normalizeDeployCommandEnv(value: unknown) {
   }, {} as Record<string, string>);
 }
 
-function runDeployCommand(commandConfig: ReturnType<typeof normalizeDeployCommandConfig>, context: {
+async function runDeployCommand(commandConfig: ReturnType<typeof normalizeDeployCommandConfig>, context: {
   rootDir: string;
   sourceBranch: string;
   targetBranch: string;
   sha: string;
-}) {
+}, options: {
+  streamOutput?: boolean;
+} = {}): Promise<DeployCommandRunResult | null> {
   if (!commandConfig) {
     return null;
   }
-  const result = spawnSync(commandConfig.command, commandConfig.args, {
-    cwd: commandConfig.cwd,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      AUTONOMY_DEPLOY_SOURCE_BRANCH: context.sourceBranch,
-      AUTONOMY_DEPLOY_TARGET_BRANCH: context.targetBranch,
-      AUTONOMY_DEPLOY_SHA: context.sha,
-      ...commandConfig.env,
-    },
-    shell: commandConfig.shell,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS,
+  if (options.streamOutput) {
+    console.log(`Running deploy command: ${commandConfig.displayCommand}`);
+  }
+
+  return await new Promise<DeployCommandRunResult>((resolve, reject) => {
+    const child = spawn(commandConfig.command, commandConfig.args, {
+      cwd: commandConfig.cwd,
+      env: {
+        ...process.env,
+        AUTONOMY_DEPLOY_SOURCE_BRANCH: context.sourceBranch,
+        AUTONOMY_DEPLOY_TARGET_BRANCH: context.targetBranch,
+        AUTONOMY_DEPLOY_SHA: context.sha,
+        ...commandConfig.env,
+      },
+      shell: commandConfig.shell,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stdoutParts: string[] = [];
+    const stderrParts: string[] = [];
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+    }, DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS);
+
+    child.stdout?.on('data', (chunk) => {
+      stdoutParts.push(String(chunk));
+      if (options.streamOutput) {
+        process.stdout.write(chunk);
+      }
+    });
+    child.stderr?.on('data', (chunk) => {
+      stderrParts.push(String(chunk));
+      if (options.streamOutput) {
+        process.stderr.write(chunk);
+      }
+    });
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(new Error(`Deploy command "${commandConfig.displayCommand}" failed: ${error.message}`));
+    });
+    child.on('close', (status, signal) => {
+      clearTimeout(timeout);
+      const output = truncateDeployCommandOutput(collectDeployCommandOutput(
+        stdoutParts.join(''),
+        stderrParts.join('')
+      ));
+      if (timedOut) {
+        reject(new Error(`Deploy command "${commandConfig.displayCommand}" timed out after ${DEFAULT_DEPLOY_COMMAND_TIMEOUT_MS}ms: ${output || signal || 'no output'}`));
+        return;
+      }
+      if (status !== 0) {
+        const detail = output || signal || 'no output';
+        reject(new Error(`Deploy command "${commandConfig.displayCommand}" failed with exit code ${status}: ${detail}`));
+        return;
+      }
+      resolve({
+        command: commandConfig.displayCommand,
+        cwd: path.relative(context.rootDir, commandConfig.cwd) || '.',
+        exitCode: status,
+        output: output || null,
+      });
+    });
   });
-  const output = truncateDeployCommandOutput(collectDeployCommandOutput(result.stdout, result.stderr));
-  if (result.error) {
-    throw new Error(`Deploy command "${commandConfig.displayCommand}" failed: ${result.error.message}`);
-  }
-  if (result.status !== 0) {
-    const detail = output || result.signal || 'no output';
-    throw new Error(`Deploy command "${commandConfig.displayCommand}" failed with exit code ${result.status}: ${detail}`);
-  }
-  return {
-    command: commandConfig.displayCommand,
-    cwd: path.relative(context.rootDir, commandConfig.cwd) || '.',
-    exitCode: result.status,
-    output: output || null,
-  };
 }
 
 function collectDeployCommandOutput(...parts: unknown[]) {

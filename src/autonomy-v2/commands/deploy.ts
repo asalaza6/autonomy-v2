@@ -10,7 +10,7 @@ import {
 } from './shared-core.js';
 import { gitRefExists, resolveBaseRef, runGitRead } from './shared-repo.js';
 
-function run(rootDir, options) {
+async function run(rootDir, options) {
   ensureInitialized(rootDir);
   const paths = getAutonomyPaths(rootDir);
   const config = validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
@@ -19,9 +19,12 @@ function run(rootDir, options) {
     {}
   );
   const deployCommand = resolveDeployCommand(rootDir, paths, config, controlPlaneConfig);
-  const result = performLocalDeploy(rootDir, {
+  const streamDeployCommandOutput = options.streamDeployCommandOutput === false ? false : options.json !== true;
+  const result = await performLocalDeploy(rootDir, {
     ...config,
     deployCommand,
+  }, {
+    streamDeployCommandOutput,
   });
 
   if (!result.ok) {
@@ -36,7 +39,7 @@ function run(rootDir, options) {
     }
     if (result.deployCommand) {
       console.log(`Ran deploy command: ${result.deployCommand.command}`);
-      if (result.deployCommand.output) {
+      if (!streamDeployCommandOutput && result.deployCommand.output) {
         console.log(result.deployCommand.output);
       }
     }

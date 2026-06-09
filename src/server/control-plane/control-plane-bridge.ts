@@ -357,7 +357,7 @@ async function runControlPlaneBridgeOnce(rootDir: string, options: {
           repoId: job.repoId,
           root: repoRoot,
         });
-        const execution = runDeploy(repoRoot, {});
+        const execution = await runDeploy(repoRoot, { streamDeployCommandOutput: false });
         logBridgeEvent('bridge:deploy:done', {
           jobId: job.id,
           repoId: job.repoId,
