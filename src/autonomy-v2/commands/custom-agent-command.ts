@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import {
   listConfiguredCustomAgents,
@@ -10,7 +12,33 @@ import {
 import { loadRuntime, writeRuntime } from '../../server/orchestrator/orchestrator-state.js';
 import { buildTraceOptions } from '../../server/commands/trace.js';
 import { attachWorkerOutput } from '../../server/commands/worker-streams.js';
-import { ensureInitialized, printOutput, requireOption } from './shared-core.js';
+import { ensureDir, ensureInitialized, printOutput, requireOption } from './shared-core.js';
+
+const DEFAULT_RESET_WORKSPACE_FILES = ['context.md', 'notes.md', 'recent-summary.md'];
+const RESET_FILE_STARTERS = {
+  'context.md': [
+    '# Custom Agent Context',
+    '',
+    'This workspace has been reset for a fresh custom-agent run.',
+    '',
+    '- Treat archived files as historical reference only.',
+    '- Use current repository files, runtime inputs, and tool responses as the source of truth.',
+    '- Record new verified context here as it is established.',
+    '',
+  ].join('\n'),
+  'notes.md': [
+    '# Notes',
+    '',
+    'Fresh reset. Add new verified notes from future custom-agent runs here.',
+    '',
+  ].join('\n'),
+  'recent-summary.md': [
+    '# Recent Summary',
+    '',
+    'Fresh reset. No recent workspace summary has been established yet.',
+    '',
+  ].join('\n'),
+};
 
 function run(rootDir, options = {}, command = 'custom-agent:run') {
   ensureInitialized(rootDir);
@@ -19,6 +47,9 @@ function run(rootDir, options = {}, command = 'custom-agent:run') {
   }
   if (command === 'custom-agent:toggle') {
     return handleCustomAgentToggle(rootDir, options);
+  }
+  if (command === 'custom-agent:reset') {
+    return handleCustomAgentReset(rootDir, options);
   }
   return handleCustomAgentRun(rootDir, options);
 }
@@ -53,6 +84,86 @@ function handleCustomAgentToggle(rootDir, options) {
   };
   printOutput(options, payload, () => {
     console.log(`${enabled ? 'Enabled' : 'Disabled'} custom agent ${runtimeKey}`);
+  });
+  return payload;
+}
+
+function handleCustomAgentReset(rootDir, options) {
+  const runtimeKey = requireSingleRuntimeKey(options);
+  const resetOptions = {
+    archiveExisting: options['archive-existing'] === true,
+    clearContext: options['clear-context'] === true,
+    clearNotes: options['clear-notes'] === true,
+    clearRecentSummary: options['clear-recent-summary'] === true,
+  };
+  if (!resetOptions.archiveExisting && !resetOptions.clearContext && !resetOptions.clearNotes && !resetOptions.clearRecentSummary) {
+    throw new Error('Provide at least one of --archive-existing, --clear-context, --clear-notes, or --clear-recent-summary.');
+  }
+
+  const runtime = loadRuntime(rootDir);
+  const agents = listConfiguredCustomAgents(rootDir, runtime);
+  const agent = agents.find((entry) => entry.runtimeKey === runtimeKey) || null;
+  if (!agent) {
+    const available = agents.map((entry) => entry.runtimeKey);
+    throw new Error(`Unknown custom agent runtime key "${runtimeKey}". Available runtime keys: ${available.join(', ') || 'none'}.`);
+  }
+
+  const workspace = String(agent.workspacePath || '').trim();
+  if (!workspace) {
+    throw new Error(`Custom agent ${runtimeKey} has no configured writable workspace.`);
+  }
+
+  ensureWorkspaceInsideRoot(rootDir, workspace);
+  ensureDir(workspace);
+
+  const writableFiles = resolveResetWritableFiles(agent);
+  let archiveDirectory = null;
+  const archivedFiles: string[] = [];
+  const skippedMissingFiles: string[] = [];
+  if (resetOptions.archiveExisting) {
+    archiveDirectory = path.join(workspace, 'archive', `reset-${formatResetTimestamp()}`);
+    ensureDir(archiveDirectory);
+    writableFiles.forEach((relativeFile) => {
+      const sourcePath = resolveWorkspaceFile(workspace, relativeFile);
+      if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
+        skippedMissingFiles.push(relativeFile);
+        return;
+      }
+      const archivePath = resolveWorkspaceFile(archiveDirectory, relativeFile);
+      ensureDir(path.dirname(archivePath));
+      fs.copyFileSync(sourcePath, archivePath);
+      archivedFiles.push(relativeFile);
+    });
+  }
+
+  const rewrittenFiles: string[] = [];
+  if (resetOptions.clearContext) {
+    writeStarterFile(workspace, 'context.md');
+    rewrittenFiles.push('context.md');
+  }
+  if (resetOptions.clearNotes) {
+    writeStarterFile(workspace, 'notes.md');
+    rewrittenFiles.push('notes.md');
+  }
+  if (resetOptions.clearRecentSummary) {
+    writeStarterFile(workspace, 'recent-summary.md');
+    rewrittenFiles.push('recent-summary.md');
+  }
+
+  const payload = {
+    runtimeKey,
+    workspace,
+    archiveDirectory,
+    archivedFiles,
+    rewrittenFiles,
+    skippedMissingFiles,
+  };
+  printOutput(options, payload, () => {
+    console.log(`Reset custom agent ${runtimeKey}`);
+    console.log(`Workspace: ${workspace}`);
+    console.log(`Archived files: ${formatFileSummary(archivedFiles)}`);
+    console.log(`Rewritten files: ${formatFileSummary(rewrittenFiles)}`);
+    console.log(`Skipped missing files: ${formatFileSummary(skippedMissingFiles)}`);
   });
   return payload;
 }
@@ -145,6 +256,71 @@ function resolveEnabledOption(options) {
     return false;
   }
   throw new Error('Provide --enable, --disable, or --enabled <true|false>.');
+}
+
+function requireSingleRuntimeKey(options) {
+  const raw = options['runtime-key'];
+  if (Array.isArray(raw)) {
+    throw new Error('Provide exactly one --runtime-key. Multiple --runtime-key flags are not supported.');
+  }
+  if (typeof raw === 'undefined' || raw === true) {
+    throw new Error('Missing required option --runtime-key');
+  }
+  const value = String(raw || '').trim();
+  if (!value) {
+    throw new Error('Missing required option --runtime-key');
+  }
+  if (value.includes(',')) {
+    throw new Error('Provide exactly one --runtime-key. Comma-separated runtime keys are not supported.');
+  }
+  return value;
+}
+
+function resolveResetWritableFiles(agent) {
+  const configuredFiles = Array.isArray(agent.workspaceReadWrite)
+    ? agent.workspaceReadWrite.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  const files = configuredFiles.length > 0 ? configuredFiles : DEFAULT_RESET_WORKSPACE_FILES;
+  return Array.from(new Set<string>(files.map(normalizeWorkspaceRelativeFile)));
+}
+
+function normalizeWorkspaceRelativeFile(value) {
+  const normalized = path.normalize(String(value || '').trim());
+  if (!normalized || path.isAbsolute(normalized) || normalized.startsWith('..')) {
+    throw new Error(`Custom agent writable file "${value}" must be relative to the workspace.`);
+  }
+  return normalized;
+}
+
+function ensureWorkspaceInsideRoot(rootDir, workspace) {
+  const relative = path.relative(rootDir, workspace);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Custom agent workspace must resolve inside the repository root: ${workspace}`);
+  }
+}
+
+function resolveWorkspaceFile(workspace, relativeFile) {
+  const normalizedFile = normalizeWorkspaceRelativeFile(relativeFile);
+  const resolvedPath = path.resolve(workspace, normalizedFile);
+  const relative = path.relative(workspace, resolvedPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Custom agent workspace file must resolve inside the workspace: ${relativeFile}`);
+  }
+  return resolvedPath;
+}
+
+function writeStarterFile(workspace, relativeFile) {
+  const targetPath = resolveWorkspaceFile(workspace, relativeFile);
+  ensureDir(path.dirname(targetPath));
+  fs.writeFileSync(targetPath, RESET_FILE_STARTERS[relativeFile], 'utf8');
+}
+
+function formatResetTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function formatFileSummary(files) {
+  return files.length > 0 ? files.join(', ') : 'none';
 }
 
 function findConfiguredCustomAgent(rootDir, runtimeKey, runtime = null) {

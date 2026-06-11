@@ -33,6 +33,7 @@ Commands:
   custom-agent:list
   custom-agent:toggle --runtime-key <runtime-key> (--enable|--disable|--enabled <true|false>)
   custom-agent:run --runtime-key <runtime-key>
+  custom-agent:reset --runtime-key <runtime-key> [--archive-existing] [--clear-context] [--clear-notes] [--clear-recent-summary]
   update [--package-manager <npm|pnpm|yarn>] [--skip-init]
   refresh
 

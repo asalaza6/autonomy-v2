@@ -51,6 +51,7 @@ const COMMAND_HANDLERS = new Map([
   ['custom-agent:list', customAgentRun],
   ['custom-agent:toggle', customAgentRun],
   ['custom-agent:run', customAgentRun],
+  ['custom-agent:reset', customAgentRun],
 ]);
 
 async function main(argv: string[] = process.argv.slice(2)) {

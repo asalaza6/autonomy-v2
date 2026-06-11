@@ -24,7 +24,7 @@ function makeCustomAgentRepo() {
     enabled: true,
     context: {
       globalReadOnly: ['context.md'],
-      workspaceReadWrite: ['state.json'],
+      workspaceReadWrite: ['context.md', 'notes.md', 'recent-summary.md'],
       allowRuntimeStateChanges: true,
     },
     agents: [
@@ -160,6 +160,228 @@ test('custom-agent:run is registered and manually runs disabled agents through d
   assert.equal(status.lastResult.finalize.finalized, true);
 });
 
+test('custom-agent:reset rejects an unknown runtime key with available keys', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const error = await captureConsoleError(async () => {
+    await main([
+      'custom-agent:reset',
+      '--root',
+      rootDir,
+      '--runtime-key',
+      'missing-agent:target-1',
+      '--clear-context',
+    ]);
+  });
+
+  assert.match(error, /Unknown custom agent runtime key "missing-agent:target-1"/);
+  assert.match(error, /cli-agent:target-1/);
+});
+
+test('custom-agent:reset rejects multiple runtime keys', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const repeatedError = await captureConsoleError(async () => {
+    await main([
+      'custom-agent:reset',
+      '--root',
+      rootDir,
+      '--runtime-key',
+      'cli-agent:target-1',
+      '--runtime-key',
+      'cli-agent:target-2',
+      '--clear-context',
+    ]);
+  });
+  const commaError = await captureConsoleError(async () => {
+    await main([
+      'custom-agent:reset',
+      '--root',
+      rootDir,
+      '--runtime-key',
+      'cli-agent:target-1,cli-agent:target-2',
+      '--clear-context',
+    ]);
+  });
+
+  assert.match(repeatedError, /Multiple --runtime-key flags are not supported/);
+  assert.match(commaError, /Comma-separated runtime keys are not supported/);
+});
+
+test('custom-agent:reset rejects no-op invocation', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const error = await captureConsoleError(async () => {
+    await main([
+      'custom-agent:reset',
+      '--root',
+      rootDir,
+      '--runtime-key',
+      'cli-agent:target-1',
+    ]);
+  });
+
+  assert.match(error, /Provide at least one of --archive-existing/);
+});
+
+test('custom-agent:reset archives existing workspace files without deleting them', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const workspacePath = prepareResetWorkspace(rootDir, {
+    'context.md': 'old context\n',
+    'notes.md': 'old notes\n',
+    'recent-summary.md': 'old summary\n',
+  });
+
+  const output = await captureConsoleLog(async () => {
+    await main([
+      'custom-agent:reset',
+      '--root',
+      rootDir,
+      '--runtime-key',
+      'cli-agent:target-1',
+      '--archive-existing',
+      '--json',
+    ]);
+  });
+  const payload = JSON.parse(output);
+
+  assert.equal(payload.runtimeKey, 'cli-agent:target-1');
+  assert.equal(payload.workspace, workspacePath);
+  assert.deepEqual(payload.archivedFiles, ['context.md', 'notes.md', 'recent-summary.md']);
+  assert.deepEqual(payload.rewrittenFiles, []);
+  assert.deepEqual(payload.skippedMissingFiles, []);
+  assert.equal(fs.readFileSync(path.join(workspacePath, 'context.md'), 'utf8'), 'old context\n');
+  assert.equal(fs.readFileSync(path.join(payload.archiveDirectory, 'context.md'), 'utf8'), 'old context\n');
+  assert.equal(fs.readFileSync(path.join(payload.archiveDirectory, 'notes.md'), 'utf8'), 'old notes\n');
+  assert.equal(fs.readFileSync(path.join(payload.archiveDirectory, 'recent-summary.md'), 'utf8'), 'old summary\n');
+});
+
+test('custom-agent:reset skips missing optional files during archive', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  prepareResetWorkspace(rootDir, {
+    'context.md': 'only context exists\n',
+  });
+
+  const output = await captureConsoleLog(async () => {
+    await main([
+      'custom-agent:reset',
+      '--root',
+      rootDir,
+      '--runtime-key',
+      'cli-agent:target-1',
+      '--archive-existing',
+      '--json',
+    ]);
+  });
+  const payload = JSON.parse(output);
+
+  assert.deepEqual(payload.archivedFiles, ['context.md']);
+  assert.deepEqual(payload.skippedMissingFiles, ['notes.md', 'recent-summary.md']);
+});
+
+test('custom-agent:reset rewrites context with generic starter content', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const workspacePath = prepareResetWorkspace(rootDir, {
+    'context.md': 'stock crypto trading personality\n',
+  });
+
+  await main([
+    'custom-agent:reset',
+    '--root',
+    rootDir,
+    '--runtime-key',
+    'cli-agent:target-1',
+    '--clear-context',
+  ]);
+
+  const context = fs.readFileSync(path.join(workspacePath, 'context.md'), 'utf8');
+  assert.match(context, /# Custom Agent Context/);
+  assert.doesNotMatch(context, /stock|crypto|trading|personality/i);
+});
+
+test('custom-agent:reset rewrites notes with generic starter content', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const workspacePath = prepareResetWorkspace(rootDir, {
+    'notes.md': 'old notes\n',
+  });
+
+  await main([
+    'custom-agent:reset',
+    '--root',
+    rootDir,
+    '--runtime-key',
+    'cli-agent:target-1',
+    '--clear-notes',
+  ]);
+
+  const notes = fs.readFileSync(path.join(workspacePath, 'notes.md'), 'utf8');
+  assert.match(notes, /# Notes/);
+  assert.match(notes, /Fresh reset/);
+  assert.doesNotMatch(notes, /old notes/);
+});
+
+test('custom-agent:reset rewrites recent summary with generic starter content', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const workspacePath = prepareResetWorkspace(rootDir, {
+    'recent-summary.md': 'old summary\n',
+  });
+
+  await main([
+    'custom-agent:reset',
+    '--root',
+    rootDir,
+    '--runtime-key',
+    'cli-agent:target-1',
+    '--clear-recent-summary',
+  ]);
+
+  const summary = fs.readFileSync(path.join(workspacePath, 'recent-summary.md'), 'utf8');
+  assert.match(summary, /# Recent Summary/);
+  assert.match(summary, /Fresh reset/);
+  assert.doesNotMatch(summary, /old summary/);
+});
+
+test('custom-agent:reset JSON output shape is stable', async () => {
+  const { rootDir } = makeCustomAgentRepo();
+  const workspacePath = prepareResetWorkspace(rootDir, {});
+
+  const output = await captureConsoleLog(async () => {
+    await main([
+      'custom-agent:reset',
+      '--root',
+      rootDir,
+      '--runtime-key',
+      'cli-agent:target-1',
+      '--clear-context',
+      '--json',
+    ]);
+  });
+  const payload = JSON.parse(output);
+
+  assert.deepEqual(Object.keys(payload), [
+    'runtimeKey',
+    'workspace',
+    'archiveDirectory',
+    'archivedFiles',
+    'rewrittenFiles',
+    'skippedMissingFiles',
+  ]);
+  assert.equal(payload.runtimeKey, 'cli-agent:target-1');
+  assert.equal(payload.workspace, workspacePath);
+  assert.equal(payload.archiveDirectory, null);
+  assert.deepEqual(payload.archivedFiles, []);
+  assert.deepEqual(payload.rewrittenFiles, ['context.md']);
+  assert.deepEqual(payload.skippedMissingFiles, []);
+});
+
+function prepareResetWorkspace(rootDir, files) {
+  const workspacePath = path.join(rootDir, '.autonomy', 'custom', 'cli-agent-target-1');
+  fs.mkdirSync(workspacePath, { recursive: true });
+  Object.entries(files).forEach(([relativeFile, contents]) => {
+    const filePath = path.join(workspacePath, relativeFile);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, String(contents), 'utf8');
+  });
+  return workspacePath;
+}
+
 async function captureConsoleLog(callback: () => Promise<void>) {
   const originalLog = console.log;
   const lines: string[] = [];
@@ -170,6 +392,23 @@ async function captureConsoleLog(callback: () => Promise<void>) {
     await callback();
   } finally {
     console.log = originalLog;
+  }
+  return lines.join('\n');
+}
+
+async function captureConsoleError(callback: () => Promise<void>) {
+  const originalError = console.error;
+  const previousExitCode = process.exitCode;
+  const lines: string[] = [];
+  console.error = (...args: unknown[]) => {
+    lines.push(args.map((arg) => String(arg)).join(' '));
+  };
+  try {
+    process.exitCode = undefined;
+    await callback();
+  } finally {
+    console.error = originalError;
+    process.exitCode = previousExitCode;
   }
   return lines.join('\n');
 }
