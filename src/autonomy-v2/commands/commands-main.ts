@@ -19,6 +19,7 @@ import { run as refreshRun } from './refresh.js';
 import { run as serverCommandRun } from './server-command.js';
 import { run as healthRun } from './health-command.js';
 import { run as customAgentRun } from './custom-agent-command.js';
+import { run as authRun } from './auth-command.js';
 import type { CliOptions } from '../autonomy-types.js';
 
 const REVIEW_RECORD_COMMAND = buildRoleEventName(AGENT_ROLES.REVIEW, 'record');
@@ -44,6 +45,7 @@ const COMMAND_HANDLERS = new Map([
   ['health:help', healthRun],
   ['update', updateRun],
   ['refresh', refreshRun],
+  ['auth', authRun],
   ['server:start', serverCommandRun],
   ['server:kill', serverCommandRun],
   ['server:restart', serverCommandRun],

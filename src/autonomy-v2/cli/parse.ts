@@ -43,6 +43,7 @@ function isMutatingCommand(command: string) {
     'deploy',
     'update',
     'refresh',
+    'auth',
     'custom-agent:reset',
   ]).has(command);
 }
