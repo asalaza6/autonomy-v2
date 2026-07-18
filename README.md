@@ -5,6 +5,8 @@ It provides only:
 
 - a polling server;
 - custom-agent discovery and process bookkeeping;
+- repository-scoped server lifecycle commands;
+- minimal custom-agent initialization, status, auth, refresh, and package update commands;
 - JSON-over-stdio lifecycle commands;
 - Codex execution between the prompt and finalize lifecycle phases.
 
@@ -22,8 +24,9 @@ cat >> .npmrc <<'EOF'
 EOF
 
 npm install -O @asalaza6/autonomy-v2
+npx autonomy-v2 init --root .
 npx autonomy-v2 custom-agent:list --root .
-npx autonomy-v2-server serve --root .
+npx autonomy-v2 server:start --root .
 ```
 
 `NODE_AUTH_TOKEN` must be able to read the package from GitHub Packages.
@@ -41,6 +44,54 @@ The server also supports a single detached polling pass:
 ```bash
 npx autonomy-v2-server tick --root . --json
 ```
+
+## Management commands
+
+The main CLI manages one repository at a time. Server discovery and shutdown
+are scoped to the resolved `--root`, so a lifecycle command in one repository
+does not stop another repository's server.
+
+```bash
+npx autonomy-v2 server:status --root .
+npx autonomy-v2 server:restart --detached --root .
+npx autonomy-v2 server:kill --root .
+```
+
+Managed servers run detached by default and append output to
+`.autonomy/runtime/server.log`. Pass `--foreground` to keep a start or restart
+attached to the current terminal. Shutdown sends `SIGTERM` to the complete
+repository-local process tree before escalating remaining processes to
+`SIGKILL`. `--keep-old-terminal` remains accepted for command compatibility;
+managed servers never open or close Terminal windows, so there is no old
+terminal to retain.
+
+`init` creates a minimal empty custom-agent configuration when one is missing,
+initializes local runtime state, and ensures local credentials/runtime paths
+are ignored by Git. `refresh` repairs those base files without replacing an
+existing custom-agent configuration. `status --sync` reconciles stale runtime
+process state but never starts an agent.
+
+```bash
+npx autonomy-v2 status --sync --root . --json
+npx autonomy-v2 refresh --root . --json
+npx autonomy-v2 update --package-manager npm --root . --json
+```
+
+Auth setup writes `.env.autonomy` with mode `0600` and never includes token
+values in command results. Interactive setup is preferred because token option
+values can remain in shell history. Non-interactive setup is also available:
+
+```bash
+npx autonomy-v2 auth \
+  --repo owner/name \
+  --node-auth-token '<token>' \
+  --github-token '<token>' \
+  --skip-verify \
+  --root . \
+  --json
+```
+
+Every command accepts `--json` for structured output.
 
 ## Configuration
 

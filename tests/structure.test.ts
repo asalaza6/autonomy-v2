@@ -5,13 +5,17 @@ import assert from 'node:assert/strict';
 
 const projectRoot = process.cwd();
 
-test('the source tree contains only the server and custom-agent runtime', () => {
+test('the source tree contains only the server, management commands, and custom-agent runtime', () => {
   const files = listFiles(path.join(projectRoot, 'src'))
     .map((file) => path.relative(projectRoot, file))
     .sort();
   assert.deepEqual(files, [
     'src/autonomy-v2/index.ts',
     'src/cli.ts',
+    'src/commands/auth-command.ts',
+    'src/commands/project-command.ts',
+    'src/commands/server-command.ts',
+    'src/commands/update-command.ts',
     'src/custom-agents/codex.ts',
     'src/custom-agents/command.ts',
     'src/custom-agents/config.ts',

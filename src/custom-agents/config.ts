@@ -7,7 +7,12 @@ import type {
   LoadedCustomAgentConfig,
   NormalizedCustomAgent,
 } from '../types.js';
-import { isRecord, readJson, resolveInsideRoot } from '../runtime.js';
+import {
+  canonicalizePath,
+  isRecord,
+  readJson,
+  resolveInsideRoot,
+} from '../runtime.js';
 
 const DEFAULT_CONFIG_PATH = 'prompts/autonomous/v2/config/custom-agents.json';
 const DEFAULT_INTERVAL_SECONDS = 60;
@@ -15,9 +20,10 @@ const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
 const MAX_PARALLELISM = 32;
 
 function loadCustomAgentConfig(
-  rootDir: string,
+  requestedRootDir: string,
   configOption = ''
 ): LoadedCustomAgentConfig | null {
+  const rootDir = canonicalizePath(requestedRootDir);
   const configuredPath = String(
     configOption || process.env.AUTONOMY_CUSTOM_AGENTS_CONFIG || DEFAULT_CONFIG_PATH
   ).trim();

@@ -43,6 +43,19 @@ function ensureStatus(
 
 function refreshCustomAgentRuntime(runtime: RuntimeState, now = new Date()) {
   Object.values(runtime.customAgents).forEach((status) => {
+    if (status.phase === 'deciding') {
+      const expiresAt = Date.parse(status.decisionExpiresAt || '');
+      if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) {
+        status.status = 'idle';
+        status.phase = 'idle';
+        status.lastPollAt = undefined;
+        status.lastDecision = 'expired';
+        status.lastDecisionReason = 'decision reservation expired before completion';
+        status.lastError = null;
+        status.decisionToken = undefined;
+        status.decisionExpiresAt = undefined;
+      }
+    }
     if (!status.running || (status.pid && isProcessAlive(status.pid))) return;
     const startedAt = Date.parse(status.startedAt || '');
     if (!status.pid && Number.isFinite(startedAt) && now.getTime() - startedAt < 60_000) return;
@@ -61,6 +74,24 @@ function refreshCustomAgentRuntime(runtime: RuntimeState, now = new Date()) {
       invocation.finishedAt = now.toISOString();
       invocation.lastError = status.lastError;
     }
+  });
+
+  const activeInvocationIds = new Set(
+    Object.values(runtime.customAgents)
+      .filter((status) => status.running && status.invocationId)
+      .map((status) => status.invocationId as string)
+  );
+  Object.values(runtime.customAgentInvocations).forEach((invocation) => {
+    if (invocation.status !== 'running' || activeInvocationIds.has(invocation.invocationId)) {
+      return;
+    }
+    const timestamp = now.toISOString();
+    invocation.status = 'failed';
+    invocation.phase = 'failed';
+    invocation.updatedAt = timestamp;
+    invocation.finishedAt = invocation.finishedAt || timestamp;
+    invocation.lastError = invocation.lastError
+      || 'custom agent invocation no longer owns a running runtime slot';
   });
 }
 

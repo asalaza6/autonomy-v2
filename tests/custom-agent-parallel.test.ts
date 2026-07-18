@@ -217,6 +217,7 @@ test('parallelism rejects a repository-root workspace that cannot be isolated', 
 
 test('an opted-in pool starts N distinct decision-selected tasks in stable slots', async () => {
   const rootDir = makeRoot();
+  const canonicalRoot = fs.realpathSync(rootDir);
   writeParallelFixture(rootDir, { parallelism: 3 });
   const config = loadCustomAgentConfig(rootDir);
   assert.ok(config);
@@ -227,7 +228,7 @@ test('an opted-in pool starts N distinct decision-selected tasks in stable slots
     'worker:fixture#3',
   ]);
   assert.deepEqual(config.agents.map((agent) => agent.parallelSlot), [1, 2, 3]);
-  assert.deepEqual(config.agents.map((agent) => path.relative(rootDir, agent.workspacePath)), [
+  assert.deepEqual(config.agents.map((agent) => path.relative(canonicalRoot, agent.workspacePath)), [
     '.autonomy/runtime/parallel-agent-slots/slot-1',
     '.autonomy/runtime/parallel-agent-slots/slot-2',
     '.autonomy/runtime/parallel-agent-slots/slot-3',
@@ -323,7 +324,7 @@ test('live scale-up keeps the single-worker workspace outside the new pool', asy
     spawner: liveSpawner,
   });
   assert.equal(initial.started.length, 1);
-  const legacyWorkspace = path.join(rootDir, fixture.workspace);
+  const legacyWorkspace = path.join(fs.realpathSync(rootDir), fixture.workspace);
   assert.equal(
     loadRuntime(rootDir).customAgents['worker:fixture'].workspacePath,
     legacyWorkspace

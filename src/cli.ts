@@ -10,16 +10,98 @@ import {
   listConfiguredCustomAgents,
   runSchedulerTick,
 } from './custom-agents/scheduler.js';
+import { runAuth } from './commands/auth-command.js';
+import {
+  runInit,
+  runRefresh,
+  runStatus,
+} from './commands/project-command.js';
+import { runServerCommand } from './commands/server-command.js';
+import { runUpdate } from './commands/update-command.js';
+
+const BOOLEAN_OPTIONS = new Set([
+  'detached',
+  'force',
+  'foreground',
+  'help',
+  'json',
+  'keep-old-terminal',
+  'open',
+  'skip-init',
+  'skip-verify',
+  'sync',
+]);
 
 async function main(argv = process.argv.slice(2)) {
   const { command, options } = parseCli(argv);
-  if (!command || command === 'help' || options.help === true) {
+  if (!command || command === 'help' || command === '-h' || options.help === true) {
+    if (options.json === true) {
+      const result = helpPayload();
+      console.log(JSON.stringify(result, null, 2));
+      return result;
+    }
     printHelp();
     return null;
   }
   const rootDir = resolveRootDir(String(options.root || ''));
   loadAutonomyEnv(rootDir);
   const configPath = String(options.config || '');
+
+  if (command === 'init') {
+    const result = runInit(rootDir, options);
+    print(options, result, () => printInitResult(result, 'Initialized'));
+    return result;
+  }
+
+  if (command === 'refresh') {
+    const result = runRefresh(rootDir, options);
+    print(options, result, () => printInitResult(result, 'Refreshed'));
+    return result;
+  }
+
+  if (command === 'status') {
+    const result = await runStatus(rootDir, options);
+    print(options, result, () => {
+      console.log(`Config: ${result.config.exists ? result.config.path : 'missing'}`);
+      console.log(`Server: ${result.server.running ? `running (pid ${result.server.pid})` : 'stopped'}`);
+      console.log(`Custom agents: ${result.config.agentCount} configured, ${result.runtime.runningAgents} running`);
+      if (result.synced) console.log('Runtime state synchronized.');
+    });
+    return result;
+  }
+
+  if (command === 'auth') {
+    const result = await runAuth(rootDir, options);
+    print(options, result, () => {
+      console.log(`Env file: ${result.envPath}`);
+      Object.entries(result.statuses).forEach(([key, status]) => {
+        console.log(`${key}: ${status}`);
+      });
+      console.log(`GITHUB_TOKEN verification: ${result.verification.github.status}`);
+      console.log(`NODE_AUTH_TOKEN verification: ${result.verification.nodeAuth.status}`);
+    });
+    return result;
+  }
+
+  if (command.startsWith('server:')) {
+    if (!['server:start', 'server:kill', 'server:restart', 'server:status'].includes(command)) {
+      throw new Error(`Unknown command "${command}". Run "autonomy-v2 help".`);
+    }
+    const result = await runServerCommand(rootDir, options, command);
+    print(options, result, () => printServerResult(result));
+    return result;
+  }
+
+  if (command === 'update') {
+    const result = runUpdate(rootDir, options);
+    print(options, result, () => {
+      console.log(`Updated ${result.packageName} with ${result.packageManager}.`);
+      console.log(`Declared version: ${result.newDeclaredVersion || '(unchanged)'}`);
+      if (result.installedVersion) console.log(`Installed version: ${result.installedVersion}`);
+      console.log(`Refresh: ${result.refreshStatus}`);
+    });
+    return result;
+  }
 
   if (command === 'custom-agent:list') {
     const agents = listConfiguredCustomAgents(rootDir, { configPath });
@@ -49,7 +131,7 @@ async function main(argv = process.argv.slice(2)) {
       force: true,
       ignoreEnabled: true,
       detached: false,
-      streamOutput: true,
+      streamOutput: options.json !== true,
     });
     const launch = tick.launched[0];
     if (!launch) {
@@ -104,16 +186,30 @@ function parseCli(argv: string[]) {
   const positionals: string[] = [];
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
+    if (token === '-h') {
+      options.help = true;
+      continue;
+    }
     if (!token.startsWith('--')) {
       positionals.push(token);
       continue;
     }
+    const separator = token.indexOf('=');
+    if (separator > 2) {
+      options[token.slice(2, separator)] = token.slice(separator + 1);
+      continue;
+    }
+    const name = token.slice(2);
+    if (BOOLEAN_OPTIONS.has(name)) {
+      options[name] = true;
+      continue;
+    }
     const next = argv[index + 1];
     if (next && !next.startsWith('--')) {
-      options[token.slice(2)] = next;
+      options[name] = next;
       index += 1;
     } else {
-      options[token.slice(2)] = true;
+      options[name] = true;
     }
   }
   return { command: positionals[0] || '', options };
@@ -133,6 +229,41 @@ function print(options: CliOptions, value: unknown, fallback: () => void) {
   } else {
     fallback();
   }
+}
+
+function printInitResult(
+  result: ReturnType<typeof runInit>,
+  verb: 'Initialized' | 'Refreshed'
+) {
+  console.log(`${verb} autonomy v2 at ${result.rootDir}`);
+  console.log(`Config: ${result.configPath}`);
+  console.log(`Runtime: ${result.runtimePath}`);
+  console.log(`Created: ${result.created.length}; updated: ${result.updated.length}; skipped: ${result.skipped.length}`);
+}
+
+function printServerResult(result: Awaited<ReturnType<typeof runServerCommand>>) {
+  const value = result as Record<string, any>;
+  if (value.action === 'status') {
+    console.log(value.running
+      ? `autonomy-v2-server is running for ${value.rootDir} (pid ${value.pid}).`
+      : `autonomy-v2-server is stopped for ${value.rootDir}.`);
+    return;
+  }
+  if (value.action === 'kill') {
+    console.log(value.alreadyStopped
+      ? `No autonomy-v2-server is running for ${value.rootDir}.`
+      : `Stopped autonomy-v2-server for ${value.rootDir}.`);
+    return;
+  }
+  if (value.action === 'start') {
+    console.log(value.alreadyRunning
+      ? `autonomy-v2-server is already running for ${value.rootDir} (pid ${value.pid}).`
+      : `Started autonomy-v2-server for ${value.rootDir} (pid ${value.pid}).`);
+    if (value.logPath) console.log(`Log: ${value.logPath}`);
+    return;
+  }
+  console.log(`Restarted autonomy-v2-server for ${value.rootDir} (pid ${value.pid}).`);
+  if (value.logPath) console.log(`Log: ${value.logPath}`);
 }
 
 function waitForExit(child: ChildProcess) {
@@ -171,14 +302,51 @@ function waitForExit(child: ChildProcess) {
 }
 
 function printHelp() {
-  console.log(`Autonomy custom-agent CLI
+  console.log(`Autonomy v2 CLI
 
 Usage:
-  autonomy-v2 custom-agent:list [--root <path>] [--config <path>] [--json]
-  autonomy-v2 custom-agent:run --runtime-key <key> [--root <path>] [--config <path>] [--json]
+  autonomy-v2 <command> [options]
 
-The consumer repository owns agent decisions, prompts, tools, Git operations,
-API calls, verification, and deployment through its lifecycle commands.`);
+Commands:
+  init
+  status [--sync]
+  auth [--node-auth-token <token>] [--github-token <token>] [--control-plane-url <url>] [--repo owner/name] [--open] [--skip-verify]
+  server:start
+  server:kill
+  server:restart [--detached] [--foreground] [--keep-old-terminal]
+  server:status
+  custom-agent:list [--config <path>]
+  custom-agent:run --runtime-key <runtime-key> [--config <path>]
+  update [--package-manager <npm|pnpm|yarn>] [--skip-init]
+  refresh
+
+Common options:
+  --root <path>
+
+Output:
+  Use --json to print structured JSON for any command.`);
 }
 
-export { main, parseCli, printHelp };
+function helpPayload() {
+  return {
+    ok: true,
+    command: 'help',
+    usage: 'autonomy-v2 <command> [options]',
+    commands: [
+      'init',
+      'status [--sync]',
+      'auth [--node-auth-token <token>] [--github-token <token>] [--control-plane-url <url>] [--repo owner/name] [--open] [--skip-verify]',
+      'server:start',
+      'server:kill',
+      'server:restart [--detached] [--foreground] [--keep-old-terminal]',
+      'server:status',
+      'custom-agent:list [--config <path>]',
+      'custom-agent:run --runtime-key <runtime-key> [--config <path>]',
+      'update [--package-manager <npm|pnpm|yarn>] [--skip-init]',
+      'refresh',
+    ],
+    commonOptions: ['--root <path>', '--json'],
+  };
+}
+
+export { helpPayload, main, parseCli, printHelp };

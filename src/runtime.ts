@@ -12,20 +12,40 @@ const DEFAULT_ENV_FILES = [
 ];
 
 function resolveRootDir(rootOption = '') {
-  return rootOption
+  const resolved = rootOption
     ? path.resolve(process.cwd(), rootOption)
     : process.cwd();
+  return canonicalizePath(resolved);
+}
+
+function canonicalizePath(value: string) {
+  const resolved = path.resolve(value);
+  const missingSegments: string[] = [];
+  let cursor = resolved;
+  while (true) {
+    try {
+      return path.join(fs.realpathSync.native(cursor), ...missingSegments);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      const parent = path.dirname(cursor);
+      if (parent === cursor) return resolved;
+      missingSegments.unshift(path.basename(cursor));
+      cursor = parent;
+    }
+  }
 }
 
 function resolveInsideRoot(rootDir: string, value: string, label: string) {
+  const canonicalRoot = canonicalizePath(rootDir);
   const resolved = path.isAbsolute(value)
     ? path.normalize(value)
-    : path.resolve(rootDir, value);
-  const relative = path.relative(rootDir, resolved);
+    : path.resolve(canonicalRoot, value);
+  const canonicalResolved = canonicalizePath(resolved);
+  const relative = path.relative(canonicalRoot, canonicalResolved);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error(`${label} must resolve inside the repository root: ${value}`);
   }
-  return resolved;
+  return canonicalResolved;
 }
 
 function ensureDir(directory: string) {
@@ -129,6 +149,10 @@ function acquireServerLock(rootDir: string) {
   return acquireLock(rootDir, 'server-lock', 250);
 }
 
+async function acquireServerControlLock(rootDir: string) {
+  return acquireLockAsync(rootDir, 'server-control-lock', 30_000);
+}
+
 function acquireLock(rootDir: string, name: string, timeoutMs: number) {
   const lockDir = path.join(rootDir, '.autonomy', name);
   const ownerPath = path.join(lockDir, 'owner.json');
@@ -160,6 +184,44 @@ function acquireLock(rootDir: string, name: string, timeoutMs: number) {
         throw new Error(`Timed out acquiring ${name} at ${lockDir}`);
       }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+
+  return () => {
+    const owner = readLockOwner(ownerPath);
+    if (owner && owner.token === token) {
+      fs.rmSync(lockDir, { recursive: true, force: true });
+    }
+  };
+}
+
+async function acquireLockAsync(rootDir: string, name: string, timeoutMs: number) {
+  const lockDir = path.join(rootDir, '.autonomy', name);
+  const ownerPath = path.join(lockDir, 'owner.json');
+  const token = randomUUID();
+  const startedAt = Date.now();
+  ensureDir(path.dirname(lockDir));
+
+  while (true) {
+    try {
+      fs.mkdirSync(lockDir);
+      fs.writeFileSync(ownerPath, `${JSON.stringify({
+        pid: process.pid,
+        token,
+        startedAt: new Date().toISOString(),
+      }, null, 2)}\n`, 'utf8');
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      const owner = readLockOwner(ownerPath);
+      if (owner && !isProcessAlive(Number(owner.pid))) {
+        if (recoverLock(lockDir, ownerPath, owner)) continue;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        if (!owner && recoverLock(lockDir, ownerPath, null)) continue;
+        throw new Error(`Timed out acquiring ${name} at ${lockDir}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
 
@@ -261,8 +323,10 @@ function extractError(error: unknown) {
 }
 
 export {
+  acquireServerControlLock,
   acquireServerLock,
   acquireStateLock,
+  canonicalizePath,
   ensureDir,
   extractError,
   getRuntimePath,

@@ -1,6 +1,6 @@
 {
   "name": "@asalaza6/autonomy-v2",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A minimal server for repository-defined custom agents.",
   "type": "module",
   "private": false,

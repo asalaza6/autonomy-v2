@@ -37,6 +37,31 @@ test('the manual run command uses the same decision and runtime path', async () 
   assert.equal(runtime.customAgents['game-agent:fluxborne'].running, false);
 });
 
+test('manual run JSON output contains no streamed worker prose', async () => {
+  const fixture = writeFluxborneFixture(makeRoot());
+  const originalLog = console.log;
+  const lines: string[] = [];
+  console.log = (...values: unknown[]) => {
+    lines.push(values.map((value) => String(value)).join(' '));
+  };
+  try {
+    await withEnvironment({ AUTONOMY_CUSTOM_AGENT_STUB: '1' }, async () => {
+      await cliMain([
+        'custom-agent:run',
+        '--root',
+        fixture.rootDir,
+        '--runtime-key',
+        'game-agent:fluxborne',
+        '--json',
+      ]);
+    });
+  } finally {
+    console.log = originalLog;
+  }
+  assert.equal(lines.length, 1);
+  assert.equal(JSON.parse(lines[0]).started, true);
+});
+
 test('removed built-in commands fail clearly', async () => {
   await assert.rejects(
     cliMain(['prd:add', '--root', makeRoot()]),
