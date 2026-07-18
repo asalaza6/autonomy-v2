@@ -1,7 +1,7 @@
 {
   "name": "@asalaza6/autonomy-v2",
-  "version": "1.4.79",
-  "description": "Autonomy v2 orchestration package.",
+  "version": "2.0.0",
+  "description": "A minimal server for repository-defined custom agents.",
   "type": "module",
   "private": false,
   "author": "Autonomy V2",
@@ -10,81 +10,55 @@
     "type": "git",
     "url": "git+https://github.com/asalaza6/autonomy-v2.git"
   },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "engines": {
     "node": ">=20"
   },
   "keywords": [
     "autonomy",
-    "agent-system"
+    "custom-agents"
   ],
   "main": "./dist/src/autonomy-v2/index.js",
+  "types": "./dist/src/autonomy-v2/index.d.ts",
   "bin": {
     "autonomy-v2": "dist/bin/autonomy-v2.js",
-    "autonomy-v2-server": "dist/bin/autonomy-v2-server.js",
-    "autonomy-v2-control": "dist/bin/autonomy-v2-control.js",
-    "autonomy-v2-smoke": "dist/bin/autonomy-v2-smoke.js"
+    "autonomy-v2-server": "dist/bin/autonomy-v2-server.js"
   },
   "exports": {
-    ".": "./dist/src/autonomy-v2/index.js",
-    "./server": "./dist/src/server/server-main.js",
-    "./control": "./dist/src/server/control-plane/control-plane-main.js",
+    ".": {
+      "types": "./dist/src/autonomy-v2/index.d.ts",
+      "import": "./dist/src/autonomy-v2/index.js"
+    },
+    "./server": {
+      "types": "./dist/src/server/server-main.d.ts",
+      "import": "./dist/src/server/server-main.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc",
-    "build:watch": "tsc --watch --preserveWatchOutput",
-    "check:publish": "node scripts/check-publish-config.js",
-    "heroku-postbuild": "npm run build",
-    "check:lines": "node scripts/check-line-count.js",
     "clean": "rm -rf dist",
-    "dev": "AUTONOMY_CONTROL_PLANE_DEV=1 node --watch dist/bin/autonomy-v2-control.js serve --root . --dev",
-    "dev:bridge": "node dist/bin/autonomy-v2-control.js bridge --root . --repo-map .",
-    "autonomy-v2": "node dist/bin/autonomy-v2.js",
-    "autonomy-v2-control": "node dist/bin/autonomy-v2-control.js",
-    "autonomy-v2-server": "node dist/bin/autonomy-v2-server.js",
-    "autonomy-v2-smoke": "node dist/bin/autonomy-v2-smoke.js",
-    "server:start": "node dist/bin/autonomy-v2.js server:start",
-    "server:kill": "node dist/bin/autonomy-v2.js server:kill",
-    "server:restart": "node dist/bin/autonomy-v2.js server:restart",
-    "server:status": "node dist/bin/autonomy-v2.js server:status",
-    "exports:mermaid": "node analyze-exports.mjs --format mermaid --layout TD --output docs/export-graph.mmd && open docs/export-graph.mmd",
-    "exports:html": "node analyze-exports.mjs --format html --tree --layout TD --output docs/export-graph.html && open docs/export-graph.html",
-    "exports:svg": "node analyze-exports.mjs --format dot --output /tmp/export-graph.dot && dot -Tsvg /tmp/export-graph.dot -o docs/export-graph.svg && open docs/export-graph.svg",
-    "nomenclature": "node scripts/check-nomenclature.js",
-    "test": "npm run build && node --test dist/tests/**/*.test.js",
-    "smoke": "npm run build && node --test dist/tests/smoke/*.test.js",
-    "test:control-plane-history": "npm run build && node --test dist/tests/unit/control-plane-status.test.js dist/tests/unit/control-plane-dashboard.test.js dist/tests/unit/control-plane-chat-prd-draft-ui.test.js",
-    "test:control-plane-summary-ui": "npm run build && node --test dist/tests/unit/control-plane-summary-ui.test.js dist/tests/unit/control-plane-restart-ui.test.js",
+    "build": "npm run clean && tsc",
+    "prepack": "npm run build",
+    "test": "npm run build && node --test --test-concurrency=1 dist/tests/*.test.js",
     "lint": "eslint src bin tests",
     "lint:fix": "npm run lint -- --fix",
-    "typecheck": "tsc --noEmit",
-    "knip": "npx -y knip",
-    "madge": "npx -y madge --extensions ts src",
-    "circular": "npx -y madge --circular --extensions ts src",
-    "release:patch": "node scripts/release.js patch",
-    "release:minor": "node scripts/release.js minor",
-    "release:major": "node scripts/release.js major",
-    "release:tag": "node scripts/release.js tag"
+    "typecheck": "tsc --noEmit"
   },
   "files": [
     "README.md",
-    "analyze-exports.mjs",
-    "dist",
-    "templates",
-    "docs"
+    "LICENSE",
+    "dist/bin",
+    "dist/src"
   ],
   "devDependencies": {
     "@types/node": "^20.16.0",
     "@typescript-eslint/eslint-plugin": "^8.37.0",
     "@typescript-eslint/parser": "^8.37.0",
-    "esbuild": "^0.25.11",
     "eslint": "^9.39.4",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^17.4.0",
-    "preact": "^10.29.0",
     "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "ts-morph": "^27.0.2"
   }
 }

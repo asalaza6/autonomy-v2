@@ -1,9 +1,6 @@
 {
   "compilerOptions": {
     "allowJs": false,
-    "jsx": "react",
-    "jsxFactory": "h",
-    "jsxFragmentFactory": "Fragment",
     "target": "ES2022",
     "lib": ["ES2022"],
     "module": "NodeNext",
@@ -12,15 +9,15 @@
     "noEmit": false,
     "outDir": "dist",
     "rootDir": ".",
+    "declaration": true,
     "strict": false,
+    "strictNullChecks": true,
     "skipLibCheck": true,
     "types": ["node"]
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx",
     "bin/**/*.ts",
-    "scripts/**/*.ts",
     "tests/**/*.ts"
   ]
 }

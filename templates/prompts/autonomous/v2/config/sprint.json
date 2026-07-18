@@ -1,9 +1,0 @@
-{
-  "sprintId": "multi-agent-mvp",
-  "name": "Multi-Agent PR System MVP",
-  "createdAt": "2026-03-13T00:00:00.000Z",
-  "maxParallelImplementationAgents": 1,
-  "requireReviewApproval": true,
-  "requireScopeValidation": true,
-  "defaultTaskBaseBranch": "dev"
-}

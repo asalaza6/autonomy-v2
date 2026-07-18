@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { main } from '../src/server/server-main.js';
+import { extractError } from '../src/runtime.js';
 
-Promise.resolve(main(process.argv.slice(2))).catch((error) => {
-  console.error(`ERROR: ${error.message}`);
+main(process.argv.slice(2)).catch((error) => {
+  console.error(`ERROR: ${extractError(error)}`);
   process.exit(1);
 });

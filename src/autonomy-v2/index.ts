@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 
-import { main as commandsMain } from './commands/commands-main.js';
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from 'node:url';
+import { main as cliMain } from '../cli.js';
+import { extractError } from '../runtime.js';
 
 async function main(argv = process.argv.slice(2)) {
-  return commandsMain(argv);
+  return cliMain(argv);
 }
-
-
-export { main };
 
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch((error) => {
-    console.error(`ERROR: ${error.message}`);
+    console.error(`ERROR: ${extractError(error)}`);
     process.exit(1);
   });
 }
+
+export { main };
+export type * from '../types.js';

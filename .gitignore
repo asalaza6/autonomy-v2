@@ -1,30 +1,8 @@
 node_modules/
 dist/
-docs/export-graph.html
-docs/export-graph.mmd
-docs/export-graph.svg
-docs/export-graph.tree.json
-docs/export-graph.grid.json
-docs/export-graph.app.js.map
-docs/export-graph.app.js
-.tooling/
-.env.publish
-.env.publish.local
-
-# System-generated default ignore file for autonomy-v2.
-# Keep this file aligned with repository bootstrap defaults.
-# Node / tooling artifacts
-build/
 coverage/
 .DS_Store
-# Env files
-.env
-.env.local
-.env.development
-.env.production
-# Autonomy runtime state
 .autonomy/
-# Autonomy local environment placeholder
-.env.autonomy
-# Generated export graph artifacts
 docs/export-graph.*
+.env
+.env.*

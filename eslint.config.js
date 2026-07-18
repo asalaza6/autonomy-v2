@@ -8,7 +8,7 @@ export default [
     ignores: ['node_modules/**'],
   },
   {
-    files: ['src/**/*.{js,ts,tsx}', 'tests/**/*.{js,ts,tsx}', 'bin/**/*.ts', 'scripts/**/*.ts'],
+    files: ['src/**/*.ts', 'tests/**/*.ts', 'bin/**/*.ts'],
     languageOptions: {
       ecmaVersion: 'latest',
       parser: tsParser,

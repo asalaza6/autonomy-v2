@@ -1,319 +1,186 @@
-# Autonomy v2 Package
-"version": "1.4.55" restarted to
+# Autonomy v2
 
-This is the repository-local package form of `autonomy-v2`.
+Autonomy v2 is a small local process host for repository-defined custom agents.
+It provides only:
 
-The package owns the command implementations and prompt templates, while the
-runtime/state and execution still occur in a consumer workspace.
-Consumer repos that want a hosted browser/API control plane own that
-deployment, configuration, and runtime wiring themselves.
+- a polling server;
+- custom-agent discovery and process bookkeeping;
+- JSON-over-stdio lifecycle commands;
+- Codex execution between the prompt and finalize lifecycle phases.
 
-## Package layout
+The consumer repository owns everything else: work selection, API clients,
+prompts, tools, Git operations, validation, deployment, and recovery policy.
+This package has no control plane, HTTP API, Git workflow, default agents,
+queues, PRDs, templates, or repository scaffold.
 
-- `bin/` CLI entrypoints
-- `src/` runtime modules
-- `templates/` bootstrap templates copied into the workspace by `init`
-- `docs/` support documentation for config and packaging behavior
-- implementation and review always use `src/autonomy-v2/runner/default-runner.js` with fixed execution behavior.
-
-## Quick mental model
-
-Autonomy v2 is a repo-local orchestration package. The package provides the
-CLI, server, runner, control-plane, and scaffold templates, but actual work is
-executed inside each consumer repository.
-
-The durable workflow truth lives in git on the integration branch:
-
-- repo config and prompt scaffolding under `prompts/autonomous/v2/config/`
-- PRD specs under `prompts/autonomous/v2/specs/prds/`
-- PRD lifecycle state under `prompts/autonomous/v2/specs/prd-state/`
-- implementation and reviewer queues under `prompts/autonomous/v2/queues/`
-
-Local process state lives under `.autonomy/` and is treated as cache,
-coordination, logs, worktrees, and status projection. Scheduler recovery should
-prefer tracked git state and GitHub state over stale runtime files.
-
-The steady-state loop is:
-
-1. add a PRD
-2. sync from the integration branch
-3. let the PM agent plan lane tasks
-4. let implementation agents run Codex in isolated worktrees
-5. let the reviewer validate, request follow-up work, or merge
-6. optionally deploy the integration branch to production
-
-The hosted manager is a browser/API queue and status surface. It does not touch
-repo files directly. A local bridge registers repo status with the manager,
-claims queued jobs, and executes `prd:add` or `deploy` inside each mapped local
-repo.
-
-## Docs
-
-- [How Autonomy V2 Works](./docs/how-it-works.md)
-- [Autonomy V2 Config Support](./docs/autonomy-v2-config-support.md)
-- [Orchestrator Flow](./docs/orchestrator-flow.md)
-- [Control Plane Bridge](./docs/control-plane-bridge.md)
-- [Health Score](./docs/health-score.md)
-- [Orchestrator Failure Cases](./docs/orchestrator-failure-cases.md)
-- [Structureness Health Flow](./docs/structureness-health-flow.md)
-- [Git-backed Implementation Queues](./docs/git-backed-implementation-queues.md)
-- [Current Issues / Deferred Fixes](./issues.md)
-- [Feature Design Template](./features.md)
-
-## Custom Agent Enable Flags
-
-Custom-agent configs support both a top-level `enabled` flag and per-agent
-`enabled` flags. Omitting either flag defaults to enabled. Set a specific
-agent to `false` to keep it registered in runtime status while preventing
-decision polling and spawning:
-
-```json
-{
-  "agents": [
-    {
-      "id": "strategy-agent-alpacaTrader4",
-      "enabled": false,
-      "target": { "type": "strategy", "id": "alpacaTrader4" }
-    }
-  ]
-}
-```
-
-## Custom Agent Prompt Identity
-
-Custom-agent configs can customize the wrapper identity text shown at the top of
-the spawned agent prompt. Use top-level `promptRole` to apply one role to the
-whole config, or per-agent `promptRole` to override it for one agent. The
-launcher renders it as `You are a ...`. For full control over the sentence, use
-`promptIntro` instead.
-
-```json
-{
-  "promptRole": "trading strategy operator agent",
-  "agents": [
-    {
-      "id": "strategy-agent-alpacaTraderCrypto24x7",
-      "target": { "type": "strategy", "id": "alpacaTraderCrypto24x7" }
-    }
-  ]
-}
-```
-
-## Current package command usage
-
-The package itself is used through `npx autonomy-v2 ...` or by invoking the
-installed binaries directly from a consumer repo.
-
-Health score commands are available locally in each consumer repo:
+## Install and run
 
 ```bash
-npx autonomy-v2 health:score
-npx autonomy-v2 health:why
-npx autonomy-v2 health:help
-```
+cat >> .npmrc <<'EOF'
+@asalaza6:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+EOF
 
-## Install + initialize in a new workspace
-
-```bash
-nvm install 20
-nvm use 20
-```
-
-```bash
-# from the target workspace
 npm install -O @asalaza6/autonomy-v2
-npx autonomy-v2 init --root .
+npx autonomy-v2 custom-agent:list --root .
+npx autonomy-v2-server serve --root .
 ```
 
-### Update autonomy-v2 in an existing project
+`NODE_AUTH_TOKEN` must be able to read the package from GitHub Packages.
 
-From the target repository root:
+Run one configured agent immediately, while still honoring its decision hook:
 
 ```bash
-npx autonomy-v2 update --root .
+npx autonomy-v2 custom-agent:run \
+  --root . \
+  --runtime-key game-agent:fluxborne
 ```
 
-To refresh only the autonomy scaffold and local runtime bootstrap files without updating the package dependency:
+The server also supports a single detached polling pass:
 
 ```bash
-npx autonomy-v2 refresh --root .
+npx autonomy-v2-server tick --root . --json
 ```
 
-If Codex shows `refresh_token_reused` or says your access token could not be refreshed, reset the local session and sign in again:
+## Configuration
 
-```bash
-codex logout
-codex login
+The default configuration path is:
+
+```text
+prompts/autonomous/v2/config/custom-agents.json
 ```
 
-If browser-based login does not open or complete, use device auth instead:
+Use `--config <repo-relative-path>` or
+`AUTONOMY_CUSTOM_AGENTS_CONFIG` to select another file inside the repository.
+There is no `control-plane.json` indirection.
 
-```bash
-codex login --device-auth
+```json
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "kind": "project-agents",
+  "promptRole": "project maintenance agent",
+  "context": {
+    "globalReadOnly": ["docs/AGENT.md"],
+    "workspaceReadWrite": ["context.md", "notes.md"],
+    "allowRuntimeStateChanges": true
+  },
+  "agents": [
+    {
+      "id": "game-agent",
+      "enabled": true,
+      "target": {
+        "type": "repository",
+        "id": "fluxborne"
+      },
+      "workspace": ".autonomy/runtime/game-agent",
+      "spawn": {
+        "mode": "poll",
+        "intervalSeconds": 10,
+        "parallelism": 1,
+        "singletonKey": "agent.id",
+        "decision": {
+          "mode": "command",
+          "command": "node",
+          "args": ["scripts/agent/should-run.mjs"],
+          "timeoutMs": 15000
+        }
+      },
+      "environment": {
+        "command": "node",
+        "args": ["scripts/agent/prepare.mjs"],
+        "cwd": ".",
+        "timeoutMs": 180000
+      },
+      "execution": {
+        "prompt": {
+          "command": "node",
+          "args": ["scripts/agent/build-prompt.mjs"],
+          "cwd": ".",
+          "timeoutMs": 120000
+        }
+      },
+      "finalize": {
+        "command": "node",
+        "args": ["scripts/agent/finalize.mjs"],
+        "cwd": ".",
+        "timeoutMs": 120000
+      },
+      "conversation": {
+        "mode": "fresh"
+      }
+    }
+  ]
+}
 ```
 
-Use `--force` to refresh and prune scaffolded artifacts:
+The runtime key is `<agent.id>:<target.id>`.
 
-```bash
-npx autonomy-v2 init --root . --force
+Parallel workers are opt in. Set `spawn.parallelism` to an integer from 1 to
+32; omitting it preserves the single-worker behavior. The logical runtime key
+stays stable for the CLI and `custom-agent:list`. Internally, additional slots
+use `#2`, `#3`, and so on. A single worker keeps the configured workspace; an
+opted-in pool gives every slot the disjoint sibling workspace
+`<workspace>-slots/slot-N`. Keeping the pool outside the single-worker path also
+makes a live scale-up from one worker safe. A manual `custom-agent:run` starts at most one
+available slot.
+
+The decision hook is the general starting-criteria contract. Each free slot
+invokes it independently. A consumer that selects shared work should atomically
+claim or lease one eligible task before returning `shouldRun: true`; a
+peek-only decision can assign the same task twice. Return the selected task in
+`target` and/or other decision fields. That exact decision payload is carried
+through environment, prompt, and finalize.
+
+## Lifecycle protocol
+
+Decision, environment, prompt, and finalize commands receive one JSON object
+on stdin. Lifecycle envelopes include:
+
+```json
+{
+  "invocationId": "game-agent-fluxborne-...",
+  "runtimeKey": "game-agent:fluxborne",
+  "baseRuntimeKey": "game-agent:fluxborne",
+  "parallel": { "slot": 1, "total": 1 },
+  "agentId": "game-agent",
+  "agentType": "project-agents",
+  "repoRoot": "/absolute/repository/path",
+  "phase": "prompt",
+  "target": {},
+  "workspace": { "cwd": "/absolute/workspace/path" },
+  "paths": {},
+  "decision": {},
+  "previous": {},
+  "run": null
+}
 ```
 
-`autonomy-v2 update` detects `npm`, `pnpm`, or `yarn`, updates `@asalaza6/autonomy-v2` to `latest` as an optional dependency, and runs `init --force` automatically when the repo is already initialized. Use `--skip-init` if you only want the package dependency update. `autonomy-v2 refresh` runs only the `init --force` scaffold refresh.
+Commands also receive `AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY`,
+`AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY`, `AUTONOMY_CUSTOM_AGENT_SLOT`, and
+`AUTONOMY_CUSTOM_AGENT_PARALLELISM`. Slot identity is stable for the lifetime
+of an invocation, so consumers can isolate claims, workspaces, locks, and other
+local resources without adding task logic to this package.
 
-From a local monorepo path:
+Commands must exit successfully and write either no output or one JSON object.
+The decision command returns `{ "shouldRun": true|false }` and may add a
+`reason` and target fields. The environment command may return `cwd`. The
+prompt command returns `prompt` or `promptPath`. Finalize receives
+`run.status: "completed"` after Codex succeeds or `run.status: "failed"` when
+environment preparation, prompt construction, or Codex execution fails.
 
-```bash
-node packages/autonomy-v2/bin/autonomy-v2 init --root /path/to/repo
-node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> --specification <text> [--priority highest]
-node packages/autonomy-v2/bin/autonomy-v2 prd:add --root /path/to/repo --id <id> --title <title> ...
-node packages/autonomy-v2/bin/autonomy-v2-server serve --root /path/to/repo
+When `conversation.mode` is `fresh`, Codex uses an ephemeral session. Other
+values use a scoped resumable session. `allowRuntimeStateChanges: true` selects
+Codex's `danger-full-access` sandbox; otherwise it selects `workspace-write`.
+
+## Runtime state
+
+Process state is stored locally at:
+
+```text
+.autonomy/runtime/state/runtime.json
 ```
 
-From another folder using the installed package:
-
-```bash
-npx autonomy-v2 init --root /path/to/consumer-repo
-npx autonomy-v2 prd:add --root /path/to/consumer-repo --id <id> --title <title> ... [--priority highest]
-npx autonomy-v2-server serve --root /path/to/consumer-repo
-```
-
-## Local consumer debugging
-
-To make sibling apps use this checkout's built package instead of the published npm release:
-
-1. Build this repo once, or keep it running in watch mode while you debug:
-
-```bash
-npm run build
-npm run build:watch
-```
-
-2. In each consumer repo, link the sibling package:
-
-```bash
-cd ../moving-game && npm run autonomy:v2:link-local
-cd ../jsvpoolsinc && npm run autonomy:v2:link-local
-```
-
-3. Verify where the package resolves from:
-
-```bash
-npm run autonomy:v2:which
-```
-
-If the printed path points into `../autonomy-v2`, that consumer is running this repo's current `dist/`.
-
-To switch a consumer back to the published package, run `npm run autonomy:v2:unlink-local` in that repo.
-
-### Local control-plane dev mode
-
-For live control-plane debugging against this checkout:
-
-1. In this repo, keep the package rebuilding:
-
-```bash
-npm run build:watch
-```
-
-2. In the consumer repo, run the control plane in watch mode:
-
-```bash
-cd ../moving-game && npm run autonomy:v2:control:dev
-cd ../jsvpoolsinc && npm run autonomy:v2:control:dev
-```
-
-That watch mode runs the sibling `../autonomy-v2/dist` control-plane entrypoint directly, so rebuilding this repo restarts the local control-plane server with your latest changes.
-In `--dev` mode, the browser UI also auto-reloads when the watched control-plane process restarts after a local rebuild.
-
-Server process controls are package-owned, so consumer repos can delegate the tested local restart flow to this package:
-
-```bash
-npx autonomy-v2 server:status
-npx autonomy-v2 server:kill
-npx autonomy-v2 server:start
-npx autonomy-v2 server:restart
-```
-
-These commands use the repo root as their operating directory, track ownership through `.autonomy/server-lock/owner.json`, write restart diagnostics to `.autonomy/runtime/restart-server.log`, and clean up related macOS Terminal tabs when available. The default start command is `npm run autonomy:v2:server`; consumers can override it with `AUTONOMY_RESTART_COMMAND` and `AUTONOMY_RESTART_ARGS`.
-
-## Happy-path consumer repo setup
-
-For a brand-new consumer repo, the functional happy path is:
-
-1. Install `@asalaza6/autonomy-v2` in the consumer repo.
-2. Run `npx autonomy-v2 init --root .` to scaffold prompts, queues, specs, and runtime bootstrap files.
-3. Add repo-level scripts that wrap `npx autonomy-v2`, `npx autonomy-v2 server:*`, `npx autonomy-v2-server`, and `npx autonomy-v2-control`.
-4. Commit the tracked `prompts/autonomous/v2/` scaffold into the consumer repo.
-5. Add `.npmrc` when the package is installed from GitHub Packages.
-6. Add `.env.autonomy` with `AUTONOMY_INITIALIZED=1`, `GITHUB_TOKEN`, and `AUTONOMY_CONTROL_PLANE_SERVER_URL`.
-7. Add hosted control-plane wiring in your deployment target with a `Procfile` or equivalent launcher and `APP_ROLE=control-plane`.
-8. Deploy one shared control-plane app running `npx --no-install autonomy-v2-control serve`.
-9. Run the local bridge with `npx autonomy-v2-control bridge` so the hosted app can discover this repo dynamically from `prompts/autonomous/v2/config/control-plane.json`.
-10. Run the local scheduler with `npx autonomy-v2-server serve --root .`.
-11. Submit PRDs in `/manager` or `/project/<repoId>` on the hosted control plane and let the bridge import them into the local repo.
-
-## GitHub auth setup
-
-Create a GitHub token with repository access and store it in your environment:
-
-```bash
-GITHUB_TOKEN=ghp_...
-```
-
-Required token capabilities:
-
-- `Contents` (repository contents, commits, branches, downloads, releases, and merges)
-- `Issues` (issues and related comments, assignees, labels, milestones)
-- `Metadata` (required)
-- `Pull requests` (pull requests and related comments, assignees, labels, milestones, and merges)
-
-Place in one of:
-
-- `.env.autonomy.local`
-- `.env.autonomy`
-- `.env.local`
-- `.env`
-
-## npm publish auth setup
-
-To publish this package without storing a token in the repo, create a local publish env file:
-
-```bash
-cp .env.publish.example .env.publish
-```
-
-Then set your npm token in `.env.publish`:
-
-```bash
-NPM_TOKEN=npm_...
-```
-
-The release scripts load `.env.publish.local` first, then `.env.publish`, generate a temporary npm config from `NPM_TOKEN`, and use that token for `npm publish`.
-Both files are gitignored.
-
-If `NPM_TOKEN` is a GitHub token such as `ghp_...` or `github_pat_...`, publish defaults to GitHub Packages at `https://npm.pkg.github.com/`.
-If `NPM_TOKEN` is an npm token such as `npm_...`, publish defaults to `https://registry.npmjs.org/`.
-You can override that with `NPM_PUBLISH_REGISTRY=...` in the same env file.
-
-## Compatibility with current repo setup
-
-- Root scripts in `package.json` already forward into this package:
-  - `autonomy:v2:init`
-  - `autonomy:v2:status`
-  - `autonomy:v2:runtime`
-  - `autonomy:v2:server`
-  - `autonomy:v2:control`
-  - `autonomy:v2:tick`
-
-## Package health checks
-
-- Local package smoke check:
-
-```bash
-node packages/autonomy-v2/package-smoke.test.js
-```
-
-## Design scope
-
-This package focuses on generic workflow orchestration.
-Only the package boundary and packaging metadata were organized.
+It contains only `customAgents` and `customAgentInvocations`. Agent lifecycle
+commands may read this file for liveness and fencing. It is local runtime data,
+not a source-controlled workflow database.

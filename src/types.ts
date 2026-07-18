@@ -1,531 +1,161 @@
-export type AnyRecord = Record<string, any>;
+import type { ChildProcess } from 'node:child_process';
 
-export type CliOptionValue = string | boolean | Array<string | boolean>;
-export type CliOptions = Record<string, CliOptionValue>;
+export type JsonRecord = Record<string, any>;
 
-export interface GitIdentity extends AnyRecord {
-  name: string;
-  email: string;
-}
-
-export type DeployCommandConfig = string | string[] | {
+export type CommandConfig = {
   command: string;
-  args?: string[];
-  cwd?: string;
-  env?: Record<string, string | number | boolean | null | undefined>;
-  shell?: boolean;
+  args: string[];
+  cwd: string;
+  env: Record<string, string>;
+  shell: boolean;
+  timeoutMs: number;
 };
 
-export interface AgentConfig extends AnyRecord {
+export type CustomAgentContext = {
+  globalReadOnly: Array<{
+    path: string;
+    relativePath: string;
+  }>;
+  workspaceReadWrite: string[];
+  allowRuntimeStateChanges: boolean;
+};
+
+export type CustomAgentConversation = {
+  mode: 'fresh' | 'scoped';
+  persist: boolean;
+  key: string;
+  resumeSessionId: string;
+};
+
+export type NormalizedCustomAgent = {
   id: string;
-  role: string;
-  systemPrompt?: string;
-  gitIdentity?: GitIdentity;
-  taskQueue?: string;
-  personaName?: string;
-  include?: string[];
-  exclude?: string[];
-  checks?: string[];
-}
-
-export interface AutonomyConfig extends AnyRecord {
-  schemaVersion?: number;
-  agents: AgentConfig[];
-  deployCommand?: DeployCommandConfig;
-  mergeActors?: string[];
-  integrationBranch?: string;
-  mergeStrategy?: string;
-  worktreesRoot?: string;
-  branchPrefixes?: {
-    task?: string;
-    [key: string]: any;
-  };
-}
-
-export interface ScopeViolation extends AnyRecord {
-  taskId?: string;
-  file?: string;
-  reason?: string;
-}
-
-export interface ConflictRecord extends AnyRecord {
-  conflictedAt?: string;
-  message?: string;
-}
-
-export interface ReviewDecisionRecord extends AnyRecord {
-  reviewerId?: string;
-  decision?: string;
-  summary?: string;
-  publishedSummary?: string;
-  reviewedAt?: string;
-  conversationId?: string;
-  remotePublishFallback?: string;
-}
-
-export interface TaskRecord extends AnyRecord {
-  id: string;
-  title?: string;
-  description?: string;
-  agentId: string;
-  prdId?: string;
-  laneKey?: string;
-  sprintId?: string;
-  baseBranch?: string;
-  branch?: string | null;
-  type?: string;
-  source?: string;
-  checks?: string[];
-  acceptance?: string[];
-  state?: string;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  startedAt?: string | null;
-  completedAt?: string;
-  implementationConversationId?: string;
-  conversationReferences?: Record<string, AnyRecord>;
-  prId?: string;
-  sourceTaskId?: string;
-  sourceAgentId?: string;
-  reviewRound?: number;
-  reviewedAt?: string;
-  reviewedCommitCount?: number;
-  lastDecision?: string;
-  lastError?: string | null;
-  lastMergeFailureMessage?: string;
-  lastMergeFailureCode?: string;
-  dispatcher?: string;
-  dispatchedAt?: string;
-  scopeViolations?: ScopeViolation[];
-  conflicts?: ConflictRecord[];
-  conflict?: ConflictRecord;
-}
-
-export interface QueueState extends AnyRecord {
-  schemaVersion?: number;
-  agentId: string;
-  role: string;
-  tasks: TaskRecord[];
-}
-
-export type QueueMap = Record<string, QueueState>;
-
-export interface PrdTaskSpec extends AnyRecord {
-  id: string;
-  title: string;
-  agentId: string;
-  description?: string;
-  acceptance?: string[];
-  sprintId?: string;
-}
-
-export interface PrdSpecPayload extends AnyRecord {
-  schemaVersion?: number;
-  id: string;
-  title: string;
-  tasks?: PrdTaskSpec[];
-  createdAt: string;
-  specification?: string;
-  requirements?: string[];
-  priority?: string;
-  archive?: PrdArchiveMetadata;
-}
-
-export interface PrdArchiveMetadata extends AnyRecord {
-  kind?: 'completed' | 'reset' | string;
-  status?: string;
-  archivedAt?: string;
-  reason?: string;
-  fromStatus?: string;
-  actor?: string;
-}
-
-export interface ControlPlaneRepoRecord extends AnyRecord {
-  repoId: string;
-  label?: string;
-  description?: string;
-  default?: boolean;
-  repoAssistantValidationPullRequest?: number;
-  deployCommand?: DeployCommandConfig;
-  packageUpdateCommand?: DeployCommandConfig;
-  controlBridgeRestartCommand?: DeployCommandConfig;
-  serverRestartCommand?: DeployCommandConfig;
-  deploymentUrl?: string;
-  deploymentLabel?: string;
-  exclusiveControl?: boolean;
-  controlTakeover?: 'refuse' | 'takeover';
-}
-
-export interface ControlPlaneConfig extends ControlPlaneRepoRecord {
-  schemaVersion?: number;
-}
-
-export interface ControlPlanePrdAddPayload extends AnyRecord {
-  repoId: string;
-  id: string;
-  title: string;
-  specification?: string;
-  requirements?: string[];
-  taskSpecs?: PrdTaskSpec[];
-  sprintId?: string;
-  priority?: string;
-}
-
-export interface ControlPlaneDeployPayload extends AnyRecord {
-  repoId: string;
-}
-
-export interface ControlPlanePrdResetPayload extends AnyRecord {
-  repoId: string;
-  confirmPrdId: string;
-  reason?: string;
-}
-
-export interface ControlPlanePrdPriorityPayload extends AnyRecord {
-  repoId: string;
-  prdId: string;
-  priority: string;
-  reason?: string;
-}
-
-export interface ControlPlanePackageUpdatePayload extends AnyRecord {
-  repoId: string;
-}
-
-export interface ControlPlaneHealthScorePayload extends AnyRecord {
-  repoId: string;
-  maxLines?: number;
-  threshold?: number;
-  top?: number;
-}
-
-export interface ControlPlaneRestartPayload extends AnyRecord {
-  repoId: string;
-  controlSessionId?: string;
-  controlSessionLabel?: string;
-  takeoverControl?: boolean;
-}
-
-export interface ControlPlaneCustomAgentTogglePayload extends AnyRecord {
-  repoId: string;
   runtimeKey: string;
+  baseRuntimeKey: string;
+  parallelSlot: number;
+  parallelism: number;
   enabled: boolean;
-}
+  kind: string;
+  promptRole: string;
+  promptIntro: string;
+  instructions: string;
+  promptPath: string;
+  target: JsonRecord;
+  workspace: string;
+  workspacePath: string;
+  intervalSeconds: number;
+  singletonKey: string;
+  singletonValue: string;
+  decisionMode: 'always' | 'command';
+  decisionCommand: CommandConfig | null;
+  environmentCommand: CommandConfig | null;
+  promptCommand: CommandConfig | null;
+  finalizeCommand: CommandConfig | null;
+  conversationMode: 'fresh' | 'scoped';
+  context: CustomAgentContext;
+};
 
-export interface ControlPlaneManagedProcessRecord extends AnyRecord {
-  repoId: string;
-  target: 'server' | 'controlBridge';
-  sessionId: string;
-  outputSessionId?: string;
-  pid?: number | null;
-  running?: boolean;
-  launchMode?: 'configured' | 'default';
-  lifecycleAction?: 'restart';
-  singletonPolicy?: 'replace';
-  singletonOutcome?: 'started' | 'replaced' | 'reused' | 'refused' | 'failed';
-  command?: string | null;
-  cwd?: string | null;
-  requestedBySessionId?: string | null;
-  requestedBySessionLabel?: string | null;
-  requestedAt?: string | null;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  updatedAt?: string;
-  exitedAt?: string | null;
-  exitReason?: string | null;
-  preRestartPid?: number | null;
-  postRestartPid?: number | null;
-  replacementOfSessionId?: string | null;
-  replacementOfPid?: number | null;
-  error?: string | null;
-}
+export type LoadedCustomAgentConfig = {
+  path: string;
+  enabled: boolean;
+  kind: string;
+  promptRole: string;
+  promptIntro: string;
+  agents: NormalizedCustomAgent[];
+};
 
-export interface ControlPlaneRepoControlOwner extends AnyRecord {
-  repoId: string;
-  sessionId: string;
-  sessionLabel?: string | null;
-  exclusiveControl?: boolean;
-  takeoverPolicy?: 'refuse' | 'takeover';
-  claimedAt: string;
-  lastSeenAt: string;
-  takeoverAt?: string | null;
-  takeoverCount?: number;
-}
-
-export interface ControlPlaneRepoControlAccess extends AnyRecord {
-  repoId: string;
-  sessionId?: string | null;
-  sessionLabel?: string | null;
-  exclusiveControl: boolean;
-  canManage: boolean;
-  isOwner: boolean;
-  readOnly: boolean;
-  owner?: ControlPlaneRepoControlOwner | null;
-  takeoverPolicy?: 'refuse' | 'takeover';
-  refusalReason?: string | null;
-}
-
-export interface ControlPlaneAgentChatMessagePayload extends AnyRecord {
-  repoId: string;
-  conversationId: string;
-  messageId: string;
-  responseMessageId: string;
-  prompt: string;
-  history?: Array<Pick<ControlPlaneChatMessageRecord, 'role' | 'content' | 'createdAt'>>;
-}
-
-export interface ControlPlanePrdProposalSource extends AnyRecord {
-  repoId?: string;
-  conversationId?: string;
-  messageId?: string;
-  responseMessageId?: string;
-  createdAt?: string;
-}
-
-export interface ControlPlanePrdSourceChat extends AnyRecord {
-  repoId?: string;
-  conversationId?: string;
-  managerMessageId?: string;
-  agentMessageId?: string;
-  createdAt?: string;
-}
-
-export interface PrdLinkedPullRequestSummary extends AnyRecord {
-  number?: number | null;
-  url?: string | null;
-}
-
-export interface ControlPlanePrdProposal extends AnyRecord {
-  schemaVersion?: number;
-  kind: 'prd-proposal';
-  title: string;
-  problem?: string;
-  goal?: string;
-  requirements: string[];
-  acceptanceCriteria: string[];
-  verification: string[];
-  priority?: string;
-  source?: ControlPlanePrdProposalSource;
-}
-
-export interface ControlPlaneChatMessageRecord extends AnyRecord {
-  id: string;
-  role: 'manager' | 'agent';
-  content: string;
-  createdAt: string;
-  updatedAt?: string;
-  status?: 'queued' | 'responding' | 'complete' | 'failed';
-  jobId?: string;
-  error?: string;
-  prdProposal?: ControlPlanePrdProposal;
-}
-
-export interface ControlPlaneConversationRecord extends AnyRecord {
-  id: string;
-  repoId: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  messages: ControlPlaneChatMessageRecord[];
-}
-
-export interface ControlPlaneJobRecord extends AnyRecord {
-  id: string;
-  type: 'prd:add' | 'prd:reset' | 'prd:priority' | 'deploy' | 'agent:chat' | 'package:update' | 'health:score' | 'restart' | 'custom-agent:toggle';
-  repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlanePrdPriorityPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneHealthScorePayload | ControlPlaneRestartPayload | ControlPlaneCustomAgentTogglePayload;
-  status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
-  createdAt: string;
-  updatedAt: string;
-  claimedAt?: string;
-  completedAt?: string;
-  error?: string;
-  result?: AnyRecord;
-}
-
-export interface ControlPlaneRepoStatusRecord extends AnyRecord {
-  repoId: string;
-  updatedAt: string;
-  label?: string;
-  description?: string;
-  default?: boolean;
-  deploymentUrl?: string;
-  deploymentLabel?: string;
-  exclusiveControl?: boolean;
-  controlTakeover?: 'refuse' | 'takeover';
-  snapshot: AnyRecord;
-}
-
-export interface ControlPlaneState extends AnyRecord {
-  schemaVersion?: number;
-  jobs: ControlPlaneJobRecord[];
-  repoStatuses: Record<string, ControlPlaneRepoStatusRecord>;
-  conversations: Record<string, ControlPlaneConversationRecord[]>;
-  heartbeats: Record<string, ControlPlaneHeartbeatRecord>;
-  managedProcesses?: Record<string, Partial<Record<'server' | 'controlBridge', ControlPlaneManagedProcessRecord>>>;
-  controlOwnership?: Record<string, ControlPlaneRepoControlOwner>;
-}
-
-export interface ControlPlaneHeartbeatRecord extends AnyRecord {
-  kind: 'server' | 'bridge';
-  updatedAt: string;
-  note?: string;
-  repoIds?: string[];
-}
-
-export interface PrdStateRecord extends AnyRecord {
-  schemaVersion?: number;
-  prdId: string;
-  status: string;
-  plannedTaskIds?: string[];
-  lastError?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface TrackedPrdRecord extends PrdSpecPayload {
-  isQueued?: boolean;
-  status?: string;
-  updatedAt?: string;
-  plannedTaskIds?: string[];
-  lastError?: string;
-  completedTaskSpecIds?: string[];
-  remoteLaneStates?: AnyRecord;
-  planningOnlySpec?: boolean;
-  source?: AnyRecord;
-  pullRequest?: PrdLinkedPullRequestSummary | null;
-}
-
-export interface PullRequestRemote extends AnyRecord {
-  number?: number;
-  url?: string;
-  state?: string;
-  mergedAt?: string | null;
-  merged_at?: string | null;
-  html_url?: string;
-  title?: string;
-  body?: string;
-  commitCount?: number;
-  commits?: number;
-  sha?: string;
-  mergeSha?: string;
-}
-
-export interface PullRequestRecord extends AnyRecord {
-  id: string;
-  taskId: string;
+export type CustomAgentStatus = {
   agentId: string;
-  laneKey?: string;
-  prdId?: string;
-  sprintId?: string;
-  sourceTitle?: string;
-  sourceBody?: string;
-  taskIds?: string[];
-  completedTaskIds?: string[];
-  pendingTaskIds?: string[];
-  acceptance?: string[];
-  checks?: string[];
-  commitCount?: number;
-  headBranch?: string | null;
-  baseBranch?: string | null;
-  status?: string;
-  reviews?: ReviewDecisionRecord[];
-  createdAt?: string;
-  updatedAt?: string;
-  remote?: PullRequestRemote | null;
-  title?: string;
-  body?: string;
-  scopeViolations?: ScopeViolation[];
-  conflicts?: ConflictRecord[];
-  conflict?: ConflictRecord;
-  mergeState?: 'waiting' | 'blocked' | 'merged';
-  mergeBlockedCode?: string;
-  mergeBlockedReason?: string;
-  mergeWatchdog?: AnyRecord;
-  conversationReferences?: Record<string, AnyRecord>;
-}
-
-export interface PrState extends AnyRecord {
-  pullRequests: PullRequestRecord[];
-}
-
-export interface BranchLock extends AnyRecord {
-  taskId?: string;
-  laneKey?: string;
-  prdId?: string;
-  sprintId?: string;
-  baseBranch?: string;
-  agentId?: string;
-  branch?: string;
-  worktreePath?: string;
-  mode?: string;
-  updatedAt?: string;
-  completedTasks?: TaskRecord[];
-}
-
-export interface BranchLocksState extends AnyRecord {
-  locks: BranchLock[];
-}
-
-export interface WorkerRuntime extends AnyRecord {
-  agentId: string;
-  status?: string;
-  mode?: string;
-  startedAt?: string;
-  finishedAt?: string;
-  pid?: number | null;
-  reason?: string;
-  lastResult?: any;
-  lastError?: string | null;
-}
-
-export interface CustomAgentRuntime extends AnyRecord {
-  agentId: string;
-  enabled?: boolean;
-  target?: AnyRecord;
-  status?: string;
-  running?: boolean;
-  pid?: number | null;
-  startedAt?: string;
-  finishedAt?: string;
+  runtimeKey: string;
+  baseRuntimeKey?: string;
+  parallelSlot?: number;
+  parallelism?: number;
+  enabled: boolean;
+  status: 'idle' | 'running' | 'disabled' | 'blocked';
+  running: boolean;
+  pid: number | null;
+  target: JsonRecord;
+  workspacePath: string;
+  singletonKey: string;
+  singletonValue: string;
+  intervalSeconds: number;
   lastPollAt?: string;
-  lastDecision?: string | null;
-  lastDecisionReason?: string | null;
-  conversationMode?: string | null;
-  conversationKey?: string | null;
-  conversationScope?: string[] | null;
-  conversationId?: string | null;
-  lastConversationId?: string | null;
-  conversations?: Record<string, AnyRecord>;
-  workspacePath?: string | null;
-  singletonKey?: string | null;
-  singletonValue?: string | null;
-  intervalSeconds?: number | null;
-  offsetSeconds?: number | null;
-  lastPollWindowStart?: number | null;
+  lastDecision?: string;
+  lastDecisionReason?: string;
   lastError?: string | null;
-}
+  startedAt?: string;
+  finishedAt?: string | null;
+  invocationId?: string;
+  phase?: string;
+  decisionToken?: string;
+  decisionExpiresAt?: string;
+  conversationId?: string;
+  lastConversationId?: string;
+  lastResult?: JsonRecord | null;
+};
 
-export interface RuntimeState extends AnyRecord {
-  workers: Record<string, WorkerRuntime>;
-  customAgents?: Record<string, CustomAgentRuntime>;
-  customAgentEnabledOverrides?: Record<string, boolean>;
-  backlogGraceConsumed?: boolean;
-  backlogGraceUntil?: string;
-  lastPrdPromotion?: AnyRecord | null;
-}
+export type CustomAgentInvocation = {
+  invocationId: string;
+  runtimeKey: string;
+  baseRuntimeKey?: string;
+  agentId: string;
+  parallel?: { slot: number; total: number };
+  status: 'running' | 'completed' | 'failed';
+  phase: string;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+  target: JsonRecord;
+  workspace: { cwd: string };
+  paths: {
+    invocationDir: string;
+    contextPath: string;
+  };
+  lastError: string | null;
+  result?: JsonRecord | null;
+};
 
-export interface TraceContext extends AnyRecord {
-  label?: string;
-  value?: string;
-  stderrMode?: string;
-  errorSummary?: string;
-  errorPriority?: number;
-}
+export type RuntimeState = {
+  schemaVersion: 1;
+  customAgents: Record<string, CustomAgentStatus>;
+  customAgentInvocations: Record<string, CustomAgentInvocation>;
+};
 
-export interface HttpResponse<TPayload = AnyRecord> extends AnyRecord {
-  statusCode: number;
-  payload: TPayload;
-  raw: string;
-}
+export type PendingCustomAgentStart = {
+  runtimeKey: string;
+  baseRuntimeKey: string;
+  parallelSlot: number;
+  parallelism: number;
+  invocationId: string;
+  agentId: string;
+  target: JsonRecord;
+  startedAt: string;
+  runtimeContextPath: string;
+  conversation: CustomAgentConversation;
+};
+
+export type StartedCustomAgent = {
+  runtimeKey: string;
+  baseRuntimeKey: string;
+  parallelSlot: number;
+  parallelism: number;
+  invocationId: string;
+  agentId: string;
+  target: JsonRecord;
+  reason: string;
+  startedAt: string;
+  pid: number | null;
+};
+
+export type LaunchedCustomAgent = {
+  start: StartedCustomAgent;
+  child: ChildProcess;
+};
+
+export type SchedulerTickResult = {
+  rootDir: string;
+  started: StartedCustomAgent[];
+  launched: LaunchedCustomAgent[];
+  runtime: RuntimeState;
+};
+
+export type CliOptions = Record<string, string | boolean>;
