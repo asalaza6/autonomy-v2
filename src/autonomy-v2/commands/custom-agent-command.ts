@@ -214,12 +214,16 @@ async function handleCustomAgentRun(rootDir, options) {
   }, buildTraceOptions(rootDir, options));
   const exit = await waitForChildExit(child);
   const runtime = loadRuntime(rootDir);
-  const status = runtime.customAgents && runtime.customAgents[runtimeKey] || null;
+  const slotRuntimeKey = pendingStart.runtimeKey || runtimeKey;
+  const status = runtime.customAgents && runtime.customAgents[slotRuntimeKey] || null;
   const invocation = pendingStart.invocationId && runtime.customAgentInvocations
     ? runtime.customAgentInvocations[pendingStart.invocationId] || null
     : null;
   const payload = {
     runtimeKey,
+    slotRuntimeKey,
+    parallelSlot: pendingStart.parallelSlot || 1,
+    parallelism: pendingStart.parallelism || 1,
     started: true,
     invocationId: pendingStart.invocationId,
     conversationKey: pendingStart.conversation && pendingStart.conversation.key || '',
@@ -335,6 +339,8 @@ function pollSingleCustomAgent(rootDir, runtimeKey) {
       customAgentRuntimeKey: runtimeKey,
       forceCustomAgentPoll: true,
       ignoreCustomAgentEnabled: true,
+      maxCustomAgentStarts: 1,
+      maxCustomAgentDecisionsPerPool: 1,
     });
     writeRuntime(rootDir, runtime);
     return result;

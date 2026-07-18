@@ -7,6 +7,8 @@ import { CUSTOM_AGENT_WORKER_PATH } from './orchestrator-constants.js';
 import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
 
 const DEFAULT_INTERVAL_SECONDS = 60;
+const DEFAULT_PARALLELISM = 1;
+const MAX_PARALLELISM = 32;
 const DEFAULT_CONVERSATION_SCOPE = ['server.instanceId', 'agent.id', 'target.id', 'date.local'];
 const DEFAULT_CUSTOM_AGENT_CONTEXT = {
   globalReadOnly: [
@@ -64,6 +66,10 @@ function refreshCustomAgentRuntime(runtime: RuntimeState, nowIso = new Date().to
     if (!status.lastError) {
       status.lastError = 'custom agent process exited before reporting result';
     }
+    markCustomAgentInvocationFailed(runtime, {
+      runtimeKey: status.runtimeKey,
+      invocationId: status.invocationId,
+    }, status.lastError, nowIso);
   });
 }
 
@@ -77,29 +83,49 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
 
   const started = [];
   const pendingSpawnStarts = [];
+  const decisionCountsByPool = new Map<string, number>();
   const decisionClient = options.customAgentDecisionClient || callDecisionEndpointSync;
 
-  configs.forEach((config) => {
+  const configuredEntries = configs.flatMap((config) => {
     const enabled = config.enabled !== false;
     const agents = Array.isArray(config.agents) ? config.agents : [];
     const context = normalizeContext(rootDir, config.context || {});
     const controlPanel = normalizeControlPanel(config.controlPanel || {});
     const agentTools = normalizeAgentTools(config.agentTools || {});
 
-    agents.forEach((agent) => {
+    return agents.flatMap((agent) => {
       const normalizedAgent = normalizeAgent(rootDir, agent, context, {
         config,
         agentTools,
         includeConfigInStatusKey: configs.length > 1,
       });
+      return expandCustomAgentParallelSlots(rootDir, normalizedAgent)
+        .sort((left, right) => compareCustomAgentPollPriority(runtime, left, right))
+        .map((parallelAgent) => ({
+          agent,
+          config,
+          controlPanel,
+          enabled,
+          normalizedAgent: parallelAgent,
+        }));
+    });
+  });
+  applyExpandedAgentValidation(configuredEntries.map((entry) => entry.normalizedAgent));
+
+  configuredEntries.forEach(({ agent, config, controlPanel, enabled, normalizedAgent }) => {
       const statusKey = getCustomAgentStatusKey(normalizedAgent);
       const requestedRuntimeKey = String(options.customAgentRuntimeKey || '').trim();
-      if (requestedRuntimeKey && statusKey !== requestedRuntimeKey) {
+      if (requestedRuntimeKey && statusKey !== requestedRuntimeKey && normalizedAgent.baseRuntimeKey !== requestedRuntimeKey) {
         return;
       }
-      const enabledOverride = getCustomAgentEnabledOverride(runtime, statusKey);
+      const maxStarts = normalizeOptionalLimit(options.maxCustomAgentStarts);
+      if (maxStarts !== null && pendingSpawnStarts.length >= maxStarts) {
+        return;
+      }
+      const enabledOverride = getCustomAgentEnabledOverride(runtime, statusKey, normalizedAgent.baseRuntimeKey);
       const agentEnabled = enabledOverride ?? normalizedAgent.enabled;
       const status = ensureCustomAgentStatus(runtime, statusKey, normalizedAgent, enabled);
+      const wasRunning = status.running === true;
       status.configEnabled = enabled;
       status.defaultEnabled = normalizedAgent.enabled;
       status.enabledOverride = enabledOverride;
@@ -108,17 +134,22 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.kind = normalizedAgent.kind;
       status.configPath = normalizedAgent.configPath;
       status.configSource = normalizedAgent.configSource;
-      status.target = normalizedAgent.target;
-      status.workspacePath = normalizedAgent.workspacePath;
-      status.singletonKey = normalizedAgent.singletonKey;
-      status.singletonValue = normalizedAgent.singletonValue;
+      status.target = wasRunning && status.target ? status.target : normalizedAgent.target;
+      status.workspacePath = wasRunning && status.workspacePath ? status.workspacePath : normalizedAgent.workspacePath;
+      status.singletonKey = wasRunning && status.singletonKey ? status.singletonKey : normalizedAgent.singletonKey;
+      status.singletonValue = wasRunning && status.singletonValue ? status.singletonValue : normalizedAgent.singletonValue;
       status.intervalSeconds = normalizedAgent.intervalSeconds;
       status.offsetSeconds = normalizedAgent.offsetSeconds;
+      status.runtimeKey = statusKey;
+      status.baseRuntimeKey = normalizedAgent.baseRuntimeKey;
+      status.parallelSlot = wasRunning && Number.isInteger(status.parallelSlot) ? status.parallelSlot : normalizedAgent.parallelSlot;
+      status.parallelism = wasRunning && Number.isInteger(status.parallelism) ? status.parallelism : normalizedAgent.parallelism;
       status.tools = buildRuntimeToolStatus(normalizedAgent.tools);
 
     if (options.ignoreCustomAgentEnabled !== true && (!enabled || !agentEnabled)) {
-      status.status = 'disabled';
-      status.running = false;
+      const isRunning = status.running === true;
+      status.status = isRunning ? status.status || 'running' : 'disabled';
+      status.running = isRunning;
       status.lastDecision = 'disabled';
       status.lastDecisionReason = enabled
         ? typeof enabledOverride === 'boolean'
@@ -128,7 +159,10 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.lastError = null;
       return;
     }
-    const configError = normalizedAgent.presetError || normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError;
+    if (status.running === true) {
+      return;
+    }
+    const configError = normalizedAgent.expansionError || normalizedAgent.presetError || normalizedAgent.parallelError || normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError;
     if (configError) {
       status.status = 'blocked';
       status.running = false;
@@ -143,16 +177,19 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       status.lastDecisionReason = `unsupported spawn mode "${normalizedAgent.spawnMode || ''}"`;
       return;
     }
-    if (status.running === true) {
-      return;
-    }
     const pollEligibility = options.forceCustomAgentPoll === true
       ? { due: true, windowStart: null }
       : getPollEligibility(status, normalizedAgent.intervalSeconds, normalizedAgent.offsetSeconds, nowIso);
     if (!pollEligibility.due) {
       return;
     }
+    const maxDecisionsPerPool = normalizeOptionalLimit(options.maxCustomAgentDecisionsPerPool);
+    const poolDecisionCount = decisionCountsByPool.get(normalizedAgent.baseRuntimeKey) || 0;
+    if (maxDecisionsPerPool !== null && poolDecisionCount >= maxDecisionsPerPool) {
+      return;
+    }
 
+    decisionCountsByPool.set(normalizedAgent.baseRuntimeKey, poolDecisionCount + 1);
     status.lastPollAt = nowIso;
     if (typeof pollEligibility.windowStart === 'number') {
       status.lastPollWindowStart = pollEligibility.windowStart;
@@ -231,7 +268,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       return;
     }
 
-    const singletonBlocker = findActiveSingleton(runtime, normalizedAgent.singletonKey, normalizedAgent.singletonValue, statusKey);
+    const singletonBlocker = findActiveSingleton(runtime, normalizedAgent, statusKey);
     if (singletonBlocker) {
       status.status = 'blocked';
       status.running = false;
@@ -255,6 +292,11 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       schemaVersion: 1,
       invocationId,
       runtimeKey: statusKey,
+      baseRuntimeKey: normalizedAgent.baseRuntimeKey,
+      parallel: {
+        slot: normalizedAgent.parallelSlot,
+        total: normalizedAgent.parallelism,
+      },
       rootDir,
       startedAt: nowIso,
       kind: String(config.kind || ''),
@@ -307,7 +349,12 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     runtime.customAgentInvocations[invocationId] = {
       invocationId,
       runtimeKey: statusKey,
+      baseRuntimeKey: normalizedAgent.baseRuntimeKey,
       agentId: normalizedAgent.agentId,
+      parallel: {
+        slot: normalizedAgent.parallelSlot,
+        total: normalizedAgent.parallelism,
+      },
       status: 'running',
       phase: 'scheduled',
       startedAt: nowIso,
@@ -325,6 +372,9 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
     };
     pendingSpawnStarts.push({
       runtimeKey: statusKey,
+      baseRuntimeKey: normalizedAgent.baseRuntimeKey,
+      parallelSlot: normalizedAgent.parallelSlot,
+      parallelism: normalizedAgent.parallelism,
       invocationId,
       agentId: normalizedAgent.agentId,
       target: invocationTarget,
@@ -333,6 +383,10 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       conversation,
     });
     started.push({
+      runtimeKey: statusKey,
+      baseRuntimeKey: normalizedAgent.baseRuntimeKey,
+      parallelSlot: normalizedAgent.parallelSlot,
+      parallelism: normalizedAgent.parallelism,
       agentId: normalizedAgent.agentId,
       target: invocationTarget,
       mode: 'custom-agent',
@@ -341,34 +395,63 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
       startedAt: nowIso,
     });
   });
-  });
 
   return { started, pendingSpawnStarts, config: configs[0] || null, configs };
 }
 
-function listConfiguredCustomAgents(rootDir: string, runtime: RuntimeState | null | undefined = null) {
+function listConfiguredCustomAgentSlots(rootDir: string, runtime: RuntimeState | null | undefined = null) {
   const configs = loadCustomAgentConfigs(rootDir);
   const runtimeState = runtime || { workers: {} };
-  return configs.flatMap((config) => {
+  const entries = configs.flatMap((config) => {
     const enabled = config.enabled !== false;
     const agents = Array.isArray(config.agents) ? config.agents : [];
     const context = normalizeContext(rootDir, config.context || {});
     const agentTools = normalizeAgentTools(config.agentTools || {});
-    return agents.map((agent) => {
+    return agents.flatMap((agent) => {
       const normalizedAgent = normalizeAgent(rootDir, agent, context, {
         config,
         agentTools,
         includeConfigInStatusKey: configs.length > 1,
       });
+      return expandCustomAgentParallelSlots(rootDir, normalizedAgent).map((normalizedAgent) => ({
+        config,
+        enabled,
+        normalizedAgent,
+      }));
+    });
+  });
+  applyExpandedAgentValidation(entries.map((entry) => entry.normalizedAgent));
+
+  const configuredSlots: AnyRecord[] = entries.map(({ config, enabled, normalizedAgent }) => {
       const runtimeKey = getCustomAgentStatusKey(normalizedAgent);
       const status: AnyRecord = runtimeState.customAgents && runtimeState.customAgents[runtimeKey]
         ? runtimeState.customAgents[runtimeKey]
         : {};
-      const enabledOverride = getCustomAgentEnabledOverride(runtimeState, runtimeKey);
+      const enabledOverride = getCustomAgentEnabledOverride(runtimeState, runtimeKey, normalizedAgent.baseRuntimeKey);
       const agentEnabled = enabledOverride ?? normalizedAgent.enabled;
-      const configError = normalizedAgent.presetError || normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError || null;
+      const configError = normalizedAgent.expansionError || normalizedAgent.presetError || normalizedAgent.parallelError || normalizedAgent.offsetError || normalizedAgent.toolError || normalizedAgent.decisionError || normalizedAgent.lifecycleError || null;
+      const running = status.running === true;
+      const parallelSlot = running && Number.isInteger(status.parallelSlot)
+        ? status.parallelSlot
+        : normalizedAgent.parallelSlot;
+      const parallelism = running && Number.isInteger(status.parallelism)
+        ? status.parallelism
+        : normalizedAgent.parallelism;
+      const workspacePath = running && status.workspacePath
+        ? status.workspacePath
+        : normalizedAgent.workspacePath;
+      const displayAgent = {
+        ...normalizedAgent,
+        parallelSlot,
+        parallelism,
+        workspacePath,
+      };
       return {
         runtimeKey,
+        baseRuntimeKey: normalizedAgent.baseRuntimeKey,
+        parallelSlot,
+        parallelism,
+        configuredParallelism: normalizedAgent.parallelism,
         agentId: normalizedAgent.agentId,
         kind: normalizedAgent.kind,
         configPath: normalizedAgent.configPath,
@@ -381,11 +464,11 @@ function listConfiguredCustomAgents(rootDir: string, runtime: RuntimeState | nul
         enabledSource: typeof enabledOverride === 'boolean' ? 'runtime' : 'config',
         enabled: enabled && agentEnabled,
         status: status.status || (enabled && agentEnabled ? 'idle' : 'disabled'),
-        running: status.running === true,
+        running,
         pid: status.pid ?? null,
         phase: status.phase || null,
         target: normalizedAgent.target,
-        workspacePath: normalizedAgent.workspacePath,
+        workspacePath,
         singletonKey: normalizedAgent.singletonKey,
         singletonValue: normalizedAgent.singletonValue,
         intervalSeconds: normalizedAgent.intervalSeconds,
@@ -407,14 +490,109 @@ function listConfiguredCustomAgents(rootDir: string, runtime: RuntimeState | nul
           }])),
         detail: describeConfiguredCustomAgent({
           status,
-          normalizedAgent,
+          normalizedAgent: displayAgent,
           enabled,
           agentEnabled,
           enabledOverride,
           configError,
         }),
       };
+  });
+
+  const configuredRuntimeKeys = new Set(configuredSlots.map((slot) => slot.runtimeKey));
+  const configuredPools = new Map<string, AnyRecord>();
+  configuredSlots.forEach((slot) => {
+    if (!configuredPools.has(slot.baseRuntimeKey)) {
+      configuredPools.set(slot.baseRuntimeKey, slot);
+    }
+  });
+  Object.entries(runtimeState.customAgents || {}).forEach(([runtimeKey, status]) => {
+    if (!status || status.running !== true || configuredRuntimeKeys.has(runtimeKey)) {
+      return;
+    }
+    const baseRuntimeKey = String(status.baseRuntimeKey || '').trim();
+    const configured = configuredPools.get(baseRuntimeKey);
+    if (!configured) {
+      return;
+    }
+    const parallelSlot = Number.isInteger(status.parallelSlot) ? status.parallelSlot : 1;
+    configuredSlots.push({
+      ...configured,
+      runtimeKey,
+      baseRuntimeKey,
+      parallelSlot,
+      parallelism: Number.isInteger(status.parallelism) ? status.parallelism : Math.max(configured.parallelism, parallelSlot),
+      agentId: status.agentId || configured.agentId,
+      status: status.status || 'running',
+      running: true,
+      pid: status.pid ?? null,
+      phase: status.phase || null,
+      target: status.target || configured.target,
+      workspacePath: status.workspacePath || configured.workspacePath,
+      lastPollAt: status.lastPollAt || null,
+      lastDecision: status.lastDecision || null,
+      lastDecisionReason: status.lastDecisionReason || null,
+      lastError: status.lastError || null,
+      conversationMode: status.conversationMode || null,
+      conversationKey: status.conversationKey || null,
+      conversationScope: status.conversationScope || null,
+      conversationId: status.conversationId || status.lastConversationId || null,
+      tools: status.tools || configured.tools,
+      retired: true,
+      detail: `${configured.agentId} | slot=${parallelSlot}/${status.parallelism || parallelSlot} | running | retired slot draining | workspace=${status.workspacePath || configured.workspacePath}`,
     });
+  });
+  return configuredSlots;
+}
+
+function listConfiguredCustomAgents(rootDir: string, runtime: RuntimeState | null | undefined = null): AnyRecord[] {
+  const pools = new Map<string, AnyRecord[]>();
+  listConfiguredCustomAgentSlots(rootDir, runtime).forEach((slot) => {
+    const slots = pools.get(slot.baseRuntimeKey) || [];
+    slots.push(slot);
+    pools.set(slot.baseRuntimeKey, slots);
+  });
+  return [...pools.values()].map((slots) => {
+    slots.sort((left, right) => left.parallelSlot - right.parallelSlot);
+    const base = slots[0];
+    const runningSlots = slots.filter((slot) => slot.running === true);
+    const representative = runningSlots[0] || slots.reduce((latest, slot) => {
+      return Date.parse(slot.lastPollAt || '') > Date.parse(latest.lastPollAt || '') ? slot : latest;
+    }, base);
+    const runningCount = runningSlots.length;
+    const configuredParallelism = base.configuredParallelism || base.parallelism;
+    return {
+      ...base,
+      runtimeKey: base.baseRuntimeKey,
+      parallelism: configuredParallelism,
+      status: runningCount > 0 ? 'running' : representative.status,
+      running: runningCount > 0,
+      runningCount,
+      pid: representative.pid,
+      phase: representative.phase,
+      lastPollAt: representative.lastPollAt,
+      lastDecision: representative.lastDecision,
+      lastDecisionReason: representative.lastDecisionReason,
+      lastError: representative.lastError,
+      conversationMode: representative.conversationMode,
+      conversationKey: representative.conversationKey,
+      conversationId: representative.conversationId,
+      slots: slots.map((slot) => ({
+        runtimeKey: slot.runtimeKey,
+        parallelSlot: slot.parallelSlot,
+        parallelism: slot.parallelism,
+        workspacePath: slot.workspacePath,
+        status: slot.status,
+        running: slot.running,
+        pid: slot.pid,
+        phase: slot.phase,
+        lastDecision: slot.lastDecision,
+        lastDecisionReason: slot.lastDecisionReason,
+        lastError: slot.lastError,
+        retired: slot.retired === true,
+      })),
+      detail: `${base.detail} | running=${runningCount}/${configuredParallelism}`,
+    };
   });
 }
 
@@ -437,6 +615,7 @@ function setCustomAgentEnabledOverride(rootDir: string, runtimeKey: string, enab
     };
     runtime.customAgents = runtime.customAgents || {};
     const previousStatus: AnyRecord = runtime.customAgents[normalizedRuntimeKey] || {};
+    const isRunning = previousStatus.running === true;
     runtime.customAgents[normalizedRuntimeKey] = {
       agentId: knownAgent.agentId,
       ...previousStatus,
@@ -444,18 +623,15 @@ function setCustomAgentEnabledOverride(rootDir: string, runtimeKey: string, enab
       enabledSource: 'runtime',
       enabled: knownAgent.configEnabled !== false && enabled === true,
       status: enabled === true && knownAgent.configEnabled !== false
-        ? previousStatus.running === true ? previousStatus.status || 'running' : 'idle'
-        : 'disabled',
-      running: enabled === true ? previousStatus.running === true : false,
+        ? isRunning ? previousStatus.status || 'running' : 'idle'
+        : isRunning ? previousStatus.status || 'running' : 'disabled',
+      running: isRunning,
       updatedAt: new Date().toISOString(),
       lastDecision: enabled === true ? previousStatus.lastDecision || null : 'disabled',
       lastDecisionReason: enabled === true
         ? previousStatus.lastDecisionReason || null
         : 'agent disabled by control-plane override',
     };
-    if (enabled !== true) {
-      runtime.customAgents[normalizedRuntimeKey].pid = null;
-    }
     writeRuntime(rootDir, runtime);
     return listConfiguredCustomAgents(rootDir, runtime).find((agent) => agent.runtimeKey === normalizedRuntimeKey) || null;
   } finally {
@@ -463,11 +639,16 @@ function setCustomAgentEnabledOverride(rootDir: string, runtimeKey: string, enab
   }
 }
 
-function getCustomAgentEnabledOverride(runtime: AnyRecord | null | undefined, runtimeKey: string) {
+function getCustomAgentEnabledOverride(runtime: AnyRecord | null | undefined, runtimeKey: string, baseRuntimeKey = runtimeKey) {
   const overrides = runtime && runtime.customAgentEnabledOverrides && typeof runtime.customAgentEnabledOverrides === 'object'
     ? runtime.customAgentEnabledOverrides
     : {};
-  return typeof overrides[runtimeKey] === 'boolean' ? overrides[runtimeKey] : undefined;
+  if (typeof overrides[runtimeKey] === 'boolean') {
+    return overrides[runtimeKey];
+  }
+  return baseRuntimeKey !== runtimeKey && typeof overrides[baseRuntimeKey] === 'boolean'
+    ? overrides[baseRuntimeKey]
+    : undefined;
 }
 
 function describeConfiguredCustomAgent(input: AnyRecord) {
@@ -486,6 +667,9 @@ function describeConfiguredCustomAgent(input: AnyRecord) {
   }
   if (agent.target && agent.target.id) {
     parts.push(`target=${agent.target.id}`);
+  }
+  if (agent.parallelism > 1) {
+    parts.push(`slot=${agent.parallelSlot}/${agent.parallelism}`);
   }
   if (status.lastDecision) {
     parts.push(`decision=${status.lastDecision}`);
@@ -529,15 +713,33 @@ function markCustomAgentSpawned(runtime: RuntimeState, entry: AnyRecord, pid: nu
 }
 
 function markCustomAgentSpawnFailed(runtime: RuntimeState, entry: AnyRecord, error: unknown) {
+  const finishedAt = new Date().toISOString();
+  const message = error instanceof Error ? error.message : String(error || 'custom agent spawn failed');
   const status = runtime.customAgents && runtime.customAgents[entry.runtimeKey];
-  if (!status || status.startedAt !== entry.startedAt) {
+  if (status && status.startedAt === entry.startedAt && status.invocationId === entry.invocationId) {
+    status.status = 'idle';
+    status.running = false;
+    status.pid = null;
+    status.finishedAt = finishedAt;
+    status.lastError = message;
+  }
+  markCustomAgentInvocationFailed(runtime, entry, message, finishedAt);
+}
+
+function markCustomAgentInvocationFailed(runtime: RuntimeState, entry: AnyRecord, error: unknown, finishedAt: string) {
+  const invocationId = String(entry.invocationId || '').trim();
+  if (!invocationId) {
     return;
   }
-  status.status = 'idle';
-  status.running = false;
-  status.pid = null;
-  status.finishedAt = new Date().toISOString();
-  status.lastError = error instanceof Error ? error.message : String(error || 'custom agent spawn failed');
+  const invocation = runtime.customAgentInvocations && runtime.customAgentInvocations[invocationId];
+  if (!invocation || (entry.runtimeKey && invocation.runtimeKey !== entry.runtimeKey)) {
+    return;
+  }
+  invocation.status = 'failed';
+  invocation.phase = invocation.phase === 'scheduled' ? 'spawn' : invocation.phase || 'failed';
+  invocation.finishedAt = finishedAt;
+  invocation.updatedAt = finishedAt;
+  invocation.lastError = error instanceof Error ? error.message : String(error || 'custom agent process failed');
 }
 
 function normalizeControlPanel(controlPanel: AnyRecord) {
@@ -575,6 +777,10 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
   const workspace = String(agent && agent.workspace || '').trim()
     || path.join('.autonomy', 'runtime', 'custom-agent-workspaces', slugify(agentId), slugify(target.id));
   const workspacePath = resolvePathInside(rootDir, workspace, `${agentId}.workspace`);
+  const parallel = normalizeParallelism(agent && agent.spawn && agent.spawn.parallelism, agentId);
+  const parallelError = parallel.error || (parallel.value > 1 && workspacePath === path.resolve(rootDir)
+    ? `invalid spawn.parallelism for "${agentId}": repository-root workspaces cannot run in parallel`
+    : null);
   const singletonKey = String(agent && agent.spawn && agent.spawn.singletonKey || 'target.id').trim();
   const singletonValue = resolveSingletonValue({ agentId, target, workspacePath }, singletonKey);
   const intervalSeconds = normalizePositiveNumber(agent && agent.spawn && agent.spawn.intervalSeconds, DEFAULT_INTERVAL_SECONDS);
@@ -594,6 +800,9 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
     target,
     workspace,
     workspacePath,
+    parallelSlot: 1,
+    parallelism: parallel.value,
+    parallelError,
     context: effectiveContext,
     workspaceReadWrite: effectiveContext.workspaceReadWrite,
     authEnv: String(agent && agent.authEnv || '').trim(),
@@ -614,6 +823,68 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
     singletonValue,
     decisionEndpoint: decision.endpoint,
   };
+}
+
+function expandCustomAgentParallelSlots(rootDir: string, agent: AnyRecord): AnyRecord[] {
+  const baseRuntimeKey = getCustomAgentBaseStatusKey(agent);
+  return Array.from({ length: agent.parallelism || DEFAULT_PARALLELISM }, (_, index) => {
+    const parallelSlot = index + 1;
+    const workspace = agent.parallelism === DEFAULT_PARALLELISM
+      ? agent.workspace
+      : path.join(`${path.normalize(agent.workspace)}-slots`, `slot-${parallelSlot}`);
+    return {
+      ...agent,
+      baseRuntimeKey,
+      parallelSlot,
+      workspace,
+      workspacePath: resolvePathInside(rootDir, workspace, `${agent.agentId}.workspace`),
+    };
+  });
+}
+
+function compareCustomAgentPollPriority(runtime: RuntimeState, left: AnyRecord, right: AnyRecord) {
+  const leftStatus = runtime.customAgents && runtime.customAgents[getCustomAgentStatusKey(left)];
+  const rightStatus = runtime.customAgents && runtime.customAgents[getCustomAgentStatusKey(right)];
+  const leftPollAt = Date.parse(String(leftStatus && leftStatus.lastPollAt || ''));
+  const rightPollAt = Date.parse(String(rightStatus && rightStatus.lastPollAt || ''));
+  const leftPriority = Number.isFinite(leftPollAt) ? leftPollAt : Number.NEGATIVE_INFINITY;
+  const rightPriority = Number.isFinite(rightPollAt) ? rightPollAt : Number.NEGATIVE_INFINITY;
+  return leftPriority - rightPriority || left.parallelSlot - right.parallelSlot;
+}
+
+function applyExpandedAgentValidation(agents: AnyRecord[]) {
+  const runtimeKeys = new Map<string, AnyRecord[]>();
+  const workspaces = new Map<string, AnyRecord[]>();
+  agents.forEach((agent) => {
+    const runtimeKey = getCustomAgentStatusKey(agent);
+    runtimeKeys.set(runtimeKey, [...(runtimeKeys.get(runtimeKey) || []), agent]);
+    workspaces.set(agent.workspacePath, [...(workspaces.get(agent.workspacePath) || []), agent]);
+  });
+
+  runtimeKeys.forEach((colliding, runtimeKey) => {
+    if (colliding.length < 2) {
+      return;
+    }
+    const poolKeys = new Set(colliding.map((agent) => agent.baseRuntimeKey));
+    agents.filter((agent) => poolKeys.has(agent.baseRuntimeKey)).forEach((agent) => {
+      appendExpandedAgentError(agent, `expanded runtime key "${runtimeKey}" is not unique`);
+    });
+  });
+
+  workspaces.forEach((colliding, workspacePath) => {
+    const poolKeys = new Set(colliding.map((agent) => agent.baseRuntimeKey));
+    if (colliding.length < 2 || poolKeys.size < 2 || !colliding.some((agent) => agent.parallelism > 1)) {
+      return;
+    }
+    agents.filter((agent) => poolKeys.has(agent.baseRuntimeKey)).forEach((agent) => {
+      appendExpandedAgentError(agent, `parallel workspace "${workspacePath}" is shared by multiple custom agents`);
+    });
+  });
+}
+
+function appendExpandedAgentError(agent: AnyRecord, message: string) {
+  const existing = String(agent.expansionError || '').trim();
+  agent.expansionError = existing ? `${existing}; ${message}` : message;
 }
 
 function ensureCustomAgentStatus(runtime: RuntimeState, statusKey: string, agent: AnyRecord, configEnabled: boolean) {
@@ -743,13 +1014,20 @@ function readPath(value: AnyRecord, dottedPath: string) {
   }, value);
 }
 
-function findActiveSingleton(runtime: RuntimeState, singletonKey: string, singletonValue: string, currentStatusKey: string) {
-  return Object.entries(runtime.customAgents || {}).find(([statusKey, status]) => {
+function findActiveSingleton(runtime: RuntimeState, agent: AnyRecord, currentStatusKey: string) {
+  const active = Object.entries(runtime.customAgents || {}).filter(([statusKey, status]) => {
     if (statusKey === currentStatusKey || !status || status.running !== true) {
       return false;
     }
-    return status.singletonKey === singletonKey && status.singletonValue === singletonValue;
-  }) || null;
+    return status.singletonKey === agent.singletonKey && status.singletonValue === agent.singletonValue;
+  });
+  const foreignPool = active.find(([statusKey, status]) => {
+    return String(status.baseRuntimeKey || statusKey) !== agent.baseRuntimeKey;
+  });
+  if (foreignPool) {
+    return foreignPool;
+  }
+  return active.length >= agent.parallelism ? active[0] : null;
 }
 
 function getPollEligibility(status: AnyRecord, intervalSeconds: number, offsetSeconds: number | null, nowIso: string) {
@@ -822,6 +1100,12 @@ function runLocalDecisionCommandSync(rootDir: string, agent: AnyRecord) {
     throw new Error('local decision command is not configured');
   }
   const envContext = {
+    runtimeKey: getCustomAgentStatusKey(agent),
+    baseRuntimeKey: agent.baseRuntimeKey || getCustomAgentBaseStatusKey(agent),
+    parallel: {
+      slot: agent.parallelSlot || DEFAULT_PARALLELISM,
+      total: agent.parallelism || DEFAULT_PARALLELISM,
+    },
     agentId: agent.agentId,
     kind: agent.kind || '',
     target: agent.target || {},
@@ -834,16 +1118,26 @@ function runLocalDecisionCommandSync(rootDir: string, agent: AnyRecord) {
     encoding: 'utf8',
     env: {
       ...process.env,
+      ...command.env,
       AUTONOMY_CUSTOM_AGENT_ID: String(agent.agentId || ''),
       AUTONOMY_CUSTOM_AGENT_KIND: String(agent.kind || ''),
+      AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY: String(getCustomAgentStatusKey(agent)),
+      AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY: String(agent.baseRuntimeKey || getCustomAgentBaseStatusKey(agent)),
+      AUTONOMY_CUSTOM_AGENT_SLOT: String(agent.parallelSlot || DEFAULT_PARALLELISM),
+      AUTONOMY_CUSTOM_AGENT_PARALLELISM: String(agent.parallelism || DEFAULT_PARALLELISM),
       AUTONOMY_CUSTOM_AGENT_TARGET_ID: String(agent.target && agent.target.id || ''),
       AUTONOMY_CUSTOM_AGENT_TARGET_TYPE: String(agent.target && agent.target.type || ''),
       AUTONOMY_CUSTOM_AGENT_WORKSPACE: String(agent.workspacePath || ''),
       AUTONOMY_CUSTOM_AGENT_DECISION_CONTEXT: JSON.stringify(envContext),
-      ...command.env,
     },
     input: `${JSON.stringify({
       invocationId: '',
+      runtimeKey: getCustomAgentStatusKey(agent),
+      baseRuntimeKey: agent.baseRuntimeKey || getCustomAgentBaseStatusKey(agent),
+      parallel: {
+        slot: agent.parallelSlot || DEFAULT_PARALLELISM,
+        total: agent.parallelism || DEFAULT_PARALLELISM,
+      },
       agentId: String(agent.agentId || ''),
       agentType: String(agent.kind || ''),
       repoRoot: rootDir,
@@ -1279,6 +1573,28 @@ function normalizePositiveNumber(value: unknown, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function normalizeParallelism(value: unknown, agentId: string) {
+  if (typeof value === 'undefined' || value === null || value === '') {
+    return { value: DEFAULT_PARALLELISM, error: null };
+  }
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && parsed >= DEFAULT_PARALLELISM && parsed <= MAX_PARALLELISM) {
+    return { value: parsed, error: null };
+  }
+  return {
+    value: DEFAULT_PARALLELISM,
+    error: `invalid spawn.parallelism for "${agentId}": expected an integer between ${DEFAULT_PARALLELISM} and ${MAX_PARALLELISM}`,
+  };
+}
+
+function normalizeOptionalLimit(value: unknown) {
+  if (typeof value === 'undefined' || value === null || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function normalizeDecisionConfig(rootDir: string, value: unknown, agentId: string) {
   const decision = value && typeof value === 'object' ? value as AnyRecord : {};
   const mode = String(decision.mode || '').trim().toLowerCase();
@@ -1443,9 +1759,16 @@ function normalizeDecisionReason(decision: AnyRecord) {
   ).trim();
 }
 
-function getCustomAgentStatusKey(agent: AnyRecord) {
+function getCustomAgentBaseStatusKey(agent: AnyRecord) {
   const baseKey = `${agent.agentId}:${agent.target && agent.target.id || ''}`;
   return agent.statusKeyPrefix ? `${agent.statusKeyPrefix}:${baseKey}` : baseKey;
+}
+
+function getCustomAgentStatusKey(agent: AnyRecord) {
+  const baseRuntimeKey = agent.baseRuntimeKey || getCustomAgentBaseStatusKey(agent);
+  return Number(agent.parallelSlot || DEFAULT_PARALLELISM) > DEFAULT_PARALLELISM
+    ? `${baseRuntimeKey}#${agent.parallelSlot}`
+    : baseRuntimeKey;
 }
 
 function resolveSingletonValue(input: AnyRecord, singletonKey: string) {

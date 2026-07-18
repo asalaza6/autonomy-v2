@@ -115,6 +115,11 @@ function compactDashboardRepo(repo: AnyRecord) {
 function compactCustomAgent(agent: AnyRecord) {
   return {
     runtimeKey: agent.runtimeKey,
+    baseRuntimeKey: agent.baseRuntimeKey || agent.runtimeKey,
+    parallelSlot: typeof agent.parallelSlot === 'number' ? agent.parallelSlot : 1,
+    parallelism: typeof agent.parallelism === 'number' ? agent.parallelism : 1,
+    runningCount: typeof agent.runningCount === 'number' ? agent.runningCount : agent.running === true ? 1 : 0,
+    slots: Array.isArray(agent.slots) ? agent.slots : [],
     agentId: agent.agentId,
     kind: agent.kind,
     configSource: agent.configSource,

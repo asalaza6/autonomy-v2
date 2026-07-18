@@ -112,6 +112,31 @@ Autonomy only runs the configured commands, passes a small JSON envelope on stdi
 
 The command envelope includes `invocationId`, `agentId`, `repoRoot`, `phase`, `target`, `workspace.cwd`, `paths.invocationDir`, `paths.contextPath`, `decision`, `previous`, and `run`. Commands should print a JSON object. `environment` may return `cwd` or `workspacePath`; `prompt` must return `prompt` or `promptPath`; `finalize` may return any JSON object useful to the external workflow.
 
+### Parallel custom-agent pools
+
+An agent may opt into a bounded pool with `spawn.parallelism`. The default is
+`1`; valid values are integers from `1` through `32`. Parallel pools require a
+workspace below the repository root so every slot can receive an isolated
+derived workspace.
+
+The base runtime key remains unchanged for slot 1. Additional slots append
+`#2`, `#3`, and so on. All slots share the logical agent's enable override and
+may coexist under its singleton; a different logical agent with the same
+singleton value remains blocked.
+
+Every decision and lifecycle command receives these runtime-owned environment
+variables:
+
+- `AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY`
+- `AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY`
+- `AUTONOMY_CUSTOM_AGENT_SLOT`
+- `AUTONOMY_CUSTOM_AGENT_PARALLELISM`
+
+The stdin envelope also includes `runtimeKey`, `baseRuntimeKey`, and
+`parallel: { "slot": n, "total": N }`. Lifecycle finalization runs after both
+successful and failed executions so repo-defined cleanup can release the same
+slot's resources.
+
 Repos can opt into the tested command-driven lifecycle defaults with `presetAgentId` instead of copying the full agent objects. Supported preset IDs are:
 
 - `shadow-pm-agent`

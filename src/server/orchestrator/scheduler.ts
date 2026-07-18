@@ -163,7 +163,10 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     }
 
     if (options.inline !== true) {
-      const customAgentPoll = pollCustomAgents(rootDir, runtime, options);
+      const customAgentPoll = pollCustomAgents(rootDir, runtime, {
+        ...options,
+        maxCustomAgentDecisionsPerPool: options.maxCustomAgentDecisionsPerPool ?? 1,
+      });
       customAgentStarted.push(...customAgentPoll.started);
       pendingCustomAgentStarts.push(...customAgentPoll.pendingSpawnStarts);
       emitSchedulerProgress(options, 'custom-agents:computed', {
@@ -226,14 +229,15 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
       }
     }
 
-    for (const entry of pendingCustomAgentStarts) {
+    for (let index = 0; index < pendingCustomAgentStarts.length; index += 1) {
+      const entry = pendingCustomAgentStarts[index];
       try {
         const child = spawnCustomAgentProcess(rootDir, entry, {
           streamOutput: options.streamWorkerOutput === true,
           customAgentSpawner: options.customAgentSpawner,
         });
         const pid = child && typeof child === 'object' ? child.pid : null;
-        const startedEntry = customAgentStarted.find((candidate) => candidate.agentId === entry.agentId && candidate.startedAt === entry.startedAt);
+        const startedEntry = customAgentStarted.find((candidate) => candidate.runtimeKey === entry.runtimeKey);
         if (startedEntry) {
           startedEntry.pid = pid;
         }
@@ -246,6 +250,10 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
         if (typeof options.onWorkerSpawn === 'function') {
           options.onWorkerSpawn({
             agentId: entry.agentId,
+            runtimeKey: entry.runtimeKey,
+            baseRuntimeKey: entry.baseRuntimeKey,
+            parallelSlot: entry.parallelSlot,
+            parallelism: entry.parallelism,
             mode: 'custom-agent',
             reason: 'custom-agent',
             pid,
@@ -255,6 +263,9 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
         }
       } catch (error) {
         updateCustomAgentSpawnFailed(rootDir, entry, error);
+        pendingCustomAgentStarts.slice(index + 1).forEach((pending) => {
+          updateCustomAgentSpawnFailed(rootDir, pending, new Error('custom agent dispatch aborted before spawn'));
+        });
         throw error;
       }
     }

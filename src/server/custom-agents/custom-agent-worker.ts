@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { spawnSync } from 'node:child_process';
 import { runCodexExec } from '../../codex/cli.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
+import type { AnyRecord } from '../server-types.js';
 import { loadRuntime, writeRuntime } from '../orchestrator/orchestrator-state.js';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 
@@ -65,7 +66,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     error = caughtError;
     throw caughtError;
   } finally {
-    finalizeCustomAgentRuntime(rootDir, runtimeKey, result, error);
+    finalizeCustomAgentRuntime(
+      rootDir,
+      runtimeKey,
+      String(runtimeContext.invocationId || ''),
+      result,
+      error
+    );
   }
 }
 
@@ -83,8 +90,14 @@ async function runCustomAgent(runtimeContext) {
   const auth = runtimeContext.auth || {};
   const controlPanel = runtimeContext.controlPanel || {};
   const tools = runtimeContext.tools || {};
+  const parallel = normalizeParallelContext(runtimeContext.parallel);
   const env = {
     AUTONOMY_CUSTOM_AGENT_ID: String(runtimeContext.agent && runtimeContext.agent.id || ''),
+    AUTONOMY_CUSTOM_AGENT_KIND: String(runtimeContext.kind || ''),
+    AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY: String(runtimeContext.runtimeKey || ''),
+    AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY: String(runtimeContext.baseRuntimeKey || runtimeContext.runtimeKey || ''),
+    AUTONOMY_CUSTOM_AGENT_SLOT: String(parallel.slot),
+    AUTONOMY_CUSTOM_AGENT_PARALLELISM: String(parallel.total),
     AUTONOMY_CUSTOM_AGENT_TARGET: JSON.stringify(runtimeContext.target || {}),
     AUTONOMY_CUSTOM_AGENT_WORKSPACE: workspacePath,
     AUTONOMY_CONTROL_PANEL_BASE_URL: String(controlPanel.baseUrl || ''),
@@ -99,74 +112,119 @@ async function runCustomAgent(runtimeContext) {
       env[String(tool.authEnv)] = String(tool.value);
     }
   });
-
-  markCustomAgentInvocationPhase(runtimeContext, 'environment', {
-    status: 'running',
+  Object.assign(env, {
+    AUTONOMY_CUSTOM_AGENT_ID: String(runtimeContext.agent && runtimeContext.agent.id || ''),
+    AUTONOMY_CUSTOM_AGENT_KIND: String(runtimeContext.kind || ''),
+    AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY: String(runtimeContext.runtimeKey || ''),
+    AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY: String(runtimeContext.baseRuntimeKey || runtimeContext.runtimeKey || ''),
+    AUTONOMY_CUSTOM_AGENT_SLOT: String(parallel.slot),
+    AUTONOMY_CUSTOM_AGENT_PARALLELISM: String(parallel.total),
   });
-  const environmentResult = runLifecycleCommand(runtimeContext, 'environment', {
-    workspacePath,
-    env,
-  }) || {};
-  const preparedWorkspacePath = resolvePreparedWorkspacePath(runtimeContext.rootDir, workspacePath, environmentResult);
-  ensureWorkspaceInsideRoot(runtimeContext.rootDir, preparedWorkspacePath);
-  ensureDir(preparedWorkspacePath);
-
-  markCustomAgentInvocationPhase(runtimeContext, 'prompt', {
-    status: 'running',
-    workspace: { cwd: preparedWorkspacePath },
-  });
-  const promptResult = runLifecycleCommand(runtimeContext, 'prompt', {
-    workspacePath: preparedWorkspacePath,
-    env,
-    previous: {
-      environment: environmentResult,
-    },
-  });
-  const prompt = promptResult
-    ? normalizePromptResult(runtimeContext.rootDir, promptResult)
-    : buildCustomAgentPrompt({
-        ...runtimeContext,
-        workspacePath: preparedWorkspacePath,
-        environment: environmentResult,
-      });
-
-  markCustomAgentInvocationPhase(runtimeContext, 'run', {
-    status: 'running',
-    workspace: { cwd: preparedWorkspacePath },
-  });
-  const result = await runCustomAgentCodex(runtimeContext, {
-    cwd: preparedWorkspacePath,
-    prompt,
-    env,
-    sandboxMode: allowRuntimeStateChanges ? 'danger-full-access' : 'workspace-write',
-    configOverrides: buildCustomAgentNetworkConfigOverrides(runtimeContext, process.env),
-  });
-  const runResult = {
-    ok: true,
-    status: 'completed',
-    conversationId: result.conversationId || '',
+  let environmentResult = {};
+  let promptResult = null;
+  let preparedWorkspacePath = workspacePath;
+  let runResult: AnyRecord = {
+    ok: false,
+    status: 'failed',
+    conversationId: '',
   };
+  let failure = null;
 
-  markCustomAgentInvocationPhase(runtimeContext, 'finalize', {
-    status: 'running',
-    workspace: { cwd: preparedWorkspacePath },
-    run: runResult,
-  });
-  const finalizeResult = runLifecycleCommand(runtimeContext, 'finalize', {
-    workspacePath: preparedWorkspacePath,
-    env,
-    previous: {
-      environment: environmentResult,
-      prompt: summarizePromptResult(promptResult),
-    },
-    run: runResult,
-  });
+  try {
+    markCustomAgentInvocationPhase(runtimeContext, 'environment', {
+      status: 'running',
+    });
+    environmentResult = runLifecycleCommand(runtimeContext, 'environment', {
+      workspacePath,
+      env,
+    }) || {};
+    preparedWorkspacePath = resolvePreparedWorkspacePath(runtimeContext.rootDir, workspacePath, environmentResult);
+    ensureWorkspaceInsideRoot(runtimeContext.rootDir, preparedWorkspacePath);
+    ensureDir(preparedWorkspacePath);
+
+    markCustomAgentInvocationPhase(runtimeContext, 'prompt', {
+      status: 'running',
+      workspace: { cwd: preparedWorkspacePath },
+    });
+    promptResult = runLifecycleCommand(runtimeContext, 'prompt', {
+      workspacePath: preparedWorkspacePath,
+      env,
+      previous: {
+        environment: environmentResult,
+      },
+    });
+    const prompt = promptResult
+      ? normalizePromptResult(runtimeContext.rootDir, promptResult)
+      : buildCustomAgentPrompt({
+          ...runtimeContext,
+          workspacePath: preparedWorkspacePath,
+          environment: environmentResult,
+        });
+
+    markCustomAgentInvocationPhase(runtimeContext, 'run', {
+      status: 'running',
+      workspace: { cwd: preparedWorkspacePath },
+    });
+    const result = await runCustomAgentCodex(runtimeContext, {
+      cwd: preparedWorkspacePath,
+      prompt,
+      env,
+      sandboxMode: allowRuntimeStateChanges ? 'danger-full-access' : 'workspace-write',
+      configOverrides: buildCustomAgentNetworkConfigOverrides(runtimeContext, process.env),
+    });
+    runResult = {
+      ok: true,
+      status: 'completed',
+      conversationId: result.conversationId || '',
+    };
+  } catch (error) {
+    failure = error;
+    runResult = {
+      ok: false,
+      status: 'failed',
+      conversationId: '',
+      error: extractError(error),
+    };
+  }
+
+  let finalizeResult = null;
+  let finalizeError = null;
+  if (runtimeContext.lifecycle && runtimeContext.lifecycle.finalize) {
+    try {
+      markCustomAgentInvocationPhase(runtimeContext, 'finalize', {
+        status: 'running',
+        workspace: { cwd: preparedWorkspacePath },
+        run: runResult,
+      });
+      finalizeResult = runLifecycleCommand(runtimeContext, 'finalize', {
+        workspacePath: preparedWorkspacePath,
+        env,
+        previous: {
+          environment: environmentResult,
+          prompt: summarizePromptResult(promptResult),
+        },
+        run: runResult,
+      });
+    } catch (error) {
+      finalizeError = error;
+    }
+  }
+
+  if (failure && finalizeError) {
+    throw new Error(`${extractError(failure)}; finalize failed: ${extractError(finalizeError)}`);
+  }
+  if (failure) {
+    throw failure;
+  }
+  if (finalizeError) {
+    throw finalizeError;
+  }
 
   return {
     ok: true,
     status: 'completed',
     invocationId: String(runtimeContext.invocationId || ''),
-    conversationId: runResult.conversationId,
+    conversationId: runResult.conversationId || '',
     conversation: runtimeContext.conversation || null,
     environment: environmentResult,
     finalize: finalizeResult || null,
@@ -219,6 +277,7 @@ function runLifecycleCommand(runtimeContext, phase: string, options: any = {}) {
     return null;
   }
   const workspacePath = String(options.workspacePath || runtimeContext.workspacePath || '');
+  const parallel = normalizeParallelContext(runtimeContext.parallel);
   const envelope = buildLifecycleEnvelope(runtimeContext, phase, {
     workspacePath,
     previous: options.previous || {},
@@ -231,6 +290,12 @@ function runLifecycleCommand(runtimeContext, phase: string, options: any = {}) {
       ...process.env,
       ...(options.env || {}),
       ...(commandConfig.env || {}),
+      AUTONOMY_CUSTOM_AGENT_ID: String(runtimeContext.agent && runtimeContext.agent.id || ''),
+      AUTONOMY_CUSTOM_AGENT_KIND: String(runtimeContext.kind || ''),
+      AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY: String(runtimeContext.runtimeKey || ''),
+      AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY: String(runtimeContext.baseRuntimeKey || runtimeContext.runtimeKey || ''),
+      AUTONOMY_CUSTOM_AGENT_SLOT: String(parallel.slot),
+      AUTONOMY_CUSTOM_AGENT_PARALLELISM: String(parallel.total),
       AUTONOMY_CUSTOM_AGENT_PHASE: phase,
       AUTONOMY_CUSTOM_AGENT_INVOCATION_ID: String(runtimeContext.invocationId || ''),
       AUTONOMY_CUSTOM_AGENT_CONTEXT: String(runtimeContext.paths && runtimeContext.paths.contextPath || process.env.AUTONOMY_CUSTOM_AGENT_CONTEXT || ''),
@@ -271,6 +336,9 @@ function runLifecycleCommand(runtimeContext, phase: string, options: any = {}) {
 function buildLifecycleEnvelope(runtimeContext, phase: string, options: any = {}) {
   return {
     invocationId: String(runtimeContext.invocationId || ''),
+    runtimeKey: String(runtimeContext.runtimeKey || ''),
+    baseRuntimeKey: String(runtimeContext.baseRuntimeKey || runtimeContext.runtimeKey || ''),
+    parallel: normalizeParallelContext(runtimeContext.parallel),
     agentId: String(runtimeContext.agent && runtimeContext.agent.id || ''),
     agentType: String(runtimeContext.kind || runtimeContext.agent && runtimeContext.agent.type || ''),
     repoRoot: String(runtimeContext.rootDir || ''),
@@ -286,6 +354,19 @@ function buildLifecycleEnvelope(runtimeContext, phase: string, options: any = {}
     decision: runtimeContext.decision || {},
     previous: options.previous || {},
     run: options.run || null,
+  };
+}
+
+function normalizeParallelContext(value: unknown) {
+  const parallel = value && typeof value === 'object' ? value as any : {};
+  const slot = Number(parallel.slot);
+  const total = Number(parallel.total);
+  if (!Number.isInteger(slot) || slot < 1 || !Number.isInteger(total) || total < slot) {
+    return { slot: 1, total: 1 };
+  }
+  return {
+    slot,
+    total,
   };
 }
 
@@ -347,6 +428,8 @@ function markCustomAgentInvocationPhase(runtimeContext, phase: string, patch: an
       invocationId,
       agentId: String(runtimeContext.agent && runtimeContext.agent.id || runtimeKey),
       runtimeKey,
+      baseRuntimeKey: String(runtimeContext.baseRuntimeKey || runtimeKey),
+      parallel: normalizeParallelContext(runtimeContext.parallel),
       status: 'running',
       startedAt: String(runtimeContext.startedAt || runtimeContext.spawn && runtimeContext.spawn.startedAt || ''),
       ...(runtime.customAgentInvocations[invocationId] || {}),
@@ -357,7 +440,7 @@ function markCustomAgentInvocationPhase(runtimeContext, phase: string, patch: an
       ...patch,
     };
     runtime.customAgents = runtime.customAgents || {};
-    if (runtime.customAgents[runtimeKey]) {
+    if (runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].invocationId === invocationId) {
       runtime.customAgents[runtimeKey].phase = phase;
     }
     writeRuntime(rootDir, runtime);
@@ -422,6 +505,9 @@ function buildCustomAgentPrompt(runtimeContext) {
     'Runtime context:',
     JSON.stringify({
       agentId: agent.id,
+      runtimeKey: runtimeContext.runtimeKey,
+      baseRuntimeKey: runtimeContext.baseRuntimeKey || runtimeContext.runtimeKey,
+      parallel: normalizeParallelContext(runtimeContext.parallel),
       kind: runtimeContext.kind || '',
       target: runtimeContext.target || {},
       workspacePath: runtimeContext.workspacePath,
@@ -538,7 +624,7 @@ function ensureWorkspaceInsideRoot(rootDir: string, workspacePath: string) {
   }
 }
 
-function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, result, error) {
+function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, invocationId: string, result, error) {
   const release = acquireStateLock(rootDir);
   try {
     const runtime = loadRuntime(rootDir);
@@ -551,13 +637,13 @@ function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, result,
       ? normalizeConversationId(result && result.conversationId)
       : '';
     const conversationKey = normalizeConversationId(conversation.key);
-    const invocationId = String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].invocationId || result && result.invocationId || '');
-    if (invocationId) {
-      const previousInvocation: any = runtime.customAgentInvocations && runtime.customAgentInvocations[invocationId] || {};
+    const ownedInvocationId = String(invocationId || result && result.invocationId || '');
+    if (ownedInvocationId) {
+      const previousInvocation: any = runtime.customAgentInvocations && runtime.customAgentInvocations[ownedInvocationId] || {};
       runtime.customAgentInvocations = runtime.customAgentInvocations || {};
-      runtime.customAgentInvocations[invocationId] = {
-        invocationId,
-        agentId: String(runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].agentId || runtimeKey),
+      runtime.customAgentInvocations[ownedInvocationId] = {
+        invocationId: ownedInvocationId,
+        agentId: String(previousInvocation.agentId || runtime.customAgents[runtimeKey] && runtime.customAgents[runtimeKey].agentId || runtimeKey),
         ...previousInvocation,
         status: error ? 'failed' : 'completed',
         phase: error ? (previousInvocation.phase || 'failed') : 'completed',
@@ -569,6 +655,10 @@ function finalizeCustomAgentRuntime(rootDir: string, runtimeKey: string, result,
       };
     }
     const previousStatus: any = runtime.customAgents[runtimeKey] || {};
+    if (!ownedInvocationId || previousStatus.invocationId !== ownedInvocationId) {
+      writeRuntime(rootDir, runtime);
+      return;
+    }
     const conversations = {
       ...(previousStatus.conversations || {}),
     };

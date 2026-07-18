@@ -482,6 +482,12 @@ export interface WorkerRuntime extends AnyRecord {
 
 export interface CustomAgentRuntime extends AnyRecord {
   agentId: string;
+  runtimeKey?: string;
+  baseRuntimeKey?: string;
+  parallelSlot?: number;
+  parallelism?: number;
+  runningCount?: number;
+  slots?: AnyRecord[];
   enabled?: boolean;
   target?: AnyRecord;
   status?: string;

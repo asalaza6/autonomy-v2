@@ -10,7 +10,9 @@ import {
   listConfiguredCustomAgents,
   loadCustomAgentConfig,
   loadCustomAgentConfigs,
+  markCustomAgentSpawnFailed,
   pollCustomAgents,
+  refreshCustomAgentRuntime,
   setCustomAgentEnabledOverride,
 } from '../../src/server/orchestrator/custom-agents.js';
 import { isLegacyRosterEnabled } from '../../src/server/orchestrator/scheduler.js';
@@ -1087,10 +1089,389 @@ test('offsetSeconds is included in runtime context when an offset agent spawns',
   });
 });
 
-test('singleton target.id prevents duplicate active target spawns', () => {
+test('parallelism starts isolated slots and carries stable slot identity', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    workspace: '.autonomy/custom/parallel-target',
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      parallelism: 3,
+      singletonKey: 'agent.id',
+      decision: {
+        mode: 'command',
+        command: process.execPath,
+        args: ['scripts/parallel-decision.mjs'],
+      },
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  const scriptsDir = path.join(rootDir, 'scripts');
+  const decisionLogPath = path.join(rootDir, 'parallel-decisions.jsonl');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.writeFileSync(path.join(scriptsDir, 'parallel-decision.mjs'), `
+import fs from 'node:fs';
+const envelope = JSON.parse(fs.readFileSync(0, 'utf8'));
+const slot = Number(process.env.AUTONOMY_CUSTOM_AGENT_SLOT);
+fs.appendFileSync(${JSON.stringify(decisionLogPath)}, JSON.stringify({
+  envelope,
+  runtimeKey: process.env.AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY,
+  baseRuntimeKey: process.env.AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY,
+  slot,
+  parallelism: Number(process.env.AUTONOMY_CUSTOM_AGENT_PARALLELISM),
+}) + '\\n');
+process.stdout.write(JSON.stringify({
+  shouldRun: true,
+  reason: 'slot selected work',
+  target: { jobId: 'job-' + slot },
+}));
+`, 'utf8');
+  const runtime: any = { workers: {} };
+
+  const first = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+  });
+
+  assert.deepEqual(first.pendingSpawnStarts.map((entry) => entry.runtimeKey), [
+    'strategy-agent:target-1',
+    'strategy-agent:target-1#2',
+    'strategy-agent:target-1#3',
+  ]);
+  assert.deepEqual(first.pendingSpawnStarts.map((entry) => entry.parallelSlot), [1, 2, 3]);
+  assert.equal(new Set(first.pendingSpawnStarts.map((entry) => entry.invocationId)).size, 3);
+  assert.equal(new Set(first.pendingSpawnStarts.map((entry) => entry.runtimeContextPath)).size, 3);
+  const contexts = first.pendingSpawnStarts.map((entry) => JSON.parse(fs.readFileSync(entry.runtimeContextPath, 'utf8')));
+  assert.deepEqual(contexts.map((context) => context.parallel), [
+    { slot: 1, total: 3 },
+    { slot: 2, total: 3 },
+    { slot: 3, total: 3 },
+  ]);
+  assert.deepEqual(contexts.map((context) => context.decision.target.jobId), ['job-1', 'job-2', 'job-3']);
+  assert.equal(new Set(contexts.map((context) => context.workspacePath)).size, 3);
+  contexts.forEach((context) => {
+    assert.equal(context.baseRuntimeKey, 'strategy-agent:target-1');
+    assert.equal(path.relative(rootDir, context.workspacePath).startsWith('..'), false);
+    assert.deepEqual(runtime.customAgentInvocations[context.invocationId].parallel, context.parallel);
+  });
+  const decisions = fs.readFileSync(decisionLogPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+  assert.deepEqual(decisions.map((entry) => entry.slot), [1, 2, 3]);
+  assert.deepEqual(decisions.map((entry) => entry.parallelism), [3, 3, 3]);
+  assert.deepEqual(decisions.map((entry) => entry.runtimeKey), [
+    'strategy-agent:target-1',
+    'strategy-agent:target-1#2',
+    'strategy-agent:target-1#3',
+  ]);
+  decisions.forEach((entry) => {
+    assert.equal(entry.baseRuntimeKey, 'strategy-agent:target-1');
+    assert.deepEqual(entry.envelope.parallel, { slot: entry.slot, total: 3 });
+  });
+  const configured = listConfiguredCustomAgents(rootDir, runtime as any);
+  assert.equal(configured.length, 1);
+  assert.equal(configured[0].runtimeKey, 'strategy-agent:target-1');
+  assert.equal(configured[0].parallelism, 3);
+  assert.equal(configured[0].runningCount, 3);
+  assert.equal(configured[0].slots.length, 3);
+
+  const whileFull = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:01:00.000Z',
+    forceCustomAgentPoll: true,
+  });
+  assert.equal(whileFull.pendingSpawnStarts.length, 0);
+  assert.equal(fs.readFileSync(decisionLogPath, 'utf8').trim().split('\n').length, 3);
+
+  runtime.customAgents['strategy-agent:target-1#2'].running = false;
+  runtime.customAgents['strategy-agent:target-1#2'].status = 'idle';
+  const refill = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:02:00.000Z',
+    forceCustomAgentPoll: true,
+  });
+  assert.deepEqual(refill.pendingSpawnStarts.map((entry) => entry.runtimeKey), ['strategy-agent:target-1#2']);
+});
+
+test('logical runtime-key polling reserves at most the configured start limit', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      parallelism: 3,
+      singletonKey: 'agent.id',
+      decision: { mode: 'always' },
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  const runtime: any = { workers: {} };
+
+  const first = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    customAgentRuntimeKey: 'strategy-agent:target-1',
+    forceCustomAgentPoll: true,
+    maxCustomAgentStarts: 1,
+    maxCustomAgentDecisionsPerPool: 1,
+  });
+  const second = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:01.000Z',
+    customAgentRuntimeKey: 'strategy-agent:target-1',
+    forceCustomAgentPoll: true,
+    maxCustomAgentStarts: 1,
+    maxCustomAgentDecisionsPerPool: 1,
+  });
+
+  assert.deepEqual(first.pendingSpawnStarts.map((entry) => entry.runtimeKey), ['strategy-agent:target-1']);
+  assert.deepEqual(second.pendingSpawnStarts.map((entry) => entry.runtimeKey), ['strategy-agent:target-1#2']);
+});
+
+test('decision admission is limited independently for each logical pool', () => {
+  const baseAgent = baseCustomConfig().agents[0];
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        ...baseAgent,
+        spawn: {
+          ...baseAgent.spawn,
+          parallelism: 2,
+          decision: { mode: 'always' },
+        },
+      },
+      {
+        ...baseAgent,
+        id: 'feedback-agent',
+        target: { type: 'strategy', id: 'target-2' },
+        workspace: '.autonomy/custom/target-2',
+        spawn: {
+          ...baseAgent.spawn,
+          parallelism: 2,
+          decision: { mode: 'always' },
+        },
+      },
+    ],
+  }));
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    maxCustomAgentDecisionsPerPool: 1,
+  });
+
+  assert.deepEqual(result.pendingSpawnStarts.map((entry) => entry.runtimeKey), [
+    'strategy-agent:target-1',
+    'feedback-agent:target-2',
+  ]);
+});
+
+test('decision admission rotates past a slot that repeatedly skips', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      parallelism: 3,
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  process.env.STRATEGY_TOKEN = 'secret-token';
+  const runtime: any = { workers: {} };
+  const decisions: number[] = [];
+  const decide = ({ agent: polledAgent }) => {
+    decisions.push(polledAgent.parallelSlot);
+    return {
+      shouldRun: polledAgent.parallelSlot === 2,
+      reason: polledAgent.parallelSlot === 2 ? 'slot two has work' : 'slot has no work',
+    };
+  };
+
+  const first = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+    forceCustomAgentPoll: true,
+    maxCustomAgentDecisionsPerPool: 1,
+    customAgentDecisionClient: decide,
+  });
+  const second = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:01.000Z',
+    forceCustomAgentPoll: true,
+    maxCustomAgentDecisionsPerPool: 1,
+    customAgentDecisionClient: decide,
+  });
+
+  assert.deepEqual(first.pendingSpawnStarts, []);
+  assert.deepEqual(decisions, [1, 2]);
+  assert.deepEqual(second.pendingSpawnStarts.map((entry) => entry.runtimeKey), ['strategy-agent:target-1#2']);
+});
+
+test('disabling and re-enabling a parallel pool preserves live slot ownership', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      parallelism: 2,
+      decision: { mode: 'always' },
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  const runtime: any = { workers: {} };
+  pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+  });
+  const invocationIds = Object.fromEntries(Object.entries(runtime.customAgents)
+    .map(([runtimeKey, status]: [string, any]) => [runtimeKey, status.invocationId]));
+
+  runtime.customAgentEnabledOverrides = { 'strategy-agent:target-1': false };
+  const disabled = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:01.000Z',
+    forceCustomAgentPoll: true,
+  });
+  runtime.customAgentEnabledOverrides['strategy-agent:target-1'] = true;
+  const reenabled = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:02.000Z',
+    forceCustomAgentPoll: true,
+  });
+
+  assert.deepEqual(disabled.pendingSpawnStarts, []);
+  assert.deepEqual(reenabled.pendingSpawnStarts, []);
+  Object.entries(runtime.customAgents).forEach(([runtimeKey, status]: [string, any]) => {
+    assert.equal(status.running, true);
+    assert.equal(status.invocationId, invocationIds[runtimeKey]);
+  });
+});
+
+test('live pool resizing preserves active workspaces and reports draining retired slots', () => {
+  const baseAgent = baseCustomConfig().agents[0];
+  const initialConfig = baseCustomConfig({
+    agents: [{
+      ...baseAgent,
+      spawn: {
+        ...baseAgent.spawn,
+        decision: { mode: 'always' },
+      },
+    }],
+  });
+  const rootDir = makeRepo(initialConfig);
+  const configPath = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config', 'custom-agents.json');
+  const runtime: any = { workers: {} };
+  pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+  });
+  const originalWorkspace = runtime.customAgents['strategy-agent:target-1'].workspacePath;
+
+  const expandedConfig = baseCustomConfig({
+    agents: [{
+      ...baseAgent,
+      spawn: {
+        ...baseAgent.spawn,
+        parallelism: 3,
+        decision: { mode: 'always' },
+      },
+    }],
+  });
+  fs.writeFileSync(configPath, `${JSON.stringify(expandedConfig, null, 2)}\n`, 'utf8');
+  const expanded = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:01.000Z',
+    forceCustomAgentPoll: true,
+    maxCustomAgentStarts: 1,
+    maxCustomAgentDecisionsPerPool: 1,
+  });
+
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].workspacePath, originalWorkspace);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].parallelism, 1);
+  assert.deepEqual(expanded.pendingSpawnStarts.map((entry) => entry.runtimeKey), ['strategy-agent:target-1#2']);
+  const expandedList = listConfiguredCustomAgents(rootDir, runtime as any)[0];
+  assert.equal(expandedList.parallelism, 3);
+  assert.equal(expandedList.slots.find((slot) => slot.runtimeKey === 'strategy-agent:target-1').workspacePath, originalWorkspace);
+
+  fs.writeFileSync(configPath, `${JSON.stringify(initialConfig, null, 2)}\n`, 'utf8');
+  const contractedList = listConfiguredCustomAgents(rootDir, runtime as any)[0];
+  const retired = contractedList.slots.find((slot) => slot.runtimeKey === 'strategy-agent:target-1#2');
+  assert.equal(contractedList.parallelism, 1);
+  assert.equal(contractedList.runningCount, 2);
+  assert.equal(retired.running, true);
+  assert.equal(retired.retired, true);
+});
+
+test('expanded custom-agent runtime keys must be unique', () => {
+  const baseAgent = baseCustomConfig().agents[0];
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: [
+      {
+        ...baseAgent,
+        spawn: {
+          ...baseAgent.spawn,
+          parallelism: 2,
+          decision: { mode: 'always' },
+        },
+      },
+      {
+        ...baseAgent,
+        target: { type: 'strategy', id: 'target-1#2' },
+        workspace: '.autonomy/custom/colliding-target',
+        spawn: {
+          ...baseAgent.spawn,
+          decision: { mode: 'always' },
+        },
+      },
+    ],
+  }));
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+  });
+
+  assert.deepEqual(result.pendingSpawnStarts, []);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecision, 'invalid_config');
+  assert.match(runtime.customAgents['strategy-agent:target-1'].lastError, /runtime key.*not unique/);
+  assert.match(runtime.customAgents['strategy-agent:target-1#2'].lastError, /runtime key.*not unique/);
+});
+
+test('invalid parallelism blocks custom-agent dispatch', () => {
+  for (const value of [0, -1, 1.5, 'many', 33]) {
+    const agent = {
+      ...baseCustomConfig().agents[0],
+      spawn: {
+        ...baseCustomConfig().agents[0].spawn,
+        parallelism: value,
+        decision: { mode: 'always' },
+      },
+    };
+    const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+    const runtime: any = { workers: {} };
+    const result = pollCustomAgents(rootDir, runtime as any, {
+      nowIso: '2026-01-01T00:00:00.000Z',
+    });
+    assert.equal(result.pendingSpawnStarts.length, 0);
+    assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecision, 'invalid_config');
+    assert.match(runtime.customAgents['strategy-agent:target-1'].lastError, /parallelism/);
+  }
+});
+
+test('parallelism blocks a repository-root workspace that cannot be isolated safely', () => {
+  const agent = {
+    ...baseCustomConfig().agents[0],
+    workspace: '.',
+    spawn: {
+      ...baseCustomConfig().agents[0].spawn,
+      parallelism: 2,
+      decision: { mode: 'always' },
+    },
+  };
+  const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
+  const runtime: any = { workers: {} };
+
+  const result = pollCustomAgents(rootDir, runtime as any, {
+    nowIso: '2026-01-01T00:00:00.000Z',
+  });
+
+  assert.equal(result.pendingSpawnStarts.length, 0);
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].lastDecision, 'invalid_config');
+  assert.match(runtime.customAgents['strategy-agent:target-1'].lastError, /repository-root workspaces/);
+});
+
+test('parallel slots coexist only within their logical singleton pool', () => {
   const config = baseCustomConfig({
     agents: [
-      baseCustomConfig().agents[0],
+      {
+        ...baseCustomConfig().agents[0],
+        spawn: {
+          ...baseCustomConfig().agents[0].spawn,
+          parallelism: 2,
+        },
+      },
       {
         ...baseCustomConfig().agents[0],
         id: 'strategy-agent-copy',
@@ -1109,9 +1490,74 @@ test('singleton target.id prevents duplicate active target spawns', () => {
     },
   });
 
-  assert.equal(result.pendingSpawnStarts.length, 1);
+  assert.equal(result.pendingSpawnStarts.length, 2);
   assert.equal(runtime.customAgents['strategy-agent:target-1'].status, 'running');
+  assert.equal(runtime.customAgents['strategy-agent:target-1#2'].status, 'running');
   assert.equal(runtime.customAgents['strategy-agent-copy:target-1'].status, 'blocked');
+});
+
+test('custom-agent spawn failure closes the owned invocation record', () => {
+  const runtime: any = {
+    workers: {},
+    customAgents: {
+      'strategy-agent:target-1#2': {
+        runtimeKey: 'strategy-agent:target-1#2',
+        status: 'running',
+        running: true,
+        startedAt: '2026-01-01T00:00:00.000Z',
+        invocationId: 'inv-spawn-2',
+      },
+    },
+    customAgentInvocations: {
+      'inv-spawn-2': {
+        invocationId: 'inv-spawn-2',
+        runtimeKey: 'strategy-agent:target-1#2',
+        status: 'running',
+        phase: 'scheduled',
+      },
+    },
+  };
+
+  markCustomAgentSpawnFailed(runtime, {
+    runtimeKey: 'strategy-agent:target-1#2',
+    invocationId: 'inv-spawn-2',
+    startedAt: '2026-01-01T00:00:00.000Z',
+  }, new Error('spawn exploded'));
+
+  assert.equal(runtime.customAgents['strategy-agent:target-1#2'].running, false);
+  assert.equal(runtime.customAgentInvocations['inv-spawn-2'].status, 'failed');
+  assert.equal(runtime.customAgentInvocations['inv-spawn-2'].phase, 'spawn');
+  assert.equal(runtime.customAgentInvocations['inv-spawn-2'].lastError, 'spawn exploded');
+});
+
+test('custom-agent refresh closes the invocation for an exited process', () => {
+  const runtime: any = {
+    workers: {},
+    customAgents: {
+      'strategy-agent:target-1': {
+        runtimeKey: 'strategy-agent:target-1',
+        status: 'running',
+        running: true,
+        pid: null,
+        invocationId: 'inv-exited',
+      },
+    },
+    customAgentInvocations: {
+      'inv-exited': {
+        invocationId: 'inv-exited',
+        runtimeKey: 'strategy-agent:target-1',
+        status: 'running',
+        phase: 'run',
+      },
+    },
+  };
+
+  refreshCustomAgentRuntime(runtime, '2026-01-01T00:01:00.000Z');
+
+  assert.equal(runtime.customAgents['strategy-agent:target-1'].running, false);
+  assert.equal(runtime.customAgentInvocations['inv-exited'].status, 'failed');
+  assert.equal(runtime.customAgentInvocations['inv-exited'].phase, 'run');
+  assert.equal(runtime.customAgentInvocations['inv-exited'].finishedAt, '2026-01-01T00:01:00.000Z');
 });
 
 test('existing PM/implementation/reviewer due-agent scheduling remains unchanged', () => {

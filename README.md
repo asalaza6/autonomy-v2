@@ -79,6 +79,39 @@ decision polling and spawning:
 }
 ```
 
+## Custom Agent Parallelism
+
+Set `spawn.parallelism` to run a bounded pool from one custom-agent definition.
+It defaults to `1` and accepts integers from `1` through `32`:
+
+```json
+{
+  "agents": [
+    {
+      "id": "game-agent",
+      "target": { "type": "repository", "id": "my-game" },
+      "workspace": ".autonomy/runtime/game-agent",
+      "spawn": {
+        "mode": "poll",
+        "parallelism": 4,
+        "singletonKey": "agent.id"
+      }
+    }
+  ]
+}
+```
+
+Slot 1 keeps the existing runtime key (`game-agent:my-game`); later slots use
+`#2`, `#3`, and so on. Each slot has independent runtime state, invocation
+artifacts, and a derived workspace. The server admits at most one new decision
+per logical pool per tick, so claimed work is dispatched promptly while active
+workers continue concurrently.
+
+Decision and lifecycle commands receive `AUTONOMY_CUSTOM_AGENT_SLOT`,
+`AUTONOMY_CUSTOM_AGENT_PARALLELISM`, and a matching
+`parallel: { "slot": n, "total": N }` envelope. Commands that own external
+claims or workspaces should use that identity to isolate per-slot state.
+
 ## Custom Agent Prompt Identity
 
 Custom-agent configs can customize the wrapper identity text shown at the top of

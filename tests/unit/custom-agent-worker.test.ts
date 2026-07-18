@@ -156,6 +156,7 @@ test('custom agent worker runs command lifecycle phases and records invocation s
   const workspacePath = path.join(rootDir, '.autonomy', 'workspace');
   const contextPath = path.join(invocationDir, 'context.json');
   const scriptsDir = path.join(rootDir, 'scripts');
+  const codexEnvPath = path.join(invocationDir, 'codex.env.json');
   fs.mkdirSync(scriptsDir, { recursive: true });
   fs.mkdirSync(path.join(rootDir, '.autonomy', 'runtime', 'state'), { recursive: true });
   fs.mkdirSync(invocationDir, { recursive: true });
@@ -164,7 +165,7 @@ test('custom agent worker runs command lifecycle phases and records invocation s
     JSON.stringify({
       workers: {},
       customAgents: {
-        'strategy-agent:target-1': {
+        'strategy-agent:target-1#2': {
           agentId: 'strategy-agent',
           status: 'running',
           running: true,
@@ -190,7 +191,16 @@ test('custom agent worker runs command lifecycle phases and records invocation s
 const fs = require('fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 fs.writeFileSync(${JSON.stringify(path.join(invocationDir, 'environment.input.json'))}, JSON.stringify(input, null, 2));
-process.stdout.write(JSON.stringify({ cwd: '.autonomy/prepared-workspace', environmentReady: true }));
+process.stdout.write(JSON.stringify({
+  cwd: '.autonomy/prepared-workspace',
+  environmentReady: true,
+  parallelEnv: {
+    slot: process.env.AUTONOMY_CUSTOM_AGENT_SLOT,
+    total: process.env.AUTONOMY_CUSTOM_AGENT_PARALLELISM,
+    runtimeKey: process.env.AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY,
+    baseRuntimeKey: process.env.AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY,
+  },
+}));
 `, 'utf8');
   fs.writeFileSync(promptScript, `
 const fs = require('fs');
@@ -204,13 +214,28 @@ const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 fs.writeFileSync(${JSON.stringify(path.join(invocationDir, 'finalize.input.json'))}, JSON.stringify(input, null, 2));
 process.stdout.write(JSON.stringify({ finalized: true, runStatus: input.run.status }));
 `, 'utf8');
-  fs.writeFileSync(codexScript, '#!/usr/bin/env node\nprocess.stdin.resume(); process.stdin.on("end", () => { process.stdout.write(JSON.stringify({ session_id: "custom-session-1" }) + "\\n"); process.exit(0); });\n', 'utf8');
+  fs.writeFileSync(codexScript, `#!/usr/bin/env node
+const fs = require('fs');
+fs.writeFileSync(${JSON.stringify(codexEnvPath)}, JSON.stringify({
+  slot: process.env.AUTONOMY_CUSTOM_AGENT_SLOT,
+  total: process.env.AUTONOMY_CUSTOM_AGENT_PARALLELISM,
+  runtimeKey: process.env.AUTONOMY_CUSTOM_AGENT_RUNTIME_KEY,
+  baseRuntimeKey: process.env.AUTONOMY_CUSTOM_AGENT_BASE_RUNTIME_KEY,
+}));
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stdout.write(JSON.stringify({ session_id: 'custom-session-1' }) + '\\n');
+  process.exit(0);
+});
+`, 'utf8');
   fs.chmodSync(codexScript, 0o755);
 
   fs.writeFileSync(contextPath, JSON.stringify({
     schemaVersion: 1,
     invocationId: 'inv-1',
-    runtimeKey: 'strategy-agent:target-1',
+    runtimeKey: 'strategy-agent:target-1#2',
+    baseRuntimeKey: 'strategy-agent:target-1',
+    parallel: { slot: 2, total: 3 },
     rootDir,
     startedAt: '2026-01-01T00:00:00.000Z',
     kind: 'strategy-agents',
@@ -254,22 +279,245 @@ process.stdout.write(JSON.stringify({ finalized: true, runStatus: input.run.stat
   const environmentInput = JSON.parse(fs.readFileSync(path.join(invocationDir, 'environment.input.json'), 'utf8'));
   const promptInput = JSON.parse(fs.readFileSync(path.join(invocationDir, 'prompt.input.json'), 'utf8'));
   const finalizeInput = JSON.parse(fs.readFileSync(path.join(invocationDir, 'finalize.input.json'), 'utf8'));
+  const codexEnv = JSON.parse(fs.readFileSync(codexEnvPath, 'utf8'));
   const runtime = JSON.parse(fs.readFileSync(path.join(rootDir, '.autonomy', 'runtime', 'state', 'runtime.json'), 'utf8'));
 
   assert.equal(environmentInput.phase, 'environment');
   assert.equal(environmentInput.repoRoot, rootDir);
+  assert.equal(environmentInput.runtimeKey, 'strategy-agent:target-1#2');
+  assert.equal(environmentInput.baseRuntimeKey, 'strategy-agent:target-1');
+  assert.deepEqual(environmentInput.parallel, { slot: 2, total: 3 });
+  assert.deepEqual(promptInput.parallel, { slot: 2, total: 3 });
+  assert.deepEqual(finalizeInput.parallel, { slot: 2, total: 3 });
+  assert.deepEqual(codexEnv, {
+    slot: '2',
+    total: '3',
+    runtimeKey: 'strategy-agent:target-1#2',
+    baseRuntimeKey: 'strategy-agent:target-1',
+  });
+  assert.deepEqual(promptInput.previous.environment.parallelEnv, codexEnv);
   assert.equal(promptInput.previous.environment.environmentReady, true);
   assert.equal(promptInput.workspace.cwd, path.join(rootDir, '.autonomy', 'prepared-workspace'));
   assert.equal(finalizeInput.run.status, 'completed');
-  assert.equal(runtime.customAgents['strategy-agent:target-1'].running, false);
-  assert.equal(runtime.customAgents['strategy-agent:target-1'].conversationId, 'custom-session-1');
-  assert.equal(runtime.customAgents['strategy-agent:target-1'].conversationKey, 'strategy-agent:target-1');
-  assert.equal(runtime.customAgents['strategy-agent:target-1'].conversations['strategy-agent:target-1'].conversationId, 'custom-session-1');
+  assert.equal(runtime.customAgents['strategy-agent:target-1#2'].running, false);
+  assert.equal(runtime.customAgents['strategy-agent:target-1#2'].conversationId, 'custom-session-1');
+  assert.equal(runtime.customAgents['strategy-agent:target-1#2'].conversationKey, 'strategy-agent:target-1');
+  assert.equal(runtime.customAgents['strategy-agent:target-1#2'].conversations['strategy-agent:target-1'].conversationId, 'custom-session-1');
   assert.equal(runtime.customAgentInvocations['inv-1'].conversationKey, 'strategy-agent:target-1');
   assert.equal(runtime.customAgentInvocations['inv-1'].conversationId, 'custom-session-1');
   assert.equal(runtime.customAgentInvocations['inv-1'].status, 'completed');
   assert.equal(runtime.customAgentInvocations['inv-1'].lastResult.finalize.finalized, true);
   assert.equal(fs.existsSync(path.join(invocationDir, 'environment.command.json')), true);
+});
+
+test('custom agent worker finalizes a failed lifecycle run with slot identity', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agent-worker-failure-'));
+  const runtimeKey = 'game-agent:fixture#2';
+  const invocationId = 'game-agent-fixture-2-2026-01-01t00-00-00-000z';
+  const invocationDir = path.join(rootDir, '.autonomy', 'runtime', 'custom-agents', 'game-agent-fixture-2', 'start');
+  const workspacePath = path.join(rootDir, '.autonomy', 'workspace-slot-2');
+  const stateDir = path.join(rootDir, '.autonomy', 'runtime', 'state');
+  const scriptsDir = path.join(rootDir, 'scripts');
+  const contextPath = path.join(invocationDir, 'context.json');
+  const finalizeInputPath = path.join(invocationDir, 'failure-finalize.input.json');
+  fs.mkdirSync(invocationDir, { recursive: true });
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.writeFileSync(path.join(stateDir, 'runtime.json'), JSON.stringify({
+    workers: {},
+    customAgents: {
+      [runtimeKey]: {
+        runtimeKey,
+        baseRuntimeKey: 'game-agent:fixture',
+        parallelSlot: 2,
+        parallelism: 3,
+        agentId: 'game-agent',
+        status: 'running',
+        running: true,
+        invocationId,
+      },
+    },
+    customAgentInvocations: {
+      [invocationId]: {
+        invocationId,
+        runtimeKey,
+        agentId: 'game-agent',
+        status: 'running',
+      },
+    },
+  }, null, 2), 'utf8');
+  const environmentScript = path.join(scriptsDir, 'environment-fails.js');
+  const finalizeScript = path.join(scriptsDir, 'finalize-failure.js');
+  fs.writeFileSync(environmentScript, `
+process.stderr.write('prepare failed after acquiring resources');
+process.exit(2);
+`, 'utf8');
+  fs.writeFileSync(finalizeScript, `
+const fs = require('fs');
+const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+fs.writeFileSync(${JSON.stringify(finalizeInputPath)}, JSON.stringify({
+  input,
+  env: {
+    slot: process.env.AUTONOMY_CUSTOM_AGENT_SLOT,
+    total: process.env.AUTONOMY_CUSTOM_AGENT_PARALLELISM,
+  },
+}, null, 2));
+process.stdout.write(JSON.stringify({ released: true }));
+`, 'utf8');
+  fs.writeFileSync(contextPath, JSON.stringify({
+    schemaVersion: 1,
+    invocationId,
+    runtimeKey,
+    baseRuntimeKey: 'game-agent:fixture',
+    parallel: { slot: 2, total: 3 },
+    rootDir,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    kind: 'game-agents',
+    agent: { id: 'game-agent' },
+    target: { type: 'repository', id: 'fixture' },
+    workspacePath,
+    paths: { invocationDir, contextPath },
+    controlPanel: {},
+    auth: {},
+    tools: {},
+    context: {},
+    conversation: { mode: 'fresh', persist: false },
+    lifecycle: {
+      environment: { command: 'node', args: [environmentScript], cwd: rootDir },
+      finalize: { command: 'node', args: [finalizeScript], cwd: rootDir },
+    },
+    decision: { shouldRun: true, jobId: 'job-2' },
+  }, null, 2), 'utf8');
+
+  await assert.rejects(
+    main(['run', '--context', contextPath]),
+    /prepare failed after acquiring resources/,
+  );
+
+  const finalized = JSON.parse(fs.readFileSync(finalizeInputPath, 'utf8'));
+  const runtime = JSON.parse(fs.readFileSync(path.join(stateDir, 'runtime.json'), 'utf8'));
+  assert.equal(finalized.input.phase, 'finalize');
+  assert.equal(finalized.input.run.status, 'failed');
+  assert.deepEqual(finalized.input.parallel, { slot: 2, total: 3 });
+  assert.deepEqual(finalized.env, { slot: '2', total: '3' });
+  assert.equal(runtime.customAgents[runtimeKey].running, false);
+  assert.match(runtime.customAgents[runtimeKey].lastError, /prepare failed after acquiring resources/);
+  assert.equal(runtime.customAgentInvocations[invocationId].status, 'failed');
+});
+
+test('an older custom-agent worker cannot finalize a replacement invocation in the same slot', async () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agent-worker-fence-'));
+  const runtimeKey = 'game-agent:fixture#2';
+  const oldInvocationId = 'inv-old';
+  const newInvocationId = 'inv-new';
+  const invocationDir = path.join(rootDir, '.autonomy', 'runtime', 'custom-agents', 'game-agent-fixture-2', 'start');
+  const stateDir = path.join(rootDir, '.autonomy', 'runtime', 'state');
+  const statePath = path.join(stateDir, 'runtime.json');
+  const scriptsDir = path.join(rootDir, 'scripts');
+  const contextPath = path.join(invocationDir, 'context.json');
+  const workspacePath = path.join(rootDir, '.autonomy', 'workspace-slot-2');
+  fs.mkdirSync(invocationDir, { recursive: true });
+  fs.mkdirSync(stateDir, { recursive: true });
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  fs.writeFileSync(statePath, JSON.stringify({
+    workers: {},
+    customAgents: {
+      [runtimeKey]: {
+        runtimeKey,
+        agentId: 'game-agent',
+        status: 'running',
+        running: true,
+        invocationId: oldInvocationId,
+      },
+    },
+    customAgentInvocations: {
+      [oldInvocationId]: {
+        invocationId: oldInvocationId,
+        runtimeKey,
+        agentId: 'game-agent',
+        status: 'running',
+      },
+    },
+  }, null, 2), 'utf8');
+
+  const environmentScript = path.join(scriptsDir, 'replace-slot-owner.js');
+  const codexScript = path.join(scriptsDir, 'codex.js');
+  fs.writeFileSync(environmentScript, `
+const fs = require('fs');
+const statePath = ${JSON.stringify(statePath)};
+const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+state.customAgents[${JSON.stringify(runtimeKey)}] = {
+  ...state.customAgents[${JSON.stringify(runtimeKey)}],
+  status: 'running',
+  running: true,
+  pid: 4242,
+  phase: 'scheduled',
+  invocationId: ${JSON.stringify(newInvocationId)},
+  lastResult: { owner: 'replacement' },
+};
+state.customAgentInvocations[${JSON.stringify(newInvocationId)}] = {
+  invocationId: ${JSON.stringify(newInvocationId)},
+  runtimeKey: ${JSON.stringify(runtimeKey)},
+  agentId: 'game-agent',
+  status: 'running',
+  phase: 'scheduled',
+};
+fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+process.stdout.write(JSON.stringify({ cwd: ${JSON.stringify(workspacePath)} }));
+`, 'utf8');
+  fs.writeFileSync(codexScript, `#!/usr/bin/env node
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stdout.write(JSON.stringify({ session_id: 'old-session' }) + '\\n');
+  process.exit(0);
+});
+`, 'utf8');
+  fs.chmodSync(codexScript, 0o755);
+
+  fs.writeFileSync(contextPath, JSON.stringify({
+    schemaVersion: 1,
+    invocationId: oldInvocationId,
+    runtimeKey,
+    baseRuntimeKey: 'game-agent:fixture',
+    parallel: { slot: 2, total: 3 },
+    rootDir,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    kind: 'game-agents',
+    agent: { id: 'game-agent' },
+    target: { type: 'repository', id: 'fixture' },
+    workspacePath,
+    paths: { invocationDir, contextPath },
+    controlPanel: {},
+    auth: {},
+    tools: {},
+    context: {},
+    conversation: { mode: 'fresh', persist: false },
+    lifecycle: {
+      environment: { command: 'node', args: [environmentScript], cwd: rootDir },
+    },
+    decision: { shouldRun: true, jobId: 'job-old' },
+  }, null, 2), 'utf8');
+
+  const previousCodexBin = process.env.AUTONOMY_CODEX_BIN;
+  process.env.AUTONOMY_CODEX_BIN = codexScript;
+  try {
+    await main(['run', '--context', contextPath]);
+  } finally {
+    if (typeof previousCodexBin === 'string') {
+      process.env.AUTONOMY_CODEX_BIN = previousCodexBin;
+    } else {
+      delete process.env.AUTONOMY_CODEX_BIN;
+    }
+  }
+
+  const runtime = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  assert.equal(runtime.customAgents[runtimeKey].invocationId, newInvocationId);
+  assert.equal(runtime.customAgents[runtimeKey].running, true);
+  assert.equal(runtime.customAgents[runtimeKey].pid, 4242);
+  assert.equal(runtime.customAgents[runtimeKey].phase, 'scheduled');
+  assert.deepEqual(runtime.customAgents[runtimeKey].lastResult, { owner: 'replacement' });
+  assert.equal(runtime.customAgentInvocations[oldInvocationId].status, 'completed');
+  assert.equal(runtime.customAgentInvocations[newInvocationId].status, 'running');
 });
 
 test('custom agent worker resumes the previous Codex conversation', async () => {
