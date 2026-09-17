@@ -71,13 +71,13 @@ Each agent must be an object with the fields below.
 |---|---|---:|---|
 | `id` | string | Yes | Required, non-empty, globally unique |
 | `role` | string | Yes | Must be one of: `pm`, `implementation`, `review` |
-| `systemPrompt` | string | Yes | Path (relative recommended) to prompt markdown used by Codex planning/review prompts |
+| `systemPrompt` | string | Yes | Non-empty prompt path metadata |
 | `gitIdentity` | object | Yes | Must include non-empty `name` and `email` |
 | `taskQueue` | string | No | Path to that agent queue file |
-| `personaName` | string | No | Human-readable label, forwarded to PM planning context |
-| `include` | string[] | No | Scope allowlist for this agent (globs). Used for PM validation + scope checks |
+| `personaName` | string | No | Human-readable label |
+| `include` | string[] | No | Scope allowlist for queue and PR commands (globs) |
 | `exclude` | string[] | No | Scope blocklist for this agent (globs). Used by scope checks |
-| `checks` | string[] | Yes for implementation agents by runtime convention | Must be non-empty for implementation agents at runtime. These are merged with task-level checks before execution |
+| `checks` | string[] | No | Check metadata for tasks and PR commands |
 | `prLabels` | string[] | No | Optional metadata carried into PR records |
 | `commentSignature` | string | No | Optional metadata used by reviewer workflow conventions |
 
@@ -91,26 +91,12 @@ Each agent must be an object with the fields below.
 - Non-implementation queues are loaded from the resolved filesystem path in the current checkout.
 - For non-implementation agents, `state/...` and `prompts/autonomous/v2/state/...` paths resolve into `.autonomy/runtime/state/...`.
 
-## 4) Scope/behavior contract by role
+## Execution
 
-- `pm`:
-  - Decomposes PRDs into tasks.
-  - Uses `systemPrompt`, `gitIdentity`, optional `taskQueue`.
-- `implementation`:
-  - Uses the fixed packaged default runner at `src/autonomy-v2/runner/default-runner.js`.
-  - Must have non-empty `checks` at runtime.
-  - `include` and `exclude` are used for scope enforcement.
-- `review`:
-  - Uses the fixed packaged default runner at `src/autonomy-v2/runner/default-runner.js` to evaluate reviews and optionally merge.
-  - Uses `systemPrompt` and `gitIdentity`.
-  - `checks` are not required by validator.
-
-## 5) Paths and defaults used during bootstrap
-
-During `autonomy-v2 init`, generated defaults are written for:
-- `prompts/autonomous/v2/config/agents.json`
-- `prompts/autonomous/v2/config/sprint.json`
-- Default queue files at the resolved path for each agent’s `taskQueue`
+This file supplies metadata to existing CLI and control-plane operations.
+It does not schedule agents or select a runner. Custom-agent configuration and
+repository lifecycle scripts control execution. Init preserves this metadata
+and does not generate agent prompts or queues.
 
 ## 6) Minimal valid config examples
 
@@ -188,5 +174,4 @@ During `autonomy-v2 init`, generated defaults are written for:
 ## 8) Related implementation
 - Config loading/validation: [src/config/index.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/config/index.js)
 - Orchestration and role dispatch: [src/server/orchestrator/index.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/server/orchestrator/index.js)
-- Runner behavior: [src/autonomy-v2/runner/default-runner.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2/runner/default-runner.js)
 - Planner / Codex constraints: [src/autonomy-v2-codex.js](/Users/bytedance/Documents/GitHub/autonomy-v2/src/autonomy-v2-codex.js)

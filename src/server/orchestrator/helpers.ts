@@ -1,5 +1,5 @@
 import path from 'path';
-import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
+import { isImplementationRole } from '../../agents/role-catalog.js';
 import { IMPLEMENTATION_DUE_STATUSES } from './orchestrator-constants.js';
 
 function getAgent(config, agentId) {
@@ -11,7 +11,12 @@ function getAgent(config, agentId) {
 }
 
 function buildTaskQueueState(agent, tasks = []) {
-  return getAgentDefinition(agent).buildQueueState(agent, tasks);
+  return {
+    ...(isImplementationRole(agent.role) ? { schemaVersion: 1 } : {}),
+    agentId: agent.id,
+    role: agent.role,
+    tasks,
+  };
 }
 
 function listTasks(queue) {

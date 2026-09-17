@@ -8,7 +8,6 @@ import {
 } from './paths.js';
 import { loadRuntime as loadRuntimeFromState } from './orchestrator-state.js';
 import { runSchedulerTick as runSchedulerTickFromScheduler } from './scheduler.js';
-import { runWorkerOnce as runWorkerOnceFromWorkers } from './workers.js';
 
 function extractExecError(error: unknown) {
   return extractExecErrorFromGit(error);
@@ -34,16 +33,11 @@ function runSchedulerTick(rootDir: string, options = {}) {
   return runSchedulerTickFromScheduler(rootDir, options);
 }
 
-function runWorkerOnce(rootDir: string, agentId: string) {
-  return runWorkerOnceFromWorkers(rootDir, agentId);
-}
-
 export {
   extractExecError,
   getPaths,
   resolveRootDir,
   runSchedulerTick,
-  runWorkerOnce,
   writeJson,
 };
 export { loadRuntime };

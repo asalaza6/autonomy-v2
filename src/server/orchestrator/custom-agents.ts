@@ -1,4 +1,5 @@
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import type { AnyRecord, RuntimeState } from '../server-types.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
@@ -1300,28 +1301,28 @@ function getDefaultCustomAgentPreset(presetAgentId: string, controlPlaneConfig: 
         decision: {
           command: [
             'node',
-            'agents/pm/should-run.mjs',
+            fileURLToPath(new URL('../../../../presets/pm/should-run.mjs', import.meta.url)),
           ],
         },
       },
       environment: {
         command: [
           'node',
-          'agents/pm/prepare-env.mjs',
+          fileURLToPath(new URL('../../../../presets/pm/prepare-env.mjs', import.meta.url)),
         ],
       },
       execution: {
         prompt: {
           command: [
             'node',
-            'agents/pm/build-prompt.mjs',
+            fileURLToPath(new URL('../../../../presets/pm/build-prompt.mjs', import.meta.url)),
           ],
         },
       },
       finalize: {
         command: [
           'node',
-          'agents/pm/finalize.mjs',
+          fileURLToPath(new URL('../../../../presets/pm/finalize.mjs', import.meta.url)),
         ],
       },
     },
@@ -1344,28 +1345,28 @@ function getDefaultCustomAgentPreset(presetAgentId: string, controlPlaneConfig: 
         decision: {
           command: [
             'node',
-            'agents/architecture/should-run.mjs',
+            fileURLToPath(new URL('../../../../presets/architecture/should-run.mjs', import.meta.url)),
           ],
         },
       },
       environment: {
         command: [
           'node',
-          'agents/architecture/prepare-env.mjs',
+          fileURLToPath(new URL('../../../../presets/architecture/prepare-env.mjs', import.meta.url)),
         ],
       },
       execution: {
         prompt: {
           command: [
             'node',
-            'agents/architecture/build-prompt.mjs',
+            fileURLToPath(new URL('../../../../presets/architecture/build-prompt.mjs', import.meta.url)),
           ],
         },
       },
       finalize: {
         command: [
           'node',
-          'agents/architecture/finalize.mjs',
+          fileURLToPath(new URL('../../../../presets/architecture/finalize.mjs', import.meta.url)),
         ],
       },
     },
@@ -1388,28 +1389,28 @@ function getDefaultCustomAgentPreset(presetAgentId: string, controlPlaneConfig: 
         decision: {
           command: [
             'node',
-            'agents/reviewer/should-run.mjs',
+            fileURLToPath(new URL('../../../../presets/reviewer/should-run.mjs', import.meta.url)),
           ],
         },
       },
       environment: {
         command: [
           'node',
-          'agents/reviewer/prepare-env.mjs',
+          fileURLToPath(new URL('../../../../presets/reviewer/prepare-env.mjs', import.meta.url)),
         ],
       },
       execution: {
         prompt: {
           command: [
             'node',
-            'agents/reviewer/build-prompt.mjs',
+            fileURLToPath(new URL('../../../../presets/reviewer/build-prompt.mjs', import.meta.url)),
           ],
         },
       },
       finalize: {
         command: [
           'node',
-          'agents/reviewer/finalize.mjs',
+          fileURLToPath(new URL('../../../../presets/reviewer/finalize.mjs', import.meta.url)),
         ],
       },
     },

@@ -31,7 +31,8 @@ test('reset archives the active PRD and clears repo-local autonomy state', () =>
   git(repoDir, ['checkout', 'dev']);
 
   const reviewerQueuePath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'queues', 'reviewer.json');
-  const reviewerQueue = JSON.parse(fs.readFileSync(reviewerQueuePath, 'utf8'));
+  const reviewerQueue = { agentId: 'reviewer', role: 'review', tasks: [] };
+  fs.mkdirSync(path.dirname(reviewerQueuePath), { recursive: true });
   reviewerQueue.tasks.push({
     id: 'review-prd-reset-001',
     title: 'Review reset flow',

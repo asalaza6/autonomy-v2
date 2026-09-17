@@ -1,102 +1,16 @@
 # How Autonomy V2 Works
 
-Autonomy v2 is a GitHub-backed, repo-local multi-agent delivery loop.
+Autonomy schedules custom agents defined by each consumer repository. The
+package owns scheduling, Codex execution, runtime coordination, CLI commands,
+and the hosted manager/bridge. The consumer owns lifecycle scripts and workflow
+state: planning, task selection, worktrees, checks, pull requests and merges.
 
-The package owns the command implementations, scheduler, runner, control-plane
-server, bridge, and scaffold templates. The consumer repo owns the actual
-runtime state, git branches, worktrees, prompts, queue files, PRDs, checks, and
-deployment wiring.
+The scheduler selects configs through `control-plane.json.spawnCustomAgents`.
+`agents.json` is retained as metadata for existing commands and status views;
+it no longer defines runnable agents. Built-in role execution has been removed.
 
-## Core Layers
-
-### Package entrypoints
-
-- `autonomy-v2` is the operator CLI for `init`, `prd:add`, `status`, `deploy`,
-  queue mutation, worktree preparation, and PR/review state transitions.
-- `autonomy-v2-server` is the polling scheduler. It repeatedly syncs tracked
-  repo state, finds due agents, and starts workers.
-- `autonomy-v2-control` is the control-plane binary. In `serve` mode it hosts
-  the manager/project UI and queue API. In `bridge` mode it runs locally and
-  executes queued jobs against mapped repo paths.
-
-### Repo contract
-
-The scaffolded repo contract lives under `prompts/autonomous/v2/`.
-
-Important tracked files:
-
-- `config/agents.json` defines agents, branches, queue paths, checks, scopes,
-  merge behavior, and git identities.
-- `config/sprint.json` defines sprint-level workflow defaults.
-- `config/control-plane.json` defines the repo id, manager display metadata,
-  deployment link metadata, and optional deploy hook.
-- `queues/<agent-id>.json` stores tracked implementation and reviewer queue
-  truth.
-- `specs/prds/*.json` stores active PRD specs.
-- `specs/prds/queue/*.json` stores queued PRDs when another active PRD exists.
-- `specs/prds/archived/*.json` stores completed PRDs that sync should ignore.
-- `specs/prd-state/*.json` stores narrow tracked PM planning lifecycle state.
-
-### Runtime cache
-
-`.autonomy/` is local operational state, not durable product truth.
-
-It stores runtime worker status, branch locks, reconstructed PR records, sync
-cursors, logs, control-plane state, and worktrees. Much of it is useful for
-speed and debugging, but scheduler recovery should rebuild as much as possible
-from tracked git state, remote lane branches, and GitHub PR state.
-
-## Source Of Truth
-
-Tracked git state is authoritative for durable workflow facts:
-
-- PRD specs
-- PRD planning lifecycle state
-- implementation queues
-- reviewer queues
-- branch-local implementation queue progress
-
-Local runtime state is appropriate for host-specific or short-lived facts:
-
-- worker liveness
-- worktree paths
-- branch lock ownership
-- logs
-- control-plane local cache
-- sync cursors
-
-This split is the main design guardrail. AI calls are allowed to be
-nondeterministic, but queue mutation, branch preparation, checks, scope
-validation, commits, pushes, reviews, and merges are deterministic wrapper
-steps.
-
-## PRD To Merge Flow
-
-1. An operator or the manager submits a PRD.
-2. `prd:add` writes the PRD spec to the integration branch, usually `dev`, or
-   to the queued PRD directory if another active PRD is already present.
-3. The scheduler fetches the integration branch and imports tracked PRD specs.
-4. The PM agent claims one queued PRD and asks Codex to edit the PRD spec with
-   lane task plans.
-5. PM validates the planned tasks and commits them into tracked implementation
-   queue files.
-6. An implementation agent claims the next dispatchable tracked task.
-7. The worker prepares a deterministic lane branch and worktree.
-8. The default runner invokes Codex in that worktree. Codex edits files, but it
-   does not commit, push, merge, or open PRs itself.
-9. The wrapper collects changed files, validates scope, runs configured checks,
-   advances the branch-local queue, commits, records the work commit SHA, and
-   pushes the lane branch.
-10. When the lane has no remaining queued work, the wrapper records or updates
-    one lane PR.
-11. Reviewer work is queued for that lane PR.
-12. The reviewer runner builds review context, computes diff files, evaluates
-    scope, runs checks, asks Codex for a review decision, then normalizes that
-    decision with deterministic check and scope results.
-13. Approved PRs are merged into the integration branch. Change requests append
-    a `review_followup` task to the same implementation lane.
-
-There is one PR per lane, not one PR per task.
+See [orchestration](orchestrator-flow.md) and
+[configuration](autonomy-v2-config-support.md) for the custom lifecycle.
 
 ## Manager And Bridge
 
@@ -333,14 +247,8 @@ running its configured deploy hook is intended.
 ## Key Files
 
 - `src/server/orchestrator/scheduler.ts` runs scheduler ticks.
-- `src/server/orchestrator/workers-core.ts` dispatches agent role execution.
-- `src/agents/*AgentDefinition.ts` defines PM, implementation, and review
-  behavior.
-- `src/autonomy-v2/runner/default-runner.ts` enters implementation or review
-  runner flows.
-- `src/codex/planning.ts` builds PM planning prompts and validates planned
-  tasks.
-- `src/codex/worker.ts` builds implementation and review Codex prompts.
+- `src/server/orchestrator/custom-agents.ts` selects and coordinates invocations.
+- `src/server/custom-agents/custom-agent-worker.ts` runs lifecycle commands.
 - `src/sync/syncer.ts` rebuilds runtime projection from tracked git state.
 - `src/server/control-plane/control-plane-main.ts` hosts manager/project UI and
   job APIs.

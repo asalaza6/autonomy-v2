@@ -7,5 +7,6 @@
   "controlBridgeRestartCommand": "",
   "serverRestartCommand": "",
   "deploymentUrl": "https://example.com",
-  "deploymentLabel": "Production site"
+  "deploymentLabel": "Production site",
+  "spawnCustomAgents": "prompts/autonomous/v2/config/custom-agents.json"
 }

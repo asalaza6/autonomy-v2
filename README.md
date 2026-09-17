@@ -1,51 +1,19 @@
 # Autonomy v2 Package
-"version": "1.4.55" restarted to
 
-This is the repository-local package form of `autonomy-v2`.
+Autonomy runs custom agents. It provides scheduling, lifecycle
+command execution, Codex sessions, runtime state, CLI commands and a control plane.
 
-The package owns the command implementations and prompt templates, while the
-runtime/state and execution still occur in a consumer workspace.
-Consumer repos that want a hosted browser/API control plane own that
-deployment, configuration, and runtime wiring themselves.
+Consumer repositories define their agents in the configuration selected by
+`control-plane.json.spawnCustomAgents`. Each agent can supply decision,
+environment, prompt and finalize commands. Those commands own planning, task
+selection, checks, worktrees, pull requests and merges.
 
-## Package layout
-
-- `bin/` CLI entrypoints
-- `src/` runtime modules
-- `templates/` bootstrap templates copied into the workspace by `init`
-- `docs/` support documentation for config and packaging behavior
-- implementation and review always use `src/autonomy-v2/runner/default-runner.js` with fixed execution behavior.
-
-## Quick mental model
-
-Autonomy v2 is a repo-local orchestration package. The package provides the
-CLI, server, runner, control-plane, and scaffold templates, but actual work is
-executed inside each consumer repository.
-
-The durable workflow truth lives in git on the integration branch:
-
-- repo config and prompt scaffolding under `prompts/autonomous/v2/config/`
-- PRD specs under `prompts/autonomous/v2/specs/prds/`
-- PRD lifecycle state under `prompts/autonomous/v2/specs/prd-state/`
-- implementation and reviewer queues under `prompts/autonomous/v2/queues/`
-
-Local process state lives under `.autonomy/` and is treated as cache,
-coordination, logs, worktrees, and status projection. Scheduler recovery should
-prefer tracked git state and GitHub state over stale runtime files.
-
-The steady-state loop is:
-
-1. add a PRD
-2. sync from the integration branch
-3. let the PM agent plan lane tasks
-4. let implementation agents run Codex in isolated worktrees
-5. let the reviewer validate, request follow-up work, or merge
-6. optionally deploy the integration branch to production
-
-The hosted manager is a browser/API queue and status surface. It does not touch
-repo files directly. A local bridge registers repo status with the manager,
-claims queued jobs, and executes `prd:add` or `deploy` inside each mapped local
-repo.
+The built-in PM, implementation and review execution paths have been removed.
+Explicit custom-agent commands, concurrency, conversation scopes and runtime keys
+are unchanged. Presets run the packaged PM, architecture and reviewer lifecycle
+scripts from `presets/`; consumer copies are unnecessary. `legacyRosterEnabled` no longer enables anything.
+`agents.json` remains repository and queue metadata for the existing CLI and
+control-plane commands; it does not register executable agents.
 
 ## Docs
 

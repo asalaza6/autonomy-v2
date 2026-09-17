@@ -1,9 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { validateAutonomyConfig } from '../../config/config-main.js';
-import { collectAgentScaffoldEntries, getTemplateContent, pruneStaleAgentScaffold, resolveTemplateTargetPath, validateImplementationChecks, } from '../scaffold/scaffold-main.js';
-import { BASE_TEMPLATE_FILES, GENERATED_TEMPLATE_FILES, TEMPLATE_ROOT, ensureDir, getAgentLogPath, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
-import { resolveTaskQueuePath } from './shared-queues.js';
+import { getTemplateContent, resolveTemplateTargetPath, } from '../scaffold/scaffold-main.js';
+import { BASE_TEMPLATE_FILES, GENERATED_TEMPLATE_FILES, TEMPLATE_ROOT, ensureDir, getAutonomyPaths, printOutput, readJson, } from './shared-core.js';
 
 function run(rootDir, options) {
   const created = [];
@@ -41,6 +40,7 @@ function run(rootDir, options) {
       || relativeFile === 'project-context.md'
       || relativeFile === 'config/agents.json'
       || relativeFile === 'config/control-plane.json'
+      || relativeFile === 'config/custom-agents.json'
       || relativeFile === 'config/sprint.json';
     const shouldSkipExisting = fs.existsSync(targetPath)
       && (preserveIfExists || options.force !== true);
@@ -74,31 +74,6 @@ function run(rootDir, options) {
     removeListEntry(skipped, 'config/agents.json');
     updated.push('config/agents.json');
   }
-  validateImplementationChecks(config, paths.agentsConfig);
-  const agentEntries = collectAgentScaffoldEntries(rootDir, config, {
-    getAgentLogPath,
-    getAutonomyPaths,
-    resolveTaskQueuePath,
-    templateRoot: TEMPLATE_ROOT,
-  });
-
-  for (const entry of agentEntries) {
-    ensureDir(path.dirname(entry.targetPath));
-    if (fs.existsSync(entry.targetPath) && options.force !== true) {
-      skipped.push(entry.relativeFile);
-      continue;
-    }
-
-    fs.writeFileSync(entry.targetPath, entry.content, 'utf8');
-    created.push(entry.relativeFile);
-  }
-
-  if (options.force === true) {
-    removed.push(...pruneStaleAgentScaffold(rootDir, agentEntries, {
-      getAutonomyPaths,
-    }));
-  }
-
   const payload = {
     rootDir,
     created,

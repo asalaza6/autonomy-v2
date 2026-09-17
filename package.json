@@ -31,7 +31,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc && chmod +x dist/bin/*.js",
     "build:watch": "tsc --watch --preserveWatchOutput",
     "check:publish": "node scripts/check-publish-config.js",
     "heroku-postbuild": "npm run build",
@@ -70,6 +70,7 @@
     "README.md",
     "analyze-exports.mjs",
     "dist",
+    "presets",
     "templates",
     "docs"
   ],

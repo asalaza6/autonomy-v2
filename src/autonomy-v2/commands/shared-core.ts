@@ -64,6 +64,7 @@ const BASE_TEMPLATE_FILES = [
   'project-context.md',
   'config/agents.json',
   'config/control-plane.json',
+  'config/custom-agents.json',
   'config/sprint.json',
   'state/prs.json',
   'state/branch-locks.json',

@@ -105,49 +105,7 @@ function extractExecError(error) {
   return normalizeNonEmptyString(error && error.message) || 'Command failed without stderr/stdout output.';
 }
 
-function readRunnerErrorReport(filePath) {
-  if (!filePath || !fs.existsSync(filePath)) {
-    return null;
-  }
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch (_) {
-    return null;
-  }
-}
-
-function executeRunnerCommand(command, env) {
-  const [binary, ...args] = command;
-  const streamOutput = (env && env.AUTONOMY_STREAM_WORKER_OUTPUT === '1')
-    || process.env.AUTONOMY_STREAM_WORKER_OUTPUT === '1';
-  const errorReportPath = normalizeNonEmptyString(env && env.AUTONOMY_ERROR_REPORT);
-  if (errorReportPath && fs.existsSync(errorReportPath)) {
-    fs.rmSync(errorReportPath, { force: true });
-  }
-  try {
-    execFileSync(binary, args, {
-      cwd: (env && env.AUTONOMY_ROOT) || process.cwd(),
-      env: {
-        ...process.env,
-        ...env,
-      },
-      stdio: streamOutput ? 'inherit' : ['ignore', 'pipe', 'pipe'],
-    });
-    return {
-      command,
-      status: 'executed',
-    };
-  } catch (error) {
-    const runnerErrorReport = readRunnerErrorReport(errorReportPath);
-    if (runnerErrorReport) {
-      error.autonomyErrorReport = runnerErrorReport;
-    }
-    throw error;
-  }
-}
-
 export {
-  executeRunnerCommand,
   extractExecError,
   gitRefExists,
   readImplementationQueueSnapshot,

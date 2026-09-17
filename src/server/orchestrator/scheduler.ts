@@ -1,13 +1,6 @@
-import path from 'path';
 import { acquireStateLock } from '../../lock/lock-main.js';
 import type { AnyRecord, WorkerRuntime } from '../server-types.js';
-import { syncPrdSpecsFromIntegrationBranch } from '../../sync/syncer.js';
-import { runApprovedPrMergeWatchdog } from '../../autonomy-v2/commands/merge-watchdog.js';
-import { loadQueues } from './queues.js';
-import { findDueAgents, finalizePendingInlineWorkers, refreshRuntime, setWorkerState, spawnWorkerProcess, updateBacklogGrace } from './orchestrator-runtime.js';
-import { loadBranchLocks, loadConfig, loadPrds, loadRuntime, writeRuntime } from './orchestrator-state.js';
-import { runWorkerOnce } from './workers.js';
-import { getPaths, readJson } from './paths.js';
+import { loadConfig, loadRuntime, writeRuntime } from './orchestrator-state.js';
 import {
   markCustomAgentSpawnFailed,
   markCustomAgentSpawned,
@@ -27,31 +20,15 @@ function emitSchedulerProgress(options, event, payload = {}) {
   }
 }
 
-function updateRuntimePromotion(runtime: AnyRecord, sync: AnyRecord) {
-  if (!runtime || !sync || !sync.queuedPromotion) {
-    return;
-  }
-  runtime.lastPrdPromotion = {
-    ...sync.queuedPromotion,
-    trigger: 'automatic-queue-promotion',
-  };
-}
-
 function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   const { config: syncConfig } = loadConfig(rootDir);
-  const legacyRosterEnabled = isLegacyRosterEnabled(rootDir);
-  const skipLegacySync = options.skipSync === true || !legacyRosterEnabled;
   const syncStartedAt = Date.now();
   emitSchedulerProgress(options, 'sync:start', {
     integrationBranch: syncConfig.integrationBranch,
-    skipped: skipLegacySync ? 'yes' : 'no',
-    legacyRosterEnabled: legacyRosterEnabled ? 'yes' : 'no',
+    skipped: 'yes',
+    legacyRosterEnabled: 'no',
   });
-  const sync = skipLegacySync
-    ? buildSkippedSyncResult(syncConfig.integrationBranch)
-    : syncPrdSpecsFromIntegrationBranch(rootDir, syncConfig.integrationBranch, {
-        onProgress: options.onProgress,
-      });
+  const sync = buildSkippedSyncResult(syncConfig.integrationBranch);
   emitSchedulerProgress(options, 'sync:done', {
     integrationBranch: sync.integrationBranch || syncConfig.integrationBranch,
     durationMs: Date.now() - syncStartedAt,
@@ -62,105 +39,20 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   });
   emitSchedulerProgress(options, 'state-lock:wait', { lock: 'state-lock' });
   const release = acquireStateLock(rootDir);
-  let dueAgents = [];
+  const dueAgents = [];
   let runtime = null;
   const started = [];
   const customAgentStarted = [];
-  const pendingSpawnStarts = [];
   const pendingCustomAgentStarts = [];
 
   try {
     emitSchedulerProgress(options, 'state-lock:acquired', { lock: 'state-lock' });
-    if (legacyRosterEnabled) {
-      const watchdogStartedAt = Date.now();
-      const mergeWatchdog = runApprovedPrMergeWatchdog(rootDir, {
-        onProgress: options.onProgress,
-        stateLockHeld: true,
-      });
-      emitSchedulerProgress(options, 'merge-watchdog:done', {
-        durationMs: Date.now() - watchdogStartedAt,
-        checked: mergeWatchdog.checked || 0,
-        changed: mergeWatchdog.changed ? 'yes' : 'no',
-        merged: mergeWatchdog.merged ? 'yes' : 'no',
-        prId: mergeWatchdog.prId || '-',
-        reason: mergeWatchdog.reason || mergeWatchdog.diagnosis && mergeWatchdog.diagnosis.code || '-',
-        legacyRosterEnabled: 'yes',
-      });
-    } else {
-      emitSchedulerProgress(options, 'merge-watchdog:done', {
-        skipped: 'yes',
-        legacyRosterEnabled: 'no',
-      });
-    }
-    const { config } = loadConfig(rootDir);
-    const queues = loadQueues(rootDir, config);
-    const branchLocks = loadBranchLocks(rootDir);
-    const prds = loadPrds(rootDir, config, { queues });
     runtime = loadRuntime(rootDir);
-    updateRuntimePromotion(runtime, sync);
-    emitSchedulerProgress(options, 'state:loaded', {
-      agents: (config.agents || []).length,
-      queues: Object.keys(queues).length,
-      prds: Array.isArray(prds.prds) ? prds.prds.length : 0,
-      workers: Object.keys((runtime && runtime.workers) || {}).length,
-    });
-    refreshRuntime(rootDir, config, queues, runtime);
     refreshCustomAgentRuntime(runtime);
     emitSchedulerProgress(options, 'runtime:refreshed', {
       workers: Object.keys((runtime && runtime.workers) || {}).length,
       customAgents: Object.keys((runtime && runtime.customAgents) || {}).length,
     });
-
-    const { pendingPrdWork, suppressNonPmDispatch } = legacyRosterEnabled
-      ? updateBacklogGrace(rootDir, config, queues, branchLocks, prds, runtime, options)
-      : { pendingPrdWork: false, suppressNonPmDispatch: false };
-    dueAgents = legacyRosterEnabled
-      ? findDueAgents(rootDir, config, queues, branchLocks, prds, runtime, {
-          suppressNonPmDispatch,
-        })
-      : [];
-    emitSchedulerProgress(options, 'due:computed', {
-      due: dueAgents.length,
-      pendingPrdWork: pendingPrdWork ? 'yes' : 'no',
-      suppressNonPmDispatch: suppressNonPmDispatch ? 'yes' : 'no',
-      legacyRosterEnabled: legacyRosterEnabled ? 'yes' : 'no',
-      dueAgents: dueAgents.map((entry) => `${entry.agentId}:${entry.reason}`).join(','),
-    });
-
-    for (const due of dueAgents) {
-      const now = new Date().toISOString();
-      emitSchedulerProgress(options, 'worker:dispatch:start', {
-        agentId: due.agentId,
-        mode: options.inline === true ? 'inline' : 'spawn',
-        reason: due.reason,
-      });
-      if (options.inline === true) {
-        setWorkerState(runtime, due.agentId, {
-          status: 'running',
-          mode: 'inline',
-          startedAt: now,
-          pid: null,
-          reason: due.reason,
-        });
-        started.push({ agentId: due.agentId, mode: 'inline', reason: due.reason });
-        emitSchedulerProgress(options, 'worker:dispatch:done', {
-          agentId: due.agentId,
-          mode: 'inline',
-          reason: due.reason,
-        });
-        continue;
-      }
-
-      setWorkerState(runtime, due.agentId, {
-        status: 'running',
-        mode: 'spawn',
-        startedAt: now,
-        pid: null,
-        reason: due.reason,
-      });
-      started.push({ agentId: due.agentId, mode: 'spawn', reason: due.reason, pid: null, startedAt: now });
-      pendingSpawnStarts.push({ agentId: due.agentId, reason: due.reason, startedAt: now });
-    }
 
     if (options.inline !== true) {
       const customAgentPoll = pollCustomAgents(rootDir, runtime, {
@@ -193,42 +85,6 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
   }
 
   if (options.inline !== true) {
-    for (let index = 0; index < pendingSpawnStarts.length; index += 1) {
-      const entry = pendingSpawnStarts[index];
-      try {
-        const child = spawnWorkerProcess(rootDir, entry.agentId, {
-          streamOutput: options.streamWorkerOutput === true,
-        });
-        const pid = child.pid;
-        const startedEntry = started.find((candidate) => candidate.agentId === entry.agentId && candidate.mode === 'spawn');
-        if (startedEntry) {
-          startedEntry.pid = pid;
-        }
-        updateSpawnedWorkerPid(rootDir, entry.agentId, entry.startedAt, pid);
-        emitSchedulerProgress(options, 'worker:dispatch:done', {
-          agentId: entry.agentId,
-          mode: 'spawn',
-          reason: entry.reason,
-          pid,
-        });
-        if (typeof options.onWorkerSpawn === 'function') {
-          options.onWorkerSpawn({
-            agentId: entry.agentId,
-            mode: 'spawn',
-            reason: entry.reason,
-            pid,
-            child,
-          });
-        }
-      } catch (error) {
-        markSpawnDispatchFailed(rootDir, entry.agentId, entry.startedAt, error);
-        pendingSpawnStarts.slice(index + 1).forEach((pending) => {
-          markSpawnDispatchSkipped(rootDir, pending.agentId, pending.startedAt, 'worker dispatch aborted before spawn');
-        });
-        throw error;
-      }
-    }
-
     for (let index = 0; index < pendingCustomAgentStarts.length; index += 1) {
       const entry = pendingCustomAgentStarts[index];
       try {
@@ -271,37 +127,6 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     }
   }
 
-  if (options.inline === true) {
-    for (let index = 0; index < started.length; index += 1) {
-      const entry = started[index];
-      try {
-        entry.result = runWorkerOnce(rootDir, entry.agentId);
-      } catch (error) {
-        entry.error = error.message;
-        finalizePendingInlineWorkers(rootDir, started.slice(index + 1));
-        throw error;
-      } finally {
-        const runtimeRelease = acquireStateLock(rootDir);
-        try {
-          const nextRuntime = loadRuntime(rootDir);
-          setWorkerState(nextRuntime, entry.agentId, {
-            status: 'idle',
-            mode: 'inline',
-            finishedAt: new Date().toISOString(),
-            pid: null,
-            reason: entry.reason,
-            lastResult: entry.result || null,
-            lastError: entry.error || null,
-          });
-          writeRuntime(rootDir, nextRuntime);
-          runtime = nextRuntime;
-        } finally {
-          runtimeRelease();
-        }
-      }
-    }
-  }
-
   return {
     rootDir,
     sync,
@@ -326,12 +151,6 @@ function buildSkippedSyncResult(integrationBranch: string) {
   };
 }
 
-function isLegacyRosterEnabled(rootDir: string) {
-  const controlPlanePath = path.join(getPaths(rootDir).configDir, 'control-plane.json');
-  const controlPlaneConfig = readJson(controlPlanePath, {}) as AnyRecord;
-  return controlPlaneConfig.legacyRosterEnabled !== false;
-}
-
 function updateCustomAgentSpawnedPid(rootDir: string, entry: AnyRecord, pid: number | null | undefined) {
   const release = acquireStateLock(rootDir);
   try {
@@ -354,59 +173,4 @@ function updateCustomAgentSpawnFailed(rootDir: string, entry: AnyRecord, error: 
   }
 }
 
-function updateSpawnedWorkerPid(rootDir: string, agentId: string, startedAt: string, pid: number | null | undefined) {
-  const release = acquireStateLock(rootDir);
-  try {
-    const runtime = loadRuntime(rootDir);
-    const worker = runtime.workers[agentId];
-    if (!worker || worker.status !== 'running' || worker.mode !== 'spawn' || worker.startedAt !== startedAt) {
-      return;
-    }
-    worker.pid = pid ?? null;
-    writeRuntime(rootDir, runtime);
-  } finally {
-    release();
-  }
-}
-
-function markSpawnDispatchFailed(rootDir: string, agentId: string, startedAt: string, error: unknown) {
-  const release = acquireStateLock(rootDir);
-  try {
-    const runtime = loadRuntime(rootDir);
-    const worker = runtime.workers[agentId];
-    if (!worker || worker.mode !== 'spawn' || worker.startedAt !== startedAt) {
-      return;
-    }
-    setWorkerState(runtime, agentId, {
-      status: 'idle',
-      pid: null,
-      finishedAt: new Date().toISOString(),
-      lastError: error instanceof Error ? error.message : String(error || 'worker spawn failed'),
-    });
-    writeRuntime(rootDir, runtime);
-  } finally {
-    release();
-  }
-}
-
-function markSpawnDispatchSkipped(rootDir: string, agentId: string, startedAt: string, message: string) {
-  const release = acquireStateLock(rootDir);
-  try {
-    const runtime = loadRuntime(rootDir);
-    const worker = runtime.workers[agentId];
-    if (!worker || worker.mode !== 'spawn' || worker.startedAt !== startedAt) {
-      return;
-    }
-    setWorkerState(runtime, agentId, {
-      status: 'idle',
-      pid: null,
-      finishedAt: new Date().toISOString(),
-      lastError: message,
-    });
-    writeRuntime(rootDir, runtime);
-  } finally {
-    release();
-  }
-}
-
-export { isLegacyRosterEnabled, runSchedulerTick };
+export { runSchedulerTick };

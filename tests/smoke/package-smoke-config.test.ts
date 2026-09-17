@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { syncPrdSpecsFromIntegrationBranch } from '../../src/sync/syncer.js';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
@@ -202,12 +203,8 @@ test('task:finish refuses to mutate dev for claimed implementation lanes', () =>
     JSON.stringify(task),
   ]);
 
-  const tick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-  assert.equal(tick.started.length, 1);
+  syncPrdSpecsFromIntegrationBranch(repoDir, 'dev');
+  runNode(CLI_BIN, ['worktree:prepare', '--root', repoDir, '--task', task.id, '--create']);
 
   assert.throws(
     () => runNode(CLI_BIN, ['task:finish', '--root', repoDir, '--task', task.id]),

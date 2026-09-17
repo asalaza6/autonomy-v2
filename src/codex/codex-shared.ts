@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import type { AnyRecord } from '../types.js';
 
 const DEFAULT_ERROR_PREVIEW_LIMIT = 1000;
@@ -7,26 +5,6 @@ const DEFAULT_ERROR_PREVIEW_LIMIT = 1000;
 function ensureTrailingNewline(value) {
   const text = String(value || '');
   return text.endsWith('\n') ? text : `${text}\n`;
-}
-
-function normalizeStringList(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .map((entry) => String(entry || '').trim())
-    .filter(Boolean);
-}
-
-function readOptionalFile(rootDir, filePath) {
-  if (!filePath) {
-    return '';
-  }
-  const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(rootDir, filePath);
-  if (!fs.existsSync(absolutePath)) {
-    return '';
-  }
-  return fs.readFileSync(absolutePath, 'utf8').trim();
 }
 
 function normalizeNonEmptyString(value) {
@@ -153,6 +131,4 @@ export {
   buildSpawnExitMessage,
   logCodexFailure,
   normalizeNonEmptyString,
-  normalizeStringList,
-  readOptionalFile,
 };

@@ -1,79 +1,22 @@
 # Autonomy V2 Config Support
 
-This document describes how configuration works for the repository-local autonomy v2 setup.
+`control-plane.json.spawnCustomAgents` selects one custom-agent config path or
+an array of paths, resolved relative to the consumer repository.
 
-## What Is Configured
+`autonomy-v2 init` creates repository settings, project context, an empty
+`config/custom-agents.json`, and local runtime state. Existing config and project
+context are preserved, including on `--force`. Init does not generate or prune
+agent scripts, prompts or queues. Gitignore rules are appended without replacing
+existing rules.
 
-The current default configuration lives in the consumer repo under:
+`agents.json` and `sprint.json` remain metadata for existing PRD, queue, Git and
+control-plane commands. The starter `agents.json` retains identities and queue
+paths for those commands; its entries are not scheduled. Custom lifecycle
+scripts own workflow behavior.
 
-- `prompts/autonomous/v2/config/agents.json`
-- `prompts/autonomous/v2/config/sprint.json`
-- `prompts/autonomous/v2/queues/<agent-id>.json`
-
-The runtime state stays separate under:
-
-- `.autonomy/runtime/`
-- `.autonomy/worktrees/`
-
-The entire `.autonomy/` directory is scaffolded as local runtime state and is ignored by default.
-Queue files may live in the repository tree or under runtime state depending on each agent's `taskQueue`.
-In the starter template, `pm-agent`, `architecture-agent`, and `reviewer` all use repo-relative queue files under `prompts/autonomous/v2/queues/`.
-Only implementation queues are currently treated as git-backed authoritative queue state.
-
-## What `init` Creates
-
-Running `autonomy-v2 init --root <repo>` scaffolds the repo-local config and support files into the target repository.
-
-By default it writes:
-
-- `.gitignore`
-- `.env.autonomy`
-- `.env.autonomy` is scaffolded with placeholders and ignored by default.
-- `prompts/autonomous/v2/config/agents.json`
-- `prompts/autonomous/v2/config/sprint.json`
-- `prompts/autonomous/v2/agents/*`
-- `prompts/autonomous/v2/queues/*`
-- `prompts/autonomous/v2/state/*`
-
-Existing config files are preserved. Generated agent scaffolding is recreated from the active config, and `--force` prunes stale generated agent files when the roster changes.
-
-By design, `.gitignore` is only expanded during init: missing bootstrap ignore rules are appended, while existing custom entries are preserved. Existing `.env.autonomy` files are preserved so local secrets and overrides are not replaced.
-
-## Default Agent Set
-
-The default config supports a small set of starter agents.
-
-Active starter agents:
-
-- `pm-agent`
-- `architecture-agent`
-- `reviewer`
-
-Roles:
-
-- `pm-agent` plans PRDs into tasks
-- `architecture-agent` plans and guides repository initialization and structure-oriented implementation tasks
-- `reviewer` reviews and merges approved PRs into `dev`
-
-The default integration and production branches are:
-
-- integration: `dev`
-- production: `main`
-
-## Legacy Roster Disable Flag
-
-The repo-level control-plane config can disable the built-in `agents.json` roster scheduler while leaving custom agents enabled:
-
-```json
-{
-  "legacyRosterEnabled": false,
-  "spawnCustomAgents": [
-    "../moving-game/agents/custom-agents.json"
-  ]
-}
-```
-
-When `legacyRosterEnabled` is `false`, the scheduler skips the old PRD sync, the old PM/implementation/reviewer dispatch path from `agents.json`, and the old approved-PR merge watchdog. It still loads repo status, refreshes runtime state, and polls `spawnCustomAgents`.
+The built-in roster, automatic legacy PRD sync and automatic merge watchdog
+have been removed from the scheduler. `legacyRosterEnabled` is ignored regardless
+of its value. Existing custom-agent configurations require no changes.
 
 ## Command-Driven Custom Agent Lifecycle
 
@@ -156,7 +99,11 @@ Example:
 }
 ```
 
-Those presets expand to the same PM, architecture, and reviewer command layout used by `darwinexzero-frontend` and `moving-game`: `agents/pm/*`, `agents/architecture/*`, and `agents/reviewer/*`, with the default custom lifecycle runtime paths under `.autonomy/runtime/custom-lifecycle` and worktrees under `.autonomy/worktrees/`.
+These presets run the packaged lifecycle scripts in `presets/pm/`, `presets/architecture/`, and `presets/reviewer/`. Consumers need only configuration; local script copies are unnecessary. Commands receive the consumer repository as `repoRoot` and retain its working directory, runtime state under `.autonomy/runtime/custom-lifecycle`, and worktrees under `.autonomy/worktrees/`. Explicit command overrides still run the consumer’s own implementation.
+
+The packaged lifecycle scripts use the maintained Darwin implementation from commit `9764bfbc` (June 7, 2026), preserved without behavioral rewrites. They read project context and optional role prompts from the consumer repository.
+
+The PM prompt reads `id`, `type`, and `target` directly from the consumer’s `custom-lifecycle-agents.json`; retain those metadata fields when converting existing entries to presets.
 
 Every preset entry is still a normal custom-agent object after expansion. Repos can override selected fields locally:
 
@@ -188,14 +135,6 @@ choice is made the repo-local runtime override in
 runtime key. The override is applied by the bridge through a
 `custom-agent:toggle` job, so remote manager pages and repo-local control pages
 use the same mutation path.
-
-## How Runner Execution Works
-
-Implementation and review execution always uses the fixed packaged runner:
-
-- `node <package-root>/src/autonomy-v2/runner/default-runner.js`
-
-Runner execution behavior is not configurable through `agents.json`.
 
 ## Validation Rules
 

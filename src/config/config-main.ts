@@ -1,6 +1,5 @@
 import path from 'path';
-import { getAgentDefinition } from '../agents/AgentDefinitionRegistry.js';
-import { isAgentRole, listAgentRoleIds, normalizeAgentRole, } from '../agents/role-catalog.js';
+import { usesTrackedQueueForRole, isAgentRole, listAgentRoleIds, normalizeAgentRole, } from '../agents/role-catalog.js';
 import type { AgentConfig, AutonomyConfig, GitIdentity } from '../types.js';
 
 const VALID_AGENT_ROLES = new Set<string>(listAgentRoleIds());
@@ -78,11 +77,14 @@ function validateResolvedTaskQueue(agent: AgentConfig, sourcePath: string) {
   if (!agent || !agent.taskQueue) {
     return;
   }
-  getAgentDefinition(agent).validateConfig(agent, sourcePath, {
-    isRuntimeManagedTaskQueuePath,
-    normalizeConfigPath,
-    path,
-  });
+  if (!usesTrackedQueueForRole(agent.role)) return;
+  const taskQueue = normalizeConfigPath(agent.taskQueue);
+  if (path.posix.isAbsolute(taskQueue)) {
+    throw new Error(`Invalid autonomy config at ${sourcePath}: ${agent.role} agent "${agent.id}" must use a repo-relative taskQueue.`);
+  }
+  if (isRuntimeManagedTaskQueuePath(taskQueue)) {
+    throw new Error(`Invalid autonomy config at ${sourcePath}: ${agent.role} agent "${agent.id}" cannot use runtime-managed taskQueue paths.`);
+  }
 }
 
 function buildDefaultTaskQueuePath(agentId: string) {

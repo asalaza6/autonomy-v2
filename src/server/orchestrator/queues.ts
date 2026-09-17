@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { getAgentDefinition } from '../../agents/AgentDefinitionRegistry.js';
 import { isReviewRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
 import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
 import type { AnyRecord, AutonomyConfig, QueueMap, QueueState } from '../server-types.js';
@@ -20,13 +19,13 @@ import {
 import { resolveRuntimeManagedPath, writeJson } from './paths.js';
 
 function resolveQueuePath(rootDir, agent) {
-  return getAgentDefinition(agent).resolveTaskQueue(rootDir, agent, {
-    isAbsolutePath: path.isAbsolute,
-    resolveRepoPath(currentRootDir, relativePath) {
-      return path.join(currentRootDir, relativePath);
-    },
-    resolveRuntimePath: resolveRuntimeManagedPath,
-  });
+  if (!agent.taskQueue) {
+    throw new Error(`Agent "${agent.id}" is missing required taskQueue in config.`);
+  }
+  if (path.isAbsolute(agent.taskQueue)) return agent.taskQueue;
+  return usesTrackedQueueForRole(agent.role)
+    ? path.join(rootDir, agent.taskQueue)
+    : resolveRuntimeManagedPath(rootDir, agent.taskQueue);
 }
 
 function loadQueues(rootDir: string, config: AutonomyConfig): QueueMap {

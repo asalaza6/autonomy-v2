@@ -1,11 +1,12 @@
+import { runSchedulerTick } from '../../src/server/orchestrator/scheduler.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
-import { AGENT_ROLES } from '../../src/agents/role-catalog.js';
-import { findDueAgents } from '../../src/server/orchestrator/orchestrator-runtime-core.js';
 import {
   listConfiguredCustomAgents,
   loadCustomAgentConfig,
@@ -15,7 +16,6 @@ import {
   refreshCustomAgentRuntime,
   setCustomAgentEnabledOverride,
 } from '../../src/server/orchestrator/custom-agents.js';
-import { isLegacyRosterEnabled } from '../../src/server/orchestrator/scheduler.js';
 
 function makeRepo(customConfig, controlPlane = {}) {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
@@ -136,8 +136,8 @@ test('presetAgentId expands default custom lifecycle agents from the tested cons
     'shadow-reviewer-agent',
   ]);
   assert.equal(config?.agents[0].target.id, 'moving-game');
-  assert.deepEqual(config?.agents[1].spawn.decision.command, ['node', 'agents/architecture/should-run.mjs']);
-  assert.deepEqual(config?.agents[2].finalize.command, ['node', 'agents/reviewer/finalize.mjs']);
+  assert.deepEqual(config?.agents[1].spawn.decision.command, ['node', fileURLToPath(new URL('../../../presets/architecture/should-run.mjs', import.meta.url))]);
+  assert.deepEqual(config?.agents[2].finalize.command, ['node', fileURLToPath(new URL('../../../presets/reviewer/finalize.mjs', import.meta.url))]);
   assert.deepEqual(configured.map((agent) => agent.runtimeKey), [
     'shadow-pm-agent:moving-game',
     'shadow-architecture-agent:shadow-architecture-agent',
@@ -241,18 +241,6 @@ test('missing spawnCustomAgents leaves existing repo-agent runtime untouched', (
       'pm-agent': { agentId: 'pm-agent', status: 'idle' },
     },
   });
-});
-
-test('legacy roster defaults on and can be disabled from control-plane config', () => {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
-  const configDir = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config');
-  fs.mkdirSync(configDir, { recursive: true });
-
-  assert.equal(isLegacyRosterEnabled(rootDir), true);
-
-  fs.writeFileSync(path.join(configDir, 'control-plane.json'), '{"schemaVersion":1,"legacyRosterEnabled":false}\n', 'utf8');
-
-  assert.equal(isLegacyRosterEnabled(rootDir), false);
 });
 
 test('disabled custom-agent config is a no-op', () => {
@@ -1560,40 +1548,132 @@ test('custom-agent refresh closes the invocation for an exited process', () => {
   assert.equal(runtime.customAgentInvocations['inv-exited'].finishedAt, '2026-01-01T00:01:00.000Z');
 });
 
-test('existing PM/implementation/reviewer due-agent scheduling remains unchanged', () => {
-  const config = {
-    integrationBranch: 'dev',
-    branchPrefixes: { task: 'task' },
-    worktreesRoot: '.worktrees',
-    agents: [
-      { id: 'pm-agent', role: AGENT_ROLES.PM, taskQueue: 'queues/pm-agent.json' },
-      { id: 'builder', role: AGENT_ROLES.IMPLEMENTATION, taskQueue: 'queues/builder.json', checks: ['npm test'] },
-      { id: 'gate', role: AGENT_ROLES.REVIEW, taskQueue: 'queues/gate.json' },
-    ],
-  };
-  const queues = {
-    builder: {
-      agentId: 'builder',
-      role: AGENT_ROLES.IMPLEMENTATION,
-      tasks: [{ id: 'task-1', status: 'queued', laneKey: 'lane-1', sprintId: 'shared', createdAt: '2026-01-01T00:00:00.000Z' }],
-    },
-    gate: {
-      agentId: 'gate',
-      role: AGENT_ROLES.REVIEW,
-      tasks: [{ id: 'review-1', status: 'queued', sourceAgentId: 'builder', prId: 'pr-1' }],
-    },
-  };
+// Exercise the scheduler boundary as well as the unchanged custom-agent engine.
+for (const legacyRosterEnabled of [undefined, false, true]) {
+  test(`scheduler only runs custom agents with legacyRosterEnabled=${legacyRosterEnabled}`, () => {
+    const rootDir = makeRepo(baseCustomConfig({
+      agents: [{
+        id: 'custom',
+        workspace: '.autonomy/custom/target',
+        target: { id: 'target', type: 'task' },
+        spawn: { mode: 'poll', intervalSeconds: 60, decision: { mode: 'always' } },
+      }],
+    }), { legacyRosterEnabled });
+    const configDir = path.join(rootDir, 'prompts/autonomous/v2/config');
+    fs.writeFileSync(path.join(configDir, 'agents.json'), JSON.stringify({
+      integrationBranch: 'dev',
+      agents: [{
+        id: 'pm-agent', role: 'pm', taskQueue: 'missing-queue.json',
+        systemPrompt: 'missing-prompt.md', gitIdentity: { name: 'PM', email: 'pm@example.com' },
+      }],
+    }));
+    const runtimePath = path.join(rootDir, '.autonomy/runtime/state/runtime.json');
+    fs.mkdirSync(path.dirname(runtimePath), { recursive: true });
+    const workers = { 'pm-agent': { status: 'idle', lastResult: { preserved: true } } };
+    fs.writeFileSync(runtimePath, JSON.stringify({ workers }));
+    let spawnCalls = 0;
+    let callback: any;
+    try {
+      const result = runSchedulerTick(rootDir, {
+        nowIso: '2026-01-01T00:00:00.000Z',
+        customAgentSpawner(_root, entry) {
+          spawnCalls += 1;
+          const reserved = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+          assert.ok(reserved.customAgents[entry.runtimeKey]);
+          return { pid: process.pid };
+        },
+        onWorkerSpawn(event) { callback = event; },
+      });
+      assert.deepEqual(result.started, []);
+      assert.deepEqual(result.dueAgents, []);
+      assert.deepEqual(result.sync.imported, []);
+      assert.equal(spawnCalls, 1);
+      assert.equal(result.customAgentStarted.length, 1);
+      assert.equal(callback.mode, 'custom-agent');
+      assert.equal(callback.pid, process.pid);
+      const persisted = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+      assert.deepEqual(persisted.workers, workers);
+      assert.equal(persisted.customAgents[callback.runtimeKey].pid, process.pid);
+      assert.equal(fs.existsSync(path.join(rootDir, 'missing-queue.json')), false);
+    } finally {
+      fs.rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
+}
 
-  const dueAgents = findDueAgents(
-    '/tmp/example',
-    config as any,
-    queues as any,
-    { locks: [] } as any,
-    { prds: [] } as any,
-    { workers: {} } as any,
-  );
+test('scheduler releases all pending custom reservations after a spawn failure', () => {
+  const rootDir = makeRepo(baseCustomConfig({
+    agents: ['first', 'second'].map((id) => ({
+      id, workspace: `.autonomy/custom/${id}`, target: { id, type: 'task' },
+      spawn: { mode: 'poll', intervalSeconds: 60, decision: { mode: 'always' } },
+    })),
+  }));
+  fs.writeFileSync(path.join(rootDir, 'prompts/autonomous/v2/config/agents.json'), JSON.stringify({
+    integrationBranch: 'dev', agents: [],
+  }));
+  let spawnCalls = 0;
+  try {
+    assert.throws(() => runSchedulerTick(rootDir, {
+      nowIso: '2026-01-01T00:00:00.000Z',
+      customAgentSpawner() { spawnCalls += 1; throw new Error('fixture spawn failed'); },
+    }), /fixture spawn failed/);
+    assert.equal(spawnCalls, 1);
+    const runtime = JSON.parse(fs.readFileSync(path.join(rootDir, '.autonomy/runtime/state/runtime.json'), 'utf8'));
+    assert.equal(Object.keys(runtime.customAgentInvocations).length, 2);
+    for (const invocation of Object.values(runtime.customAgentInvocations) as any[]) {
+      assert.equal(invocation.status, 'failed');
+    }
+    for (const status of Object.values(runtime.customAgents) as any[]) {
+      assert.equal(status.running, false);
+      assert.equal(status.pid, null);
+    }
+    // A subsequent tick must be able to acquire the state lock.
+    assert.doesNotThrow(() => runSchedulerTick(rootDir, { inline: true }));
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+});
 
-  assert.deepEqual(dueAgents, [
-    { agentId: 'builder', reason: 'queued_task' },
-  ]);
+
+test('packaged preset phases run against an external consumer without local agent scripts', () => {
+  const rootDir = makeRepo({ agents: [
+    { presetAgentId: 'shadow-pm-agent' },
+    { presetAgentId: 'shadow-architecture-agent' },
+    { presetAgentId: 'shadow-reviewer-agent' },
+  ] });
+  try {
+    const contextPath = path.join(rootDir, 'prompts/autonomous/v2/project-context.md');
+    fs.writeFileSync(contextPath, 'External consumer context marker');
+    const archivedDir = path.join(rootDir, 'prompts/autonomous/v2/specs/prds/archived');
+    fs.mkdirSync(archivedDir, { recursive: true });
+    fs.writeFileSync(path.join(archivedDir, 'retired.json'), JSON.stringify({ id: 'retired' }));
+    const config = loadCustomAgentConfig(rootDir);
+    for (const agent of config.agents) {
+      const invoke = (command, target = {}) => {
+        assert.ok(path.isAbsolute(command[1]));
+        assert.ok(fs.existsSync(command[1]));
+        assert.ok(!command[1].startsWith(rootDir));
+        const result = spawnSync(command[0], command.slice(1), {
+          cwd: rootDir,
+          input: JSON.stringify({ repoRoot: rootDir, target }),
+          encoding: 'utf8',
+        });
+        assert.equal(result.status, 0, result.stderr);
+        return JSON.parse(result.stdout);
+      };
+      assert.equal(invoke(agent.spawn.decision.command).shouldRun, false);
+      assert.match(invoke(agent.execution.prompt.command).prompt, /External consumer context marker/);
+      const target = agent.type === 'pm' ? {} : {
+        id: 'retired-task', task: { id: 'retired-task', prdId: 'retired' },
+      };
+      const prepared = invoke(agent.environment.command, target);
+      assert.equal(prepared.cwd, rootDir);
+      const finalized = invoke(agent.finalize.command, target);
+      assert.equal(finalized.ok, true);
+      assert.ok(fs.existsSync(path.join(rootDir, '.autonomy/runtime/custom-lifecycle', agent.id, 'last-finalize.json')));
+    }
+    assert.equal(fs.existsSync(path.join(rootDir, 'agents')), false);
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
 });

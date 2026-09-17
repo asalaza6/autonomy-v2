@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { syncPrdSpecsFromIntegrationBranch } from '../../src/sync/syncer.js';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
@@ -9,12 +10,10 @@ import {
   createFixtureRepo,
   fileExistsInGitRevision,
   findTaskInQueue,
-  getAutonomyPathsForTest,
   git,
   initAutonomyRepo,
   readGitJson,
   runNode,
-  runTick,
   SERVER_BIN,
 } from './package-smoke.helpers.js';
 
@@ -83,11 +82,7 @@ test('packaged autonomy-v2 runs init, prd:add, and imports tracked task specs ag
   const committedPrdSpec = git(repoDir, ['show', 'dev:prompts/autonomous/v2/specs/prds/prd-package-001.json']);
   assert.match(committedPrdSpec, /"id": "prd-package-001"/);
 
-  const tickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
+  const tickResult = { sync: syncPrdSpecsFromIntegrationBranch(repoDir, 'dev') };
 
   assert.equal(tickResult.sync.imported.length, 1);
   const trackedQueue = readGitJson(
@@ -101,7 +96,7 @@ test('packaged autonomy-v2 runs init, prd:add, and imports tracked task specs ag
   );
 });
 
-test('packaged autonomy-v2 legacyRosterEnabled false skips old sync and roster dispatch', () => {
+test('packaged autonomy-v2 never dispatches the retired roster even when enabled', () => {
   const repoDir = createFixtureRepo('autonomy-v2-legacy-roster-off-');
   initAutonomyRepo(repoDir);
 
@@ -109,7 +104,7 @@ test('packaged autonomy-v2 legacyRosterEnabled false skips old sync and roster d
   const controlPlaneConfig = JSON.parse(fs.readFileSync(controlPlanePath, 'utf8'));
   fs.writeFileSync(
     controlPlanePath,
-    `${JSON.stringify({ ...controlPlaneConfig, legacyRosterEnabled: false }, null, 2)}\n`,
+    `${JSON.stringify({ ...controlPlaneConfig, legacyRosterEnabled: true }, null, 2)}\n`,
     'utf8',
   );
 
@@ -124,11 +119,7 @@ test('packaged autonomy-v2 legacyRosterEnabled false skips old sync and roster d
     },
   ]);
 
-  const tickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
+  const tickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--json']));
 
   assert.deepEqual(tickResult.sync.imported, []);
   assert.deepEqual(tickResult.dueAgents, []);
@@ -169,11 +160,7 @@ test('packaged autonomy-v2 queues PRD additions when one is already active', () 
     }),
   ]);
 
-  const tickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
+  const tickResult = { sync: syncPrdSpecsFromIntegrationBranch(repoDir, 'dev') };
   assert.equal(tickResult.sync.imported.length, 1);
 
   runNode(CLI_BIN, [
@@ -254,411 +241,24 @@ test('packaged autonomy-v2 queues PRD additions when spec already exists in inte
   );
 });
 
-test('packaged autonomy-v2 promotes queued PRD from queue when no active PRD is imported', () => {
-  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-queue-promote-'));
-
-  fs.mkdirSync(path.join(repoDir, 'src', 'apps', 'reef'), { recursive: true });
-  fs.writeFileSync(path.join(repoDir, 'src', 'apps', 'reef', 'index.js'), 'export const value = 2;\n', 'utf8');
-
-  git(repoDir, ['init', '-b', 'main']);
-  git(repoDir, ['config', 'user.email', 'autonomy-queue-promote@example.com']);
-  git(repoDir, ['config', 'user.name', 'Autonomy Queue Promote']);
-  git(repoDir, ['add', '.']);
-  git(repoDir, ['commit', '-m', 'fixture']);
-  git(repoDir, ['branch', 'dev']);
-
-  runNode(CLI_BIN, ['init', '--root', repoDir]);
-
-  runNode(CLI_BIN, [
-    'prd:add',
-    '--root',
-    repoDir,
-    '--id',
-    'prd-queue-promo-001',
-    '--title',
-    'Primary PRD',
-    '--task-spec',
-    JSON.stringify({
-      id: 'prd-queue-promo-001-architecture-agent-1',
-      title: 'Primary architecture task',
-      agentId: 'architecture-agent',
-      description: 'Primary fixture task',
-      acceptance: ['Only repository source files are queued for this queue fixture task.'],
-      sprintId: 'multi-agent-mvp',
-    }),
-  ]);
-
-  const activeTickResult = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-  assert.equal(activeTickResult.sync.imported.length, 1);
-
-  runNode(CLI_BIN, [
-    'prd:add',
-    '--root',
-    repoDir,
-    '--id',
-    'prd-queue-promo-200',
-    '--title',
-    'First queued PRD',
-    '--specification',
-    'Should be promoted before later queued specs',
-  ]);
-
-  runNode(CLI_BIN, [
-    'prd:add',
-    '--root',
-    repoDir,
-    '--id',
-    'prd-queue-promo-100',
-    '--title',
-    'Second queued PRD',
-    '--specification',
-    'Should stay queued after the earlier queued spec is promoted',
-  ]);
-
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-200.json'),
-    true
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-100.json'),
-    true
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-200.json'),
-    false
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-100.json'),
-    false
-  );
-
-  const blockedTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-  assert.equal(blockedTick.started.some((entry) => entry.agentId === 'pm-agent'), false);
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-200.json'),
-    true
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-100.json'),
-    true
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-200.json'),
-    false
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-100.json'),
-    false
-  );
-
-  const controlWorktree = path.join(repoDir, '.autonomy', 'control', 'dev-sync');
-  fs.rmSync(
-    path.join(controlWorktree, 'prompts', 'autonomous', 'v2', 'specs', 'prds', 'prd-queue-promo-001.json'),
-    { force: true }
-  );
-  fs.writeFileSync(
-    path.join(controlWorktree, 'prompts', 'autonomous', 'v2', 'queues', 'reviewer.json'),
-    `${JSON.stringify({ agentId: 'reviewer', role: 'review', tasks: [] }, null, 2)}\n`,
-    'utf8'
-  );
-  git(controlWorktree, [
-    'add',
-    '--all',
-    '--',
-    'prompts/autonomous/v2/specs/prds/prd-queue-promo-001.json',
-    'prompts/autonomous/v2/queues/reviewer.json',
-  ]);
-  git(controlWorktree, ['commit', '-m', 'archive active prd for promotion test']);
-  const archivedFixtureCommit = git(controlWorktree, ['rev-parse', 'HEAD']);
-  git(repoDir, ['update-ref', 'refs/heads/dev', archivedFixtureCommit]);
-
-  const secondTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-  assert.equal(secondTick.sync.queuedPromotion.id, 'prd-queue-promo-200');
-  assert.equal(secondTick.sync.queuedPromotion.title, 'First queued PRD');
-  assert.equal(secondTick.started.some((entry) => entry.agentId === 'pm-agent'), true);
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-200.json'),
-    false
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-200.json'),
-    true
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/queue/prd-queue-promo-100.json'),
-    true
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prds/prd-queue-promo-100.json'),
-    false
-  );
-  assert.equal(
-    fileExistsInGitRevision(repoDir, 'dev:prompts/autonomous/v2/specs/prd-state/prd-queue-promo-200.json'),
-    true
-  );
-
-  const thirdTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-  assert.equal(thirdTick.sync.queuedPromotion, null);
-  assert.equal(
-    thirdTick.started.filter((entry) => entry.agentId === 'pm-agent').length,
-    0
-  );
-});
-
-test('packaged autonomy-v2 scaffolds custom agents and prunes removed agents on force', () => {
-  const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-custom-agent-'));
-
-  runNode(CLI_BIN, ['init', '--root', repoDir]);
-
-  const agentsPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'config', 'agents.json');
-  const agentsConfig = JSON.parse(fs.readFileSync(agentsPath, 'utf8'));
-  agentsConfig.agents.push({
-    id: 'billing-agent',
-    personaName: 'billing-agent',
-    role: 'implementation',
-    systemPrompt: 'prompts/autonomous/v2/agents/billing-agent/system.md',
-    taskQueue: 'prompts/autonomous/v2/queues/billing-agent.json',
-    gitIdentity: {
-      name: 'autonomy-billing[bot]',
-      email: 'autonomy-billing[bot]@users.noreply.github.com',
-    },
-    prLabels: ['agent:billing'],
-      include: ['src/**/*'],
-    checks: ['npm run typecheck'],
-  });
-  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
-
+test('init preserves consumer prompts, queues and custom lifecycle config on force', () => {
+  const repoDir = createFixtureRepo('autonomy-init-custom-');
+  initAutonomyRepo(repoDir);
+  const base = path.join(repoDir, 'prompts/autonomous/v2');
+  assert.equal(fs.existsSync(path.join(base, 'agents')), false);
+  assert.equal(fs.existsSync(path.join(base, 'queues')), false);
+  const files = {
+    'agents/consumer/system.md': '# Consumer prompt',
+    'queues/consumer.json': '{"tasks":[{"id":"keep"}]}',
+    'config/custom-agents.json': '{"enabled":false,"agents":[]}',
+  };
+  for (const [relative, content] of Object.entries(files)) {
+    const target = path.join(base, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
+  }
   runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
-
-  const billingSystemPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'system.md');
-  const billingHandoffPath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'handoff.md');
-  const billingLogPath = path.join(repoDir, '.autonomy', 'runtime', 'agents', 'billing-agent', 'log.md');
-  const billingQueuePath = path.join(repoDir, 'prompts', 'autonomous', 'v2', 'queues', 'billing-agent.json');
-
-  assert.ok(fs.existsSync(billingSystemPath));
-  assert.ok(fs.existsSync(billingHandoffPath));
-  assert.ok(fs.existsSync(billingLogPath));
-  assert.ok(fs.existsSync(billingQueuePath));
-
-  const billingSystem = fs.readFileSync(billingSystemPath, 'utf8');
-  assert.match(billingSystem, /billing agent implementation agent/i);
-  assert.match(billingSystem, /src\/\*\*/);
-
-  agentsConfig.agents = agentsConfig.agents.filter((agent) => agent.id !== 'billing-agent');
-  fs.writeFileSync(agentsPath, `${JSON.stringify(agentsConfig, null, 2)}\n`, 'utf8');
-
-  runNode(CLI_BIN, ['init', '--root', repoDir, '--force']);
-
-  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'system.md')));
-  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'agents', 'billing-agent', 'handoff.md')));
-  assert.ok(!fs.existsSync(path.join(repoDir, '.autonomy', 'runtime', 'agents', 'billing-agent', 'log.md')));
-  assert.ok(!fs.existsSync(path.join(repoDir, 'prompts', 'autonomous', 'v2', 'queues', 'billing-agent.json')));
-});
-
-test('implementation queue stays queued on dev while branch queue advances across ticks', () => {
-  const repoDir = createFixtureRepo('autonomy-v2-branch-queue-');
-  initAutonomyRepo(repoDir);
-
-  const taskOne = {
-    id: 'prd-branch-queue-001-architecture-agent-1',
-    title: 'Lane task 1',
-    agentId: 'architecture-agent',
-    description: 'First lane task',
-    acceptance: ['First task completed on the implementation branch.'],
-    sprintId: 'multi-agent-mvp',
-  };
-  const taskTwo = {
-    id: 'prd-branch-queue-001-architecture-agent-2',
-    title: 'Lane task 2',
-    agentId: 'architecture-agent',
-    description: 'Second lane task',
-    acceptance: ['Second task completed after branch-local promotion.'],
-    sprintId: 'multi-agent-mvp',
-  };
-
-  addPrdWithTasks(repoDir, 'prd-branch-queue-001', 'Branch queue PRD', [taskOne, taskTwo]);
-
-  const firstTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-  assert.equal(firstTick.started.length, 1);
-  assert.equal(firstTick.started[0].result.taskId, taskOne.id);
-
-  const queueRevision = 'prompts/autonomous/v2/queues/architecture-agent.json';
-  const devQueueAfterFirstTick = readGitJson(repoDir, `dev:${queueRevision}`);
-  assert.equal(devQueueAfterFirstTick.tasks.length, 2);
-  assert.deepEqual(
-    devQueueAfterFirstTick.tasks.map((task) => String(task.status || task.state)),
-    ['queued', 'queued']
-  );
-
-  const branchName = firstTick.started[0].result.branch;
-  const branchQueueAfterFirstTick = readGitJson(repoDir, `${branchName}:${queueRevision}`);
-  assert.equal(findTaskInQueue(branchQueueAfterFirstTick, taskOne.id).status, 'done');
-  assert.equal(findTaskInQueue(branchQueueAfterFirstTick, taskTwo.id).status, 'active');
-
-  fs.rmSync(firstTick.started[0].result.worktreePath, { recursive: true, force: true });
-  assert.equal(fs.existsSync(firstTick.started[0].result.worktreePath), false);
-
-  const secondTick = JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-  assert.equal(secondTick.started.length, 1);
-  assert.equal(secondTick.started[0].result.taskId, taskTwo.id);
-  assert.equal(fs.existsSync(secondTick.started[0].result.worktreePath), true);
-
-  const devQueueAfterSecondTick = readGitJson(repoDir, `dev:${queueRevision}`);
-  assert.deepEqual(
-    devQueueAfterSecondTick.tasks.map((task) => String(task.status || task.state)),
-    ['queued', 'queued']
-  );
-
-  const branchQueueAfterSecondTick = readGitJson(repoDir, `${branchName}:${queueRevision}`);
-  assert.equal(findTaskInQueue(branchQueueAfterSecondTick, taskOne.id).status, 'done');
-  assert.equal(findTaskInQueue(branchQueueAfterSecondTick, taskTwo.id).status, 'done');
-});
-
-test('review follow-up is appended only to the implementation branch queue and recreates a missing worktree', () => {
-  const repoDir = createFixtureRepo('autonomy-v2-review-followup-');
-  initAutonomyRepo(repoDir);
-
-  const task = {
-    id: 'prd-review-followup-001-architecture-agent-1',
-    title: 'Review follow-up task',
-    agentId: 'architecture-agent',
-    description: 'Initial implementation task',
-    acceptance: ['Implementation is completed before review feedback.'],
-    sprintId: 'multi-agent-mvp',
-  };
-  addPrdWithTasks(repoDir, 'prd-review-followup-001', 'Review follow-up PRD', [task]);
-
-  runTick(repoDir);
-
-  const paths = getAutonomyPathsForTest(repoDir);
-  const prsState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
-  assert.equal(prsState.pullRequests.length, 1);
-  const pr = prsState.pullRequests[0];
-
-  const branchLocks = JSON.parse(fs.readFileSync(paths.branchLocksState, 'utf8'));
-  assert.equal(branchLocks.locks.length, 1);
-  const worktreePath = branchLocks.locks[0].worktreePath;
-  fs.rmSync(worktreePath, { recursive: true, force: true });
-  assert.equal(fs.existsSync(worktreePath), false);
-
-  runNode(CLI_BIN, [
-    'review:record',
-    '--root',
-    repoDir,
-    '--pr',
-    pr.id,
-    '--reviewer',
-    'reviewer',
-    '--decision',
-    'changes-requested',
-    '--summary',
-    'Please address the review feedback.',
-  ]);
-
-  const queueRevision = 'prompts/autonomous/v2/queues/architecture-agent.json';
-  const devQueue = readGitJson(repoDir, `dev:${queueRevision}`);
-  assert.equal(devQueue.tasks.length, 1);
-  assert.equal(findTaskInQueue(devQueue, task.id).status, 'queued');
-
-  assert.equal(fs.existsSync(worktreePath), true);
-  const branchQueue = readGitJson(repoDir, `${pr.headBranch}:${queueRevision}`);
-  assert.equal(findTaskInQueue(branchQueue, task.id).status, 'done');
-  const followupTaskId = `architecture-agent-followup-${pr.id}-1`;
-  const followupTask = findTaskInQueue(branchQueue, followupTaskId);
-  assert.ok(followupTask);
-  assert.equal(followupTask.type, 'review_followup');
-  assert.equal(followupTask.status, 'active');
-});
-
-test('reviewer merge archives completed PRDs on dev without leaving staged fragments behind', () => {
-  const repoDir = createFixtureRepo('autonomy-v2-reviewer-merge-archive-');
-  initAutonomyRepo(repoDir);
-  git(repoDir, ['add', '.']);
-  git(repoDir, ['commit', '-m', 'initialize autonomy']);
-
-  const task = {
-    id: 'helppage1-architecture-agent-1',
-    title: 'Add help page',
-    agentId: 'architecture-agent',
-    description: 'Create a new help page in frontend',
-    acceptance: ['Help page route exists and renders placeholder content.'],
-    sprintId: 'multi-agent-mvp',
-  };
-  addPrdWithTasks(repoDir, 'helppage1', 'helppage1', [task]);
-
-  runTick(repoDir);
-
-  const paths = getAutonomyPathsForTest(repoDir);
-  const prsState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
-  assert.equal(prsState.pullRequests.length, 1);
-  const pr = prsState.pullRequests[0];
-  const branchLocks = JSON.parse(fs.readFileSync(paths.branchLocksState, 'utf8'));
-  const implementationWorktreePath = branchLocks.locks[0].worktreePath;
-
-  runNode(CLI_BIN, [
-    'review:record',
-    '--root',
-    repoDir,
-    '--pr',
-    pr.id,
-    '--reviewer',
-    'reviewer',
-    '--decision',
-    'approve',
-    '--summary',
-    'Looks good to merge.',
-  ]);
-
-  runNode(CLI_BIN, [
-    'merge',
-    '--root',
-    repoDir,
-    '--pr',
-    pr.id,
-    '--actor',
-    'reviewer',
-    '--execute',
-  ]);
-
-  const archivedPrdPath = 'dev:prompts/autonomous/v2/specs/prds/archived/helppage1.json';
-  const activePrdPath = 'dev:prompts/autonomous/v2/specs/prds/helppage1.json';
-  const prdStatePath = 'dev:prompts/autonomous/v2/specs/prd-state/helppage1.json';
-  assert.equal(fileExistsInGitRevision(repoDir, archivedPrdPath), true);
-  assert.equal(fileExistsInGitRevision(repoDir, activePrdPath), false);
-  assert.equal(fileExistsInGitRevision(repoDir, prdStatePath), false);
-
-  const reviewerQueue = readGitJson(repoDir, 'dev:prompts/autonomous/v2/queues/reviewer.json');
-  assert.equal(reviewerQueue.tasks.length, 1);
-  assert.equal(reviewerQueue.tasks[0].prId, pr.id);
-  assert.equal(reviewerQueue.tasks[0].status, 'merged');
-
-  const postMergePrsState = JSON.parse(fs.readFileSync(paths.prsState, 'utf8'));
-  assert.equal(postMergePrsState.pullRequests[0].status, 'merged');
-
-  assert.equal(git(repoDir, ['status', '--short']), '');
-  assert.equal(git(implementationWorktreePath, ['status', '--short']), '');
+  for (const [relative, content] of Object.entries(files)) {
+    assert.equal(fs.readFileSync(path.join(base, relative), 'utf8'), content);
+  }
 });
