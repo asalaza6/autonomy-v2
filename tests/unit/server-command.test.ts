@@ -22,6 +22,7 @@ test('detached server starts and stops without consumer npm scripts', async t =>
   await run(['init']);
   const started = await run(['server:start', '--detached', '--no-trace-window']);
   assert.match(started.stdout, /Started autonomy-v2-server pid/);
+  assert.match(fs.readFileSync(path.join(rootDir, '.autonomy/runtime/restart-server.log'), 'utf8'), /--no-trace-window/);
   const owner = JSON.parse(fs.readFileSync(path.join(rootDir, '.autonomy/server-lock/owner.json'), 'utf8'));
   assert.doesNotThrow(() => process.kill(owner.pid, 0));
   const status = await run(['server:status']);

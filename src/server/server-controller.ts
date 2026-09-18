@@ -497,7 +497,8 @@ return "Terminal"
     const args = process.env.AUTONOMY_RESTART_ARGS
       ? JSON.parse(process.env.AUTONOMY_RESTART_ARGS)
       : [fileURLToPath(new URL('../../bin/autonomy-v2-server.js', import.meta.url)), 'serve', '--root', rootDir];
-    if (options['trace-window'] === false && !args.includes('--no-trace-window')) args.push('--no-trace-window');
+    if ((getBooleanOption(options, 'no-trace-window') || options['trace-window'] === false)
+      && !args.includes('--no-trace-window')) args.push('--no-trace-window');
     return { launchCommand, args };
   }
 
