@@ -58,7 +58,7 @@ await loader.reload();
 ```
 
 The host supplies TSX compilation or JavaScript import and React mounting.
-Packaged pages are already compiled. React 19 is an optional peer dependency
+Packaged pages are already compiled. React 18.2 or 19 is an optional peer dependency
 for hosts using these pages; the agent server does not require React.
 
 The loader watches repository config, page and options files, rejects stale
