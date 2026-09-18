@@ -22,6 +22,8 @@ test('public entrypoints stay explicit and src root has no extra top-level files
   assert.equal(packageJson.main, './dist/src/autonomy-v2/index.js');
   assert.equal(packageJson.exports['.'], './dist/src/autonomy-v2/index.js');
   assert.equal(packageJson.exports['./server'], './dist/src/server/server-main.js');
+  assert.equal(packageJson.exports['./control'], undefined);
+  assert.equal(packageJson.bin['autonomy-v2-control'], undefined);
   assert.equal(packageJson.exports['./worker'], undefined);
   assert.equal(packageJson.bin['autonomy-v2-worker'], undefined);
 
@@ -46,6 +48,7 @@ test('public entrypoints stay explicit and src root has no extra top-level files
     'codex',
     'config',
     'env',
+    'frontend',
     'github',
     'lock',
     'server',

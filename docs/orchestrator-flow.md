@@ -23,7 +23,7 @@ configs, enable overrides, staggered polling, singleton and parallel-pool
 coordination, conversation scopes and runtime status.
 
 The scheduler does not run built-in role workers, synchronize legacy PRDs or
-merge approved PRs. Existing CLI and control-plane operations remain available.
+merge approved PRs. Existing local CLI operations remain available through commands and action presets.
 The legacy `started`, `dueAgents` and skipped `sync` result fields remain for
 callers; scheduled invocations appear in `customAgentStarted`.
 

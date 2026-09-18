@@ -7,7 +7,7 @@ import {
 } from './shared-core.js';
 import { archiveCompletedPrdSpecs, loadAllState, loadTrackedPrds, } from './shared-prds.js';
 import { syncIntegrationSpecs } from './shared-sync.js';
-import { executePrdAdd, } from '../control-plane/prd-service.js';
+import { executePrdAdd, } from '../local/prd-service.js';
 import { validateAutonomyConfig } from './command-dependencies.js';
 
 function run(rootDir, options, command) {

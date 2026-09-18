@@ -18,7 +18,6 @@ test('auth command writes required auth values to .env.autonomy without printing
   const restore = clearEnv([
     'AUTONOMY_INITIALIZED',
     'NODE_AUTH_TOKEN',
-    'AUTONOMY_CONTROL_PLANE_SERVER_URL',
     'GITHUB_TOKEN',
   ]);
   const originalLog = console.log;
@@ -35,7 +34,6 @@ test('auth command writes required auth values to .env.autonomy without printing
       repo: 'asalaza6/example-repo',
       'node-auth-token': 'node-secret',
       'github-token': 'github-secret',
-      'control-plane-url': 'https://control.example.test',
       'skip-verify': true,
     });
 
@@ -44,7 +42,6 @@ test('auth command writes required auth values to .env.autonomy without printing
     assert.match(content, /^AUTONOMY_INITIALIZED=1/m);
     assert.match(content, /^NODE_AUTH_TOKEN=node-secret/m);
     assert.match(content, /^GITHUB_TOKEN=github-secret/m);
-    assert.match(content, /^AUTONOMY_CONTROL_PLANE_SERVER_URL=https:\/\/control\.example\.test/m);
     assert.equal((content.match(/^GITHUB_TOKEN=/gm) || []).length, 1);
 
     const output = lines.join('\n');
@@ -52,7 +49,6 @@ test('auth command writes required auth values to .env.autonomy without printing
     assert.doesNotMatch(output, /github-secret/);
     const payload = JSON.parse(output);
     assert.deepEqual(payload.updatedKeys.sort(), [
-      'AUTONOMY_CONTROL_PLANE_SERVER_URL',
       'AUTONOMY_INITIALIZED',
       'GITHUB_TOKEN',
       'NODE_AUTH_TOKEN',

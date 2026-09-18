@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { executePrdPriorityUpdate, executePrdReset } from '../../src/autonomy-v2/control-plane/prd-service.js';
-import { buildStatusSnapshot } from '../../src/autonomy-v2/control-plane/status-service.js';
+import { executePrdPriorityUpdate, executePrdReset } from '../../src/autonomy-v2/local/prd-service.js';
+import { buildStatusSnapshot } from '../../src/autonomy-v2/local/status-service.js';
 import {
   addPrdWithTasks,
   createFixtureRepo,

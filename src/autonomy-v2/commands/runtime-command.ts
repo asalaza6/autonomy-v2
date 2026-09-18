@@ -1,7 +1,7 @@
 import { ensureInitialized, formatCountSummary, printOutput } from './shared-core.js';
 import { formatAgentStatusLine } from './shared-agent-status.js';
 import { formatPullRequestStatusLine } from './shared-pr-status.js';
-import { buildRuntimeSnapshot } from '../control-plane/status-service.js';
+import { buildRuntimeSnapshot } from '../local/status-service.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);

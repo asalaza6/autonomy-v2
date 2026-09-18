@@ -23,10 +23,7 @@ Commands:
   merge --pr <pr-id> --actor <agent-id> [--execute]
   deploy
   runtime:status
-  health:score [--max-lines 800] [--threshold 80] [--top 10] [--score-only] [--json]
-  health:why [--max-lines 800] [--threshold 80] [--top 10] [--json]
-  health:help
-  auth [--node-auth-token <token>] [--github-token <token>] [--control-plane-url <url>] [--repo owner/name] [--open] [--skip-verify]
+  auth [--node-auth-token <token>] [--github-token <token>] [--repo owner/name] [--open] [--skip-verify]
   server:start
   server:kill
   server:restart [--detached] [--foreground] [--keep-old-terminal]

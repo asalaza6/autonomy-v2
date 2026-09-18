@@ -68,22 +68,6 @@ async function run(rootDir: string, options: CliOptions) {
     statuses.NODE_AUTH_TOKEN = 'present';
   }
 
-  const controlPlaneUrl = getStringOption(options, 'control-plane-url', '');
-  if (controlPlaneUrl) {
-    updates.AUTONOMY_CONTROL_PLANE_SERVER_URL = controlPlaneUrl;
-    statuses.AUTONOMY_CONTROL_PLANE_SERVER_URL = 'updated';
-  } else if (force || !hasConfiguredValue(configuredEnv, 'AUTONOMY_CONTROL_PLANE_SERVER_URL')) {
-    const prompted = await promptOptionalText('AUTONOMY_CONTROL_PLANE_SERVER_URL (blank to skip): ');
-    if (prompted) {
-      updates.AUTONOMY_CONTROL_PLANE_SERVER_URL = prompted;
-      statuses.AUTONOMY_CONTROL_PLANE_SERVER_URL = 'updated';
-    } else {
-      statuses.AUTONOMY_CONTROL_PLANE_SERVER_URL = hasConfiguredValue(configuredEnv, 'AUTONOMY_CONTROL_PLANE_SERVER_URL') ? 'present' : 'skipped';
-    }
-  } else {
-    statuses.AUTONOMY_CONTROL_PLANE_SERVER_URL = 'present';
-  }
-
   const tokenTemplateUrl = buildGithubTokenTemplateUrl(rootDir, options);
   const githubToken = getStringOption(options, 'github-token', '');
   if (githubToken) {
@@ -160,7 +144,6 @@ Usage:
 Options:
   --node-auth-token <token>     Write NODE_AUTH_TOKEN without prompting
   --github-token <token>        Write GITHUB_TOKEN without prompting
-  --control-plane-url <url>     Write AUTONOMY_CONTROL_PLANE_SERVER_URL without prompting
   --repo <owner/name>           Generate the GitHub token template for this repo
   --owner <owner> --repo <repo> Generate the GitHub token template for this repo
   --expires-in <days|none>      Token template expiration, default 90

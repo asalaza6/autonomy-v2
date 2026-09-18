@@ -141,149 +141,22 @@ export interface PrdArchiveMetadata extends AnyRecord {
   actor?: string;
 }
 
-export interface ControlPlaneRepoRecord extends AnyRecord {
+export interface RepositoryMetadata extends AnyRecord {
   repoId: string;
   label?: string;
   description?: string;
-  default?: boolean;
-  repoAssistantValidationPullRequest?: number;
   deployCommand?: DeployCommandConfig;
   packageUpdateCommand?: DeployCommandConfig;
-  controlBridgeRestartCommand?: DeployCommandConfig;
   serverRestartCommand?: DeployCommandConfig;
   deploymentUrl?: string;
   deploymentLabel?: string;
-  exclusiveControl?: boolean;
-  controlTakeover?: 'refuse' | 'takeover';
 }
 
-export interface ControlPlaneConfig extends ControlPlaneRepoRecord {
+export interface RepositoryConfig extends RepositoryMetadata {
   schemaVersion?: number;
 }
 
-export interface ControlPlanePrdAddPayload extends AnyRecord {
-  repoId: string;
-  id: string;
-  title: string;
-  specification?: string;
-  requirements?: string[];
-  taskSpecs?: PrdTaskSpec[];
-  sprintId?: string;
-  priority?: string;
-}
-
-export interface ControlPlaneDeployPayload extends AnyRecord {
-  repoId: string;
-}
-
-export interface ControlPlanePrdResetPayload extends AnyRecord {
-  repoId: string;
-  confirmPrdId: string;
-  reason?: string;
-}
-
-export interface ControlPlanePrdPriorityPayload extends AnyRecord {
-  repoId: string;
-  prdId: string;
-  priority: string;
-  reason?: string;
-}
-
-export interface ControlPlanePackageUpdatePayload extends AnyRecord {
-  repoId: string;
-}
-
-export interface ControlPlaneHealthScorePayload extends AnyRecord {
-  repoId: string;
-  maxLines?: number;
-  threshold?: number;
-  top?: number;
-}
-
-export interface ControlPlaneRestartPayload extends AnyRecord {
-  repoId: string;
-  controlSessionId?: string;
-  controlSessionLabel?: string;
-  takeoverControl?: boolean;
-}
-
-export interface ControlPlaneCustomAgentTogglePayload extends AnyRecord {
-  repoId: string;
-  runtimeKey: string;
-  enabled: boolean;
-}
-
-export interface ControlPlaneManagedProcessRecord extends AnyRecord {
-  repoId: string;
-  target: 'server' | 'controlBridge';
-  sessionId: string;
-  outputSessionId?: string;
-  pid?: number | null;
-  running?: boolean;
-  launchMode?: 'configured' | 'default';
-  lifecycleAction?: 'restart';
-  singletonPolicy?: 'replace';
-  singletonOutcome?: 'started' | 'replaced' | 'reused' | 'refused' | 'failed';
-  command?: string | null;
-  cwd?: string | null;
-  requestedBySessionId?: string | null;
-  requestedBySessionLabel?: string | null;
-  requestedAt?: string | null;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  updatedAt?: string;
-  exitedAt?: string | null;
-  exitReason?: string | null;
-  preRestartPid?: number | null;
-  postRestartPid?: number | null;
-  replacementOfSessionId?: string | null;
-  replacementOfPid?: number | null;
-  error?: string | null;
-}
-
-export interface ControlPlaneRepoControlOwner extends AnyRecord {
-  repoId: string;
-  sessionId: string;
-  sessionLabel?: string | null;
-  exclusiveControl?: boolean;
-  takeoverPolicy?: 'refuse' | 'takeover';
-  claimedAt: string;
-  lastSeenAt: string;
-  takeoverAt?: string | null;
-  takeoverCount?: number;
-}
-
-export interface ControlPlaneRepoControlAccess extends AnyRecord {
-  repoId: string;
-  sessionId?: string | null;
-  sessionLabel?: string | null;
-  exclusiveControl: boolean;
-  canManage: boolean;
-  isOwner: boolean;
-  readOnly: boolean;
-  owner?: ControlPlaneRepoControlOwner | null;
-  takeoverPolicy?: 'refuse' | 'takeover';
-  refusalReason?: string | null;
-}
-
-export interface ControlPlaneAgentChatMessagePayload extends AnyRecord {
-  repoId: string;
-  conversationId: string;
-  messageId: string;
-  responseMessageId: string;
-  prompt: string;
-  history?: Array<Pick<ControlPlaneChatMessageRecord, 'role' | 'content' | 'createdAt'>>;
-}
-
-export interface ControlPlanePrdProposalSource extends AnyRecord {
-  repoId?: string;
-  conversationId?: string;
-  messageId?: string;
-  responseMessageId?: string;
-  createdAt?: string;
-}
-
-export interface ControlPlanePrdSourceChat extends AnyRecord {
+export interface PrdSourceChat extends AnyRecord {
   repoId?: string;
   conversationId?: string;
   managerMessageId?: string;
@@ -294,84 +167,6 @@ export interface ControlPlanePrdSourceChat extends AnyRecord {
 export interface PrdLinkedPullRequestSummary extends AnyRecord {
   number?: number | null;
   url?: string | null;
-}
-
-export interface ControlPlanePrdProposal extends AnyRecord {
-  schemaVersion?: number;
-  kind: 'prd-proposal';
-  title: string;
-  problem?: string;
-  goal?: string;
-  requirements: string[];
-  acceptanceCriteria: string[];
-  verification: string[];
-  priority?: string;
-  source?: ControlPlanePrdProposalSource;
-}
-
-export interface ControlPlaneChatMessageRecord extends AnyRecord {
-  id: string;
-  role: 'manager' | 'agent';
-  content: string;
-  createdAt: string;
-  updatedAt?: string;
-  status?: 'queued' | 'responding' | 'complete' | 'failed';
-  jobId?: string;
-  error?: string;
-  prdProposal?: ControlPlanePrdProposal;
-}
-
-export interface ControlPlaneConversationRecord extends AnyRecord {
-  id: string;
-  repoId: string;
-  title: string;
-  createdAt: string;
-  updatedAt: string;
-  messages: ControlPlaneChatMessageRecord[];
-}
-
-export interface ControlPlaneJobRecord extends AnyRecord {
-  id: string;
-  type: 'prd:add' | 'prd:reset' | 'prd:priority' | 'deploy' | 'agent:chat' | 'package:update' | 'health:score' | 'restart' | 'custom-agent:toggle';
-  repoId: string;
-  payload: ControlPlanePrdAddPayload | ControlPlanePrdResetPayload | ControlPlanePrdPriorityPayload | ControlPlaneDeployPayload | ControlPlaneAgentChatMessagePayload | ControlPlanePackageUpdatePayload | ControlPlaneHealthScorePayload | ControlPlaneRestartPayload | ControlPlaneCustomAgentTogglePayload;
-  status: 'queued' | 'claimed' | 'running' | 'completed' | 'failed';
-  createdAt: string;
-  updatedAt: string;
-  claimedAt?: string;
-  completedAt?: string;
-  error?: string;
-  result?: AnyRecord;
-}
-
-export interface ControlPlaneRepoStatusRecord extends AnyRecord {
-  repoId: string;
-  updatedAt: string;
-  label?: string;
-  description?: string;
-  default?: boolean;
-  deploymentUrl?: string;
-  deploymentLabel?: string;
-  exclusiveControl?: boolean;
-  controlTakeover?: 'refuse' | 'takeover';
-  snapshot: AnyRecord;
-}
-
-export interface ControlPlaneState extends AnyRecord {
-  schemaVersion?: number;
-  jobs: ControlPlaneJobRecord[];
-  repoStatuses: Record<string, ControlPlaneRepoStatusRecord>;
-  conversations: Record<string, ControlPlaneConversationRecord[]>;
-  heartbeats: Record<string, ControlPlaneHeartbeatRecord>;
-  managedProcesses?: Record<string, Partial<Record<'server' | 'controlBridge', ControlPlaneManagedProcessRecord>>>;
-  controlOwnership?: Record<string, ControlPlaneRepoControlOwner>;
-}
-
-export interface ControlPlaneHeartbeatRecord extends AnyRecord {
-  kind: 'server' | 'bridge';
-  updatedAt: string;
-  note?: string;
-  repoIds?: string[];
 }
 
 export interface PrdStateRecord extends AnyRecord {

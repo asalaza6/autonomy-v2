@@ -2,8 +2,8 @@ import { ensureInitialized, formatCountSummary, printOutput } from './shared-cor
 import { formatAgentStatusLine } from './shared-agent-status.js';
 import { formatPullRequestStatusLine } from './shared-pr-status.js';
 import { syncIntegrationSpecs } from './shared-sync.js';
-import { buildStatusSnapshot } from '../control-plane/status-service.js';
-import { describePrd, selectActivePrd, selectQueuedPrds } from '../control-plane/status-view.js';
+import { buildStatusSnapshot } from '../local/status-service.js';
+import { describePrd, selectActivePrd, selectQueuedPrds } from '../local/status-view.js';
 
 function run(rootDir, options) {
   ensureInitialized(rootDir);

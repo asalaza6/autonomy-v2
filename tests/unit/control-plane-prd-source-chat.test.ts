@@ -5,7 +5,7 @@ import {
   extractPrdSourceChatMetadata,
   extractPrdSourceChatMetadataFromSpecification,
   normalizePrdSourceChat,
-} from '../../src/autonomy-v2/control-plane/prd-source-chat.js';
+} from '../../src/autonomy-v2/local/prd-source-chat.js';
 
 test('PRD source chat parser extracts archived Source Chat Message sections', () => {
   const sourceChat = extractPrdSourceChatMetadataFromSpecification(`

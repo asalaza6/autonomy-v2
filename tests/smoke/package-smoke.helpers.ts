@@ -10,7 +10,6 @@ const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const CLI_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2');
 const SERVER_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2-server');
-const CONTROL_BIN = path.join(PROJECT_ROOT, 'bin', 'autonomy-v2-control.js');
 
 function createFixtureRepo(prefix) {
   const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -95,7 +94,6 @@ export {
   addPrdWithTasks,
   CLI_BIN,
   createFixtureRepo,
-  CONTROL_BIN,
   fileExistsInGitRevision,
   findTaskInQueue,
   getAutonomyPathsForTest,

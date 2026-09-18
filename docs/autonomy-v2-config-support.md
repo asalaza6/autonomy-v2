@@ -10,7 +10,7 @@ agent scripts, prompts or queues. Gitignore rules are appended without replacing
 existing rules.
 
 `agents.json` and `sprint.json` remain metadata for existing PRD, queue, Git and
-control-plane commands. The starter `agents.json` retains identities and queue
+local commands. The starter `agents.json` retains identities and queue
 paths for those commands; its entries are not scheduled. Custom lifecycle
 scripts own workflow behavior.
 
@@ -124,17 +124,9 @@ Every preset entry is still a normal custom-agent object after expansion. Repos 
 
 Object overrides are merged recursively, while arrays and command lists replace the preset value. `spawn.decision` is replaced as a block so mutually exclusive modes such as `{"mode":"always"}` do not retain the preset command.
 
-The control-plane UI exposes configured custom agents, including agents that have
-not run yet. It shows runtime status, target, workspace, decision metadata,
-conversation metadata, tool env presence, and last error when available.
-
-Each individual custom agent can be enabled or disabled from that UI. The
-`enabled` value in the custom-agent config remains the default, but once a UI
-choice is made the repo-local runtime override in
-`.autonomy/runtime/state/runtime.json` is the source of truth for that agent's
-runtime key. The override is applied by the bridge through a
-`custom-agent:toggle` job, so remote manager pages and repo-local control pages
-use the same mutation path.
+Local pages enable or disable agents through the `agent:toggle` action. Runtime
+overrides remain stored in `.autonomy/runtime/state/runtime.json`. No bridge or
+hosted job is involved. See [Local frontend](local-frontend.md).
 
 ## Validation Rules
 
