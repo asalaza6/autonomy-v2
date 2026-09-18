@@ -6,8 +6,8 @@ import path from 'node:path';
 const input = readStdinJson();
 const repoRoot = input.repoRoot || process.cwd();
 const target = input.target || {};
-const run = input.run || {};
-const prdPath = path.join(repoRoot, String(run.prdRelativePath || target.path || ''));
+const prepared = input.previous?.environment || {};
+const prdPath = path.join(repoRoot, String(prepared.prdRelativePath || target.path || ''));
 const prd = readJsonFile(prdPath, {});
 const projectContext = readText(path.join(repoRoot, 'prompts', 'autonomous', 'v2', 'project-context.md'));
 const systemPrompt = readText(path.join(repoRoot, 'prompts', 'autonomous', 'v2', 'custom', 'agents', 'shadow-pm-agent', 'system.md'));
@@ -21,7 +21,7 @@ writeJson({
     fenced(projectContext),
     '',
     'Planning target:',
-    fenced(JSON.stringify({ target, promotion: run.promotion || null, prdPath: path.relative(repoRoot, prdPath), prd }, null, 2)),
+    fenced(JSON.stringify({ target, promotion: prepared.promotion || null, prdPath: path.relative(repoRoot, prdPath), prd }, null, 2)),
     '',
     'Available custom lifecycle agents:',
     fenced(JSON.stringify((agentsConfig.agents || []).map((agent) => ({

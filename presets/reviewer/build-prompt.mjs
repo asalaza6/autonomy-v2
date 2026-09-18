@@ -7,7 +7,7 @@ import { customPrsPath, customQueuePath } from '../lib/custom-state.mjs';
 
 const input = readStdinJson();
 const repoRoot = input.repoRoot || process.cwd();
-const run = input.run || {};
+const prepared = input.previous?.environment || {};
 const target = input.target || {};
 const reviewTask = hydrateReviewTask(repoRoot, target.task || resolveReviewTask(repoRoot, target.id));
 const prs = readJsonFile(customPrsPath(repoRoot), { pullRequests: [] });
@@ -29,9 +29,9 @@ writeJson({
     'Review execution paths:',
     fenced(JSON.stringify({
       repoRoot,
-      reviewWorktree: run.worktreePath || run.cwd || process.cwd(),
-      summaryPath: run.summaryPath || path.join(repoRoot, '.autonomy', 'runtime', 'custom-lifecycle', 'shadow-reviewer-agent', 'review-summary.md'),
-      headFetchWarning: run.headFetchWarning || '',
+      reviewWorktree: prepared.worktreePath || prepared.cwd || process.cwd(),
+      summaryPath: prepared.summaryPath || path.join(repoRoot, '.autonomy', 'runtime', 'custom-lifecycle', 'shadow-reviewer-agent', 'review-summary.md'),
+      headFetchWarning: prepared.headFetchWarning || '',
     }, null, 2)),
     '',
     'Diff:',

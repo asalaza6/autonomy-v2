@@ -10,7 +10,7 @@ import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
 
 const DEFAULT_INTERVAL_SECONDS = 60;
 const DEFAULT_PARALLELISM = 1;
-const MAX_PARALLELISM = 32;
+const MAX_PARALLELISM = 40;
 const DEFAULT_CONVERSATION_SCOPE = ['server.instanceId', 'agent.id', 'target.id', 'date.local'];
 
 function loadCustomAgentConfig(rootDir: string): AnyRecord | null {
@@ -763,7 +763,7 @@ function normalizeAgent(rootDir: string, agent: AnyRecord, context: AnyRecord, o
   const workspace = String(agent && agent.workspace || '').trim()
     || path.join('.autonomy', 'runtime', 'custom-agent-workspaces', slugify(agentId), slugify(target.id));
   const workspacePath = resolvePathInside(rootDir, workspace, `${agentId}.workspace`);
-  const parallel = normalizeParallelism(agent && agent.spawn && agent.spawn.parallelism, agentId);
+  const parallel = normalizeParallelism(agent?.spawn?.parallelism, agentId, agent?.spawn?.parallelismEnv);
   const parallelError = parallel.error || (parallel.value > 1 && workspacePath === path.resolve(rootDir)
     ? `invalid spawn.parallelism for "${agentId}": repository-root workspaces cannot run in parallel`
     : null);
@@ -1437,7 +1437,14 @@ function normalizePositiveNumber(value: unknown, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function normalizeParallelism(value: unknown, agentId: string) {
+function normalizeParallelism(value: unknown, agentId: string, environmentVariable?: unknown) {
+  if (environmentVariable !== undefined) {
+    if (typeof environmentVariable !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(environmentVariable)) {
+      return { value: DEFAULT_PARALLELISM, error: `invalid spawn.parallelismEnv for "${agentId}": expected an environment variable name` };
+    }
+    const override = process.env[environmentVariable]?.trim();
+    if (override) value = override;
+  }
   if (typeof value === 'undefined' || value === null || value === '') {
     return { value: DEFAULT_PARALLELISM, error: null };
   }

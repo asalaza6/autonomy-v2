@@ -22,7 +22,7 @@ fs.writeFileSync(path.join(runDir, 'last-finalize.json'), `${JSON.stringify({
 }, null, 2)}\n`, 'utf8');
 if (target.id && plannedTaskIds.length > 0) {
   const statePath = customPrdStatePath(repoRoot, target.id);
-  const activePath = resolveActivePath(repoRoot, target, input.run);
+  const activePath = resolveActivePath(repoRoot, target, input.previous?.environment);
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
   fs.writeFileSync(statePath, `${JSON.stringify({
     prdId: target.id,

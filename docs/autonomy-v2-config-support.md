@@ -54,9 +54,11 @@ The command envelope includes `invocationId`, `agentId`, `repoRoot`, `phase`, `t
 ### Parallel custom-agent pools
 
 An agent may opt into a bounded pool with `spawn.parallelism`. The default is
-`1`; valid values are integers from `1` through `32`. Parallel pools require a
+`1`; valid values are integers from `1` through `40`. Parallel pools require a
 workspace below the repository root so every slot can receive an isolated
-derived workspace.
+derived workspace. `spawn.parallelismEnv` can name an environment variable
+whose nonempty value overrides `spawn.parallelism` at launch. The same bounds
+apply; unset or empty variables retain the configured default.
 
 The base runtime key remains unchanged for slot 1. Additional slots append
 `#2`, `#3`, and so on. All slots share the logical agent's enable override and

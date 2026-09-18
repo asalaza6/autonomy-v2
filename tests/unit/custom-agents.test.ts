@@ -1283,7 +1283,7 @@ test('expanded custom-agent runtime keys must be unique', () => {
 });
 
 test('invalid parallelism blocks custom-agent dispatch', () => {
-  for (const value of [0, -1, 1.5, 'many', 33]) {
+  for (const value of [0, -1, 1.5, 'many', 41]) {
     const agent = {
       ...baseCustomConfig().agents[0],
       spawn: {
@@ -1527,4 +1527,22 @@ test('packaged preset phases run against an external consumer without local agen
   } finally {
     fs.rmSync(rootDir, { recursive: true, force: true });
   }
+});
+
+test('parallelism environment overrides are generic, bounded, and fall back to config', t => {
+  const key = 'AUTONOMY_TEST_POOL_SIZE';
+  const original = process.env[key];
+  t.after(() => { if (original === undefined) delete process.env[key]; else process.env[key] = original; });
+  const config = baseCustomConfig();
+  config.agents[0].spawn = { ...config.agents[0].spawn, parallelism: 3, parallelismEnv: key } as any;
+  const root = makeRepo(config);t.after(() => fs.rmSync(root,{recursive:true,force:true}));
+  delete process.env[key];
+  assert.equal(listConfiguredCustomAgents(root)[0].parallelism,3);
+  process.env[key] = '40';
+  assert.equal(listConfiguredCustomAgents(root)[0].parallelism,40);
+  assert.equal(listConfiguredCustomAgents(root)[0].slots.length,40);
+  process.env[key] = 'bad';
+  assert.match(listConfiguredCustomAgents(root)[0].lastError,/parallelism/);
+  process.env[key] = '';
+  assert.equal(listConfiguredCustomAgents(root)[0].parallelism,3);
 });
