@@ -92,5 +92,9 @@
     "react-dom": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "esbuild": "^0.25.12",
+    "playwright": "^1.53.0"
   }
 }

@@ -13,6 +13,7 @@ Commands:
   server:kill
   server:restart
   server:status
+  frontend                    Open the local React control panel
 
 All commands accept --root <directory>. Agent commands accept --json.
 Workflow actions are defined by repository files or optional control presets.`);
