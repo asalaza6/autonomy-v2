@@ -221,9 +221,9 @@ function createServerController(rootDir: string, options: Record<string, unknown
       return false;
     }
     return entryCommand.includes('/.bin/autonomy-v2-server')
+      || /\/autonomy-v2-server\.js(?:\s|$)/.test(entryCommand)
       || /\bnpm exec autonomy-v2-server\b/.test(entryCommand)
-      || /\bnpx(?:\s+--no-install)?\s+autonomy-v2-server\b/.test(entryCommand)
-      || /\bnpm run autonomy:v2:server\b/.test(entryCommand);
+      || /\bnpx(?:\s+--no-install)?\s+autonomy-v2-server\b/.test(entryCommand);
   }
 
   function isProcessInRoot(entry) {
@@ -455,7 +455,8 @@ return closedCount
   }
 
   function serverShellCommand() {
-    return `cd ${shellQuote(rootDir)} && npm run autonomy:v2:server`;
+    const { launchCommand, args } = resolveLaunchCommand();
+    return `cd ${shellQuote(rootDir)} && ${[launchCommand, ...args].map(shellQuote).join(' ')}`;
   }
 
   function shellQuote(value) {
@@ -492,10 +493,11 @@ return "Terminal"
   }
 
   function resolveLaunchCommand() {
-    const launchCommand = process.env.AUTONOMY_RESTART_COMMAND || 'npm';
+    const launchCommand = process.env.AUTONOMY_RESTART_COMMAND || process.execPath;
     const args = process.env.AUTONOMY_RESTART_ARGS
       ? JSON.parse(process.env.AUTONOMY_RESTART_ARGS)
-      : ['run', 'autonomy:v2:server'];
+      : [fileURLToPath(new URL('../../bin/autonomy-v2-server.js', import.meta.url)), 'serve', '--root', rootDir];
+    if (options['trace-window'] === false && !args.includes('--no-trace-window')) args.push('--no-trace-window');
     return { launchCommand, args };
   }
 
@@ -661,7 +663,9 @@ return "Terminal"
       return false;
     }
     appendLog('start requested');
-    launchServerInNewTerminal();
+    if (getBooleanOption(options, 'detached')) launchServer();
+    else if (getBooleanOption(options, 'foreground')) return launchServerInCurrentTerminal();
+    else launchServerInNewTerminal();
     const owner = await waitForNewOwner(0);
     if (owner) {
       appendLog(`start ready pid=${owner.pid}`);
@@ -792,7 +796,7 @@ return "Terminal"
         return;
       }
       if (selectedCommand === 'server:start') {
-        await startServerProcess();
+        if (await startServerProcess() === false) process.exitCode = 1;
         return;
       }
       if (getBooleanOption(options, 'detached') || getBooleanOption(options, 'foreground')) {

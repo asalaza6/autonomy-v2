@@ -127,7 +127,7 @@ What is true on `dev` today:
 ### 1. Start the scheduler
 
 ```bash
-npm run autonomy:v2:server
+npx --no-install autonomy-v2-server serve --root .
 ```
 
 The scheduler begins polling immediately.
@@ -219,7 +219,7 @@ If review requests changes:
 
 After one-time setup, the intended day-to-day flow is:
 
-1. `npm run autonomy:v2:server`
+1. `npx --no-install autonomy-v2-server serve --root .`
 2. `node scripts/autonomy-v2.js prd:add ...`
 
 No extra clone is required.
