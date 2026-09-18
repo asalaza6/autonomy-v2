@@ -28,7 +28,7 @@ export async function runFrontend(rootDir: string) {
 window.autonomyCallbacks=new Map();let next=0;
 const runtime=Object.fromEntries(${JSON.stringify(methods)}.map(name=>[name,(...args)=>window.autonomyCall(name,args)]));
 runtime.watch=(paths,callback)=>{const id=++next;window.autonomyCallbacks.set(id,callback);window.autonomyWatch(id,paths);return ()=>{window.autonomyCallbacks.delete(id);window.autonomyUnwatch(id);};};
- createRoot(document.getElementById('root')).render(React.createElement(Page,{runtime,context:${JSON.stringify(loaded.props.context)},options:${JSON.stringify(loaded.props.options)}}));`, resolveDir: rootDir, bundle: true, write: false, format: 'iife', platform: 'browser' }
+ createRoot(document.getElementById('root')).render(React.createElement(Page,{runtime,context:${JSON.stringify(loaded.props.context)},options:${JSON.stringify(loaded.props.options)}}));`, resolveDir: rootDir }, bundle: true, write: false, format: 'iife', platform: 'browser'
   });
   const browser = await chromium.launch({ headless: false, channel: 'chrome' });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
