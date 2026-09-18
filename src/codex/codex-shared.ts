@@ -130,5 +130,4 @@ export {
   extractSpawnSyncError,
   buildSpawnExitMessage,
   logCodexFailure,
-  normalizeNonEmptyString,
 };

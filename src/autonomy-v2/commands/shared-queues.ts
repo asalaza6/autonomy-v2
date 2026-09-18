@@ -329,7 +329,6 @@ function isTerminalTaskStatus(status) {
 }
 
 export {
-  
   buildTaskQueueState,
   buildTrackedImplementationQueueUpdates,
   commitTrackedImplementationQueue,
@@ -340,11 +339,8 @@ export {
   getTaskQueue,
   isTerminalTaskStatus,
   listTasks,
-  
   readImplementationQueueSnapshot,
   readTaskQueues,
-  
-  resolveTaskQueuePath,
   sanitizePlannedTaskSpecs,
   writeTaskQueues,
 };

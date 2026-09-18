@@ -1,83 +1,15 @@
 import fs from 'fs';
-import path from 'path';
-import { isReviewRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
-import { commitTrackedFilesToIntegrationBranch } from '../../sync/sync-git.js';
-import type { AnyRecord, AutonomyConfig, QueueMap, QueueState } from '../server-types.js';
-import { gitRefExists, readImplementationQueueSnapshot, readJsonFromGitRef, resolveTrackedQueueRef } from './orchestrator-git.js';
+import { gitRefExists, readImplementationQueueSnapshot } from './orchestrator-git.js';
 import {
   buildTaskBranchName,
   buildTaskLaneKey,
-  buildTaskQueueState,
   buildWorktreePath,
   compareImplementationTaskPriority,
-  getAgent,
   implementationTaskNeedsDispatch,
   isPendingImplementationTask,
   listTasks,
   normalizeNonEmptyString,
 } from './helpers.js';
-import { resolveRuntimeManagedPath, writeJson } from './paths.js';
-
-function resolveQueuePath(rootDir, agent) {
-  if (!agent.taskQueue) {
-    throw new Error(`Agent "${agent.id}" is missing required taskQueue in config.`);
-  }
-  if (path.isAbsolute(agent.taskQueue)) return agent.taskQueue;
-  return usesTrackedQueueForRole(agent.role)
-    ? path.join(rootDir, agent.taskQueue)
-    : resolveRuntimeManagedPath(rootDir, agent.taskQueue);
-}
-
-function loadQueues(rootDir: string, config: AutonomyConfig): QueueMap {
-  const queues: QueueMap = {};
-  (config.agents || []).forEach((agent) => {
-    const queuePath = resolveQueuePath(rootDir, agent);
-    const fallbackValue = buildTaskQueueState(agent, []);
-    const usesTrackedQueue = usesTrackedQueueForRole(agent.role);
-    queues[agent.id] = usesTrackedQueue
-      ? readJsonFromGitRef(
-          rootDir,
-          resolveTrackedQueueRef(rootDir, config.integrationBranch),
-          agent.taskQueue,
-          fs.existsSync(queuePath) ? JSON.parse(fs.readFileSync(queuePath, 'utf8')) : fallbackValue
-        )
-      : fs.existsSync(queuePath)
-        ? JSON.parse(fs.readFileSync(queuePath, 'utf8'))
-        : fallbackValue;
-  });
-  return queues;
-}
-
-function writeQueue(rootDir, agent, queue) {
-  const queuePath = resolveQueuePath(rootDir, agent);
-  if (!queuePath) {
-    return;
-  }
-  writeJson(queuePath, queue);
-}
-
-function commitTrackedQueue(rootDir: string, config: AutonomyConfig, agent, queue: QueueState, options: AnyRecord = {}) {
-  const relativePath = agent.taskQueue;
-  if (!relativePath || path.isAbsolute(relativePath)) {
-    throw new Error(`Tracked queue for "${agent.id}" must use a repo-relative path.`);
-  }
-  return commitTrackedFilesToIntegrationBranch(rootDir, config.integrationBranch, [{
-    relativePath,
-    content: buildTaskQueueState(agent, listTasks(queue)),
-  }], options);
-}
-
-function writeQueueAndAggregate(rootDir: string, config: AutonomyConfig, agentId: string, queue: QueueState, options: AnyRecord = {}) {
-  const agent = getAgent(config, agentId);
-  if (isReviewRole(agent.role)) {
-    commitTrackedQueue(rootDir, config, agent, queue, {
-      commitMessage: options.commitMessage || `autonomy(queue): update ${agent.id}`,
-      gitIdentity: options.gitIdentity || agent.gitIdentity,
-    });
-    return;
-  }
-  writeQueue(rootDir, agent, queue);
-}
 
 function completedImplementationTaskIds(branchLocks, agentId) {
   return new Set(
@@ -200,9 +132,5 @@ function resolveImplementationQueueContext(rootDir, config, branchLocks, agent, 
 }
 
 export {
-  
-  loadQueues,
   resolveImplementationQueueContext,
-  
-  writeQueueAndAggregate,
 };

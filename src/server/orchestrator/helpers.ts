@@ -68,28 +68,6 @@ function normalizeNonEmptyString(value) {
   return normalized || null;
 }
 
-function listPrds(prds) {
-  return Array.isArray(prds && prds.prds) ? prds.prds : [];
-}
-
-function comparePrdBacklogOrder(left, right) {
-  const leftCreated = String(left && left.createdAt || '');
-  const rightCreated = String(right && right.createdAt || '');
-  const createdOrder = leftCreated.localeCompare(rightCreated);
-  if (createdOrder !== 0) {
-    return createdOrder;
-  }
-
-  const leftUpdated = String(left && left.updatedAt || '');
-  const rightUpdated = String(right && right.updatedAt || '');
-  const updatedOrder = leftUpdated.localeCompare(rightUpdated);
-  if (updatedOrder !== 0) {
-    return updatedOrder;
-  }
-
-  return String(left && left.id || '').localeCompare(String(right && right.id || ''));
-}
-
 function implementationTaskNeedsDispatch(task) {
   return IMPLEMENTATION_DUE_STATUSES.has(getImplementationTaskState(task));
 }
@@ -118,33 +96,15 @@ function compareImplementationTaskPriority(left, right) {
     - getImplementationTaskPriority(right);
 }
 
-function selectImplementationTask(tasks, prds) {
-  const prdById = new Map((prds || []).map((prd) => [prd.id, prd]));
-  return (tasks || [])
-    .filter((candidate) => implementationTaskNeedsDispatch(candidate))
-    .sort((left, right) => {
-      const priorityOrder = compareImplementationTaskPriority(left, right);
-      if (priorityOrder !== 0) {
-        return priorityOrder;
-      }
-      return comparePrdBacklogOrder(prdById.get(left.prdId), prdById.get(right.prdId));
-    })[0] || null;
-}
-
 export {
   buildTaskBranchName,
   buildTaskLaneKey,
   buildTaskQueueState,
   buildWorktreePath,
   compareImplementationTaskPriority,
-  
   getAgent,
-  
   implementationTaskNeedsDispatch,
   isPendingImplementationTask,
-  listPrds,
   listTasks,
   normalizeNonEmptyString,
-  selectImplementationTask,
-  
 };

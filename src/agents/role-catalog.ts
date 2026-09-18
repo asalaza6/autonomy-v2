@@ -21,11 +21,6 @@ const TASK_TYPES = Object.freeze({
   CONFLICT: 'conflict-resolution',
 });
 
-const RUNNER_TYPES = Object.freeze({
-  DEFAULT: AGENT_ROLES.IMPLEMENTATION,
-  REVIEW: AGENT_ROLES.REVIEW,
-});
-
 function listAgentRoleIds() {
   return ROLE_IDS.slice();
 }
@@ -55,12 +50,6 @@ function usesTrackedQueueForRole(value) {
   return isImplementationRole(value) || isReviewRole(value);
 }
 
-function getRunnerTypeForRole(value) {
-  return isReviewRole(value)
-    ? RUNNER_TYPES.REVIEW
-    : RUNNER_TYPES.DEFAULT;
-}
-
 function getRoleLabel(value) {
   return normalizeAgentRole(value);
 }
@@ -73,17 +62,13 @@ function buildRoleEventName(value, suffix) {
   return `${normalizeAgentRole(value)}:${suffix}`;
 }
 
-
 export { AGENT_ROLES };
-
 
 export { TASK_TYPES };
 export { buildRoleEventName };
 
-
 export { getRoleAgentLabel };
 export { getRoleLabel };
-export { getRunnerTypeForRole };
 
 export { isAgentRole };
 export { isImplementationRole };
@@ -93,4 +78,3 @@ export { listAgentRoleIds };
 export { normalizeAgentRole };
 
 export { usesTrackedQueueForRole };
-export { RUNNER_TYPES };

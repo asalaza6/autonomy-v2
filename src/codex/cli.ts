@@ -185,60 +185,6 @@ function runCodexExecSync({
   }
 }
 
-function runCodexStructuredSync({
-  cwd,
-  prompt,
-  schema,
-  readOnly,
-  resumeSessionId = '',
-  captureConversationId = false,
-  env,
-  inheritHostEnv = true,
-  configOverrides = [],
-  sandboxMode,
-}: {
-  cwd: string;
-  prompt: string;
-  schema: unknown;
-  readOnly: boolean;
-  resumeSessionId?: string;
-  captureConversationId?: boolean;
-  env?: NodeJS.ProcessEnv;
-  inheritHostEnv?: boolean;
-  configOverrides?: string[];
-  sandboxMode?: CodexSandboxMode;
-}) {
-  const codexBin = process.env.AUTONOMY_CODEX_BIN || process.env.CODEX_BIN || 'codex';
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-v2-codex-'));
-  const schemaPath = path.join(tempDir, 'schema.json');
-  const outputPath = path.join(tempDir, 'output.json');
-  const streamOutput = shouldStreamCodexOutput();
-
-  try {
-    fs.writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
-    const args = buildCodexArgs({ cwd, schemaPath, outputPath, readOnly, resumeSessionId, captureConversationId, configOverrides, sandboxMode });
-    logCodexInvocation({ cwd, prompt, args, readOnly, streamOutput });
-    const result = runCodexCommandSync({
-      binary: codexBin,
-      args,
-      cwd,
-      input: prompt,
-      streamOutput,
-      ...buildCodexRuntimeOptions({ env, inheritHostEnv, configOverrides }),
-    });
-    const output = readCodexOutput(outputPath, streamOutput);
-    const conversationId = extractCodexConversationId(result.stdout);
-    return captureConversationId === true || resumeSessionId
-      ? { ...output, conversationId }
-      : output;
-  } catch (error) {
-    logCodexFailure(error, streamOutput);
-    throw new Error(`Codex CLI failed: ${extractExecError(error)}`);
-  } finally {
-    fs.rmSync(tempDir, { recursive: true, force: true });
-  }
-}
-
 function resolveSandboxMode(readOnly, sandboxMode: CodexSandboxMode | undefined) {
   if (sandboxMode) {
     return sandboxMode;
@@ -645,11 +591,7 @@ function logCodexResult(raw, streamOutput) {
 }
 
 export {
-  buildCodexArgs,
-  buildCodexExecArgs,
-  buildCodexProcessEnv,
   runCodexExec,
   runCodexExecSync,
   runCodexStructured,
-  runCodexStructuredSync,
 };

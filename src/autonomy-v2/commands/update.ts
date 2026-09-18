@@ -287,8 +287,6 @@ function execCommand(file: string, args: string[], cwd: string): string {
 }
 
 export {
-  PACKAGE_NAME as AUTONOMY_PACKAGE_NAME,
   readAutonomyPackageStatus,
   run,
-  runPackageUpdate,
 };

@@ -324,5 +324,4 @@ export {
   reconcilePullRequestRecord,
   reconcileReviewTaskRecord,
   reviewTaskHasActionableImplementationWork,
-  reviewTaskShouldBeResolved,
 };

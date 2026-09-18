@@ -23,7 +23,6 @@ import {
   getRoleLabel,
   hasActivePrdSpecInIntegrationBranch,
   hasPrdSpecInIntegrationBranch,
-  validateAutonomyConfig,
   AGENT_ROLES,
 } from '../commands/command-dependencies.js';
 import { isImplementationRole, usesTrackedQueueForRole } from '../../agents/role-catalog.js';
@@ -584,15 +583,9 @@ function terminateWorker(pid) {
   }
 }
 
-function loadValidatedAutonomyConfig(rootDir) {
-  const paths = getAutonomyPaths(rootDir);
-  return validateAutonomyConfig(readJson(paths.agentsConfig), paths.agentsConfig);
-}
-
 export {
   buildPrdAddCliOptions,
   executePrdAdd,
   executePrdPriorityUpdate,
   executePrdReset,
-  loadValidatedAutonomyConfig,
 };

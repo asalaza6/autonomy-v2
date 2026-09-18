@@ -1,6 +1,6 @@
 export type AnyRecord = Record<string, any>;
 
-export type CliOptionValue = string | boolean | Array<string | boolean>;
+type CliOptionValue = string | boolean | Array<string | boolean>;
 export type CliOptions = Record<string, CliOptionValue>;
 
 export interface GitIdentity extends AnyRecord {
@@ -42,18 +42,18 @@ export interface AutonomyConfig extends AnyRecord {
   };
 }
 
-export interface ScopeViolation extends AnyRecord {
+interface ScopeViolation extends AnyRecord {
   taskId?: string;
   file?: string;
   reason?: string;
 }
 
-export interface ConflictRecord extends AnyRecord {
+interface ConflictRecord extends AnyRecord {
   conflictedAt?: string;
   message?: string;
 }
 
-export interface ReviewDecisionRecord extends AnyRecord {
+interface ReviewDecisionRecord extends AnyRecord {
   reviewerId?: string;
   decision?: string;
   summary?: string;
@@ -111,7 +111,7 @@ export interface QueueState extends AnyRecord {
 
 export type QueueMap = Record<string, QueueState>;
 
-export interface PrdTaskSpec extends AnyRecord {
+interface PrdTaskSpec extends AnyRecord {
   id: string;
   title: string;
   agentId: string;
@@ -132,7 +132,7 @@ export interface PrdSpecPayload extends AnyRecord {
   archive?: PrdArchiveMetadata;
 }
 
-export interface PrdArchiveMetadata extends AnyRecord {
+interface PrdArchiveMetadata extends AnyRecord {
   kind?: 'completed' | 'reset' | string;
   status?: string;
   archivedAt?: string;
@@ -141,7 +141,7 @@ export interface PrdArchiveMetadata extends AnyRecord {
   actor?: string;
 }
 
-export interface RepositoryMetadata extends AnyRecord {
+interface RepositoryMetadata extends AnyRecord {
   repoId: string;
   label?: string;
   description?: string;
@@ -192,7 +192,7 @@ export interface TrackedPrdRecord extends PrdSpecPayload {
   pullRequest?: PrdLinkedPullRequestSummary | null;
 }
 
-export interface PullRequestRemote extends AnyRecord {
+interface PullRequestRemote extends AnyRecord {
   number?: number;
   url?: string;
   state?: string;
@@ -245,7 +245,7 @@ export interface PrState extends AnyRecord {
   pullRequests: PullRequestRecord[];
 }
 
-export interface BranchLock extends AnyRecord {
+interface BranchLock extends AnyRecord {
   taskId?: string;
   laneKey?: string;
   prdId?: string;
@@ -275,7 +275,7 @@ export interface WorkerRuntime extends AnyRecord {
   lastError?: string | null;
 }
 
-export interface CustomAgentRuntime extends AnyRecord {
+interface CustomAgentRuntime extends AnyRecord {
   agentId: string;
   runtimeKey?: string;
   baseRuntimeKey?: string;
@@ -323,10 +323,4 @@ export interface TraceContext extends AnyRecord {
   stderrMode?: string;
   errorSummary?: string;
   errorPriority?: number;
-}
-
-export interface HttpResponse<TPayload = AnyRecord> extends AnyRecord {
-  statusCode: number;
-  payload: TPayload;
-  raw: string;
 }

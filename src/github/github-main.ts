@@ -98,12 +98,6 @@ function resolveGithubAuthToken(options: AnyRecord = {}) {
   return '';
 }
 
-function hasGithubAuth(): boolean {
-  return Boolean(resolveGithubAuthToken());
-}
-
-
-export { hasGithubAuth };
 export { compareBranchToBase };
 export { getPullRequest };
 export { listPullRequestsByHead };

@@ -201,6 +201,4 @@ export {
   buildDeployCreatedVersionData,
   buildDeploymentVersionSnapshot,
   buildUnavailableDeploymentVersionSnapshot,
-  isVersionNewer,
-  normalizeVersionString,
 };

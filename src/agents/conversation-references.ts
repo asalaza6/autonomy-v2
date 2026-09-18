@@ -157,25 +157,10 @@ function copyAgentConversationReference(
   return conversationId;
 }
 
-function resolveReturnedConversationId(value: AnyRecord | null | undefined): string {
-  return normalizeConversationId(value && (
-    value.conversationId
-      || value.conversation_id
-      || value.sessionId
-      || value.session_id
-      || value.implementationConversationId
-      || value.implementationSessionId
-      || value.reviewConversationId
-      || value.reviewSessionId
-  ));
-}
-
 export {
   buildAgentConversationKey,
   copyAgentConversationReference,
   getAgentConversationId,
-  getAgentConversationReference,
   normalizeConversationReferences,
-  resolveReturnedConversationId,
   setAgentConversationReference,
 };

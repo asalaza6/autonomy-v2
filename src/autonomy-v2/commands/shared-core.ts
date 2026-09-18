@@ -342,7 +342,6 @@ export {
   ensureInitialized,
   formatCountSummary,
   getAgent,
-  getAgentLogPath,
   getAutonomyPaths,
   getListOption,
   getPr,

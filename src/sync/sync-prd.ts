@@ -205,11 +205,8 @@ function slugify(value) {
 export {
   buildPrdSpecPayload,
   buildPrdSpecRelativePath,
-  buildPrdStatePayload,
   buildPrdStateRelativePath,
-  
   normalizeStringList,
-  
   parsePrdSpec,
   parsePrdState,
   requiresPmPlanning,

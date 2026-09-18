@@ -3,7 +3,7 @@ import path from 'path';
 import { execFileSync } from 'child_process';
 import type { AnyRecord, AutonomyConfig } from '../server-types.js';
 import { readJson } from './paths.js';
-import { buildTaskQueueState, getAgent, normalizeNonEmptyString } from './helpers.js';
+import { buildTaskQueueState, getAgent } from './helpers.js';
 
 function gitRefExists(rootDir, ref) {
   try {
@@ -15,17 +15,6 @@ function gitRefExists(rootDir, ref) {
   } catch (_) {
     return false;
   }
-}
-
-function resolveTrackedQueueRef(rootDir, integrationBranch) {
-  const remoteRef = `origin/${integrationBranch}`;
-  if (gitRefExists(rootDir, remoteRef)) {
-    return remoteRef;
-  }
-  if (gitRefExists(rootDir, integrationBranch)) {
-    return integrationBranch;
-  }
-  return null;
 }
 
 function readJsonFromGitRef(rootDir, ref, relativePath, fallbackValue) {
@@ -91,24 +80,7 @@ function readImplementationQueueSnapshot(rootDir: string, config: AutonomyConfig
   return null;
 }
 
-function extractExecError(error) {
-  const runnerSummary = normalizeNonEmptyString(error && error.autonomyErrorReport && error.autonomyErrorReport.summary);
-  if (runnerSummary) {
-    return runnerSummary;
-  }
-  if (error.stderr) {
-    return String(error.stderr).trim();
-  }
-  if (error.stdout) {
-    return String(error.stdout).trim();
-  }
-  return normalizeNonEmptyString(error && error.message) || 'Command failed without stderr/stdout output.';
-}
-
 export {
-  extractExecError,
   gitRefExists,
   readImplementationQueueSnapshot,
-  readJsonFromGitRef,
-  resolveTrackedQueueRef,
 };

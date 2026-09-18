@@ -46,40 +46,10 @@ function writeJson(filePath, payload) {
   fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
-function resolveRuntimeManagedPath(rootDir, relativePath) {
-  const normalized = path.normalize(relativePath);
-  const trackedStatePrefix = path.join(...AUTONOMY_SEGMENTS, 'state');
-  const runtimeStateDir = path.join(rootDir, ...RUNTIME_SEGMENTS, 'state');
-  if (normalized === trackedStatePrefix || normalized.startsWith(`${trackedStatePrefix}${path.sep}`)) {
-    return path.join(runtimeStateDir, trimLeadingSeparator(normalized.slice(trackedStatePrefix.length)));
-  }
-  return path.join(rootDir, normalized);
-}
-
-function trimLeadingSeparator(value) {
-  let normalized = String(value || '');
-  while (normalized.startsWith('/') || normalized.startsWith('\\')) {
-    normalized = normalized.slice(1);
-  }
-  return normalized;
-}
-
-function getAgentLogPath(rootDir, agentId) {
-  return path.join(rootDir, ...RUNTIME_SEGMENTS, 'agents', agentId, 'log.md');
-}
-
-function getRunnerErrorReportPath(rootDir, agentId) {
-  return path.join(rootDir, ...RUNTIME_SEGMENTS, 'agents', agentId, 'last-runner-error.json');
-}
-
 export {
   ensureDir,
-  getAgentLogPath,
   getPaths,
-  getRunnerErrorReportPath,
   readJson,
   resolveRootDir,
-  resolveRuntimeManagedPath,
-  
   writeJson,
 };

@@ -36,14 +36,6 @@ function addPrdWithTasks(repoDir, prdId, title, taskSpecs) {
   runNode(CLI_BIN, args);
 }
 
-function runTick(repoDir) {
-  return JSON.parse(runNode(SERVER_BIN, ['tick', '--root', repoDir, '--inline', '--json'], {
-    env: {
-      AUTONOMY_CODEX_STUB: '1',
-    },
-  }));
-}
-
 function readGitJson(cwd, revisionPath) {
   return JSON.parse(git(cwd, ['show', revisionPath]));
 }
@@ -99,9 +91,7 @@ export {
   getAutonomyPathsForTest,
   git,
   initAutonomyRepo,
-  
   readGitJson,
   runNode,
-  runTick,
   SERVER_BIN,
 };

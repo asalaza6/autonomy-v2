@@ -22,8 +22,6 @@ import {
 import {
   buildPrdSpecPayload,
   buildPrdSpecRelativePath,
-  buildPrdStatePayload,
-  buildPrdStateRelativePath,
   parsePrdSpec,
   parsePrdState,
 } from './sync-prd.js';
@@ -460,25 +458,13 @@ function readTrackedPrdStateMap(rootDir, integrationBranch) {
   return states;
 }
 
-function commitTrackedPrdStateToIntegrationBranch(rootDir, integrationBranch, prdState, options = {}) {
-  const payload = buildPrdStatePayload(prdState);
-  return commitTrackedFilesToIntegrationBranch(rootDir, integrationBranch, [{
-    relativePath: buildPrdStateRelativePath(payload.prdId),
-    content: payload,
-  }], options);
-}
-
 export {
-  
   commitPrdSpecToIntegrationBranch,
   commitTrackedFilesToIntegrationBranch,
-  commitTrackedPrdStateToIntegrationBranch,
-  
   fetchIntegrationBranch,
   hasActivePrdSpecInIntegrationBranch,
   hasPrdSpecInIntegrationBranch,
   listArchivedPrdSpecs,
   listTrackedPrdSpecs,
   readTrackedPrdStateMap,
-  
 };
