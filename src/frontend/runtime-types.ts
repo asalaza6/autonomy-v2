@@ -1,3 +1,4 @@
+import type { ActionRuntime } from '../runtime/index.js';
 /** Serializable contracts shared by repository pages and their local host. */
 export interface FrontendContext {
   repository: { id: string; rootDir: string; name?: string };
@@ -37,10 +38,16 @@ export interface Operation {
   logs: string[];
 }
 
+export interface ActionCapabilities {
+  executeModel(request: { prompt: string; schema: Record<string, unknown>; readOnly?: boolean; sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access'; cwd?: string }): Promise<Record<string, unknown>>;
+  setAgentEnabled(agentKey: string, enabled: boolean): unknown;
+  controlServer(command: 'server:start' | 'server:kill' | 'server:restart' | 'server:status', options?: Record<string, unknown>): unknown;
+}
+
 export interface LocalAction {
   /** Throw on invalid input; return the validated value passed to run. */
   validate(input: unknown): unknown;
-  run(input: unknown, context: { rootDir: string; log(message: string): void }): Promise<unknown> | unknown;
+  run(input: unknown, context: { rootDir: string; runtime: ActionRuntime; options?: Record<string, unknown>; capabilities?: ActionCapabilities; log(message: string): void }): Promise<unknown> | unknown;
   /** Actions sharing a key cannot run together. Defaults to the action name. */
   lockKey?: string;
 }

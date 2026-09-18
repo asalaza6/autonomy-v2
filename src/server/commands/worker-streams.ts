@@ -1,14 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { AGENT_ROLES, buildRoleEventName, getRoleLabel } from '../../agents/role-catalog.js';
-import type { AnyRecord, TraceContext } from '../server-types.js';
-import {
-  appendTraceLine,
-  ensureDir,
-  formatServerEventLine,
-  getAgentTraceLogPath,
-  maybeOpenAgentTraceTerminal,
-} from './trace.js';
+import type { AnyRecord } from '../../types.js';
+import type { TraceContext } from '../server-types.js';
+import { appendTraceLine, ensureDir, formatServerEventLine, getAgentTraceLogPath, maybeOpenAgentTraceTerminal } from './trace.js';
 
 function attachWorkerOutput(attachedWorkers: Map<string, any>, entry: AnyRecord, options: AnyRecord = {}) {
   if (!entry || !entry.child || !entry.pid) {
@@ -326,13 +320,6 @@ function looksLikeWorkerErrorLine(line) {
 }
 
 function updateWorkerContext(contextState: TraceContext, line: string) {
-  const nextContext = extractWorkerContextFromLine(line);
-  if (!nextContext) {
-    updateWorkerErrorSummary(contextState, line);
-    return contextState;
-  }
-  contextState.label = nextContext.label;
-  contextState.value = nextContext.value;
   updateWorkerErrorSummary(contextState, line);
   return contextState;
 }
@@ -394,37 +381,6 @@ function extractWorkerErrorSummaryFromLine(line) {
 
 function shouldIncludeWorkerExitError(code: number | null, contextState: TraceContext = {}) {
   return code != null && Number(code) !== 0 && Boolean(contextState.errorSummary);
-}
-
-function extractWorkerContextFromLine(line: string) {
-  const match = String(line || '').match(/^\[runner\] ([^ ]+) (\{.*\})$/);
-  if (!match) {
-    return null;
-  }
-
-  const [, eventName, rawPayload] = match;
-  let payload: AnyRecord;
-  try {
-    payload = JSON.parse(rawPayload) as AnyRecord;
-  } catch (_) {
-    return null;
-  }
-
-  if (
-    (eventName === buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'start')
-      || eventName === buildRoleEventName(AGENT_ROLES.IMPLEMENTATION, 'error'))
-      && payload && payload.taskId
-  ) {
-    return { label: 'task', value: String(payload.taskId) };
-  }
-  if (
-    (eventName === buildRoleEventName(AGENT_ROLES.REVIEW, 'start')
-      || eventName === buildRoleEventName(AGENT_ROLES.REVIEW, 'error'))
-      && payload && payload.reviewTaskId
-  ) {
-    return { label: getRoleLabel(AGENT_ROLES.REVIEW), value: String(payload.reviewTaskId) };
-  }
-  return null;
 }
 
 function formatWorkerStreamLine(agentId, pid, streamName, line, contextState = {}, timestamp = new Date().toISOString()) {

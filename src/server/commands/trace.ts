@@ -1,7 +1,7 @@
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
-import { execFileSync } from 'child_process';
-import type { AnyRecord, CliOptions } from '../server-types.js';
+import type { AnyRecord, CliOptions } from '../../types.js';
 
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 const DEFAULT_TRACE_LOG_MAX_BYTES = 5 * 1024 * 1024;
@@ -239,10 +239,10 @@ function formatServerEventLine(event, fields = {}, timestamp = new Date().toISOS
 }
 
 export {
-  appendTraceLine,
-  buildTraceOptions,
-  ensureDir,
-  formatServerEventLine,
-  getAgentTraceLogPath,
-  maybeOpenAgentTraceTerminal,
+appendTraceLine,
+buildTraceOptions,
+ensureDir,
+formatServerEventLine,
+getAgentTraceLogPath,
+maybeOpenAgentTraceTerminal
 };

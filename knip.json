@@ -4,14 +4,18 @@
     "src/frontend/action-worker.ts",
     "src/server/custom-agents/custom-agent-worker.ts",
     "bin/*.ts",
-    "presets/*/*.mjs"
+    "presets/*/*.mjs",
+    "control-presets/*/actions.ts",
+    "control-presets/*/frontend.tsx",
+    "control-presets/**/tests/*.test.tsx"
   ],
   "project": [
     "src/**/*.{ts,tsx}",
     "bin/**/*.ts",
     "tests/**/*.ts",
     "scripts/**/*.js",
-    "presets/**/*.mjs"
+    "presets/**/*.mjs",
+    "control-presets/**/*.{ts,tsx}"
   ],
   "ignoreBinaries": [
     "osascript"

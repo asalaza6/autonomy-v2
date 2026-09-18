@@ -1,15 +1,19 @@
+import { createRepositoryFiles } from '../runtime/repository-files.js';
+import { createActionRuntime } from '../runtime/index.js';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { listConfiguredCustomAgents } from '../server/orchestrator/custom-agents.js';
 import { getPaths } from '../server/orchestrator/paths.js';
 import type { RuntimeState } from '../server/server-types.js';
-import type { AgentRecord, AutonomyRuntime, FileEntry, LocalAction, Operation, RunRecord } from './runtime-types.js';
+import { createActionCapabilities } from './capabilities.js';
+import type { AgentRecord, AutonomyRuntime, LocalAction, Operation, RunRecord } from './runtime-types.js';
 
 /** Local host adapter. Repository pages receive its methods, never Node or a shell. */
 export function createLocalRuntime(options: { rootDir: string; actions?: Record<string, LocalAction> }): AutonomyRuntime & { dispose(): void } {
-  const requestedRoot = path.resolve(options.rootDir);
-  const rootDir = fs.realpathSync(requestedRoot);
+  const files = createRepositoryFiles(options.rootDir);
+  const { rootDir } = files;
+  const actionRuntime = createActionRuntime(rootDir);
   const actions = new Map(Object.entries(options.actions || {}));
   const operations = new Map<string, Operation>();
   const locks = new Set<string>();
@@ -28,59 +32,17 @@ export function createLocalRuntime(options: { rootDir: string; actions?: Record<
     return candidate;
   }
 
-  // Check every existing ancestor as well as the lexical path, including writes to missing files.
-  function resolve(filePath: string) {
-    assertOpen();
-    if (typeof filePath !== 'string' || filePath.includes('\0')) throw new Error('Invalid file path.');
-    const lexical = path.resolve(rootDir, filePath);
-    const relative = path.relative(requestedRoot, lexical);
-    const candidate = inside(path.isAbsolute(filePath) && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
-      ? path.resolve(rootDir, relative)
-      : lexical);
-    let ancestor = candidate;
-    while (true) {
-      try {
-        inside(fs.realpathSync(ancestor));
-        break;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-        // A dangling symlink must not be treated as an ordinary missing path.
-        try {
-          if (fs.lstatSync(ancestor).isSymbolicLink()) throw new Error(`Unresolved symlink: ${ancestor}`);
-        } catch (statError) {
-          if ((statError as NodeJS.ErrnoException).code !== 'ENOENT') throw statError;
-        }
-        ancestor = path.dirname(ancestor);
-      }
-    }
-    return candidate;
-  }
-
-  function json<T>(filePath: string, fallback?: T): T {
-    try {
-      return JSON.parse(fs.readFileSync(resolve(filePath), 'utf8')) as T;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && fallback !== undefined) return fallback;
-      throw error;
-    }
+  function resolve(filePath: string) { assertOpen(); return files.resolve(filePath); }
+  function json<T>(filePath: string, ...fallback: [T?]): T {
+    assertOpen(); return files.readJson(filePath, ...fallback);
   }
 
   function runtimeState(): RuntimeState {
-    return json(getPaths(rootDir).runtimeState, { workers: {} });
+    return json(getPaths(rootDir).runtimeState, { customAgents: {} });
   }
 
-  function listFiles(filePath: string, recursive = false): FileEntry[] {
-    const entries: FileEntry[] = [];
-    function visit(directory: string) {
-      for (const entry of fs.readdirSync(resolve(directory), { withFileTypes: true })) {
-        const entryPath = path.join(directory, entry.name);
-        entries.push({ path: path.relative(rootDir, entryPath), type: entry.isSymbolicLink() ? 'symlink' : entry.isDirectory() ? 'directory' : 'file' });
-        // Never traverse symlinks (including cycles and links outside the repo).
-        if (recursive && entry.isDirectory()) visit(entryPath);
-      }
-    }
-    visit(resolve(filePath));
-    return entries.sort((a, b) => a.path.localeCompare(b.path));
+  function listFiles(filePath: string, recursive = false) {
+    assertOpen(); return files.listFiles(filePath, recursive);
   }
 
   function operationPath(id: string) {
@@ -100,9 +62,7 @@ export function createLocalRuntime(options: { rootDir: string; actions?: Record<
 
   const api: AutonomyRuntime & { dispose(): void } = {
     async readFile(filePath, readOptions = {}) {
-      const encoding = readOptions.encoding || 'utf8';
-      if (encoding !== 'utf8' && encoding !== 'base64') throw new Error('Unsupported encoding.');
-      return fs.readFileSync(resolve(filePath)).toString(encoding);
+      assertOpen(); return files.readFile(filePath, readOptions.encoding);
     },
     async readJson<T>(filePath: string) { return json<T>(filePath); },
     async listFiles(filePath, listOptions = {}) { return listFiles(filePath, listOptions.recursive); },
@@ -214,6 +174,8 @@ export function createLocalRuntime(options: { rootDir: string; actions?: Record<
       locks.add(key);
       void Promise.resolve().then(() => action.run(validated, {
         rootDir,
+        runtime: actionRuntime,
+        capabilities: createActionCapabilities(rootDir),
         log(message) {
           operation.logs.push(String(message));
           if (!disposed) saveOperation(operation);

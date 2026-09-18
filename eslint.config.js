@@ -8,7 +8,7 @@ export default [
     ignores: ['node_modules/**'],
   },
   {
-    files: ['src/**/*.{js,ts,tsx}', 'tests/**/*.{js,ts,tsx}', 'bin/**/*.ts', 'scripts/**/*.ts'],
+    files: ['src/**/*.{js,ts,tsx}', 'tests/**/*.{js,ts,tsx}', 'bin/**/*.ts', 'scripts/**/*.ts', 'control-presets/**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 'latest',
       parser: tsParser,
@@ -42,5 +42,9 @@ export default [
         },
       ],
     },
+  },
+  {
+    files: ['control-presets/**/actions.ts', 'control-presets/**/frontend.tsx'],
+    rules: { 'import/no-default-export': 'off' },
   },
 ];

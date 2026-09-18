@@ -1,6 +1,8 @@
-import type { AutonomyRuntime, FrontendContext } from './runtime-types.js';
-import { resolveFrontendConfig, type FrontendPreset } from './config.js';
+import path from 'node:path';
+import type { FrontendPreset } from './config.js';
+import { resolveFrontendConfig } from './config.js';
 import type { FrontendPage, LoadedFrontendPage } from './page-contract.js';
+import type { AutonomyRuntime, FrontendContext } from './runtime-types.js';
 
 /** The host supplies compilation/import and React mounting; this layer has no transport. */
 export function createPageLoader(options: {
@@ -35,7 +37,12 @@ export function createPageLoader(options: {
       presets: options.presets,
     });
     stopPageWatch?.();
-    stopPageWatch = watch([config.modulePath], changed);
+    const watched = [config.modulePath, config.optionsPath].filter((file): file is string => {
+      if (!file) return false;
+      const relative = path.relative(options.context.repository.rootDir, file);
+      return Boolean(options.watch) || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+    });
+    stopPageWatch = watched.length ? watch(watched, changed) : undefined;
     const module = await options.importModule(config.modulePath, { revision: currentRevision });
     if (disposed || currentRevision !== revision) return null;
     if (typeof module?.default !== 'function') {
@@ -46,6 +53,7 @@ export function createPageLoader(options: {
       modulePath: config.modulePath,
       props: {
         runtime: options.runtime,
+        options: config.options,
         context: { ...options.context, preset: config.preset, frontend: config.options },
       },
     };

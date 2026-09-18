@@ -4,33 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { fileURLToPath } from 'node:url';
+import { makeRepo } from '../support/custom-agent-fixture.js';
 import { spawnSync } from 'node:child_process';
 
-import {
-  listConfiguredCustomAgents,
-  loadCustomAgentConfig,
-  loadCustomAgentConfigs,
-  markCustomAgentSpawnFailed,
-  pollCustomAgents,
-  refreshCustomAgentRuntime,
-  setCustomAgentEnabledOverride,
-} from '../../src/server/orchestrator/custom-agents.js';
-
-function makeRepo(customConfig, controlPlane = {}) {
-  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
-  const configDir = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config');
-  fs.mkdirSync(configDir, { recursive: true });
-  fs.writeFileSync(path.join(rootDir, 'context.md'), '# Strategy context\n', 'utf8');
-  fs.writeFileSync(path.join(configDir, 'control-plane.json'), `${JSON.stringify({
-    schemaVersion: 1,
-    repoId: 'fixture',
-    spawnCustomAgents: 'prompts/autonomous/v2/config/custom-agents.json',
-    ...controlPlane,
-  }, null, 2)}\n`, 'utf8');
-  fs.writeFileSync(path.join(configDir, 'custom-agents.json'), `${JSON.stringify(customConfig, null, 2)}\n`, 'utf8');
-  return rootDir;
-}
+import { listConfiguredCustomAgents, loadCustomAgentConfig, loadCustomAgentConfigs, markCustomAgentSpawnFailed, pollCustomAgents, refreshCustomAgentRuntime, setCustomAgentEnabledOverride } from '../../src/server/orchestrator/custom-agents.js';
 
 function makeRepoWithCustomConfigs(customConfigs, controlPlane = {}) {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
@@ -105,103 +82,6 @@ test('loads multiple spawnCustomAgents config files when configured as an array'
   assert.equal(loadCustomAgentConfig(rootDir)?.kind, 'strategy-agents');
 });
 
-test('presetAgentId expands default custom lifecycle agents from the tested consumer config shape', () => {
-  const rootDir = makeRepo({
-    schemaVersion: 1,
-    agents: [
-      { presetAgentId: 'shadow-pm-agent' },
-      { presetAgentId: 'shadow-architecture-agent' },
-      { presetAgentId: 'shadow-reviewer-agent' },
-    ],
-  }, {
-    repoId: 'moving-game',
-    label: 'Moving game',
-  });
-
-  const config = loadCustomAgentConfig(rootDir);
-  const configured = listConfiguredCustomAgents(rootDir);
-
-  assert.equal(config?.kind, 'moving-game-lifecycle-agents');
-  assert.equal(config?.promptRole, 'Moving game command-driven autonomy agent');
-  assert.equal(config?.agents[0].context.allowRuntimeStateChanges, true);
-  assert.deepEqual(config?.agents[0].context.workspaceReadWrite, [
-    '.autonomy/runtime/custom-lifecycle',
-    '.autonomy/worktrees/shadow-architecture-agent',
-    '.autonomy/worktrees/shadow-reviewer-agent',
-    'prompts/autonomous/v2/specs',
-  ]);
-  assert.deepEqual(config?.agents.map((agent) => agent.id), [
-    'shadow-pm-agent',
-    'shadow-architecture-agent',
-    'shadow-reviewer-agent',
-  ]);
-  assert.equal(config?.agents[0].target.id, 'moving-game');
-  assert.deepEqual(config?.agents[1].spawn.decision.command, ['node', fileURLToPath(new URL('../../../presets/architecture/should-run.mjs', import.meta.url))]);
-  assert.deepEqual(config?.agents[2].finalize.command, ['node', fileURLToPath(new URL('../../../presets/reviewer/finalize.mjs', import.meta.url))]);
-  assert.deepEqual(configured.map((agent) => agent.runtimeKey), [
-    'shadow-pm-agent:moving-game',
-    'shadow-architecture-agent:shadow-architecture-agent',
-    'shadow-reviewer-agent:shadow-reviewer-agent',
-  ]);
-});
-
-test('presetAgentId entries can override selected default custom-agent config fields', () => {
-  const rootDir = makeRepo({
-    schemaVersion: 1,
-    promptRole: 'Custom lifecycle role',
-    context: {
-      globalReadOnly: ['context.md'],
-    },
-    agents: [
-      {
-        presetAgentId: 'shadow-pm-agent',
-        enabled: false,
-        target: {
-          id: 'custom-backlog',
-        },
-        spawn: {
-          intervalSeconds: 120,
-          decision: {
-            mode: 'always',
-          },
-        },
-        finalize: {
-          command: ['node', 'custom/finalize.mjs'],
-        },
-      },
-    ],
-  }, {
-    repoId: 'fixture-repo',
-  });
-
-  const config = loadCustomAgentConfig(rootDir);
-  const agent = config?.agents[0];
-  const configured = listConfiguredCustomAgents(rootDir);
-
-  assert.equal(config?.promptRole, 'Custom lifecycle role');
-  assert.deepEqual(config?.context.globalReadOnly, ['context.md']);
-  assert.deepEqual(agent.context.globalReadOnly, ['context.md']);
-  assert.deepEqual(agent.context.workspaceReadWrite, [
-    '.autonomy/runtime/custom-lifecycle',
-    '.autonomy/worktrees/shadow-architecture-agent',
-    '.autonomy/worktrees/shadow-reviewer-agent',
-    'prompts/autonomous/v2/specs',
-  ]);
-  assert.equal(agent.id, 'shadow-pm-agent');
-  assert.equal(agent.type, 'pm');
-  assert.equal(agent.enabled, false);
-  assert.equal(agent.target.type, 'prd-backlog');
-  assert.equal(agent.target.id, 'custom-backlog');
-  assert.equal(agent.spawn.intervalSeconds, 120);
-  assert.equal(agent.spawn.offsetSeconds, 10);
-  assert.equal(agent.spawn.singletonKey, 'agent.id');
-  assert.deepEqual(agent.spawn.decision, { mode: 'always' });
-  assert.deepEqual(agent.finalize.command, ['node', 'custom/finalize.mjs']);
-  assert.equal(configured[0].runtimeKey, 'shadow-pm-agent:custom-backlog');
-  assert.equal(configured[0].enabled, false);
-  assert.equal(configured[0].decisionSource, 'always');
-});
-
 test('unknown presetAgentId is reported as invalid custom-agent config', () => {
   const rootDir = makeRepo({
     schemaVersion: 1,
@@ -209,7 +89,7 @@ test('unknown presetAgentId is reported as invalid custom-agent config', () => {
       { presetAgentId: 'missing-agent-preset' },
     ],
   });
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -222,14 +102,14 @@ test('unknown presetAgentId is reported as invalid custom-agent config', () => {
   assert.equal(runtime.customAgents['missing-agent-preset:missing-agent-preset'].lastDecision, 'invalid_config');
 });
 
-test('missing spawnCustomAgents leaves existing repo-agent runtime untouched', () => {
+test('missing spawnCustomAgents leaves existing custom-agent runtime untouched', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-custom-agents-'));
   const configDir = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config');
   fs.mkdirSync(configDir, { recursive: true });
   fs.writeFileSync(path.join(configDir, 'control-plane.json'), '{"schemaVersion":1,"repoId":"fixture"}\n', 'utf8');
   const runtime: any = {
-    workers: {
-      'pm-agent': { agentId: 'pm-agent', status: 'idle' },
+    customAgents: {
+      'example': { agentId: 'example', status: 'idle' },
     },
   };
 
@@ -237,8 +117,8 @@ test('missing spawnCustomAgents leaves existing repo-agent runtime untouched', (
 
   assert.deepEqual(result.started, []);
   assert.deepEqual(runtime, {
-    workers: {
-      'pm-agent': { agentId: 'pm-agent', status: 'idle' },
+    customAgents: {
+      'example': { agentId: 'example', status: 'idle' },
     },
   });
 });
@@ -246,7 +126,7 @@ test('missing spawnCustomAgents leaves existing repo-agent runtime untouched', (
 test('disabled custom-agent config is a no-op', () => {
   const rootDir = makeRepo(baseCustomConfig({ enabled: false }));
   let decisionCalls = 0;
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     customAgentDecisionClient() {
@@ -280,7 +160,7 @@ test('disabled individual custom agent is not polled or spawned', () => {
   }));
   process.env.STRATEGY_TOKEN = 'secret-token';
   let decisionCalls = 0;
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -307,7 +187,6 @@ test('runtime enable override disables configured custom agent before polling', 
   process.env.STRATEGY_TOKEN = 'secret-token';
   let decisionCalls = 0;
   const runtime: any = {
-    workers: {},
     customAgentEnabledOverrides: {
       'strategy-agent:target-1': false,
     },
@@ -360,7 +239,7 @@ test('missing auth env key blocks spawn without calling the decision API', () =>
   const previous = process.env.STRATEGY_TOKEN;
   delete process.env.STRATEGY_TOKEN;
   let decisionCalls = 0;
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   try {
     const result = pollCustomAgents(rootDir, runtime as any, {
@@ -386,7 +265,7 @@ test('polling uses the configured decision endpoint and auth header', () => {
   const rootDir = makeRepo(baseCustomConfig());
   process.env.STRATEGY_TOKEN = 'secret-token';
   const calls: any[] = [];
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -422,7 +301,7 @@ test('decision mode always spawns without a remote decision endpoint or auth env
   }));
   const previous = process.env.STRATEGY_TOKEN;
   delete process.env.STRATEGY_TOKEN;
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
   let decisionCalls = 0;
 
   try {
@@ -475,7 +354,7 @@ test('local decision command controls custom-agent spawn without remote auth', (
   );
   const previous = process.env.STRATEGY_TOKEN;
   delete process.env.STRATEGY_TOKEN;
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
   let decisionCalls = 0;
 
   try {
@@ -501,7 +380,7 @@ test('local decision command controls custom-agent spawn without remote auth', (
 test('shouldRun false does not spawn a custom agent', () => {
   const rootDir = makeRepo(baseCustomConfig());
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     customAgentDecisionClient() {
@@ -517,7 +396,7 @@ test('shouldRun false does not spawn a custom agent', () => {
 test('decision request failures are recorded without preventing later polls', () => {
   const rootDir = makeRepo(baseCustomConfig());
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const failed = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -553,7 +432,7 @@ test('offsetSeconds staggers polling within epoch interval windows', () => {
   const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
   process.env.STRATEGY_TOKEN = 'secret-token';
   const calls: string[] = [];
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:08:59.000Z',
@@ -605,7 +484,7 @@ test('invalid offsetSeconds is reported as a custom-agent config warning and not
   const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
   process.env.STRATEGY_TOKEN = 'secret-token';
   let decisionCalls = 0;
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -627,7 +506,7 @@ test('shouldRun true spawns once and creates the configured workspace', () => {
     promptRole: 'trading strategy operator agent',
   }));
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const first = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -688,7 +567,7 @@ test('custom-agent lifecycle command config is carried into runtime context', ()
     ],
   }));
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -712,7 +591,6 @@ test('custom-agent default conversation scope reuses only the same day', () => {
   process.env.STRATEGY_TOKEN = 'secret';
   const rootDir = makeRepo(baseCustomConfig());
   const runtime: any = {
-    workers: {},
     customAgents: {
       'strategy-agent:target-1': {
         agentId: 'strategy-agent',
@@ -759,7 +637,6 @@ test('custom-agent default conversation scope starts fresh for a new server inst
   process.env.STRATEGY_TOKEN = 'secret';
   const rootDir = makeRepo(baseCustomConfig());
   const runtime: any = {
-    workers: {},
     customAgents: {
       'strategy-agent:target-1': {
         agentId: 'strategy-agent',
@@ -798,7 +675,6 @@ test('custom-agent conversation scope can rotate by UTC day', () => {
     ],
   }));
   const runtime: any = {
-    workers: {},
     customAgents: {
       'strategy-agent:target-1': {
         agentId: 'strategy-agent',
@@ -847,7 +723,6 @@ test('custom-agent conversation scope can follow a decision task id', () => {
     ],
   }));
   const runtime: any = {
-    workers: {},
     customAgents: {
       'strategy-agent:target-1': {
         agentId: 'strategy-agent',
@@ -881,7 +756,7 @@ test('custom-agent runtime context carries explicit runtime recovery permission'
     },
   }));
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -913,7 +788,7 @@ test('per-agent context overrides top-level context', () => {
   }));
   fs.writeFileSync(path.join(rootDir, 'feedback.md'), '# Feedback context\n', 'utf8');
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -949,7 +824,7 @@ test('declared custom-agent tools are passed into runtime context with env value
   }));
   process.env.STRATEGY_TOKEN = 'secret-token';
   process.env.FEEDBACK_BOT_AUTONOMY_TOKEN = 'tool-secret';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -990,7 +865,7 @@ test('missing declared custom-agent tool env blocks spawn after a run decision',
   const previous = process.env.FEEDBACK_BOT_AUTONOMY_TOKEN;
   delete process.env.FEEDBACK_BOT_AUTONOMY_TOKEN;
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   try {
     const result = pollCustomAgents(rootDir, runtime as any, {
@@ -1031,7 +906,7 @@ test('multiple custom-agent files keep independent status keys while preserving 
     { name: 'feedback-bots.json', config: feedback },
   ]);
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -1059,7 +934,7 @@ test('offsetSeconds is included in runtime context when an offset agent spawns',
   };
   const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:09:00.000Z',
@@ -1113,7 +988,7 @@ process.stdout.write(JSON.stringify({
   target: { jobId: 'job-' + slot },
 }));
 `, 'utf8');
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const first = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -1186,7 +1061,7 @@ test('logical runtime-key polling reserves at most the configured start limit', 
     },
   };
   const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const first = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -1232,7 +1107,7 @@ test('decision admission is limited independently for each logical pool', () => 
       },
     ],
   }));
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -1255,7 +1130,7 @@ test('decision admission rotates past a slot that repeatedly skips', () => {
   };
   const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
   const decisions: number[] = [];
   const decide = ({ agent: polledAgent }) => {
     decisions.push(polledAgent.parallelSlot);
@@ -1293,7 +1168,7 @@ test('disabling and re-enabling a parallel pool preserves live slot ownership', 
     },
   };
   const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
   pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
   });
@@ -1332,7 +1207,7 @@ test('live pool resizing preserves active workspaces and reports draining retire
   });
   const rootDir = makeRepo(initialConfig);
   const configPath = path.join(rootDir, 'prompts', 'autonomous', 'v2', 'config', 'custom-agents.json');
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
   pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
   });
@@ -1395,7 +1270,7 @@ test('expanded custom-agent runtime keys must be unique', () => {
       },
     ],
   }));
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -1418,7 +1293,7 @@ test('invalid parallelism blocks custom-agent dispatch', () => {
       },
     };
     const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
-    const runtime: any = { workers: {} };
+    const runtime: any = { customAgents: {} };
     const result = pollCustomAgents(rootDir, runtime as any, {
       nowIso: '2026-01-01T00:00:00.000Z',
     });
@@ -1439,7 +1314,7 @@ test('parallelism blocks a repository-root workspace that cannot be isolated saf
     },
   };
   const rootDir = makeRepo(baseCustomConfig({ agents: [agent] }));
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -1469,7 +1344,7 @@ test('parallel slots coexist only within their logical singleton pool', () => {
   });
   const rootDir = makeRepo(config);
   process.env.STRATEGY_TOKEN = 'secret-token';
-  const runtime: any = { workers: {} };
+  const runtime: any = { customAgents: {} };
 
   const result = pollCustomAgents(rootDir, runtime as any, {
     nowIso: '2026-01-01T00:00:00.000Z',
@@ -1486,7 +1361,6 @@ test('parallel slots coexist only within their logical singleton pool', () => {
 
 test('custom-agent spawn failure closes the owned invocation record', () => {
   const runtime: any = {
-    workers: {},
     customAgents: {
       'strategy-agent:target-1#2': {
         runtimeKey: 'strategy-agent:target-1#2',
@@ -1520,7 +1394,6 @@ test('custom-agent spawn failure closes the owned invocation record', () => {
 
 test('custom-agent refresh closes the invocation for an exited process', () => {
   const runtime: any = {
-    workers: {},
     customAgents: {
       'strategy-agent:target-1': {
         runtimeKey: 'strategy-agent:target-1',
@@ -1548,58 +1421,36 @@ test('custom-agent refresh closes the invocation for an exited process', () => {
   assert.equal(runtime.customAgentInvocations['inv-exited'].finishedAt, '2026-01-01T00:01:00.000Z');
 });
 
-// Exercise the scheduler boundary as well as the unchanged custom-agent engine.
-for (const legacyRosterEnabled of [undefined, false, true]) {
-  test(`scheduler only runs custom agents with legacyRosterEnabled=${legacyRosterEnabled}`, () => {
-    const rootDir = makeRepo(baseCustomConfig({
-      agents: [{
-        id: 'custom',
-        workspace: '.autonomy/custom/target',
-        target: { id: 'target', type: 'task' },
-        spawn: { mode: 'poll', intervalSeconds: 60, decision: { mode: 'always' } },
-      }],
-    }), { legacyRosterEnabled });
-    const configDir = path.join(rootDir, 'prompts/autonomous/v2/config');
-    fs.writeFileSync(path.join(configDir, 'agents.json'), JSON.stringify({
-      integrationBranch: 'dev',
-      agents: [{
-        id: 'pm-agent', role: 'pm', taskQueue: 'missing-queue.json',
-        systemPrompt: 'missing-prompt.md', gitIdentity: { name: 'PM', email: 'pm@example.com' },
-      }],
-    }));
-    const runtimePath = path.join(rootDir, '.autonomy/runtime/state/runtime.json');
-    fs.mkdirSync(path.dirname(runtimePath), { recursive: true });
-    const workers = { 'pm-agent': { status: 'idle', lastResult: { preserved: true } } };
-    fs.writeFileSync(runtimePath, JSON.stringify({ workers }));
-    let spawnCalls = 0;
-    let callback: any;
-    try {
-      const result = runSchedulerTick(rootDir, {
-        nowIso: '2026-01-01T00:00:00.000Z',
-        customAgentSpawner(_root, entry) {
-          spawnCalls += 1;
-          const reserved = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
-          assert.ok(reserved.customAgents[entry.runtimeKey]);
-          return { pid: process.pid };
-        },
-        onWorkerSpawn(event) { callback = event; },
-      });
-      assert.deepEqual(result.started, []);
-      assert.deepEqual(result.dueAgents, []);
-      assert.deepEqual(result.sync.imported, []);
-      assert.equal(spawnCalls, 1);
-      assert.equal(result.customAgentStarted.length, 1);
-      assert.equal(callback.mode, 'custom-agent');
-      assert.equal(callback.pid, process.pid);
-      const persisted = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
-      assert.deepEqual(persisted.workers, workers);
-      assert.equal(persisted.customAgents[callback.runtimeKey].pid, process.pid);
-      assert.equal(fs.existsSync(path.join(rootDir, 'missing-queue.json')), false);
-    } finally {
-      fs.rmSync(rootDir, { recursive: true, force: true });
-    }
-  });
-}
+test('scheduler runs repository-defined agents without workflow configuration', () => {
+  const rootDir = makeRepo(baseCustomConfig({ agents: [{
+    id: 'sample', workspace: '.autonomy/custom/target', target: { id: 'target' },
+    spawn: { mode: 'poll', intervalSeconds: 60, decision: { mode: 'always' } },
+  }] }));
+  const configDir = path.join(rootDir, 'prompts/autonomous/v2/config');
+  for (const name of ['agents.json', 'sprint.json']) fs.rmSync(path.join(configDir, name), { force: true });
+  const runtimePath = path.join(rootDir, '.autonomy/runtime/state/runtime.json');
+  let callback: any;
+  const events: string[] = [];
+  try {
+    const result = runSchedulerTick(rootDir, {
+      nowIso: '2026-01-01T00:00:00.000Z',
+      customAgentSpawner(_root, entry) {
+        const reserved = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+        assert.ok(reserved.customAgents[entry.runtimeKey]);
+        return { pid: process.pid };
+      },
+      onProgress(event) { events.push(event); },
+      onWorkerSpawn(event) { callback = event; },
+    });
+    assert.equal(result.customAgentStarted.length, 1);
+    assert.equal(callback.mode, 'custom-agent');
+    assert.equal(callback.pid, process.pid);
+    const persisted = JSON.parse(fs.readFileSync(runtimePath, 'utf8'));
+    assert.equal(persisted.customAgents[callback.runtimeKey].pid, process.pid);
+    assert.equal(Object.hasOwn(persisted, 'workers'), false);
+    assert.equal(events.some((event) => event.startsWith('sync:')), false);
+  } finally { fs.rmSync(rootDir, { recursive: true, force: true }); }
+});
 
 test('scheduler releases all pending custom reservations after a spawn failure', () => {
   const rootDir = makeRepo(baseCustomConfig({

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { resolveControlDefinition } from './control-config.js';
 
 export interface FrontendPreset {
   /** Host-resolvable module reference, e.g. a packaged page's absolute path. */
@@ -8,6 +9,7 @@ export interface FrontendPreset {
 
 export interface ResolvedFrontendConfig {
   modulePath: string;
+  optionsPath?: string;
   preset?: string;
   options: Record<string, unknown>;
 }
@@ -24,6 +26,11 @@ export function resolveFrontendConfig(
   options: { rootDir: string; presets?: Record<string, FrontendPreset> },
 ): ResolvedFrontendConfig {
   const config = record(value, 'Frontend configuration');
+  if (config.controls !== undefined) {
+    const controls = resolveControlDefinition(config.controls, options.rootDir);
+    if (!controls.frontend) throw new Error('Configure controls.frontend; this control preset has no page.');
+    return { modulePath: controls.frontend, preset: controls.preset, options: controls.options, ...(controls.optionsPath ? { optionsPath: controls.optionsPath } : {}) };
+  }
   const presetId = config.frontendPreset;
   if (presetId !== undefined && (typeof presetId !== 'string' || !presetId.trim())) {
     throw new Error('frontendPreset must be a nonempty string.');

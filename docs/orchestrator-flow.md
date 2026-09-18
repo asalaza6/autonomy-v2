@@ -22,9 +22,8 @@ also runs after execution failures. The consumer commands own workflow semantics
 configs, enable overrides, staggered polling, singleton and parallel-pool
 coordination, conversation scopes and runtime status.
 
-The scheduler does not run built-in role workers, synchronize legacy PRDs or
-merge approved PRs. Existing local CLI operations remain available through commands and action presets.
-The legacy `started`, `dueAgents` and skipped `sync` result fields remain for
-callers; scheduled invocations appear in `customAgentStarted`.
+A tick returns `rootDir`, `customAgentStarted`, and `runtime`. Workflow state
+transitions belong to configured lifecycle commands. Agent preset defaults live
+in `presets/definitions.json`; the scheduler expands them generically.
 
 See [configuration](autonomy-v2-config-support.md) for the lifecycle contract.

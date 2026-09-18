@@ -22,11 +22,7 @@ function getPaths(rootDir) {
     runtimeAutonomyDir,
     configDir,
     stateDir,
-    agentsConfig: path.join(configDir, 'agents.json'),
-    sprintConfig: path.join(configDir, 'sprint.json'),
     runtimeState: path.join(stateDir, 'runtime.json'),
-    prsState: path.join(stateDir, 'prs.json'),
-    branchLocksState: path.join(stateDir, 'branch-locks.json'),
   };
 }
 
@@ -47,9 +43,9 @@ function writeJson(filePath, payload) {
 }
 
 export {
-  ensureDir,
-  getPaths,
-  readJson,
-  resolveRootDir,
-  writeJson,
+ensureDir,
+getPaths,
+readJson,
+resolveRootDir,
+writeJson
 };

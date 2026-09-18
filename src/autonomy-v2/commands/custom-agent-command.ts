@@ -1,18 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import { ensureDir, ensureInitialized, printOutput, requireOption } from './shared-core.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
-import {
-  listConfiguredCustomAgents,
-  markCustomAgentSpawnFailed,
-  markCustomAgentSpawned,
-  pollCustomAgents,
-  setCustomAgentEnabledOverride,
-  spawnCustomAgentProcess,
-} from '../../server/orchestrator/custom-agents.js';
-import { loadRuntime, writeRuntime } from '../../server/orchestrator/orchestrator-state.js';
 import { buildTraceOptions } from '../../server/commands/trace.js';
 import { attachWorkerOutput } from '../../server/commands/worker-streams.js';
-import { ensureDir, ensureInitialized, printOutput, requireOption } from './shared-core.js';
+import { listConfiguredCustomAgents, markCustomAgentSpawnFailed, markCustomAgentSpawned, pollCustomAgents, setCustomAgentEnabledOverride, spawnCustomAgentProcess } from '../../server/orchestrator/custom-agents.js';
+import { loadRuntime, writeRuntime } from '../../server/orchestrator/orchestrator-state.js';
 
 const DEFAULT_RESET_WORKSPACE_FILES = ['context.md', 'notes.md', 'recent-summary.md'];
 const RESET_FILE_STARTERS = {
@@ -40,7 +33,7 @@ const RESET_FILE_STARTERS = {
   ].join('\n'),
 };
 
-function run(rootDir, options = {}, command = 'custom-agent:run') {
+function run(rootDir, options = {}, command = 'custom-agent:run'): unknown {
   ensureInitialized(rootDir);
   if (command === 'custom-agent:list') {
     return handleCustomAgentList(rootDir, options);

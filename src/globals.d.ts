@@ -1,3 +1,4 @@
+
 declare global {
   interface Error {
     code?: string | number;
@@ -9,4 +10,4 @@ declare global {
   }
 }
 
-export {};
+export { };

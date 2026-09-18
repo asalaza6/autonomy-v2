@@ -3,6 +3,7 @@ import type { AutonomyRuntime, FrontendContext } from './runtime-types.js';
 export interface FrontendPageProps {
   context: FrontendContext;
   runtime: AutonomyRuntime;
+  options?: Record<string, unknown>;
 }
 
 /** React function components satisfy this contract; the host owns rendering. */

@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { createServerController } from '../../src/autonomy-v2/commands/server-command.js';
+import { createServerController } from '../../src/server/server-controller.js';
 
 test('server:status reports missing owner without requiring initialized autonomy state', async () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'autonomy-server-command-status-'));

@@ -1,6 +1,5 @@
 import path from 'path';
-import { AGENT_ROLES, buildRoleEventName } from '../../agents/role-catalog.js';
-import type { CliOptions } from '../autonomy-types.js';
+import type { CliOptions } from '../../types.js';
 
 function parseCli(argv: string[]): { command: string; options: CliOptions } {
   const options: CliOptions = {};
@@ -29,25 +28,6 @@ function parseCli(argv: string[]): { command: string; options: CliOptions } {
   };
 }
 
-function isMutatingCommand(command: string) {
-  return new Set([
-    'init',
-    'task:add',
-    'task:finish',
-    'prd:add',
-    'prd:archive-completed',
-    'worktree:prepare',
-    'pr:record',
-    buildRoleEventName(AGENT_ROLES.REVIEW, 'record'),
-    'merge',
-    'deploy',
-    'update',
-    'refresh',
-    'auth',
-    'custom-agent:reset',
-  ]).has(command);
-}
-
 function resolveRootDir(rootOption: string) {
   if (!rootOption) {
     return process.cwd();
@@ -70,6 +50,4 @@ function addOption(options: CliOptions, key: string, value: string | boolean) {
   options[key] = value;
 }
 
-export { isMutatingCommand };
-export { parseCli };
-export { resolveRootDir };
+export { parseCli, resolveRootDir };

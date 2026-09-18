@@ -4,11 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import {
-  buildCustomAgentNetworkConfigOverrides,
-  buildCustomAgentPrompt,
-  main,
-} from '../../src/server/custom-agents/custom-agent-worker.js';
+import { buildCustomAgentNetworkConfigOverrides, buildCustomAgentPrompt, main } from '../../src/server/custom-agents/custom-agent-worker.js';
 
 test('custom agent worker allowlists configured control hosts', () => {
   const overrides = buildCustomAgentNetworkConfigOverrides(

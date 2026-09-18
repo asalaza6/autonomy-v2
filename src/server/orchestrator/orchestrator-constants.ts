@@ -17,11 +17,9 @@ const AUTONOMY_SEGMENTS = ['prompts', 'autonomous', 'v2'];
 const RUNTIME_SEGMENTS = ['.autonomy', 'runtime'];
 
 const CUSTOM_AGENT_WORKER_PATH = resolveRuntimeEntry('..', 'custom-agents', 'custom-agent-worker.js');
-const IMPLEMENTATION_DUE_STATUSES = new Set(['queued', 'active']);
 
 export {
-  AUTONOMY_SEGMENTS,
-  CUSTOM_AGENT_WORKER_PATH,
-  IMPLEMENTATION_DUE_STATUSES,
-  RUNTIME_SEGMENTS,
+AUTONOMY_SEGMENTS,
+CUSTOM_AGENT_WORKER_PATH,
+RUNTIME_SEGMENTS
 };

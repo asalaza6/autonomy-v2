@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import fs from 'fs';
+import { spawnSync } from 'node:child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawnSync } from 'node:child_process';
+import type { AnyRecord } from '../../types.js';
 import { runCodexExec } from '../../codex/cli.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
-import type { AnyRecord } from '../server-types.js';
 import { loadRuntime, writeRuntime } from '../orchestrator/orchestrator-state.js';
 import { ensureDir, readJson, writeJson } from '../orchestrator/paths.js';
 

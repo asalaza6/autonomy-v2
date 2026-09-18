@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { main as commandsMain } from './commands/commands-main.js';
 import { fileURLToPath } from 'url';
+import { main as commandsMain } from './commands/commands-main.js';
 
 async function main(argv = process.argv.slice(2)) {
   return commandsMain(argv);

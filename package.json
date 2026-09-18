@@ -30,10 +30,11 @@
     "./frontend": "./dist/src/frontend/index.js",
     "./frontend/runtime": "./dist/src/frontend/local-runtime.js",
     "./frontend/actions": "./dist/src/frontend/actions.js",
-    "./frontend/pages": "./dist/src/frontend/page-loader.js"
+    "./frontend/pages": "./dist/src/frontend/page-loader.js",
+    "./runtime": "./dist/src/runtime/index.js"
   },
   "scripts": {
-    "build": "npm run clean && tsc && chmod +x dist/bin/*.js",
+    "build": "npm run clean && tsc && node scripts/copy-control-options.js && chmod +x dist/bin/*.js",
     "build:watch": "tsc --watch --preserveWatchOutput",
     "check:publish": "node scripts/check-publish-config.js",
     "check:lines": "node scripts/check-line-count.js",
@@ -45,10 +46,9 @@
     "server:kill": "node dist/bin/autonomy-v2.js server:kill",
     "server:restart": "node dist/bin/autonomy-v2.js server:restart",
     "server:status": "node dist/bin/autonomy-v2.js server:status",
-    "nomenclature": "node scripts/check-nomenclature.js",
-    "test": "npm run build && node --test dist/tests/**/*.test.js",
+    "test": "npm run build && node --test dist/tests/**/*.test.js dist/control-presets/*/tests/*.test.js dist/presets/tests/*.test.js",
     "smoke": "npm run build && node --test dist/tests/smoke/*.test.js",
-    "lint": "eslint src bin tests",
+    "lint": "eslint src bin tests control-presets",
     "lint:fix": "npm run lint -- --fix",
     "typecheck": "tsc --noEmit",
     "knip": "npx -y knip",
@@ -63,17 +63,34 @@
     "README.md",
     "dist",
     "presets",
-    "templates",
-    "docs"
+    "docs",
+    "control-presets"
   ],
   "devDependencies": {
     "@types/node": "^20.16.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/react-test-renderer": "^19.3.0",
     "@typescript-eslint/eslint-plugin": "^8.37.0",
     "@typescript-eslint/parser": "^8.37.0",
     "eslint": "^9.39.4",
     "eslint-plugin-import": "^2.32.0",
     "globals": "^17.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-test-renderer": "^19.3.0",
     "typescript": "^5.9.3"
   },
-  "dependencies": {}
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  }
 }

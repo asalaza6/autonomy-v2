@@ -1,14 +1,8 @@
+import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn, spawnSync } from 'child_process';
-import {
-  buildSpawnExitMessage,
-  ensureTrailingNewline,
-  extractExecError,
-  extractSpawnSyncError,
-  logCodexFailure,
-} from './codex-shared.js';
+import { buildSpawnExitMessage, ensureTrailingNewline, extractExecError, extractSpawnSyncError, logCodexFailure } from './codex-shared.js';
 
 const DEFAULT_CAPTURE_LIMIT = 64 * 1024;
 const DEFAULT_SYNC_PROCESS_BUFFER_LIMIT = 16 * 1024 * 1024;
@@ -591,7 +585,7 @@ function logCodexResult(raw, streamOutput) {
 }
 
 export {
-  runCodexExec,
-  runCodexExecSync,
-  runCodexStructured,
+runCodexExec,
+runCodexExecSync,
+runCodexStructured
 };

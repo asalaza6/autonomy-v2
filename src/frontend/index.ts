@@ -1,9 +1,11 @@
-export type * from './runtime-types.js';
-export type * from './page-contract.js';
-export { createLocalRuntime } from './local-runtime.js';
-export { createFrontendRuntime } from './configured-runtime.js';
 export { createActionRegistry } from './actions.js';
-export type { ActionPreset, ActionRegistryOptions } from './actions.js';
+export type { ActionModule, ActionModuleLoader, ActionPreset, ActionRegistryOptions } from './actions.js';
 export { resolveFrontendConfig } from './config.js';
 export type { FrontendPreset, ResolvedFrontendConfig } from './config.js';
+export { createFrontendRuntime } from './configured-runtime.js';
+export { resolveControlDefinition } from './control-config.js';
+export type { ControlDefinition, ResolvedControlDefinition } from './control-config.js';
+export { createLocalRuntime } from './local-runtime.js';
+export type * from './page-contract.js';
 export { createPageLoader } from './page-loader.js';
+export type * from './runtime-types.js';

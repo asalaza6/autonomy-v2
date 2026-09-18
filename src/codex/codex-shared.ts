@@ -125,9 +125,7 @@ function buildSpawnExitMessage({ code, signal, stdout, stderr }) {
 }
 
 export {
-  ensureTrailingNewline,
-  extractExecError,
-  extractSpawnSyncError,
-  buildSpawnExitMessage,
-  logCodexFailure,
+buildSpawnExitMessage, ensureTrailingNewline,
+extractExecError,
+extractSpawnSyncError, logCodexFailure
 };

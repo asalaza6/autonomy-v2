@@ -1,5 +1,5 @@
+import type { CliOptions } from '../../types.js';
 import { run as initRun } from './init.js';
-import type { CliOptions } from '../autonomy-types.js';
 
 function run(rootDir: string, options: CliOptions) {
   const refreshOptions = {

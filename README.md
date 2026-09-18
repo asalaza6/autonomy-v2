@@ -26,26 +26,30 @@ one or more custom-agent configs; it no longer configures a hosted panel.
 ```json
 {
   "repoId": "my-repo",
-  "frontend": "./frontend/AgentPage.tsx",
-  "actionPresets": ["shared", "development"],
-  "frontendOptions": { "showHistory": true }
+  "controls": {
+    "preset": "development",
+    "frontend": "./controls/frontend.tsx",
+    "options": "./controls/options.json"
+  }
 }
 ```
 
-A game-agent repo can select only `shared`. Add `maintenance` when package
-updates and server restarts should be available. Repos can select registered
-page presets with `frontendPreset`, override their `frontend` path, and override
-preset options with `frontendOptions`.
+Control definitions use `frontend.tsx`, `actions.ts`, and `options.json`.
+`control-presets/` supplies optional tested defaults, separate from agent
+`presets/`. Omit `preset` and provide your own files, or override individual
+preset files. Action paths point to compiled JavaScript unless the host supplies
+a TypeScript importer. Packaged controls supply React pages, actions, and options. A host supplies
+React mounting and a module importer; no desktop framework is required.
 
-Pages receive `{ context, runtime }`. The runtime provides local file reads,
-watching, agent/run inspection, logs, registered actions and operation status.
-Pages own their workflow, layout and navigation; the loader has no fixed tabs
-or repository-specific branches.
+Pages receive `{ context, runtime, options }`. Actions receive validated input
+and `{ rootDir, runtime, capabilities, log, options }`. The runtime only loads and dispatches definitions.
+Existing `actionPresets` arrays and `frontend`/`frontendPreset` configuration
+remain supported when `controls` is absent.
 
 | Action preset | Registered actions |
 | --- | --- |
 | `shared` | `chat:send`, `agent:toggle` |
-| `development` | `prd:add`, `prd:reset`, `prd:priority`, `deploy` |
+| `development` | Shared and maintenance actions plus `prd:list`, `prd:add`, `prd:reset`, `prd:priority`, `deploy` |
 | `maintenance` | `package:update`, `server:restart` |
 
 See [Local frontend](docs/local-frontend.md) for integration and action inputs.
@@ -59,8 +63,7 @@ packaged `shadow-pm-agent`, `shadow-architecture-agent` and
 consumers do not need copies. Overrides remain supported.
 
 [Configuration](docs/autonomy-v2-config-support.md) ·
-[Orchestration](docs/orchestrator-flow.md) ·
-[Repository metadata](docs/autonomy-v2-agents-schema.md)
+[Orchestration](docs/orchestrator-flow.md)
 
 ## Development
 

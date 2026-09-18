@@ -1,32 +1,17 @@
-import path from 'path';
-import { fileURLToPath } from 'node:url';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import type { AnyRecord, RuntimeState } from '../server-types.js';
+import { fileURLToPath } from 'node:url';
+import path from 'path';
+import type { AnyRecord } from '../../types.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
-import { loadRuntime, writeRuntime } from './orchestrator-state.js';
+import type { RuntimeState } from '../server-types.js';
 import { CUSTOM_AGENT_WORKER_PATH } from './orchestrator-constants.js';
+import { loadRuntime, writeRuntime } from './orchestrator-state.js';
 import { ensureDir, getPaths, readJson, writeJson } from './paths.js';
 
 const DEFAULT_INTERVAL_SECONDS = 60;
 const DEFAULT_PARALLELISM = 1;
 const MAX_PARALLELISM = 32;
 const DEFAULT_CONVERSATION_SCOPE = ['server.instanceId', 'agent.id', 'target.id', 'date.local'];
-const DEFAULT_CUSTOM_AGENT_CONTEXT = {
-  globalReadOnly: [
-    'prompts/autonomous/v2/project-context.md',
-    'prompts/autonomous/v2/config/agents.json',
-    'prompts/autonomous/v2/config/control-plane.json',
-    'prompts/autonomous/v2/config/sprint.json',
-    'package.json',
-  ],
-  workspaceReadWrite: [
-    '.autonomy/runtime/custom-lifecycle',
-    '.autonomy/worktrees/shadow-architecture-agent',
-    '.autonomy/worktrees/shadow-reviewer-agent',
-    'prompts/autonomous/v2/specs',
-  ],
-  allowRuntimeStateChanges: true,
-};
 
 function loadCustomAgentConfig(rootDir: string): AnyRecord | null {
   const configs = loadCustomAgentConfigs(rootDir);
@@ -402,7 +387,7 @@ function pollCustomAgents(rootDir: string, runtime: RuntimeState, options: AnyRe
 
 function listConfiguredCustomAgentSlots(rootDir: string, runtime: RuntimeState | null | undefined = null) {
   const configs = loadCustomAgentConfigs(rootDir);
-  const runtimeState = runtime || { workers: {} };
+  const runtimeState = runtime || {};
   const entries = configs.flatMap((config) => {
     const enabled = config.enabled !== false;
     const agents = Array.isArray(config.agents) ? config.agents : [];
@@ -1266,7 +1251,7 @@ function expandCustomAgentPreset(agent: unknown, options: AnyRecord) {
   }
   const presetWithContext = {
     ...preset,
-    context: mergePlainRecords(DEFAULT_CUSTOM_AGENT_CONTEXT, options.configContext || {}),
+    context: mergePlainRecords(preset.context || {}, options.configContext || {}),
   };
   return mergePlainRecords(presetWithContext, override);
 }
@@ -1279,143 +1264,21 @@ function getPresetAgentId(agent: unknown) {
   return String(record.presetAgentId || record.presetId || '').trim();
 }
 
-function getDefaultCustomAgentPreset(presetAgentId: string, controlPlaneConfig: AnyRecord) {
-  const repoId = String(controlPlaneConfig && controlPlaneConfig.repoId || '').trim() || 'repo';
-  const presets = {
-    'shadow-pm-agent': {
-      presetAgentId: 'shadow-pm-agent',
-      id: 'shadow-pm-agent',
-      type: 'pm',
-      enabled: true,
-      target: {
-        type: 'prd-backlog',
-        id: repoId,
-      },
-      context: DEFAULT_CUSTOM_AGENT_CONTEXT,
-      workspace: '.',
-      spawn: {
-        mode: 'poll',
-        intervalSeconds: 60,
-        offsetSeconds: 10,
-        singletonKey: 'agent.id',
-        decision: {
-          command: [
-            'node',
-            fileURLToPath(new URL('../../../../presets/pm/should-run.mjs', import.meta.url)),
-          ],
-        },
-      },
-      environment: {
-        command: [
-          'node',
-          fileURLToPath(new URL('../../../../presets/pm/prepare-env.mjs', import.meta.url)),
-        ],
-      },
-      execution: {
-        prompt: {
-          command: [
-            'node',
-            fileURLToPath(new URL('../../../../presets/pm/build-prompt.mjs', import.meta.url)),
-          ],
-        },
-      },
-      finalize: {
-        command: [
-          'node',
-          fileURLToPath(new URL('../../../../presets/pm/finalize.mjs', import.meta.url)),
-        ],
-      },
-    },
-    'shadow-architecture-agent': {
-      presetAgentId: 'shadow-architecture-agent',
-      id: 'shadow-architecture-agent',
-      type: 'implementation',
-      enabled: true,
-      target: {
-        type: 'task-queue',
-        id: 'shadow-architecture-agent',
-      },
-      context: DEFAULT_CUSTOM_AGENT_CONTEXT,
-      workspace: '.',
-      spawn: {
-        mode: 'poll',
-        intervalSeconds: 60,
-        offsetSeconds: 20,
-        singletonKey: 'target.id',
-        decision: {
-          command: [
-            'node',
-            fileURLToPath(new URL('../../../../presets/architecture/should-run.mjs', import.meta.url)),
-          ],
-        },
-      },
-      environment: {
-        command: [
-          'node',
-          fileURLToPath(new URL('../../../../presets/architecture/prepare-env.mjs', import.meta.url)),
-        ],
-      },
-      execution: {
-        prompt: {
-          command: [
-            'node',
-            fileURLToPath(new URL('../../../../presets/architecture/build-prompt.mjs', import.meta.url)),
-          ],
-        },
-      },
-      finalize: {
-        command: [
-          'node',
-          fileURLToPath(new URL('../../../../presets/architecture/finalize.mjs', import.meta.url)),
-        ],
-      },
-    },
-    'shadow-reviewer-agent': {
-      presetAgentId: 'shadow-reviewer-agent',
-      id: 'shadow-reviewer-agent',
-      type: 'review',
-      enabled: true,
-      target: {
-        type: 'review-queue',
-        id: 'shadow-reviewer-agent',
-      },
-      context: DEFAULT_CUSTOM_AGENT_CONTEXT,
-      workspace: '.',
-      spawn: {
-        mode: 'poll',
-        intervalSeconds: 60,
-        offsetSeconds: 30,
-        singletonKey: 'target.id',
-        decision: {
-          command: [
-            'node',
-            fileURLToPath(new URL('../../../../presets/reviewer/should-run.mjs', import.meta.url)),
-          ],
-        },
-      },
-      environment: {
-        command: [
-          'node',
-          fileURLToPath(new URL('../../../../presets/reviewer/prepare-env.mjs', import.meta.url)),
-        ],
-      },
-      execution: {
-        prompt: {
-          command: [
-            'node',
-            fileURLToPath(new URL('../../../../presets/reviewer/build-prompt.mjs', import.meta.url)),
-          ],
-        },
-      },
-      finalize: {
-        command: [
-          'node',
-          fileURLToPath(new URL('../../../../presets/reviewer/finalize.mjs', import.meta.url)),
-        ],
-      },
-    },
+function getDefaultCustomAgentPreset(presetAgentId: string, repositoryConfig: AnyRecord) {
+  const manifestUrl = new URL('../../../../presets/definitions.json', import.meta.url);
+  const definitions = readJson(fileURLToPath(manifestUrl), {});
+  if (!Object.hasOwn(definitions, presetAgentId)) return null;
+  const variables = {
+    presetDir: fileURLToPath(new URL('.', manifestUrl)).replace(/\/$/, ''),
+    repoId: String(repositoryConfig.repoId || '').trim() || 'repo',
   };
-  return presets[presetAgentId] || null;
+  const resolve = (value: any): any => {
+    if (typeof value === 'string') return value.replace(/\$\{(presetDir|repoId)\}/g, (_, key) => variables[key]);
+    if (Array.isArray(value)) return value.map(resolve);
+    if (isPlainRecord(value)) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolve(item)]));
+    return value;
+  };
+  return resolve(definitions[presetAgentId]);
 }
 
 function mergePlainRecords(base: unknown, override: unknown) {
@@ -1846,13 +1709,9 @@ function isProcessAlive(pid) {
 }
 
 export {
-  loadCustomAgentConfig,
-  loadCustomAgentConfigs,
-  listConfiguredCustomAgents,
-  markCustomAgentSpawnFailed,
-  markCustomAgentSpawned,
-  pollCustomAgents,
-  refreshCustomAgentRuntime,
-  setCustomAgentEnabledOverride,
-  spawnCustomAgentProcess,
+listConfiguredCustomAgents, loadCustomAgentConfig,
+loadCustomAgentConfigs, markCustomAgentSpawned, markCustomAgentSpawnFailed, pollCustomAgents,
+refreshCustomAgentRuntime,
+setCustomAgentEnabledOverride,
+spawnCustomAgentProcess
 };

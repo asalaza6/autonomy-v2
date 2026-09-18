@@ -1,0 +1,179 @@
+{
+  "shadow-pm-agent": {
+    "presetAgentId": "shadow-pm-agent",
+    "id": "shadow-pm-agent",
+    "type": "pm",
+    "enabled": true,
+    "target": {
+      "type": "prd-backlog",
+      "id": "${repoId}"
+    },
+    "context": {
+      "globalReadOnly": [
+        "prompts/autonomous/v2/project-context.md",
+        "prompts/autonomous/v2/config/agents.json",
+        "prompts/autonomous/v2/config/control-plane.json",
+        "prompts/autonomous/v2/config/sprint.json",
+        "package.json"
+      ],
+      "workspaceReadWrite": [
+        ".autonomy/runtime/custom-lifecycle",
+        ".autonomy/worktrees/shadow-architecture-agent",
+        ".autonomy/worktrees/shadow-reviewer-agent",
+        "prompts/autonomous/v2/specs"
+      ],
+      "allowRuntimeStateChanges": true
+    },
+    "workspace": ".",
+    "spawn": {
+      "mode": "poll",
+      "intervalSeconds": 60,
+      "offsetSeconds": 10,
+      "singletonKey": "agent.id",
+      "decision": {
+        "command": [
+          "node",
+          "${presetDir}/pm/should-run.mjs"
+        ]
+      }
+    },
+    "environment": {
+      "command": [
+        "node",
+        "${presetDir}/pm/prepare-env.mjs"
+      ]
+    },
+    "execution": {
+      "prompt": {
+        "command": [
+          "node",
+          "${presetDir}/pm/build-prompt.mjs"
+        ]
+      }
+    },
+    "finalize": {
+      "command": [
+        "node",
+        "${presetDir}/pm/finalize.mjs"
+      ]
+    }
+  },
+  "shadow-architecture-agent": {
+    "presetAgentId": "shadow-architecture-agent",
+    "id": "shadow-architecture-agent",
+    "type": "implementation",
+    "enabled": true,
+    "target": {
+      "type": "task-queue",
+      "id": "shadow-architecture-agent"
+    },
+    "context": {
+      "globalReadOnly": [
+        "prompts/autonomous/v2/project-context.md",
+        "prompts/autonomous/v2/config/agents.json",
+        "prompts/autonomous/v2/config/control-plane.json",
+        "prompts/autonomous/v2/config/sprint.json",
+        "package.json"
+      ],
+      "workspaceReadWrite": [
+        ".autonomy/runtime/custom-lifecycle",
+        ".autonomy/worktrees/shadow-architecture-agent",
+        ".autonomy/worktrees/shadow-reviewer-agent",
+        "prompts/autonomous/v2/specs"
+      ],
+      "allowRuntimeStateChanges": true
+    },
+    "workspace": ".",
+    "spawn": {
+      "mode": "poll",
+      "intervalSeconds": 60,
+      "offsetSeconds": 20,
+      "singletonKey": "target.id",
+      "decision": {
+        "command": [
+          "node",
+          "${presetDir}/architecture/should-run.mjs"
+        ]
+      }
+    },
+    "environment": {
+      "command": [
+        "node",
+        "${presetDir}/architecture/prepare-env.mjs"
+      ]
+    },
+    "execution": {
+      "prompt": {
+        "command": [
+          "node",
+          "${presetDir}/architecture/build-prompt.mjs"
+        ]
+      }
+    },
+    "finalize": {
+      "command": [
+        "node",
+        "${presetDir}/architecture/finalize.mjs"
+      ]
+    }
+  },
+  "shadow-reviewer-agent": {
+    "presetAgentId": "shadow-reviewer-agent",
+    "id": "shadow-reviewer-agent",
+    "type": "review",
+    "enabled": true,
+    "target": {
+      "type": "review-queue",
+      "id": "shadow-reviewer-agent"
+    },
+    "context": {
+      "globalReadOnly": [
+        "prompts/autonomous/v2/project-context.md",
+        "prompts/autonomous/v2/config/agents.json",
+        "prompts/autonomous/v2/config/control-plane.json",
+        "prompts/autonomous/v2/config/sprint.json",
+        "package.json"
+      ],
+      "workspaceReadWrite": [
+        ".autonomy/runtime/custom-lifecycle",
+        ".autonomy/worktrees/shadow-architecture-agent",
+        ".autonomy/worktrees/shadow-reviewer-agent",
+        "prompts/autonomous/v2/specs"
+      ],
+      "allowRuntimeStateChanges": true
+    },
+    "workspace": ".",
+    "spawn": {
+      "mode": "poll",
+      "intervalSeconds": 60,
+      "offsetSeconds": 30,
+      "singletonKey": "target.id",
+      "decision": {
+        "command": [
+          "node",
+          "${presetDir}/reviewer/should-run.mjs"
+        ]
+      }
+    },
+    "environment": {
+      "command": [
+        "node",
+        "${presetDir}/reviewer/prepare-env.mjs"
+      ]
+    },
+    "execution": {
+      "prompt": {
+        "command": [
+          "node",
+          "${presetDir}/reviewer/build-prompt.mjs"
+        ]
+      }
+    },
+    "finalize": {
+      "command": [
+        "node",
+        "${presetDir}/reviewer/finalize.mjs"
+      ]
+    }
+  }
+}

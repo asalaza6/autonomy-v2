@@ -4,19 +4,15 @@
 an array of paths, resolved relative to the consumer repository.
 
 `autonomy-v2 init` creates repository settings, project context, an empty
-`config/custom-agents.json`, and local runtime state. Existing config and project
+`config/custom-agents.json`, and an empty `controls` selection. Existing config and project
 context are preserved, including on `--force`. Init does not generate or prune
 agent scripts, prompts or queues. Gitignore rules are appended without replacing
 existing rules.
 
-`agents.json` and `sprint.json` remain metadata for existing PRD, queue, Git and
-local commands. The starter `agents.json` retains identities and queue
-paths for those commands; its entries are not scheduled. Custom lifecycle
-scripts own workflow behavior.
-
-The built-in roster, automatic legacy PRD sync and automatic merge watchdog
-have been removed from the scheduler. `legacyRosterEnabled` is ignored regardless
-of its value. Existing custom-agent configurations require no changes.
+The runtime does not load legacy role definitions or sprint workflows.
+An optional control preset may read old repository metadata for compatibility
+(for example an integration branch). Its policy stays in that preset.
+Existing custom-agent lifecycle configurations remain supported.
 
 ## Command-Driven Custom Agent Lifecycle
 
@@ -128,60 +124,21 @@ Local pages enable or disable agents through the `agent:toggle` action. Runtime
 overrides remain stored in `.autonomy/runtime/state/runtime.json`. No bridge or
 hosted job is involved. See [Local frontend](local-frontend.md).
 
-## Validation Rules
-
-Config loading fails fast if the active config is malformed.
-
-The current validator checks for:
-
-- missing or duplicate agent IDs
-- unsupported agent roles
-- missing `systemPrompt`
-- missing `gitIdentity`
-- invalid `schemaVersion` values when present
-- invalid `taskQueue` values when present
-- `mergeActors` entries that do not map to a known agent
-
-## How To Customize A Repo
-
-To adapt autonomy v2 in a new repo:
+## New repositories
 
 1. Run `autonomy-v2 init`.
-2. Edit `prompts/autonomous/v2/config/agents.json`.
-3. Edit `prompts/autonomous/v2/config/sprint.json`.
-4. Add or remove agent objects in `agents.json` as needed.
-5. Update lane scopes, checks, and git identities for the repo’s actual code layout.
-6. Re-run `autonomy-v2 init --force` to materialize any new agents and prune removed generated scaffolding.
+2. Add custom agents to `prompts/autonomous/v2/config/custom-agents.json`.
+3. Configure lifecycle commands, or select a `presetAgentId` and override fields.
+4. Select optional controls or supply repository-owned frontend/action files.
+5. Run `autonomy-v2 custom-agent:list` to inspect resolved agents, then start the server.
 
-### Agent Config Shape
+No role roster, workflow queues, or generated agent scripts are required by the
+runtime. Lifecycle scripts own their own task formats, resources, and recovery.
 
-The active config supports any number of agents. Common fields are:
+## Local control definitions
 
-- `id`
-- `role`
-- `schemaVersion` if you need to record a config format revision
-- `systemPrompt`
-- `gitIdentity`
-- runner execution is fixed at runtime
-- `include`
-- `checks`
-- `taskQueue` when you want to override the default queue location; otherwise the runtime uses the standard queue path for that agent id
-
-Queue defaults:
-
-- implementation agents default to repo-relative queue files in `prompts/autonomous/v2/queues/<agent-id>.json`
-- non-implementation agents use their configured `taskQueue`
-- for non-implementation agents, repo-relative queue paths stay in the repo tree
-- `prompts/autonomous/v2/state/...` and `state/...` queue paths resolve into `.autonomy/runtime/state/...`
-- the starter template uses repo-relative queue files for `pm-agent` and `reviewer`
-
-The scaffold generator derives system prompts, handoff files, log files, and queue files from the config entries, so adding a new implementation lane does not require package changes.
-
-## Operational Notes
-
-- `status` reports the loaded config path and the loaded agent list.
-- Scheduler and CLI commands read the repo-local config, not package-global state.
-- Implementation queues are git-backed and authoritative; they are read from tracked refs and committed back to the integration branch.
-- PM and review queues are local operational queue files resolved from `taskQueue`; in the starter template they live in repo paths, but they are not treated as tracked git-backed queue truth.
-- Leases, worker status, logs, worktrees, branch locks, sync state, and runtime projections remain local runtime state.
-- Implementation task completion is observed from tracked queue state plus git branch state, not from runtime implementation queue files.
+`controls: { preset?, frontend?, actions?, options? }` selects optional control
+preset defaults and repository file overrides. With `controls` present, legacy
+`actionPresets` and frontend selection are bypassed. Without it, existing config
+continues to work. See [Local frontend](local-frontend.md) for the file contract,
+async host factories, JavaScript worker requirements, and options behavior.

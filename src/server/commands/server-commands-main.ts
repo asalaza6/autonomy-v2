@@ -2,13 +2,13 @@
 
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
-import { resolveRootDir } from '../orchestrator/paths.js';
-import { runSchedulerTick } from '../orchestrator/scheduler.js';
+import type { CliOptions } from '../../types.js';
 import { loadAutonomyEnv } from '../../env/env-main.js';
 import { acquireServerLock } from '../../lock/lock-main.js';
-import type { CliOptions } from '../server-types.js';
+import { resolveRootDir } from '../orchestrator/paths.js';
+import { runSchedulerTick } from '../orchestrator/scheduler.js';
 import { logTickResult } from './tick-log.js';
-import { formatServerEventLine, buildTraceOptions } from './trace.js';
+import { buildTraceOptions, formatServerEventLine } from './trace.js';
 import { attachWorkerOutput } from './worker-streams.js';
 
 const MAX_CONSECUTIVE_TICK_FAILURES = 3;
@@ -53,7 +53,6 @@ Commands:
 Options:
   --help, -h         Show this help
   --json              Print JSON output for tick command
-  --inline            Run workers inline for tick command
   --poll-ms <ms>     Poll interval in milliseconds (serve only, default: 2000)
   --trace-log-max-bytes <bytes>
                      Max bytes to keep per worker stream log (default: 5242880)
@@ -73,7 +72,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
   }
   loadAutonomyEnv(rootDir);
   if (command === 'tick') {
-    const result = runSchedulerTick(rootDir, { inline: options.inline === true });
+    const result = runSchedulerTick(rootDir);
     if (options.json === true) console.log(JSON.stringify(result, null, 2));
     else console.log(`Tick complete. Started ${result.customAgentStarted.length} custom agent(s).`);
     return;
@@ -149,7 +148,6 @@ async function main(argv: string[] = process.argv.slice(2)) {
     const tickId = tickCount + 1;
     try {
       const result = runSchedulerTick(rootDir, {
-        inline: false,
         streamWorkerOutput: true,
         serverInstanceId,
         onWorkerSpawn(entry) {
@@ -198,5 +196,5 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
 }
 
 export {
-  main,
+main
 };

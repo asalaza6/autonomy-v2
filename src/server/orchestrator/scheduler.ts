@@ -1,13 +1,7 @@
+import type { AnyRecord } from '../../types.js';
 import { acquireStateLock } from '../../lock/lock-main.js';
-import type { AnyRecord, WorkerRuntime } from '../server-types.js';
-import { loadConfig, loadRuntime, writeRuntime } from './orchestrator-state.js';
-import {
-  markCustomAgentSpawnFailed,
-  markCustomAgentSpawned,
-  pollCustomAgents,
-  refreshCustomAgentRuntime,
-  spawnCustomAgentProcess,
-} from './custom-agents.js';
+import { markCustomAgentSpawnFailed, markCustomAgentSpawned, pollCustomAgents, refreshCustomAgentRuntime, spawnCustomAgentProcess } from './custom-agents.js';
+import { loadRuntime, writeRuntime } from './orchestrator-state.js';
 
 function emitSchedulerProgress(options, event, payload = {}) {
   if (!options || typeof options.onProgress !== 'function') {
@@ -21,27 +15,9 @@ function emitSchedulerProgress(options, event, payload = {}) {
 }
 
 function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
-  const { config: syncConfig } = loadConfig(rootDir);
-  const syncStartedAt = Date.now();
-  emitSchedulerProgress(options, 'sync:start', {
-    integrationBranch: syncConfig.integrationBranch,
-    skipped: 'yes',
-    legacyRosterEnabled: 'no',
-  });
-  const sync = buildSkippedSyncResult(syncConfig.integrationBranch);
-  emitSchedulerProgress(options, 'sync:done', {
-    integrationBranch: sync.integrationBranch || syncConfig.integrationBranch,
-    durationMs: Date.now() - syncStartedAt,
-    fetchedRef: sync.fetchedRef || '-',
-    imported: Array.isArray(sync.imported) ? sync.imported.length : 0,
-    updated: Array.isArray(sync.updated) ? sync.updated.length : 0,
-    invalid: Array.isArray(sync.invalid) ? sync.invalid.length : 0,
-  });
   emitSchedulerProgress(options, 'state-lock:wait', { lock: 'state-lock' });
   const release = acquireStateLock(rootDir);
-  const dueAgents = [];
   let runtime = null;
-  const started = [];
   const customAgentStarted = [];
   const pendingCustomAgentStarts = [];
 
@@ -50,11 +26,10 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     runtime = loadRuntime(rootDir);
     refreshCustomAgentRuntime(runtime);
     emitSchedulerProgress(options, 'runtime:refreshed', {
-      workers: Object.keys((runtime && runtime.workers) || {}).length,
       customAgents: Object.keys((runtime && runtime.customAgents) || {}).length,
     });
 
-    if (options.inline !== true) {
+    {
       const customAgentPoll = pollCustomAgents(rootDir, runtime, {
         ...options,
         maxCustomAgentDecisionsPerPool: options.maxCustomAgentDecisionsPerPool ?? 1,
@@ -69,22 +44,19 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
     }
 
     emitSchedulerProgress(options, 'runtime:write:start', {
-      started: started.length,
       customAgentStarted: customAgentStarted.length,
     });
     writeRuntime(rootDir, runtime);
     emitSchedulerProgress(options, 'runtime:write:done', {
-      started: started.length,
       customAgentStarted: customAgentStarted.length,
-      running: (Object.values((runtime && runtime.workers) || {}) as WorkerRuntime[])
-        .filter((worker) => worker && worker.status === 'running').length,
+      running: Object.values(runtime.customAgents || {}).filter((agent: AnyRecord) => agent.running).length,
     });
   } finally {
     emitSchedulerProgress(options, 'state-lock:release', { lock: 'state-lock' });
     release();
   }
 
-  if (options.inline !== true) {
+  {
     for (let index = 0; index < pendingCustomAgentStarts.length; index += 1) {
       const entry = pendingCustomAgentStarts[index];
       try {
@@ -129,25 +101,8 @@ function runSchedulerTick(rootDir: string, options: AnyRecord = {}) {
 
   return {
     rootDir,
-    sync,
-    dueAgents,
-    started,
     customAgentStarted,
     runtime,
-  };
-}
-
-function buildSkippedSyncResult(integrationBranch: string) {
-  return {
-    integrationBranch,
-    ref: null,
-    fetchedRef: null,
-    imported: [],
-    updated: [],
-    skipped: [],
-    invalid: [],
-    fetchMessage: '',
-    queuedPromotion: null,
   };
 }
 
