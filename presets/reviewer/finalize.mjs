@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { deployAfterArchive } from '../lib/deploy-after-archive.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -56,7 +57,7 @@ if (reviewTask && !isTaskPrdRunnable(repoRoot, hydrateReviewTask(repoRoot, revie
 const summary = fs.existsSync(summaryPath) ? fs.readFileSync(summaryPath, 'utf8').trim() : '';
 const prState = inspectPullRequest(repoRoot, reviewTask);
 const outcome = determineOutcome(reviewTask, summary, prState);
-const result = applyOutcome(repoRoot, reviewTask, outcome, prState);
+const result = await applyOutcome(repoRoot, reviewTask, outcome, prState);
 const payload = {
   finalizedAt: new Date().toISOString(),
   target: input.target || {},
@@ -67,6 +68,7 @@ const payload = {
   outcome,
   devSync: result?.devSync || null,
   archive: result?.archive || null,
+  deploy: result?.deploy || null,
   worktreeCleanup: result?.worktreeCleanup || null,
 };
 fs.writeFileSync(path.join(runDir, 'last-finalize.json'), `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
@@ -78,6 +80,7 @@ writeJson({
   prState,
   devSync: result?.devSync || null,
   archive: result?.archive || null,
+  deploy: result?.deploy || null,
   worktreeCleanup: result?.worktreeCleanup || null,
 });
 
@@ -167,7 +170,7 @@ function determineOutcome(task, summary, prState) {
   };
 }
 
-function applyOutcome(root, task, outcome, prState) {
+async function applyOutcome(root, task, outcome, prState) {
   if (!task?.id) {
     return null;
   }
@@ -195,7 +198,8 @@ function applyOutcome(root, task, outcome, prState) {
     const worktreeCleanup = devSync?.status === 'synced'
       ? cleanupMergedWorktrees(root, task)
       : { status: 'skipped', reason: 'dev sync did not complete' };
-    return { devSync, archive, worktreeCleanup };
+    const deploy = await deployAfterArchive(root, archive);
+    return { devSync, archive, worktreeCleanup, deploy };
   }
   return { devSync: null, archive: null, worktreeCleanup: null };
 }

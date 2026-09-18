@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+const { deployAfterArchive } = await import(new URL('../../../presets/lib/deploy-after-archive.mjs', import.meta.url).href);
+
+test('reviewer auto-deployment is opt-in and dispatches the configured action after archival', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preset-deploy-'));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const configDir = path.join(root, 'prompts/autonomous/v2/config');
+  fs.mkdirSync(configDir, {recursive:true});
+  fs.writeFileSync(path.join(configDir, 'control-plane.json'), JSON.stringify({controls:{actions:'actions.mjs',options:'options.json'}}));
+  fs.writeFileSync(path.join(root,'actions.mjs'), `export default {deploy:{validate:()=>({}),async run(input,{runtime}) {await runtime.writeJson('deployed.json',{deployed:true});return {version:'fixture'};}}};`);
+  fs.writeFileSync(path.join(root,'options.json'), '{}');
+  assert.equal((await deployAfterArchive(root,{status:'archived'})).status,'skipped');
+  assert.equal(fs.existsSync(path.join(root,'deployed.json')),false);
+  fs.writeFileSync(path.join(root,'options.json'), '{"deployAfterArchive":true}');
+  assert.equal((await deployAfterArchive(root,{status:'failed'})).status,'skipped');
+  assert.equal(fs.existsSync(path.join(root,'deployed.json')),false);
+  const result = await deployAfterArchive(root,{status:'archived'});
+  assert.equal(result.status,'deployed');
+  assert.deepEqual(result.result,{version:'fixture'});
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root,'deployed.json'),'utf8')).deployed,true);
+  fs.writeFileSync(path.join(root,'actions-fail.mjs'), `export default {deploy:{validate:()=>({}),run(){throw Error('deployment rejected');}}};`);
+  fs.writeFileSync(path.join(configDir,'control-plane.json'),JSON.stringify({controls:{actions:'actions-fail.mjs',options:'options.json'}}));
+  const failure = await deployAfterArchive(root,{status:'archived'});
+  assert.equal(failure.status,'failed');
+  assert.match(failure.error,/deployment rejected/);
+});

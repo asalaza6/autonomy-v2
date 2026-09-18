@@ -29,7 +29,7 @@ export function MainPage({ runtime, options = {} }: FrontendPageProps) {
   const directory = String(options.specsDir || 'prompts/autonomous/v2/specs/prds');
   const [id, setId] = useState(''), [title, setTitle] = useState(''), [specification, setSpecification] = useState('');
   const action = useOperation(runtime);
-  const records = useResource(runtime, [directory, ...gitPaths], async () => (await readPrds(runtime)).filter(record => !record.archive), [directory]);
+  const records = useResource(runtime, [directory, ...gitPaths], async () => (await readPrds(runtime)).filter(record => !record.archived), [directory]);
   return <section><h2>PRDs</h2>{records.error && <p role="alert">{records.error}</p>}
     <form onSubmit={event => { event.preventDefault(); void action.run('prd:add', { id, title, specification }); }}>
       <label>ID <input required pattern="[a-zA-Z0-9][a-zA-Z0-9._-]*" value={id} onChange={e => setId(e.target.value)} /></label>{' '}
@@ -45,7 +45,7 @@ export function MainPage({ runtime, options = {} }: FrontendPageProps) {
 }
 export function HistoryPage({ runtime, options = {} }: FrontendPageProps) {
   const directory = `${String(options.specsDir || 'prompts/autonomous/v2/specs/prds')}/archived`;
-  const history = useResource(runtime, [directory, ...gitPaths], async () => (await readPrds(runtime)).filter(record => record.archive), [directory]);
+  const history = useResource(runtime, [directory, ...gitPaths], async () => (await readPrds(runtime)).filter(record => record.archived), [directory]);
   return <section><h2>History</h2>{history.error && <p role="alert">{history.error}</p>}<ul>{history.value?.map(record => <li key={record.id}><h3>{record.title}</h3><p>{record.id} · {record.archive?.archivedAt || 'Archived'}</p><details><summary>Details</summary><pre>{JSON.stringify(record, null, 2)}</pre></details></li>)}</ul>{history.value?.length === 0 && <p>No archived PRDs.</p>}</section>;
 }
 export function AdvancedPage(props: FrontendPageProps) {

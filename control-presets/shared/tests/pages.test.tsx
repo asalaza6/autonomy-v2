@@ -47,3 +47,20 @@ test('preset navigation and forms invoke runtime actions and dispose watchers', 
   assert.match(JSON.stringify(view.toJSON()), /No archived PRDs/);
   await act(async () => { view.unmount(); }); assert.ok(stopped() >= 3);
 });
+
+test('development Main and History separate lifecycle archives using path classification', async () => {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+  const { props } = fixture();
+  props.runtime.runAction = async name => ({id:'read',name,status:'success',startedAt:'',logs:[],result:[
+    {id:'active',title:'Current work',archived:false},
+    {id:'completed',title:'Finished work',archived:true},
+  ]});
+  let view;
+  await act(async()=>{view=create(<Development {...props} />);});
+  assert.match(JSON.stringify(view.toJSON()),/Current work/);
+  assert.doesNotMatch(JSON.stringify(view.toJSON()),/Finished work/);
+  await act(async()=>{view.root.findAllByType('button').find(button=>button.children.join('')==='History').props.onClick();});
+  assert.match(JSON.stringify(view.toJSON()),/Finished work/);
+  assert.doesNotMatch(JSON.stringify(view.toJSON()),/Current work/);
+  await act(async()=>{view.unmount();});
+});

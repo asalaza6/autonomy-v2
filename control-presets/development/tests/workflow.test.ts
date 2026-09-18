@@ -64,3 +64,14 @@ test('PRD reads and mutations use integration branch while checkout stays on ano
   assert.equal((await invoke(runtime, 'prd:list', {}))[0].archive.kind, 'reset');
   assert.equal(git('status', '--porcelain'), '');
 });
+
+test('history classifies archived lifecycle specs by path even without reset metadata', async t => {
+  const { rootDir, git } = fixture(t);
+  const io = createActionRuntime(rootDir);
+  await io.writeJson('prompts/autonomous/v2/specs/prds/archived/completed.json', {id:'completed',title:'Completed by reviewer'});
+  git('add','.');git('commit','-m','reviewer archive');
+  const { runtime } = await createFrontendRuntime({rootDir,configPath:'controls.json'});t.after(()=>runtime.dispose());
+  const records = await invoke(runtime,'prd:list',{});
+  assert.equal(records[0].archived,true);
+  assert.equal(records[0].archive,undefined);
+});

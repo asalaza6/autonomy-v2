@@ -34,6 +34,9 @@ Agent presets under `presets/` are independent of `control-presets/`.
 | `maintenance` | Package update and server restart | `package:update`, `server:restart` |
 
 Development shows maintenance controls when `options.maintenance` is true.
+Set `options.deployAfterArchive` to true to have the packaged reviewer invoke
+the configured `deploy` action after successfully archiving a completed PRD.
+It defaults to false.
 The preset owns this composition; the runtime has no workflow-specific dispatch.
 Legacy `actionPresets` and `frontend`/`frontendPreset` selection remain supported
 when `controls` is absent. Legacy action selection defaults to `shared`.

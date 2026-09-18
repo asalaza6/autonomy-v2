@@ -23,18 +23,18 @@ async function specs(context: Context, includeArchived = false) {
   const { specs: directory } = workflowPaths(context.options);
   const ref = await git(context, ['rev-parse', await branch(context)]);
   const files = await git(context, ['ls-tree', '-r', '--name-only', ref, '--', directory]);
-  const result: { file: string; data: RecordData; queued: boolean }[] = [];
+  const result: { file: string; data: RecordData; queued: boolean; archived: boolean }[] = [];
   for (const file of files.split('\n').filter(Boolean)) {
     const suffix = file.slice(directory.length + 1);
     if (!suffix.endsWith('.json') || (!includeArchived && suffix.startsWith('archived/'))) continue;
     if (suffix.includes('/') && ! /^(queue|archived)\/[^/]+\.json$/.test(suffix)) continue;
     const data = JSON.parse(await git(context, ['show', `${ref}:${file}`]));
-    result.push({ file, data, queued: suffix.startsWith('queue/') });
+    result.push({ file, data, queued: suffix.startsWith('queue/'), archived: suffix.startsWith('archived/') });
   }
   return result;
 }
 export async function listPrds(context: Context) {
-  return (await specs(context, true)).map(entry => ({ ...entry.data, queued: entry.queued }));
+  return (await specs(context, true)).map(entry => ({ ...entry.data, queued: entry.queued, archived: entry.archived }));
 }
 async function commit(context: Context, updates: { file: string; data?: unknown }[], message: string) {
   const { runtime } = context;
