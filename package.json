@@ -34,6 +34,7 @@
     "./runtime": "./dist/src/runtime/index.js"
   },
   "scripts": {
+    "prepare": "npm run build",
     "build": "npm run clean && tsc && node scripts/copy-control-options.js && chmod +x dist/bin/*.js",
     "build:watch": "tsc --watch --preserveWatchOutput",
     "check:publish": "node scripts/check-publish-config.js",
